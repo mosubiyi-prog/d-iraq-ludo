@@ -38,6 +38,17 @@ class DedaSessionDiagnosticReadOnly {
       report.directory == DedaProbeMatch.differentUid &&
       !report.google && !report.password;
 
+  /// Read-only routing hint for an ORIGINAL anonymous DEDA session.
+  /// This is NOT owner authorization: the existing confirmation button must
+  /// still verify PIN, immutable routing, archival receipt, and same UID.
+  /// Any split, missing server document or signed-out session stays HOLD.
+  static bool mayOfferOriginalAnonymousConfirmation(
+      DedaSessionProbeReport report) =>
+      report.kind == DedaProbeKind.anonymous &&
+      report.original == DedaProbeMatch.sameUid &&
+      report.directory == DedaProbeMatch.sameUid &&
+      !report.google && !report.password;
+
   /// Stable 64-bit fingerprint to compare a CURRENT device Firebase UID with
   /// historic A/B/C server references. No raw UID, phone, PIN or token is
   /// displayed/sent/logged. Not an authorization factor or cryptographic proof.
