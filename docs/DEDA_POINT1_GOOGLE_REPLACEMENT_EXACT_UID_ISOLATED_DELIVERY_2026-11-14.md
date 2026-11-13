@@ -24,3 +24,8 @@ An owner who has already linked Google to the proven original DEDA Firebase UID 
 5. Financial/progress hydration remains explicitly separate. No signed APK containing this functionality is designated a finished DEDA restoration update. No A/B/C conflicted identity or protected production source was modified.
 
 Next action *within point 1*: verify the latest Flutter assembly, then require explicit backend/AppCheck production authorization and live healthy-account two-phone proof before enabling the flag and issuing an APK. DO NOT convert these holds into green claims.
+
+## Final isolated check confirmed
+- Flutter full-source QA final check [43511855387](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43511855387): **SUCCESS**. Analyzer, private Google UID proof tests, assembled original full-app source, archived-rules read verification and Firestore emulator rules passed. This includes the Play Integrity AppCheck guard in the replacement-phone candidate.
+- Server and production-wiring no-deploy test [43512207413](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43512207413): **SUCCESS**, Node signed JWT / binding / AppCheck / rate-limit tests passed.
+- Both are SOURCE / EMULATOR checks, NOT actual Google OAuth, live Functions deployment or two-phone acceptance. No production Firebase, Play publication or protected data changed.
