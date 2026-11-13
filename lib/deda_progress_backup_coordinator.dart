@@ -218,17 +218,25 @@ class DedaProgressBackupCoordinator {
       // Never replace a previous uncertain request with a newer local snapshot.
       if(old != null) {
         final pending = DedaProgressBackupIntent.decode(old,accountKey);
-        if(requireNonEmptyEvidence && !pending.capture.hasAnyLocalRecord) {
+        // A trusted old-phone checkpoint may contain purchase/frame evidence
+        // without any of the three optional progress preferences. Do not
+        // discard those exact bytes merely because progress was never saved.
+        if(requireNonEmptyEvidence &&
+            !pending.capture.hasAnyLocalRecord &&
+            !(pending.purchaseCapture?.hasAnyLocalRecord ?? false)) {
           throw const DedaProgressEvidenceMissing();
         }
         return pending;
       }
       final capture=await reader.capture(accountKey:accountKey,isCurrent:_current(bound));bound();
-      // Cross-device recovery refuses empty old-phone backups.
-      if(requireNonEmptyEvidence && !capture.hasAnyLocalRecord) {
+      final purchaseCapture=await _capturePurchase(accountKey,owner,bound);bound();
+      // An actual old-phone progress OR purchase source qualifies for
+      // archival; neither alone grants financial or identity rights.
+      // Both absent means HOLD: never manufacture an empty proof or zero.
+      if(requireNonEmptyEvidence && !capture.hasAnyLocalRecord &&
+          !(purchaseCapture?.hasAnyLocalRecord ?? false)) {
         throw const DedaProgressEvidenceMissing();
       }
-      final purchaseCapture=await _capturePurchase(accountKey,owner,bound);bound();
       final intent=DedaProgressBackupIntent(captureId:captureId,capture:capture,
         purchaseCapture:purchaseCapture,purchaseCaptureObserved:purchaseReader!=null,
         sourceUid:owner.user.uid,installId:owner.installId);
