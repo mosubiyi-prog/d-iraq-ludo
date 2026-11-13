@@ -55,6 +55,10 @@ class DedaLegacyPurchaseCapture {
   final String accountKey, originalId;
   final Object? inventory;
   final Map<String, Object?> journals;
+  // Presence of an old local record, not proof that it was purchased or
+  // that a paid item may be issued. Null means absent; preserve all values.
+  bool get hasAnyLocalRecord =>
+      inventory != null || journals.values.any((value) => value != null);
   String encode() => jsonEncode({'format': 1, 'accountKey': accountKey,
     'originalId': originalId, 'inventory': inventory, 'frameJournals': journals});
   static DedaLegacyPurchaseCapture decode(String text, {
