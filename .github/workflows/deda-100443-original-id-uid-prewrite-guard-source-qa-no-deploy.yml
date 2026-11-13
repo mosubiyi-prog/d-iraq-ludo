@@ -7,6 +7,10 @@ on:
     paths:
       - "lib/deda_backend.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
+      - "lib/deda_100430_owner_uid_continuity.dart"
+      - "test/deda_auth_session_runtime_test.dart"
+      - "test/deda_google_original_uid_link_private_test.dart"
+      - "test/deda_step2_spark_linked_uid_readonly_private_test.dart"
       - "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py"
       - "tools/app_stability/app_package/bind_google_account_settings_100439.py"
       - "test/deda_original_share_uid_prewrite_guard_100443_test.dart"
@@ -74,10 +78,28 @@ jobs:
           set -euo pipefail
           flutter pub get
           dart analyze --no-fatal-warnings \
-            lib/deda_backend.dart lib/deda_100431_linked_owner_session_policy.dart
+            lib/deda_backend.dart lib/deda_100431_linked_owner_session_policy.dart \
+            lib/deda_100430_owner_uid_continuity.dart test/deda_auth_session_runtime_test.dart
           flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
             test/deda_original_share_uid_prewrite_guard_100443_test.dart \
             test/deda_pin_same_uid_100441_optin_private_test.dart
+          flutter test --no-pub \
+            test/deda_auth_session_runtime_test.dart \
+            test/deda_google_original_uid_link_private_test.dart \
+            test/deda_step2_spark_linked_uid_readonly_private_test.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('lib/deda_100430_owner_uid_continuity.dart').read_text()
+          section=s.split('  static Future<String> linkExistingOriginalUid({',1)[1]
+          section=section.split('  static void requireSameUidGoogleLink({',1)[0]
+          assert 'sparkPilotEnabled: true' in section
+          assert section.index('requireEvidenceBeforeLink(') < section.index('await DedaPinAuth.signIn(')
+          assert section.index('await beforeLinkedIdentityTransition(accountKey, originalUid)') < section.index('DedaAuthRuntime.controller.transition<UserCredential>(')
+          assert 'live.uid == originalUid' in section
+          assert 'live.kind == DedaSessionAuthKind.authenticated' in section
+          assert 'DedaAuthRuntime.checkSnapshot(linkedSnapshot)' in section
+          print('PASS_SAME_UID_ORIGINAL_PHONE_LINK_ARCHIVE_AND_SHARED_AUTH_LANE')
+          PY
       - name: Rebuild EXACT 100441 full original assembly SOURCE ONLY without APK
         shell: bash
         run: |
