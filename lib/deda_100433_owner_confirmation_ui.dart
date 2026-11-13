@@ -95,6 +95,24 @@ class _DedaOwnerPinDialogState extends State<_DedaOwnerPinDialog> {
   );
 }
 
+/// Same-UID user-triggered continuation policy. Source confirmation,
+/// optional archives and the current Firebase principal must all agree
+/// BEFORE a second provider may be attached. No UID change, money grant,
+/// local session write or phone cutover occurs in this pure policy.
+class DedaGoogleOneEntryContinuation {
+  const DedaGoogleOneEntryContinuation._();
+
+  static bool mayContinue({
+    required bool confirmedSameLinkedUid,
+    required bool placeArchiveUnconfirmed,
+    required bool quizArchiveUnconfirmed,
+    required bool globalArchiveUnconfirmed,
+  }) => confirmedSameLinkedUid &&
+      !placeArchiveUnconfirmed &&
+      !quizArchiveUnconfirmed &&
+      !globalArchiveUnconfirmed;
+}
+
 /// Visible above Sign out ONLY when owner explicitly opts into the private
 /// build's separately reviewed account confirmation feature.
 class DedaOwnerConfirmButton extends StatefulWidget {
@@ -327,7 +345,14 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           }
         }
         if (!mounted) return;
-        if (!quizUnconfirmed && !globalArchiveUnconfirmed) {
+        if (DedaGoogleOneEntryContinuation.mayContinue(
+          confirmedSameLinkedUid: FirebaseAuth.instance.currentUser?.uid ==
+              existingUser.uid &&
+              FirebaseAuth.instance.currentUser?.isAnonymous == false,
+          placeArchiveUnconfirmed: false,
+          quizArchiveUnconfirmed: quizUnconfirmed,
+          globalArchiveUnconfirmed: globalArchiveUnconfirmed,
+        )) {
           await widget.onConfirmed?.call(existingUser.uid);
         }
         if (!mounted) return;
@@ -486,8 +511,14 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       // A one-entry Google flow may continue only if no required post-link
       // old-phone archive failed. A failure retains the linked account and
       // its source data, but cannot initiate a Google provider transition.
-      if (!placeSourceUnconfirmed && !quizSourceUnconfirmed &&
-          !globalSourceUnconfirmed) {
+      if (DedaGoogleOneEntryContinuation.mayContinue(
+        confirmedSameLinkedUid: widget.confirm != null ||
+            (FirebaseAuth.instance.currentUser?.uid == uid &&
+             FirebaseAuth.instance.currentUser?.isAnonymous == false),
+        placeArchiveUnconfirmed: placeSourceUnconfirmed,
+        quizArchiveUnconfirmed: quizSourceUnconfirmed,
+        globalArchiveUnconfirmed: globalSourceUnconfirmed,
+      )) {
         await widget.onConfirmed?.call(uid);
       }
       if (!mounted) return;
