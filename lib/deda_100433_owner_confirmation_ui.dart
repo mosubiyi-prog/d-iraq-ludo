@@ -104,12 +104,18 @@ class DedaOwnerConfirmButton extends StatefulWidget {
     required this.originalId,
     this.forTesting = false,
     this.confirm,
+    this.onConfirmed,
+    this.onRunningChanged,
   });
 
   final String phone;
   final String originalId;
   final bool forTesting;
   final Future<String> Function(String phone,String pin,String originalId)? confirm;
+  /// Called only after same-UID confirmation and all required source
+  /// readbacks; the caller MUST reverify the current UID before using Google.
+  final Future<void> Function(String uid)? onConfirmed;
+  final void Function(bool running)? onRunningChanged;
 
   @override
   State<DedaOwnerConfirmButton> createState() => _DedaOwnerConfirmButtonState();
@@ -117,6 +123,12 @@ class DedaOwnerConfirmButton extends StatefulWidget {
 
 class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
   bool _running = false;
+
+  void _setRunning(bool running) {
+    if (!mounted) return;
+    setState(() => _running = running);
+    widget.onRunningChanged?.call(running);
+  }
 
   /// Original phone only, after the UID has been safely linked. This action
   /// can also be retried after an uncertain upload without re-linking the
@@ -283,7 +295,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       if (existingUser != null && !existingUser.isAnonymous &&
           existingUser.email ==
               DedaLinkedOwnerSessionPolicy.ownerEmail(account)) {
-      setState(() => _running = true);
+      _setRunning(true);
       try {
         await _rememberLinkedOriginalUid(existingUser.uid);
         final archived = dedaStep2OwnerPlaceLocalArchiveEnabled
@@ -309,6 +321,10 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           }
         }
         if (!mounted) return;
+        if (!quizUnconfirmed) {
+          await widget.onConfirmed?.call(existingUser.uid);
+        }
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text((archived
             ? 'تم تأكيد ربط الحساب وحفظ مصدر إدارة المكان على Firebase. '
@@ -331,7 +347,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
               'أو لم يتأكد حفظ المكان. أعد المحاولة ولا تحذف بيانات الهاتف.'),
         ));
       } finally {
-        if (mounted) setState(() => _running = false);
+        _setRunning(false);
       }
         return;
       }
@@ -347,7 +363,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           : 'هذه الخطوة لا تسترجع الماسات أو النقاط تلقائياً.'),
     );
     if (pin == null || !mounted) return;
-    setState(() => _running = true);
+    _setRunning(true);
     try {
       // The Spark-only old-account migration must archive original phone
       // evidence BEFORE linkWithCredential. Never convert an anonymous UID
@@ -441,11 +457,13 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           quizSourceUnconfirmed = true;
         }
       }
+      var globalSourceUnconfirmed = false;
       if (dedaStep2GlobalPlacesSettingsArchiveEnabled &&
           widget.confirm == null) {
         try {
           await _archiveLinkedOriginalGlobalData(uid);
         } catch (_) {
+          globalSourceUnconfirmed = true;
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('لم يتأكد أرشيف الأماكن والإعدادات القديمة. '
@@ -458,6 +476,14 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       if (!mounted ||
           (dedaStep2OwnerPlaceLocalArchiveEnabled &&
               FirebaseAuth.instance.currentUser?.uid != uid)) return;
+      // A one-entry Google flow may continue only if no required post-link
+      // old-phone archive failed. A failure retains the linked account and
+      // its source data, but cannot initiate a Google provider transition.
+      if (!placeSourceUnconfirmed && !quizSourceUnconfirmed &&
+          !globalSourceUnconfirmed) {
+        await widget.onConfirmed?.call(uid);
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text((placeSourceUnconfirmed
           ? 'تم ربط الحساب الأصلي، لكن نسخ بيانات إدارة المكان لم يتأكد. '
@@ -479,7 +505,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
         content: Text('تعذر تأكيد الحساب بأمان. لم يتم استرجاع أو نقل أي رصيد.'),
       ));
     } finally {
-      if (mounted) setState(() => _running = false);
+      _setRunning(false);
     }
   }
 
