@@ -7,7 +7,9 @@ DedaSmartSecondStageAccountPage makePage({
   WidgetBuilder? existing,
   String name = 'سالم',
   String phone = '+9647701234567',
+  DedaSmartAccountChoice initialChoice = DedaSmartAccountChoice.newAccount,
 }) => DedaSmartSecondStageAccountPage(
+  initialChoice: initialChoice,
   initialName: name,
   initialPhone: phone,
   onCreateNew: create,
@@ -25,6 +27,53 @@ Future<void> scrollToAccountConfirmation(WidgetTester tester) async {
 void main() {
   test('second-stage mode is OFF until explicit private approval', () {
     expect(dedaSmartSecondStageAccountEnabled, isFalse);
+  });
+
+  test('first-install lookup routes to explicit existing mode only under all guarded flags', () {
+    bool route({
+      bool linked = true,
+      bool smart = true,
+      bool existing = true,
+      bool principal = false,
+    }) => DedaSmartSecondEntryRouting.needsExplicitChoiceWithoutLookup(
+      linkedOwnerGuardEnabled: linked,
+      smartSecondStageEnabled: smart,
+      existingAccountEntryEnabled: existing,
+      hasFirebasePrincipal: principal,
+    );
+    expect(route(), isTrue);
+    expect(route(linked:false), isFalse);
+    expect(route(smart:false), isFalse);
+    expect(route(existing:false), isFalse);
+    expect(route(principal:true), isFalse);
+    // Preflight may be skipped ONLY on an explicit CREATE, with server-side
+    // atomic account existence check still enforced by createAccount().
+    expect(DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(
+      linkedOwnerGuardEnabled:true, hasFirebasePrincipal:false), isFalse);
+    expect(DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(
+      linkedOwnerGuardEnabled:true, hasFirebasePrincipal:true), isTrue);
+    expect(DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(
+      linkedOwnerGuardEnabled:false, hasFirebasePrincipal:false), isTrue);
+  });
+
+  testWidgets('fresh phone offers existing account first without generating a new DEDA owner', (tester) async {
+    var creates = 0;
+    await tester.pumpWidget(MaterialApp(home: makePage(
+      initialChoice: DedaSmartAccountChoice.existingAccount,
+      create: (_, __, ___) async { creates++; },
+    )));
+    expect(find.byKey(const ValueKey('existing-guardian')), findsOneWidget);
+    expect(find.byKey(const ValueKey('deda-second-stage-confirm-create')), findsNothing);
+    expect(find.byKey(const ValueKey('deda-second-stage-new-pin')), findsNothing);
+    expect(creates, 0);
+    await tester.tap(find.text('حساب جديد'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('deda-second-stage-pin-saved')), findsOneWidget);
+    await scrollToAccountConfirmation(tester);
+    expect(tester.widget<FilledButton>(
+      find.byKey(const ValueKey('deda-second-stage-confirm-create'))).onPressed,
+      isNull);
+    expect(creates, 0);
   });
 
   testWidgets('new account shows first name, number and six-digit PIN',
