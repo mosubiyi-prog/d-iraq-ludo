@@ -97,7 +97,6 @@ jobs:
             lib/deda_progress_backup_coordinator.dart \
             lib/deda_legacy_purchase_evidence.dart \
             lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
-            lib/deda_stage71_free_owned_use_profile.dart \
             lib/deda_verified_active_id_store.dart \
             test/deda_purchase_backup_coordinator_test.dart
           flutter test --no-pub \
@@ -220,7 +219,8 @@ jobs:
               lib/deda_100431_linked_owner_session_policy.dart \
               lib/deda_100430_owner_uid_continuity.dart \
               lib/deda_step1_google_settings_link_100439.dart \
-              lib/deda_step2_google_replacement_login_100439.dart
+              lib/deda_step2_google_replacement_login_100439.dart \
+              lib/deda_stage71_free_owned_use_profile.dart
             mkdir -p test
             cp "$GITHUB_WORKSPACE/test/deda_google_settings_card_private_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_google_original_uid_link_private_test.dart" test/
