@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_session_transition_gate.dart';
+import 'package:d_iraq_ludo/deda_auth_session_runtime.dart';
 
 Future<T> _run<T>(DedaSessionTransitionGate gate, {
   Object key = 'owner-intent',
@@ -328,5 +329,90 @@ void main() {
     expect(gate.diagnostics.values.every((count) => count >= 0), isTrue);
     expect(() => gate.diagnostics['started'] = 0, throwsUnsupportedError);
     gate.dispose();
+  });
+
+
+  test('old-phone link keeps original UID under credentialChange lane', () async {
+    var live=const DedaAuthSnapshot('original-uid',DedaSessionAuthKind.anonymous,1);
+    final runtime=DedaAuthSessionController(current:()=>live);
+    var sdkCalls=0;
+    final result=await runtime.run<String>(
+      kind:DedaSessionTransitionKind.credentialChange,
+      origin:DedaSessionTransitionOrigin.userAction,
+      action:() async {
+        final linked=await runtime.transition<String>(
+          kind:DedaSessionTransitionKind.credentialChange,
+          action:() async {
+            sdkCalls++;
+            live=DedaAuthSnapshot('original-uid',DedaSessionAuthKind.authenticated,2);
+            return 'original-uid';
+          },
+          accepts:(uid,auth)=>uid=='original-uid' &&
+              auth.uid=='original-uid' &&
+              auth.kind==DedaSessionAuthKind.authenticated,
+        );
+        await runtime.wait(() async {
+          expect(live.uid,'original-uid');
+          expect(live.kind,DedaSessionAuthKind.authenticated);
+        });
+        return linked;
+      },
+    );
+    expect(result,'original-uid');
+    expect(sdkCalls,1);
+    expect(runtime.gate.diagnostics['succeeded'],1);
+  });
+
+  test('old-phone link rejects foreign UID before publishing success', () async {
+    var live=const DedaAuthSnapshot('original-uid',DedaSessionAuthKind.anonymous,1);
+    final runtime=DedaAuthSessionController(current:()=>live);
+    var published=false;
+    await expectLater(runtime.run<void>(
+      kind:DedaSessionTransitionKind.credentialChange,
+      origin:DedaSessionTransitionOrigin.userAction,
+      action:() async {
+        await runtime.transition<String>(
+          kind:DedaSessionTransitionKind.credentialChange,
+          action:() async {
+            live=DedaAuthSnapshot('other-uid',DedaSessionAuthKind.authenticated,2);
+            return 'other-uid';
+          },
+          accepts:(uid,auth)=>uid=='original-uid' &&
+              auth.uid=='original-uid' &&
+              auth.kind==DedaSessionAuthKind.authenticated,
+        );
+        published=true;
+      },
+    ),throwsA(isA<DedaStaleSessionTransition>()));
+    expect(published,isFalse);
+    expect(runtime.gate.diagnostics['succeeded'],0);
+  });
+
+  test('old-phone link blocks concurrent logout until SDK credential change settles', () async {
+    var live=const DedaAuthSnapshot('original-uid',DedaSessionAuthKind.anonymous,1);
+    final runtime=DedaAuthSessionController(current:()=>live);
+    final transport=Completer<String>();
+    var logoutStarted=false;
+    final linked=runtime.run<String>(
+      kind:DedaSessionTransitionKind.credentialChange,
+      origin:DedaSessionTransitionOrigin.userAction,
+      action:()=>runtime.transition<String>(
+        kind:DedaSessionTransitionKind.credentialChange,
+        action:()=>transport.future,
+        accepts:(uid,auth)=>uid=='original-uid' &&
+            auth.uid=='original-uid' &&
+            auth.kind==DedaSessionAuthKind.authenticated,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await expectLater(runtime.run<void>(
+      kind:DedaSessionTransitionKind.logout,
+      origin:DedaSessionTransitionOrigin.userAction,
+      action:() async {logoutStarted=true;},
+    ),throwsA(isA<DedaSessionTransitionBusy>()));
+    expect(logoutStarted,isFalse);
+    live=const DedaAuthSnapshot('original-uid',DedaSessionAuthKind.authenticated,2);
+    transport.complete('original-uid');
+    expect(await linked,'original-uid');
   });
 }
