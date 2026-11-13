@@ -62,8 +62,10 @@ void main() {
     for (final response in <Map<String, dynamic>>[
       <String, dynamic>{},
       <String, dynamic>{'localId': 'new'},
+      <String, dynamic>{'localId': uid}, // unknown existing-user verdict
       <String, dynamic>{'localId': uid, 'isNewUser': true},
-      <String, dynamic>{'localId': uid, 'needConfirmation': true},
+      <String, dynamic>{'localId': uid, 'isNewUser': false,
+          'needConfirmation': true},
     ]) {
       expect(() => DedaGoogleReplacementProof.existingUidOnly(response),
           throwsStateError);
