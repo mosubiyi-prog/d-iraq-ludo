@@ -108,7 +108,7 @@ class _DedaGoogleSettingsLinkCardState
             .mayOfferOriginalAnonymousConfirmation(report);
         setState(() {
           _message = mayConfirm
-              ? _t('هذه جلسة حساب ديدا الأصلي المجهولة. '
+              ? _t('الجلسة المجهولة الحالية تطابق مبدئياً سجلات حساب ديدا الأصلي. '
                     'اضغط «تأكيد الحساب» فوق «تسجيل الخروج» أولاً '
                     'لإثبات الحساب وحفظ بيانات الهاتف القديم بنفس UID، '
                     'ثم ارجع لهذه البطاقة واربط Google. لا تسجل خروجك.',
