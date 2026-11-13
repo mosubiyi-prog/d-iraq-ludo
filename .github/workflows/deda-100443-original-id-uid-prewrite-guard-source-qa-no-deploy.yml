@@ -245,6 +245,45 @@ jobs:
               })
               print('LIVE_FIRESTORE_RULES_API_GETS',reader.gets)
               print('NO_PRODUCTION_DOCUMENT_READS_NO_FIREBASE_MUTATIONS')
+              if all(path in rules for path in routes.values()):
+                  import os, json
+                  from pathlib import Path
+                  source=Path(os.environ['RUNNER_TEMP'])/'deda-live-archive.rules'
+                  if source.exists():
+                      raise RuntimeError('temporary-rules-already-present')
+                  source.write_text(rules,encoding='utf-8')
+                  source.chmod(0o600)
+                  config=Path(os.environ['RUNNER_TEMP'])/'deda-live-archive-firebase.json'
+                  config.write_text(json.dumps({
+                    'firestore':{'rules':source.name},
+                    'emulators':{'auth':{'host':'127.0.0.1','port':9099},
+                                 'firestore':{'host':'127.0.0.1','port':8098},
+                                 'ui':{'enabled':False}}
+                  }),encoding='utf-8')
+                  print('PRIVATE_CURRENT_RULES_READY_FOR_OFFLINE_EMULATOR')
           PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test ACTUAL live Firestore rules against isolated same-UID Auth and archive emulators (NO DEPLOY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s "$RUNNER_TEMP/deda-live-archive.rules" ]]; then
+            echo "SAFE_HOLD_EMULATOR_REQUIRES_VERIFIED_LIVE_ARCHIVE_ROUTES"
+            exit 0
+          fi
+          node --check qa/stage2/deda_spark_prelink_evidence_rules_real_emulator_private.test.cjs
+          node --check qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs
+          mkdir -p "$RUNNER_TEMP/deda-archive-emulator-node"
+          npm install --prefix "$RUNNER_TEMP/deda-archive-emulator-node" --no-save --no-audit --no-fund \
+            firebase-tools@13.35.1 firebase@11.10.0 firebase-admin@12.7.0
+          export NODE_PATH="$RUNNER_TEMP/deda-archive-emulator-node/node_modules"
+          cli="$RUNNER_TEMP/deda-archive-emulator-node/node_modules/.bin/firebase"
+          "$cli" emulators:exec --project demo-deda-100436-journal-qa \
+            --config "$RUNNER_TEMP/deda-live-archive-firebase.json" \
+            --only auth,firestore --non-interactive \
+            'node --test qa/stage2/deda_spark_prelink_evidence_rules_real_emulator_private.test.cjs qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs'
+          echo "PASS_SAME_UID_OLD_ANONYMOUS_PHONE_ARCHIVE_AND_TWO_NEW_PHONES_ON_ACTUAL_LIVE_RULES_EMULATOR_NO_PROD_WRITES"
       - name: Confirm NO signing, APK, Firebase write or Play deployment
         run: echo "PASS_DEDA_100443_SOURCE_ONLY_PRODUCTION_UNCHANGED"
