@@ -163,9 +163,22 @@ jobs:
           assert 'mayOfferDetachedGoogleLink' not in card
           assert 'linkWithCredential(' not in card
           assert card.count('DedaOwnerUidContinuity.linkGoogleToConfirmedOriginalUid(')==1
-          assert 'DedaLinkedOwnerSessionPolicy.verified(owner, account)' in card
+          # After anonymous->password conversion, the ORIGINAL User object
+          # is stale. Re-read FirebaseAuth.currentUser and prove the same UID
+          # before opening the Google chooser. Tests must not demand the old
+          # stale-object check; that would reintroduce the race.
+          assert 'final confirmedOwner = auth.currentUser;' in card
+          assert 'confirmedOwner.uid != startingUid' in card
+          assert 'confirmedOwner.isAnonymous' in card
+          assert 'DedaLinkedOwnerSessionPolicy.verified(' in card
+          assert 'confirmedOwner, account)' in card
+          assert 'DedaLinkedOwnerSessionPolicy.verified(owner, account)' not in card
           assert 'auth.currentUser?.uid != startingUid' in card
-          print('PASS_GOOGLE_SETTINGS_VERIFIED_OWNER_UID_ONLY_NO_DETACHED_SESSION')
+          assert 'final confirmedUid = await _confirmOwnerForGoogle();' in card
+          assert 'DedaOwnerConfirmButton(' in card
+          assert 'DedaGoogleOneEntryContinuation.mayContinue(' in (
+            Path('lib/deda_100433_owner_confirmation_ui.dart').read_text())
+          print('PASS_GOOGLE_SETTINGS_VERIFIED_FRESH_OWNER_UID_AND_ARCHIVE_GATE')
           smart=Path('lib/deda_step2_smart_second_stage_account_page_100439.dart').read_text()
           binder=Path('tools/app_stability/app_package/bind_smart_second_stage_account_100439.py').read_text()
           pin=Path('lib/deda_pin_auth.dart').read_text()
