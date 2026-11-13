@@ -131,4 +131,21 @@ void main() {
     expect(continuing, 0);
     expect(find.textContaining('تعذر تأكيد الحساب بأمان'), findsOneWidget);
   });
+
+  test('one-entry Google continuation always denies archive or UID uncertainty', () {
+    bool allowed({bool sameUid = true, bool place = false,
+      bool quiz = false, bool global = false}) =>
+        DedaGoogleOneEntryContinuation.mayContinue(
+          confirmedSameLinkedUid: sameUid,
+          placeArchiveUnconfirmed: place,
+          quizArchiveUnconfirmed: quiz,
+          globalArchiveUnconfirmed: global,
+        );
+    expect(allowed(), isTrue);
+    expect(allowed(sameUid: false), isFalse);
+    expect(allowed(place: true), isFalse);
+    expect(allowed(quiz: true), isFalse);
+    expect(allowed(global: true), isFalse);
+    expect(allowed(sameUid: false, place: true, quiz: true, global: true), isFalse);
+  });
 }
