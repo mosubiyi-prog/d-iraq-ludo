@@ -1,0 +1,131 @@
+name: DEDA point1 Firebase Google LIVE release-readiness READ ONLY
+on:
+  push:
+    branches:
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
+    paths:
+      - ".github/workflows/deda-point1-production-google-deploy-readiness-readonly.yml"
+permissions:
+  contents: read
+concurrency:
+  group: deda-point1-google-live-release-readonly
+  cancel-in-progress: false
+jobs:
+  production-google-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PROD_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm PRODUCTION source and live accounts will not be modified
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 6d6d75074941eff9c1c94bf74af0b72d1ddc2422 HEAD -- \
+            functions/index.js firestore.rules storage.rules firebase.json .firebaserc \
+            google-services.json android/ lib/main.dart pubspec.yaml pubspec.lock
+          test ! -e functions/.env.deda-25b88
+          echo 'PASS_NO_FIREBASE_WRITE_NO_PROD_SOURCE_CHANGE_NO_APK_NO_PLAY'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read LIVE project IAM billing functions and App Check metadata only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check google-auth requests
+          python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          project='deda-25b88'
+          report={'project':project,'mode':'STRICT_READ_ONLY_NO_DEPLOY',
+              'serviceAccount':'missing_or_invalid','billing':'unverified',
+              'cloudFunctionsV2':'unverified','canDeployFunctions':False,
+              'cloudBuild':'unverified','cloudRun':'unverified',
+              'appCheck':'unverified','authGoogleProvider':'unverified',
+              'existingGoogleEndpoint':'unverified',
+              'androidOAuthConfig':'unverified','playSigningFingerprint':'unverified'}
+          config=json.loads(Path('config/deda_google_auth_100439/google-services.json').read_text())
+          clients=[x for x in config.get('client',[]) if
+              x.get('client_info',{}).get('android_client_info',{}).get('package_name')
+              =='com.diraq.ludo.d_iraq_ludo']
+          o=clients[0].get('oauth_client',[]) if len(clients)==1 else []
+          web=[x for x in o if x.get('client_type')==3]
+          android=[x for x in o if x.get('client_type')==1]
+          report['androidOAuthConfig']='one_web_one_or_more_android' if
+              len(web)==1 and bool(android) else 'not_verified'
+          # Checking a signed QA APK SHA1 is NOT Play app signing approval.
+          report['playSigningFingerprint']='not_proven_by_qa_certificate'
+          raw=os.getenv('PROD_SA') or os.getenv('FALLBACK_SA') or ''
+          try:
+              obj=json.loads(raw)
+              assert obj.get('type')=='service_account'
+              assert obj.get('project_id')==project
+              creds=service_account.Credentials.from_service_account_info(obj,
+                 scopes=['https://www.googleapis.com/auth/cloud-platform'])
+              session=AuthorizedSession(creds)
+              report['serviceAccount']='same_project_auth'
+          except Exception:
+              session=None
+          def ask(method,url,body=None):
+              if session is None: return None,{}
+              try:
+                  res=session.request(method,url,json=body,timeout=20)
+                  payload=res.json() if 'json' in res.headers.get('Content-Type','') else {}
+                  return res.status_code,payload if isinstance(payload,dict) else {}
+              except Exception:return 'connection_error',{}
+          if session:
+              p=f'projects/{project}'
+              status,data=ask('GET',f'https://cloudbilling.googleapis.com/v1/{p}/billingInfo')
+              report['billing']=('enabled' if status==200 and data.get('billingEnabled') is True else
+                  'disabled' if status==200 and data.get('billingEnabled') is False else
+                  f'unverified_http_{status}')
+              status,data=ask('GET',f'https://cloudfunctions.googleapis.com/v2/{p}/locations/us-central1/functions?pageSize=100')
+              report['cloudFunctionsV2']='available' if status==200 else f'http_{status}'
+              if status==200:
+                  names=[str(f.get('name','')).split('/')[-1] for f in data.get('functions',[])]
+                  report['existingGoogleEndpoint']='active_present' if
+                      'dedaGoogleExistingUidTokenV1' in names else 'not_deployed'
+              perms=['cloudfunctions.functions.create','cloudfunctions.functions.update',
+                'cloudfunctions.functions.get','iam.serviceAccounts.actAs',
+                'cloudbuild.builds.create','run.services.create']
+              status,data=ask('POST',f'https://cloudresourcemanager.googleapis.com/v1/{p}:testIamPermissions',
+                {'permissions':perms})
+              allowed=set(data.get('permissions',[])) if status==200 else set()
+              report['permissions']={k:k in allowed for k in perms} if
+                  status==200 else f'unverified_http_{status}'
+              report['canDeployFunctions']=status==200 and all(k in allowed for k in [
+                  'cloudfunctions.functions.create','cloudfunctions.functions.update',
+                  'iam.serviceAccounts.actAs'])
+              for api,name in [('cloudbuild','cloudBuild'),('run','cloudRun')]:
+                  status,data=ask('GET',
+                    f'https://serviceusage.googleapis.com/v1/{p}/services/{api}.googleapis.com')
+                  report[name]='enabled' if status==200 and data.get('state')=='ENABLED' else
+                      f'unverified_http_{status}'
+              # App Check registration must be verified with actual Play
+              # package/certificate; lack of read permission is UNKNOWN.
+              status,data=ask('GET',
+                  f'https://firebaseappcheck.googleapis.com/v1/{p}/apps')
+              report['appCheck']='readable' if status==200 else f'unverified_http_{status}'
+              status,data=ask('GET',
+                  f'https://identitytoolkit.googleapis.com/admin/v2/{p}/config')
+              google=(data.get('signIn',{}).get('allowDuplicateEmails') if status==200 else None)
+              report['authGoogleProvider']='config_readable_requires_provider_review' if
+                  status==200 else f'unverified_http_{status}'
+          print('DEDA_POINT1_READONLY_RELEASE_STATUS='+json.dumps(report,sort_keys=True))
+          Path(os.environ['RUNNER_TEMP'],'deda-point1-google-readiness.json').write_text(
+               json.dumps(report,sort_keys=True,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-POINT1-GOOGLE-PRODUCTION-READONLY-STATUS
+          path: ${{ runner.temp }}/deda-point1-google-readiness.json
+          retention-days: 14
+          if-no-files-found: error
