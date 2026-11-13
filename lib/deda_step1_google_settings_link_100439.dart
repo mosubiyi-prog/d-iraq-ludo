@@ -212,9 +212,14 @@ class _DedaGoogleSettingsLinkCardState
           throw StateError('google-owner-confirmation-rotated-original-uid');
         }
       }
-      // Only the EXISTING, already confirmed same-UID DEDA principal
-      // may proceed to choose and link a Google provider.
-      if (!await DedaLinkedOwnerSessionPolicy.verified(owner, account) ||
+      // The original anonymous User reference is stale after linking PIN.
+      // Use the CURRENT authenticated same-UID owner, not the earlier
+      // anonymous object, and reverify immutable server ownership.
+      final confirmedOwner = auth.currentUser;
+      if (confirmedOwner == null || confirmedOwner.uid != startingUid ||
+          confirmedOwner.isAnonymous ||
+          !await DedaLinkedOwnerSessionPolicy.verified(
+              confirmedOwner, account) ||
           auth.currentUser?.uid != startingUid) {
         throw StateError('deda-original-owner-confirmation-required');
       }
