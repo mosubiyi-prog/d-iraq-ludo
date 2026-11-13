@@ -9,6 +9,32 @@ const bool dedaSmartSecondStageAccountEnabled = bool.fromEnvironment(
 
 enum DedaSmartAccountChoice { newAccount, existingAccount }
 
+/// First-install owner account lookup must never create a Firebase UID.
+/// With no Auth principal there is no server-authorized directory check.
+/// Show the EXISTING-account choice first, without asserting the number
+/// already exists. Only an explicit, separately confirmed CREATE action
+/// may enter the server's atomic new-account transaction.
+class DedaSmartSecondEntryRouting {
+  const DedaSmartSecondEntryRouting._();
+
+  static bool needsExplicitChoiceWithoutLookup({
+    required bool linkedOwnerGuardEnabled,
+    required bool smartSecondStageEnabled,
+    required bool existingAccountEntryEnabled,
+    required bool hasFirebasePrincipal,
+  }) =>
+      linkedOwnerGuardEnabled && smartSecondStageEnabled &&
+      existingAccountEntryEnabled && !hasFirebasePrincipal;
+
+  // Explicit new-account creation may rely on the EXISTING atomic server
+  // directory transaction if there is no session for a preliminary read.
+  // Never use this shortcut for automatic first-screen account discovery.
+  static bool mayPreflightExplicitCreation({
+    required bool linkedOwnerGuardEnabled,
+    required bool hasFirebasePrincipal,
+  }) => !linkedOwnerGuardEnabled || hasFirebasePrincipal;
+}
+
 typedef DedaCreateNewAccountVerified = Future<void> Function(
     String name, String phone, String pin);
 
