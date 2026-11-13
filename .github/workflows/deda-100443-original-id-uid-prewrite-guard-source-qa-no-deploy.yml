@@ -216,5 +216,35 @@ jobs:
               test/deda_purchase_backup_coordinator_test.dart \
               test/deda_legacy_purchase_evidence_test.dart
           )
+      - name: Check LIVE Firestore archive route presence with firebase.readonly (no documents, no writes)
+        shell: bash
+        env:
+          DEDA_RULES_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_RULES_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/deda-rules-readonly"
+          "$RUNNER_TEMP/deda-rules-readonly/bin/pip" --disable-pip-version-check install --quiet google-auth requests
+          PYTHONPATH="tools/app_stability/rules_compat" "$RUNNER_TEMP/deda-rules-readonly/bin/python" - <<'PY'
+          from read_current import snapshot, session_reader
+          try:
+              reader=session_reader()
+              rules, metadata=snapshot(reader)
+          except Exception:
+              print('SAFE_HOLD_LIVE_FIRESTORE_RULES_READ_UNAVAILABLE')
+          else:
+              # Never log raw rules, credentials, hashes of user records,
+              # UIDs, emails or production Firestore documents.
+              routes={
+                  'progress': 'match /deda_progress_evidence/{accountKey}/captures/{captureId}',
+                  'purchase': 'match /deda_purchase_evidence/{accountKey}/captures/{captureId}',
+              }
+              print('LIVE_FIRESTORE_ARCHIVE_ROUTE_CHECK_READ_ONLY', {
+                  name:('PRESENT_NOT_PERMISSION_PROOF' if path in rules else 'MISSING')
+                  for name,path in routes.items()
+              })
+              print('LIVE_FIRESTORE_RULES_API_GETS',reader.gets)
+              print('NO_PRODUCTION_DOCUMENT_READS_NO_FIREBASE_MUTATIONS')
+          PY
       - name: Confirm NO signing, APK, Firebase write or Play deployment
         run: echo "PASS_DEDA_100443_SOURCE_ONLY_PRODUCTION_UNCHANGED"
