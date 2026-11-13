@@ -123,9 +123,69 @@ jobs:
           Path(os.environ['RUNNER_TEMP'],'deda-point1-google-readiness.json').write_text(
                json.dumps(report,sort_keys=True,indent=2)+'\n')
           PY
+      - name: Compare BOTH existing DEDA service accounts and exact App Check app safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          project='deda-25b88'
+          info=json.loads(Path('config/deda_google_auth_100439/google-services.json').read_text())
+          number=info.get('project_info',{}).get('project_number')
+          clients=[r for r in info.get('client',[]) if
+              r.get('client_info',{}).get('android_client_info',{}).get('package_name')==
+              'com.diraq.ludo.d_iraq_ludo']
+          app_id=clients[0].get('client_info',{}).get('mobilesdk_app_id') if len(clients)==1 else None
+          permissions=['cloudfunctions.functions.create','cloudfunctions.functions.update',
+                       'cloudfunctions.functions.get','iam.serviceAccounts.actAs',
+                       'iam.serviceAccounts.signBlob','cloudbuild.builds.create',
+                       'run.services.create','firebaseappcheck.apps.get']
+          out={}
+          for label,key in [('primary','PROD_SA'),('fallback','FALLBACK_SA')]:
+              raw=os.getenv(key,'')
+              row={'status':'missing','canDeployFunction':False,'appCheck':'not_verified'}
+              if not raw:
+                  out[label]=row;continue
+              try:
+                  d=json.loads(raw)
+                  if d.get('type')!='service_account' or d.get('project_id')!=project:
+                      row['status']='incorrect_project';out[label]=row;continue
+                  credential=service_account.Credentials.from_service_account_info(d,
+                      scopes=['https://www.googleapis.com/auth/cloud-platform'])
+                  ses=AuthorizedSession(credential)
+                  row['status']='valid_project_service_account'
+                  res=ses.post(f'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:testIamPermissions',
+                      json={'permissions':permissions},timeout=18)
+                  granted=set(res.json().get('permissions',[])) if res.status_code==200 else set()
+                  row['iamHttpStatus']=res.status_code
+                  row['granted']={p:p in granted for p in permissions}
+                  row['canDeployFunction']=all(p in granted for p in [
+                      'cloudfunctions.functions.create','cloudfunctions.functions.update',
+                      'iam.serviceAccounts.actAs'])
+                  if number and app_id:
+                      app=ses.get(f'https://firebaseappcheck.googleapis.com/v1/projects/{number}/apps/{app_id}',
+                          timeout=18)
+                      row['appCheck']='readable' if app.status_code==200 else 'http_'+str(app.status_code)
+                      if app.status_code==200:
+                          cfg=app.json()
+                          row['playIntegrityPresent']='playIntegrityConfig' in cfg or \
+                              'playIntegrity' in str(cfg.get('attestationProviders',{}))
+                  else:row['appCheck']='android_app_id_missing'
+              except Exception:
+                  row['status']='auth_or_transport_unavailable'
+              out[label]=row
+          print('DEDA_POINT1_FIREBASE_ALTERNATE_IAM_READONLY='+json.dumps(out,sort_keys=True))
+          Path(os.environ['RUNNER_TEMP'],'deda-point1-firebase-alternate-iam.json').write_text(
+              json.dumps(out,sort_keys=True,indent=2)+'\n')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: DEDA-POINT1-GOOGLE-PRODUCTION-READONLY-STATUS
-          path: ${{ runner.temp }}/deda-point1-google-readiness.json
+          path: |
+            ${{ runner.temp }}/deda-point1-google-readiness.json
+            ${{ runner.temp }}/deda-point1-firebase-alternate-iam.json
           retention-days: 14
           if-no-files-found: error
