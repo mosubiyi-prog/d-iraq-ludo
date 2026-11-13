@@ -114,4 +114,28 @@ void main() {
     expect(() => proof(routeUid: 'foreign-owner'), throwsStateError);
     expect(() => proof(routeId: '@DEDA-NOTOWN'), throwsStateError);
   });
+
+  test('server exchange can only return the no-create preflight original UID', () {
+    const token = 'signed-test-custom-token';
+    final result = DedaGoogleExistingUidServerTicket.fromCallable(
+      const <String, dynamic>{
+        'originalUid': uid,
+        'customToken': token,
+      }, expectedExistingUid: uid);
+    expect(result.originalUid, uid);
+    expect(result.customToken, token);
+    for (final bad in <Object?>[
+      null, const <String, dynamic>{},
+      const <String, dynamic>{'originalUid': 'new-firebase-uid', 'customToken': token},
+      const <String, dynamic>{'originalUid': uid, 'customToken': ''},
+      const <String, dynamic>{'originalUid': uid, 'customToken': 5},
+      const <String, dynamic>{'originalUid': 'not valid uid!', 'customToken': token},
+    ]) {
+      expect(() => DedaGoogleExistingUidServerTicket.fromCallable(
+        bad, expectedExistingUid: uid), throwsStateError);
+    }
+    expect(() => DedaGoogleExistingUidServerTicket.fromCallable(
+      const <String, dynamic>{'originalUid': uid, 'customToken': token},
+      expectedExistingUid: 'a-different-verified-uid'), throwsStateError);
+  });
 }
