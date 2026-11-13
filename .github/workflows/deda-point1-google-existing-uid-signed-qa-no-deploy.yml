@@ -1,0 +1,73 @@
+name: DEDA point 1 signed Google exact-original-UID server QA NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
+    paths:
+      - "functions/deda_google_existing_uid_token_exchange_PRIVATE_NOT_EXPORTED.js"
+      - "functions/test/deda_google_existing_uid_token_exchange_PRIVATE.test.js"
+      - "lib/deda_step2_google_replacement_login_100439.dart"
+      - "test/deda_google_replacement_existing_uid_private_test.dart"
+      - ".github/workflows/deda-point1-google-existing-uid-signed-qa-no-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-point1-existing-uid-google-no-deploy
+  cancel-in-progress: false
+
+jobs:
+  no-create-linked-google-server-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect production Functions, Firebase rules, app package and Play assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 15c0edb0cf74a95aa193bb0fd7b86e90d0effd8c HEAD -- \
+            functions/index.js functions/package.json firestore.rules storage.rules \
+            firebase.json .firebaserc google-services.json android/ assets/ \
+            lib/main.dart pubspec.yaml pubspec.lock
+          node - <<'JS'
+          const fs=require('node:fs');
+          const core=fs.readFileSync('functions/index.js','utf8');
+          const client=fs.readFileSync('lib/deda_step2_google_replacement_login_100439.dart','utf8');
+          const server=fs.readFileSync('functions/deda_google_existing_uid_token_exchange_PRIVATE_NOT_EXPORTED.js','utf8');
+          if(core.includes('deda_google_existing_uid_token_exchange_PRIVATE_NOT_EXPORTED') ||
+             core.includes('dedaGoogleExistingUidTokenV1'))throw Error('unexpected production export');
+          if(client.includes('auth.signInWithCredential(') ||
+             !client.includes('auth.signInWithCustomToken(ticket.customToken)') ||
+             !client.includes('DedaGoogleExistingUidServerTicket.fromCallable(') ||
+             !client.includes('autoCreate') ||
+             !client.includes("'DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN', defaultValue: false")) {
+             throw Error('client Google identity admission guard not intact');
+          }
+          if(server.includes('auth.createUser(') || server.includes('auth.updateUser(') ||
+             server.includes('auth.deleteUser(') ||
+             !server.includes('getUserByProviderUid("google.com"') ||
+             !server.includes('enforceAppCheck:true') ||
+             !server.includes('createCustomToken(uid')) {
+             throw Error('server exact UID gate not intact');
+          }
+          console.log('PASS_NO_PRODUCTION_MUTATION_OR_GOOGLE_NEW_UID_SDK_FALLBACK');
+          JS
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Signed Google JWT, canonical route, rate limits and AppCheck isolated unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-reporter=spec functions/test/deda_google_existing_uid_token_exchange_PRIVATE.test.js
+      - name: Confirm no Firebase deploy, APK, live identity reads or sign-out
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'PASS_PRIVATE_SOURCE_AND_TEST_ONLY_NO_FIREBASE_DEPLOY_NO_PLAY_NO_APK'
