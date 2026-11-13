@@ -143,3 +143,21 @@
 - الإذن بنشر فعلي أو تعديل Firebase أو نسخ الحسابات التاريخية لا يُستنتج من موافقة المستخدم على تطوير الكود المعزول.
 
 **نقطة العمل اللاحقة ضمن نفس الخطة:** حسم سلامة دخول Google على الهاتف الجديد **دون إنشاء UID بديل**، ثم إثبات ربطه الحقيقي بUID حساب سليم على هاتف أصلي، ثم ربط القراءة والاسترجاع الخاضع لحارس المجالات واختبار الأجهزة. الحساب المتعارض A/B/C وقرار `ac6afaca` يبقيان معزولين دون تعديل. لا خطط أو فروع بديلة.
+
+---
+
+## حسم مصير جلسة Firebase المجهولة قبل Google — 13 نوفمبر 2026
+
+**سبب التصحيح:** الجلسة المجهولة هي حالة Auth تاريخية طبيعية لكثير من مستخدمي DEDA 100340. رفض كل `isAnonymous` عند بطاقة Google كان يمنع معظم الحسابات القديمة من الوصول للربط رغم وجود مسار `DedaOwnerConfirmButton` المعتمد فوق «تسجيل الخروج». بالمقابل، تحويل أي anonymous عشوائي إلى Google بلا تحقق يعيد انقسام UID. لذلك نميّز من البداية، ولا نحذف أو نستبدل الجلسة.
+
+**القرار النهائي للمسار القائم (لا فرع/حارس/واجهة جديدة):**
+1. `Anonymous + originalShareId.ownerUid == live UID + directory.createdUid == live UID`: هذا **ترشيح قراءة فقط** إلى زر «تأكيد الحساب» الموجود مسبقاً فوق تسجيل الخروج. الترشيح ليس إثبات مالك ولا إذن Auth. بعد إثبات PIN الحقيقي والـUID الأصلي وإتمام pre-link local progress/purchases archive/readback الموجود في `linkExistingOriginalUid`، يتم وصل Email/Password على **نفس UID** داخل حارس الجلسة الموجود ثم حفظ provenance؛ بعدها بطاقة Google تستدعي `linkGoogleToConfirmedOriginalUid` بنفس UID فقط. لا Google مباشر على anonymous ولا إنشاء Firebase UID آخر.
+2. `Anonymous + wrong/missing/unavailable original or directory`: `SAFE HOLD` بلا Google link ولا محاولة نقل آيدي أو ممتلكات. يشمل الحساب التاريخي المتعارض A/B/C دون إعادة فحوصه أو استنتاج صاحبه.
+3. `Linked + verified original UID`: يسمح بربط Google على نفس UID بعد فحص خادمي، مع الإبقاء على الحماية والممتلكات. الآيدي المميز مظهر ولا يستخدم هوية.
+4. `Signed out/changed`: لا إجراء مصادقة تلقائي ولا ربط على التخمين.
+
+**الإصلاح المنفذ:** `lib/deda_session_diagnostic_readonly_100441.dart` أضيفت دالة ترشيح read-only `mayOfferOriginalAnonymousConfirmation` ضمن التشخيص الموجود. `lib/deda_step1_google_settings_link_100439.dart` صار يشرح للمستخدم صاحب الجلسة المجهولة المطابقة أن عليه اختيار «تأكيد الحساب» فوق «تسجيل الخروج» أولاً، ثم العودة لبطاقة Google، ويوضح HOLD للجلسة المختلفة/غير المتاحة؛ لم يُنقل زر التأكيد أو بطاقة Google، ولم يُكرر كود PIN أو archive. `test/deda_google_settings_card_private_test.dart` يختبر قبول المطابقة الأولية ورفض اختلاف/غياب السجلات والتغير.
+
+**فحص مثبت:** GitHub Actions [43460661675](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43460661675) = `SUCCESS` على `787da660e87a8c0db7e66a6b1f4e89641904c1b1` (تحليل Flutter واختبارات وسلامة المصدر المجمع وعدم تعديل Firebase/Play/Android). لا APK ولا Firebase writes ولا Google link حقيقي حدث.
+
+**الحاجز المتبقي ضمن الخطة نفسها:** فلاگ `DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT` ما زال `defaultValue:false` في المصدر العام. لا يُنفذ تحويل Anonymous فعلياً في النسخة العامة قبل تهيئة/اختبار pre-link archive مع القواعد القائمة وإثبات القراءة على هاتف حقيقي سليم، ثم تجربة Google بنفس UID والجهاز الثاني. دقة الملكية والممتلكات تظل مطلوبة؛ مرور الاختبارات لا يجيز التفعيل العام أو استرجاع أرصدة بلا مصدر. **المسار التالي الوحيد:** اعتماد وفحص عمل التأكيد/الأرشفة قبل ربط Google للحسابات السليمة، لا إعادة فحص A/B/C ولا إنشاء مسار هوية جديد.
