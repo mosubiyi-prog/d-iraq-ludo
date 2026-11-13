@@ -143,8 +143,8 @@ class _DedaGoogleSettingsLinkCardState
       setState(() => _message = conflict
           ? _t('حساب جوجل مرتبط مسبقاً؛ لم يتم دمج الحسابات.',
               'Google account already linked elsewhere; no accounts merged.')
-          : _t('تعذر إتمام الربط بأمان؛ لم تتغير بيانات حسابك.',
-              'Secure linking failed; your account data was not changed.'));
+          : _t('تعذر تأكيد ربط Google؛ تحقق من حالة البطاقة قبل إعادة المحاولة.',
+              'Google link not confirmed; check its status before retrying.'));
     } catch (_) {
       if (mounted) {
         setState(() => _message =
