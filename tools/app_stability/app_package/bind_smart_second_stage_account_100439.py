@@ -78,14 +78,17 @@ def _build_methods(arguments):
 
 """
     smart = """  void _openSmartSecondAccountStage(
-      String initialName, String normalizedPhone, {required bool accountExists}) {
+      String initialName, String normalizedPhone, {
+        required bool accountExists,
+        bool unresolvedWithoutSession = false,
+      }) {
     if (!dedaSmartSecondStageAccountEnabled ||
         !dedaStep2ExistingAccountEntryEnabled || !mounted) return;
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (pageContext) => DedaSmartSecondStageAccountPage(
         initialName: initialName,
         initialPhone: normalizedPhone,
-        initialChoice: accountExists
+        initialChoice: (accountExists || unresolvedWithoutSession)
             ? DedaSmartAccountChoice.existingAccount
             : DedaSmartAccountChoice.newAccount,
         existingAccountBuilder: (_) => _buildExistingAccountForm(
@@ -96,7 +99,17 @@ def _build_methods(arguments):
           }
           // Never silently overwrite or reuse a previous owner's number.
           // The subsequent CREATE transaction repeats this check atomically.
-          if (await DedaPinAuth.accountExists(phone)) {
+          // No Auth UID is EVER created just for first-stage discovery.
+          // When the user EXPLICITLY confirms creation on a fresh install,
+          // the existing createAccount() transaction itself rechecks the
+          // server directory atomically before writing any owner records.
+          // An Auth anonymous UID may then be created only by this action;
+          // a duplicate phone can never become a second DEDA owner.
+          if (DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(
+            linkedOwnerGuardEnabled: dedaLinkedOwnerCompatEnabled,
+            hasFirebasePrincipal: Firebase.apps.isNotEmpty &&
+                FirebaseAuth.instance.currentUser != null,
+          ) && await DedaPinAuth.accountExists(phone)) {
             throw StateError('existing-owner-number');
           }
           if (!mounted || !pageContext.mounted) {
@@ -196,7 +209,23 @@ def bind(project):
     # NOT the raw Stage2 _completeVerifiedLogin shortcut. Insert only AFTER
     # its verified exists read, BEFORE the unchanged existing/new branches.
     if current.count(PROTECTED_EXISTING) == 1:
-        routed = """      final exists = await DedaPinAuth.accountExists(normalizedPhone);
+        routed = """      // On a brand-new phone there is NO Firebase Auth UID yet.
+      // accountExists() intentionally refuses to mint one for a lookup.
+      // Offer an explicit choice with "existing" selected first; do not
+      // guess that an account exists or authorize any owner data.
+      if (DedaSmartSecondEntryRouting.needsExplicitChoiceWithoutLookup(
+        linkedOwnerGuardEnabled: dedaLinkedOwnerCompatEnabled,
+        smartSecondStageEnabled: dedaSmartSecondStageAccountEnabled,
+        existingAccountEntryEnabled: dedaStep2ExistingAccountEntryEnabled,
+        hasFirebasePrincipal: Firebase.apps.isNotEmpty &&
+            FirebaseAuth.instance.currentUser != null,
+      )) {
+        _openSmartSecondAccountStage(
+            '', normalizedPhone,
+            accountExists: false, unresolvedWithoutSession: true);
+        return;
+      }
+      final exists = await DedaPinAuth.accountExists(normalizedPhone);
       if (!mounted) return;
       if (dedaSmartSecondStageAccountEnabled &&
           dedaStep2ExistingAccountEntryEnabled) {
@@ -217,7 +246,17 @@ def bind(project):
         commit = commits[0]
         indent = commit.group("indent")
         guarded = (
-            indent + "if (dedaSmartSecondStageAccountEnabled &&\n" +
+            indent + "if (DedaSmartSecondEntryRouting.needsExplicitChoiceWithoutLookup(\n"
+            + indent + "  linkedOwnerGuardEnabled: dedaLinkedOwnerCompatEnabled,\n"
+            + indent + "  smartSecondStageEnabled: dedaSmartSecondStageAccountEnabled,\n"
+            + indent + "  existingAccountEntryEnabled: dedaStep2ExistingAccountEntryEnabled,\n"
+            + indent + "  hasFirebasePrincipal: Firebase.apps.isNotEmpty &&\n"
+            + indent + "      FirebaseAuth.instance.currentUser != null)) {\n"
+            + indent + "  _openSmartSecondAccountStage(name, normalizedPhone,\n"
+            + indent + "      accountExists: false, unresolvedWithoutSession: true);\n"
+            + indent + "  return;\n"
+            + indent + "}\n"
+            + indent + "if (dedaSmartSecondStageAccountEnabled &&\n" +
             indent + "    dedaStep2ExistingAccountEntryEnabled) {\n" +
             indent + "  final accountExists =\n" +
             indent + "      await DedaPinAuth.accountExists(normalizedPhone);\n" +
