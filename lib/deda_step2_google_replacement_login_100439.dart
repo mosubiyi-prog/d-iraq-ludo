@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -133,6 +135,28 @@ class DedaGoogleReplacementProof {
 class DedaGoogleReplacementLogin {
   const DedaGoogleReplacementLogin._();
 
+  static Future<void>? _appCheckReady;
+  /// Production Google recovery requires Play Integrity on the EXACT Play
+  /// package and signing identity. Unattested private release APKs must
+  /// fail closed: no debug bypass in release mode, no Firebase credential
+  /// transition, no UID creation when AppCheck is unavailable.
+  static Future<void> _ensureAppCheck() async {
+    if (!Platform.isAndroid || Firebase.apps.isEmpty) {
+      throw StateError('google-original-owner-appcheck-unsupported');
+    }
+    Future<void> activate() async {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: kReleaseMode
+            ? AndroidProvider.playIntegrity : AndroidProvider.debug);
+      final attestation = await FirebaseAppCheck.instance.getToken();
+      if (attestation == null || attestation.isEmpty) {
+        throw StateError('google-existing-uid-appcheck-unavailable');
+      }
+    }
+    final pending = _appCheckReady ??= activate();
+    try {await pending;} catch (_) { _appCheckReady = null; rethrow; }
+  }
+
   /// This preliminary Identity Toolkit request is deliberately no-create.
   /// Do not invoke FirebaseAuth.signInWithCredential() without obtaining
   /// the UID of an ALREADY linked Google provider in this same project.
@@ -224,6 +248,10 @@ class DedaGoogleReplacementLogin {
         DedaGoogleRecoveryStage.existingGoogleProviderResolved);
     // signInWithCredential can CREATE an unrelated UID on a provider race.
     // Server issues a custom token strictly for the pre-existing original UID.
+    await _ensureAppCheck();
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-existing-owner-appcheck-intent-expired');
+    }
     final ticket = await _serverTicket(idToken, existingUid);
     if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid ||
         ticket.originalUid != existingUid) {
