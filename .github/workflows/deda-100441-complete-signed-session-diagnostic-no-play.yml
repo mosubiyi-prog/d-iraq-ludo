@@ -1,4 +1,4 @@
-name: DEDA 100444 HEALTHY-original-UID Google and prelink archive PRIVATE signed QA NO PLAY
+name: DEDA 100445 FIRST-INSTALL SAFE UID entry and original Google PRIVATE signed QA NO PLAY
 on:
   push:
     branches:
@@ -131,7 +131,7 @@ jobs:
             # same-UID/PIN/Google/Firebase-free full assembly QA. This is
             # STRONGER than an unscoped older-branch comparison: no source,
             # Functions or platform inputs may drift between QA and signing.
-            git diff --exit-code 54b907942199e541d361fe50409b955b7abe13e2 HEAD -- \
+            git diff --exit-code 85028b14262375a7666f931ac034c08e19cee6c6 HEAD -- \
               lib/ functions/ android/ assets/ firestore.rules firebase.json \
               storage.rules google-services.json pubspec.yaml pubspec.lock
             # Also prove the protected APK's release inputs have never changed.
@@ -231,6 +231,15 @@ jobs:
           assert page.index('DedaGoogleSettingsLinkCard(')<page.index(
             "dedaText('الصوت والملاحة', 'Voice & navigation')")
           assert page.count('DedaSmartSecondStageAccountPage(')==1
+          lookup='final exists = await DedaPinAuth.accountExists(normalizedPhone);'
+          assert page.count(lookup)==1
+          assert page.index('needsExplicitChoiceWithoutLookup(') < page.index(lookup)
+          assert 'accountExists: false, unresolvedWithoutSession: true' in page
+          assert 'DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(' in page
+          assert 'DedaPinAuth.createAccount(' in page
+          # The first-page lookup MUST be non-mutating when Auth is absent.
+          # The selected existing-account option cannot create a DEDA UID.
+          assert 'auth.signInAnonymously()' not in page
           league=(root/'lib/deda_admin_league_page.dart').read_text()
           assert league.count('DedaAdminLeagueWinnersPrizes(isArabic: isArabic)')==1
           assert (root/'lib/deda_step2_completion_gate.dart').is_file()
@@ -250,13 +259,13 @@ jobs:
           assert 'DedaProbeKind.anonymous' in diag and 'DedaProbeKind.linked' in diag
           assert 'DedaProbeKind.signedOut' in diag
           assert d['googleOriginalUidSettings']['requiresOriginalUid']
-          d['versionCode']=100444
+          d['versionCode']=100445
           d['completeOwnerDelivery']=False
           d['financialRestoreEnabled']=False
           d['recoveryUserEntryEnabled']=True
           d['ownerApprovedLastSignedReferenceVersion']=100440
           d['sourceOfTruthFeatureBaselineVersion']=100440
-          d['purpose']='PRIVATE signed 100444 original-phone QA, healthy OWNER only: require original anonymous UID, real PIN and immutable server owner, checkpoint progress/purchase cloud readback before same-UID password transition, then optional Google link on same UID. No replacement-phone Google sign-in (creation race unresolved). No live actions until explicit consenting healthy-account device test; no Play, no financial restore or changes to conflicted A/B/C.'
+          d['purpose']='PRIVATE signed 100445 QA: first-install phone lookup with no Firebase principal goes to explicit account choice with previous account selected; never creates an anonymous UID merely to check a phone number. Explicit new-account creation uses the existing server atomic duplicate guard. Original Google link still needs immutable UID, PIN and prelink archival proof. New-phone direct Google sign-in remains OFF due unresolved account creation race. No Play, no live test/financial recovery, conflicted A/B/C held.'
           d['ownerPhoneVerificationPending']=True
           d['googleSettingsPlacement']='original approved settings before voice; unchanged by later unauthorized move'
           d['featureDefines']={
@@ -293,7 +302,7 @@ jobs:
           assert d['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           print('PASS_PRIVATE_GOOGLE_SOURCE_ONLY_BOTH_GUARDS_ON_NEW_PHONE_OFF_NO_USER_MUTATIONS')
           PY
-      - name: Test EXACT private 100444 same-UID and archive flags before signing (NO FIREBASE)
+      - name: Test EXACT private 100445 same-UID and archive flags before signing (NO FIREBASE)
         shell: bash
         run: |
           set -euo pipefail
@@ -307,7 +316,7 @@ jobs:
             --dart-define=DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN=false \
             --dart-define=DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY=false \
             test/deda_100444_healthy_owner_google_qa_flags_private_test.dart
-          echo "PASS_100444_OWNER_QA_FLAGS_BOTH_GUARDS_TRUE_REPLACEMENT_FALSE"
+          echo "PASS_100445_OWNER_QA_FLAGS_BOTH_GUARDS_TRUE_REPLACEMENT_FALSE"
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -329,7 +338,7 @@ jobs:
           keytool -list -keystore android/app/deda-release.jks \
             -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
           echo 'PASS_ORIGINAL_DEDA_RELEASE_SIGNER_RESTORED_ONLY_EPHEMERALLY'
-      - name: Build ONE signed 100444 HEALTHY original-phone same-UID Google+archive QA (NO PLAY)
+      - name: Build ONE signed 100445 first-install-no-UID and original Google QA (NO PLAY)
         shell: bash
         working-directory: ${{ runner.temp }}/deda-100441-complete-signed-app
         run: |
@@ -338,7 +347,7 @@ jobs:
           import json,subprocess
           from pathlib import Path
           d=json.loads(Path('internal-build-inputs.json').read_text())
-          assert d['versionCode']==100444
+          assert d['versionCode']==100445
           assert d['financialRestoreEnabled'] is False
           flags=dict(d['flags'])
           flags.update(d['featureDefines'])
@@ -352,7 +361,7 @@ jobs:
           assert flags['DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN']=='false'
           assert flags['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           cmd=['flutter','build','apk','--release','--no-pub',
-               '--build-number=100444',
+               '--build-number=100445',
                '--dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true',
                '--dart-define=DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED=true']
           for key,value in sorted(flags.items()):
@@ -380,7 +389,7 @@ jobs:
           import json,sys
           m=json.load(open(sys.argv[1]))
           assert m['packageVerification']['package']=='com.diraq.ludo.d_iraq_ludo'
-          assert m['packageVerification']['versionCode']==100444
+          assert m['packageVerification']['versionCode']==100445
           assert m['certificateSha256']=='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
           assert m['originalPortraitsVerified']==3
           assert m['featureDefines']['DEDA_SMART_SECOND_STAGE_ACCOUNT']=='true'
@@ -396,23 +405,24 @@ jobs:
           assert m['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           assert m['ownerDiagnostic100441']['manualReadOnly'] is True
           assert m['ownerDiagnostic100441']['serverUidSplitUnresolved'] is True
-          print('PASS_SIGNED_100444_PRIVATE_GOOGLE_BOTH_GUARDS_NO_NEW_PHONE_LOGIN')
+          print('PASS_SIGNED_100445_FIRST_INSTALL_UID_GUARD_GOOGLE_NEW_PHONE_OFF')
           PY
-          cp "$apk" "$output/DEDA-100444-HEALTHY-OWNER-GOOGLE-PRELINK-QA-SIGNED.apk"
+          cp "$apk" "$output/DEDA-100445-FIRST-INSTALL-GUARDED-GOOGLE-QA-SIGNED.apk"
           (cd "$output" && sha256sum *.apk > SHA256.txt)
           printf '%s\n' \
-            'DEDA 100444 PRIVATE QA only; original package and signer from 100440 protected baseline, NO Play release, no Firebase deployment.' \
+            'DEDA 100445 PRIVATE QA only; same original Android package and signing identity, NO Play release and NO Firebase deployment.' \
             'DO NOT INSTALL on a conflicted A/B/C/D account, any production administrator phone, or any device with the only copy of user purchases, diamonds, places or progress.' \
             'Only a separately approved HEALTHY original UID on an explicitly consenting test phone can attempt Confirm account: server owner + original PIN + local progress/purchase archive/readback are required BEFORE same-UID Email/Password link. Afterward Google uses linkWithCredential on that UID.' \
-            'New-phone Google sign-in is intentionally OFF due remaining auto-create race. Do not use this QA as a completed two-phone recovery or financial restoration.' \
+            'First-install no-session phone lookup now displays explicit account options, choosing existing account initially. It creates NO Firebase UID merely to check a number. Explicit NEW account creation still needs user confirmation and server atomic duplicate check.' \
+            'New-phone Google sign-in remains OFF due auto-create race. Existing-account recovery is not full data restoration; do not attempt recovery with a real or A/B/C identity.' \
             'Never uninstall, sign out, clear app storage, switch owner UID, or reset local PIN in order to test. Do not install without independent verified backup and explicit approval.' \
             'If any unexpected UID, archive error, or provider conflict is observed: STOP. Do not retry blindly. All A/B/C/D accounts and production Firebase remain unchanged by CI.' \
             > "$output/README-OWNER-INSTALL.txt"
-          echo 'PASS_SIGNED_100444_PRIVATE_HEALTHY_OWNER_GOOGLE_QA_NOT_PRODUCTION_READY'
+          echo 'PASS_SIGNED_100445_PRIVATE_FIRST_INSTALL_SAFE_ENTRY_NOT_PRODUCTION_READY'
       - name: Upload one verified installer, SHA and evidence for direct owner download
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100444-HEALTHY-OWNER-GOOGLE-PRELINK-QA-SIGNED-APK
+          name: DEDA-100445-FIRST-INSTALL-GUARDED-GOOGLE-QA-SIGNED-APK
           path: |
             ${{ runner.temp }}/deda-100441-owner-delivery/*.apk
             ${{ runner.temp }}/deda-100441-owner-delivery/*.json
