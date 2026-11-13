@@ -10,6 +10,7 @@ import 'deda_stage71_free_manager_200_service.dart';
 import 'deda_stage74_id_gift_service.dart';
 import 'deda_qa32_spark_public_identifier_directory.dart';
 import 'deda_qa32_manager_original_owner_proof.dart';
+import 'deda_verified_active_id_store.dart';
 import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor;
 
 /// Stage71: permanent gifted/self-used identifiers accessible by the verified
@@ -236,8 +237,12 @@ class DedaStage71OwnedIdentifierService {
       throw StateError('account-switched-after-use-readback');
     }
     if(persisted!=identifier) throw StateError('active-id-readback-failed');
-    // Server-confirmed selection responds immediately; never wait for
-    // optional public alias publication to update the owner's card.
+    // Server-confirmed selection updates this UID's local, visible
+    // profile, friends and league labels without waiting on public sync.
+    DedaVerifiedActiveIdStore.confirmed(
+      uid: uid, originalId: originalId,
+      displayId: identifier, fixedColor: confirmedColor,
+    );
     DedaStage71ActiveIdRefresh.changed();
     onServerConfirmed?.call();
     if (DedaQa32SparkPublicIdentifierDirectory.enabled) {
@@ -274,6 +279,7 @@ class _DedaStage71OwnedIdsPanelState
   List<DedaStage71OwnedIdentifier>? _ids;
   String? _active;
   bool _busy = false;
+  String? _pendingUseId;
   int _generation = 0;
   // DEDA_100377_P09_AUTH_UID_ROTATION_INVALIDATES_OWNED_PANEL
   // A changed account can retain the same widget originalId briefly during
@@ -298,6 +304,7 @@ class _DedaStage71OwnedIdsPanelState
       _active = null;
       _verifiedUid = null;
       _busy = false;
+      _pendingUseId = null;
     });
     if (user?.uid != null) _load();
   }
@@ -332,6 +339,7 @@ class _DedaStage71OwnedIdsPanelState
       _active = null;
       _verifiedUid = null;
       _busy = false;
+      _pendingUseId = null;
       _load();
     }
   }
@@ -397,7 +405,10 @@ class _DedaStage71OwnedIdsPanelState
     final uid = _currentUid();
     if (uid == null || uid != _verifiedUid) return;
     final generation = ++_generation;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _pendingUseId = id;
+    });
     try {
       await DedaStage71OwnedIdentifierService.use(
         original, id,
@@ -422,7 +433,10 @@ class _DedaStage71OwnedIdsPanelState
     } finally {
       if (mounted && generation == _generation &&
           widget.originalId == original && _currentUid() == uid) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = false;
+          _pendingUseId = null;
+        });
       }
     }
   }
@@ -467,7 +481,8 @@ class _DedaStage71OwnedIdsPanelState
                       ? null
                       : () => _use(widget.originalId),
                   child: Text(currentActive == widget.originalId
-                      ? 'مستخدم' : 'استخدام'),
+                      ? 'مستخدم' : _pendingUseId == widget.originalId
+                      ? 'جارِ التأكيد...' : 'استخدام'),
                 ),
               ),
             for(final owned in currentRows ?? <DedaStage71OwnedIdentifier>[])
@@ -479,7 +494,9 @@ class _DedaStage71OwnedIdsPanelState
                   onPressed:_busy||currentActive==owned.identifier
                     ?null:()=>_use(owned.identifier),
                   child:Text(currentActive==owned.identifier
-                    ?'مستخدم':'استخدام'),
+                    ? 'مستخدم'
+                    : _pendingUseId==owned.identifier
+                      ? 'جارِ التأكيد...' : 'استخدام'),
                 ),
               ),
           ],
