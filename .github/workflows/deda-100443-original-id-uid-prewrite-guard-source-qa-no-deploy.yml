@@ -8,6 +8,12 @@ on:
       - "lib/deda_backend.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
       - "lib/deda_100430_owner_uid_continuity.dart"
+      - "lib/deda_progress_backup_coordinator.dart"
+      - "lib/deda_legacy_purchase_evidence.dart"
+      - "lib/deda_step2_before_uid_link_evidence_checkpoint.dart"
+      - "test/deda_purchase_backup_coordinator_test.dart"
+      - "test/deda_progress_backup_coordinator_test.dart"
+      - "test/deda_legacy_purchase_evidence_test.dart"
       - "lib/deda_step1_google_settings_link_100439.dart"
       - "lib/deda_step2_google_replacement_login_100439.dart"
       - "test/deda_google_settings_card_private_test.dart"
@@ -83,7 +89,15 @@ jobs:
           flutter pub get
           dart analyze --no-fatal-warnings \
             lib/deda_backend.dart lib/deda_100431_linked_owner_session_policy.dart \
-            lib/deda_100430_owner_uid_continuity.dart test/deda_session_transition_gate_test.dart
+            lib/deda_100430_owner_uid_continuity.dart test/deda_session_transition_gate_test.dart \
+            lib/deda_progress_backup_coordinator.dart \
+            lib/deda_legacy_purchase_evidence.dart \
+            lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
+            test/deda_purchase_backup_coordinator_test.dart
+          flutter test --no-pub \
+            test/deda_progress_backup_coordinator_test.dart \
+            test/deda_purchase_backup_coordinator_test.dart \
+            test/deda_legacy_purchase_evidence_test.dart
           flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
             test/deda_original_share_uid_prewrite_guard_100443_test.dart \
             test/deda_pin_same_uid_100441_optin_private_test.dart
@@ -103,6 +117,16 @@ jobs:
           assert 'live.kind == DedaSessionAuthKind.authenticated' in section
           assert 'DedaAuthRuntime.checkSnapshot(linkedSnapshot)' in section
           print('PASS_SAME_UID_ORIGINAL_PHONE_LINK_ARCHIVE_AND_SHARED_AUTH_LANE')
+          checkpoint=Path('lib/deda_step2_before_uid_link_evidence_checkpoint.dart').read_text()
+          coordinator=Path('lib/deda_progress_backup_coordinator.dart').read_text()
+          purchase=Path('lib/deda_legacy_purchase_evidence.dart').read_text()
+          assert 'requireNonEmptyEvidence: true' in checkpoint
+          assert 'result.journalCleared' in checkpoint
+          assert 'intent.purchaseCapture!.encode()' in checkpoint
+          assert '!capture.hasAnyLocalRecord &&' in coordinator
+          assert 'purchaseCapture?.hasAnyLocalRecord ?? false' in coordinator
+          assert 'bool get hasAnyLocalRecord =>' in purchase
+          print('PASS_PRELINK_TRUE_PROGRESS_OR_PURCHASE_SOURCE_AND_CLOUD_READBACK_GATE')
           google=s.split('  static Future<String> linkGoogleToConfirmedOriginalUid({',1)[1]
           google=google.split('  static String validatedServerProfileName(',1)[0]
           assert 'DedaAuthRuntime.controller.transition<UserCredential>(' in google
@@ -181,10 +205,16 @@ jobs:
             cp "$GITHUB_WORKSPACE/test/deda_google_settings_card_private_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_google_original_uid_link_private_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_google_replacement_existing_uid_private_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_purchase_backup_coordinator_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_progress_backup_coordinator_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_legacy_purchase_evidence_test.dart" test/
             flutter test --no-pub \
               test/deda_google_settings_card_private_test.dart \
               test/deda_google_original_uid_link_private_test.dart \
-              test/deda_google_replacement_existing_uid_private_test.dart
+              test/deda_google_replacement_existing_uid_private_test.dart \
+              test/deda_progress_backup_coordinator_test.dart \
+              test/deda_purchase_backup_coordinator_test.dart \
+              test/deda_legacy_purchase_evidence_test.dart
           )
       - name: Confirm NO signing, APK, Firebase write or Play deployment
         run: echo "PASS_DEDA_100443_SOURCE_ONLY_PRODUCTION_UNCHANGED"
