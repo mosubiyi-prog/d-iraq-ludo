@@ -9,6 +9,9 @@ on:
       - "lib/deda_100431_linked_owner_session_policy.dart"
       - "lib/deda_100430_owner_uid_continuity.dart"
       - "lib/deda_stage71_free_owned_use_profile.dart"
+      - "lib/deda_step2_smart_second_stage_account_page_100439.dart"
+      - "tools/app_stability/app_package/bind_smart_second_stage_account_100439.py"
+      - "test/deda_smart_second_stage_account_private_test.dart"
       - "lib/deda_verified_active_id_store.dart"
       - "test/deda_stage71_four_free_cards_dual200_widget_test.dart"
       - "test/deda_100410_unified_active_id_test.dart"
@@ -98,7 +101,10 @@ jobs:
             lib/deda_legacy_purchase_evidence.dart \
             lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
             lib/deda_verified_active_id_store.dart \
+            lib/deda_step2_smart_second_stage_account_page_100439.dart \
+            test/deda_smart_second_stage_account_private_test.dart \
             test/deda_purchase_backup_coordinator_test.dart
+          flutter test --no-pub test/deda_smart_second_stage_account_private_test.dart
           flutter test --no-pub \
             test/deda_progress_backup_coordinator_test.dart \
             test/deda_purchase_backup_coordinator_test.dart \
@@ -160,6 +166,18 @@ jobs:
           assert 'DedaLinkedOwnerSessionPolicy.verified(owner, account)' in card
           assert 'auth.currentUser?.uid != startingUid' in card
           print('PASS_GOOGLE_SETTINGS_VERIFIED_OWNER_UID_ONLY_NO_DETACHED_SESSION')
+          smart=Path('lib/deda_step2_smart_second_stage_account_page_100439.dart').read_text()
+          binder=Path('tools/app_stability/app_package/bind_smart_second_stage_account_100439.py').read_text()
+          pin=Path('lib/deda_pin_auth.dart').read_text()
+          assert 'class DedaSmartSecondEntryRouting' in smart
+          assert 'needsExplicitChoiceWithoutLookup(' in smart
+          assert 'mayPreflightExplicitCreation(' in smart
+          assert 'accountExists() intentionally refuses to mint one for a lookup' in binder
+          assert 'unresolvedWithoutSession: true' in binder
+          assert 'DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(' in binder
+          assert "final directorySnapshot" not in binder
+          assert "throw StateError('deda-explicit-auth-entry-required-no-new-uid')" in pin
+          print('PASS_FRESH_PHONE_FIRST_SCREEN_EXPLICIT_CHOICE_NO_IMPLICIT_ANONYMOUS_UID')
           PY
       - name: Rebuild EXACT 100441 full original assembly SOURCE ONLY without APK
         shell: bash
@@ -209,6 +227,16 @@ jobs:
           assert section.index("canStageOriginalShareProjection(") < section.index(write)
           assert "DedaGoogleSettingsLinkCard(" in (p / "main.dart").read_text()
           assert "DedaSessionDiagnosticReadOnlyTile(" in (p / "main.dart").read_text()
+          entry=(p / "main.dart").read_text()
+          lookup="final exists = await DedaPinAuth.accountExists(normalizedPhone);"
+          assert entry.count(lookup)==1
+          assert entry.index("needsExplicitChoiceWithoutLookup(") < entry.index(lookup)
+          assert "accountExists: false, unresolvedWithoutSession: true" in entry
+          assert "DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(" in entry
+          assert entry.index("mayPreflightExplicitCreation(") < entry.index("await DedaPinAuth.accountExists(phone)")
+          assert (p / "deda_pin_auth.dart").read_text().count(
+              "deda-explicit-auth-entry-required-no-new-uid")==1
+          print("PASS_FRESH_PHONE_NO_SESSION_ROUTES_TO_EXISTING_FIRST_NO_UID")
           print("PASS_VERIFIED_REAL_APP_FULL_ASSEMBLY_SAME_UID_GUARD_PRESENT")
           PY
           (
@@ -220,7 +248,8 @@ jobs:
               lib/deda_100430_owner_uid_continuity.dart \
               lib/deda_step1_google_settings_link_100439.dart \
               lib/deda_step2_google_replacement_login_100439.dart \
-              lib/deda_stage71_free_owned_use_profile.dart
+              lib/deda_stage71_free_owned_use_profile.dart \
+              lib/deda_step2_smart_second_stage_account_page_100439.dart
             mkdir -p test
             cp "$GITHUB_WORKSPACE/test/deda_google_settings_card_private_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_google_original_uid_link_private_test.dart" test/
@@ -230,6 +259,7 @@ jobs:
             cp "$GITHUB_WORKSPACE/test/deda_legacy_purchase_evidence_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_stage71_four_free_cards_dual200_widget_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_100410_unified_active_id_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_smart_second_stage_account_private_test.dart" test/
             flutter test --no-pub \
               test/deda_google_settings_card_private_test.dart \
               test/deda_google_original_uid_link_private_test.dart \
@@ -238,7 +268,8 @@ jobs:
               test/deda_purchase_backup_coordinator_test.dart \
               test/deda_legacy_purchase_evidence_test.dart \
               test/deda_stage71_four_free_cards_dual200_widget_test.dart \
-              test/deda_100410_unified_active_id_test.dart
+              test/deda_100410_unified_active_id_test.dart \
+              test/deda_smart_second_stage_account_private_test.dart
           )
       - name: Check LIVE Firestore archive route presence with firebase.readonly (no documents, no writes)
         shell: bash
