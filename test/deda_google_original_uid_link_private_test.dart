@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100430_owner_uid_continuity.dart';
 import 'package:d_iraq_ludo/deda_100431_linked_owner_session_policy.dart';
 import 'package:d_iraq_ludo/deda_step2_before_uid_link_evidence_checkpoint.dart';
+import 'package:d_iraq_ludo/deda_step2_completion_gate.dart';
 
 const account = '9647712345678';
 const originalUid = 'immutable-owner-uid';
@@ -150,5 +151,45 @@ void main() {
         (providerId: 'google.com', email: 'owner@gmail.com'),
       ],
     ), false);
+  });
+
+  test('100445 update guard never treats a missing or different UID as the original owner', () {
+    expect(DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
+      linkedOwnerPilotEnabled: true, hasCurrentPrincipal: false), isFalse);
+    expect(DedaLinkedOwnerSessionPolicy.mayUseUnverifiedLocalLogin(
+      linkedOwnerPilotEnabled: true,
+      hasStoredOriginalUid: true, hasStoredAccountKey: true), isFalse);
+    bool canResume({String? uid = originalUid, String? storedUid = originalUid,
+      bool anonymous = false, String email = '$account@deda-login.invalid'}) =>
+        DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
+          savedOriginalUid: storedUid, savedAccountKey: account,
+          localPhone: account, currentUid: uid, currentEmail: email,
+          currentIsAnonymous: anonymous);
+    expect(canResume(), isTrue);
+    expect(canResume(uid: 'replacement-uid'), isFalse);
+    expect(canResume(uid: null), isFalse);
+    expect(canResume(storedUid: 'foreign-saved-uid'), isFalse);
+    expect(canResume(anonymous: true), isFalse);
+    expect(canResume(email: 'unknown@gmail.com'), isFalse);
+  });
+
+  test('a checkpoint or source readback must never claim complete recovery or grant finances', () {
+    const evidence = DedaStep2PreLinkEvidenceReceipt(
+      captureId: 'capture_original_source_00001',
+      sourceUid: originalUid,
+      progressReadback: true, purchaseReadback: true,
+    );
+    expect(evidence.fullAccountRestored, isFalse);
+    expect(evidence.canRestoreDiamonds, isFalse);
+    expect(evidence.canRestoreXp, isFalse);
+    expect(evidence.allowPhoneCutover, isFalse);
+    const report = DedaStep2CompletionReport({
+      'originalOwnerUid': DedaStep2CompletionState.verifiedExistingSource,
+      'levelPoints': DedaStep2CompletionState.missingHistoricalProof,
+    });
+    expect(report.allDomainsRestored, isFalse);
+    expect(report.canPrepareFullRecoveryApk, isFalse);
+    expect(report.canIssueFinancialRewards, isFalse);
+    expect(report.canDeleteOldPhoneData, isFalse);
   });
 }
