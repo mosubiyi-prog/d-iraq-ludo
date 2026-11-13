@@ -282,3 +282,167 @@ test("offline surgery: foreign account and reviewer mismatch never produce a pla
       proofs,syntheticOneAccountDocuments(),
       syntheticRevisions(syntheticOneAccountDocuments())).outcome,"HOLD");
 });
+
+
+// Extend the SAME offline-only recovery rehearsal with journal/replay and
+// rollback checks. This is a SYNTHETIC state-machine model, NOT Firebase Admin
+// SDK code. A successful result never authorizes a real cutover.
+function offlineJournalAndRollbackRehearsal({
+  proofs, documents, expectedRevisions, priorJournal = null,
+  failAfterStagedStep = null, corruptReadback = false,
+}) {
+  const before = structuredClone(documents);
+  const plan = offlineReconciliationRehearsal(
+      proofs, documents, expectedRevisions);
+  const safe = (outcome, reason) => ({
+    outcome, reason, restored:structuredClone(before),
+    actualWriteCount:0, tokenIssued:false, googleLinked:false,
+    cutoverAuthorized:false,
+  });
+  if(plan.outcome !== "OFFLINE_PROPOSAL_ONLY") {
+    return safe("HOLD", plan.reason);
+  }
+  // Only synthetic revisions and a verified test-fixture target enter this
+  // key. It is NOT a trustworthy production operation or approval identifier.
+  const revisionNames=["directory","credentials","route","social"];
+  const key = JSON.stringify([
+    proofs.serverSnapshot.accountKey, proofs.independentProof.originalUid,
+    ...revisionNames.map(name => expectedRevisions[name]),
+  ]);
+  if(priorJournal !== null) {
+    if(priorJournal.key === key &&
+        priorJournal.state === "SIMULATED_COMPLETED") {
+      return safe("REPLAY_NOOP", "ALREADY_SIMULATED");
+    }
+    return safe("HOLD", "PRIOR_JOURNAL_CONFLICT_OR_INCOMPLETE");
+  }
+
+  const working=structuredClone(before);
+  const target=proofs.independentProof.originalUid;
+  for(const [index, section] of plan.changedCollections.entries()) {
+    if(section === "target-user-projection") {
+      working.users[target] = structuredClone(plan.staged.users[target]);
+    } else {
+      working[section] = structuredClone(plan.staged[section]);
+    }
+    // An interruption at ANY stage must not leave a partial proposal as
+    // a usable output. The caller only receives a restored synthetic image.
+    if(failAfterStagedStep === index + 1) {
+      return safe("ROLLBACK_SIMULATED", "INTERRUPTED_STAGED_CHANGE");
+    }
+  }
+  if(corruptReadback) {
+    // Deliberate simulated concurrent overwrite, never written to Firebase.
+    working.route.ownerUid = "foreign-live-owner";
+  }
+
+  const reconciled = [
+    working.directory.createdUid,
+    working.credentials.createdUid,
+    working.route.ownerUid,
+    working.social.ownerUid,
+  ].every(uid => uid === target) &&
+      working.users[target].accountKey === proofs.serverSnapshot.accountKey &&
+      working.users[target].sharePersonalId === proofs.serverSnapshot.originalId;
+  const protectedDomainsUnchanged = [
+    "financial","admin","anotherAccount","session","googleLinked",
+  ].every(name => JSON.stringify(working[name]) === JSON.stringify(before[name]));
+  const historicalUsersUntouched = [A,B,C].every(uid =>
+    uid === target || JSON.stringify(working.users[uid]) ===
+      JSON.stringify(before.users[uid]));
+  if(!reconciled || !protectedDomainsUnchanged ||
+      !historicalUsersUntouched) {
+    return safe("ROLLBACK_SIMULATED", "POST_STAGE_READBACK_FAILED");
+  }
+  return {
+    outcome:"SIMULATED_COMPLETED", staged:working,
+    journal:{key,state:"SIMULATED_COMPLETED"},
+    actualWriteCount:0,tokenIssued:false,googleLinked:false,
+    cutoverAuthorized:false,
+  };
+}
+
+test("offline journal: interrupted staged changes rollback for every target UID",()=>{
+  for(const target of [A,B,C]) {
+    const proofs=verifiedProofs();
+    proofs.independentProof.originalUid=target;
+    proofs.reviewRecord.reviewedOriginalUid=target;
+    const docs=syntheticOneAccountDocuments();
+    const before=structuredClone(docs);
+    const plan=offlineReconciliationRehearsal(
+        proofs,docs,syntheticRevisions(docs));
+    assert.ok(plan.changedCollections.length > 0);
+    for(let failedStep=1;failedStep<=plan.changedCollections.length;failedStep++){
+      const stopped=offlineJournalAndRollbackRehearsal({
+        proofs,documents:docs,expectedRevisions:syntheticRevisions(docs),
+        failAfterStagedStep:failedStep,
+      });
+      assert.equal(stopped.outcome,"ROLLBACK_SIMULATED");
+      assert.deepEqual(stopped.restored,before);
+      assert.equal(stopped.actualWriteCount,0);
+      assert.equal(stopped.cutoverAuthorized,false);
+      assert.deepEqual(docs,before);
+    }
+  }
+});
+
+test("offline journal: identical replay does nothing; changed journal refuses",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const before=structuredClone(docs);
+  const args={proofs:verifiedProofs(),documents:docs,
+    expectedRevisions:syntheticRevisions(docs)};
+  const first=offlineJournalAndRollbackRehearsal(args);
+  assert.equal(first.outcome,"SIMULATED_COMPLETED");
+  assert.equal(first.actualWriteCount,0);
+  assert.equal(first.tokenIssued,false);
+  assert.equal(first.googleLinked,false);
+  assert.equal(first.cutoverAuthorized,false);
+  const replay=offlineJournalAndRollbackRehearsal({
+    ...args,priorJournal:first.journal,
+  });
+  assert.equal(replay.outcome,"REPLAY_NOOP");
+  assert.deepEqual(replay.restored,before);
+  assert.deepEqual(docs,before);
+  const conflict=offlineJournalAndRollbackRehearsal({
+    ...args,priorJournal:{...first.journal,key:"different-attempt"},
+  });
+  assert.equal(conflict.outcome,"HOLD");
+  assert.equal(conflict.reason,"PRIOR_JOURNAL_CONFLICT_OR_INCOMPLETE");
+  const incomplete=offlineJournalAndRollbackRehearsal({
+    ...args,priorJournal:{...first.journal,state:"IN_PROGRESS"},
+  });
+  assert.equal(incomplete.outcome,"HOLD");
+});
+
+test("offline journal: altered readback triggers rollback, protects assets",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const before=structuredClone(docs);
+  const r=offlineJournalAndRollbackRehearsal({
+    proofs:verifiedProofs(),documents:docs,
+    expectedRevisions:syntheticRevisions(docs),
+    corruptReadback:true,
+  });
+  assert.equal(r.outcome,"ROLLBACK_SIMULATED");
+  assert.equal(r.reason,"POST_STAGE_READBACK_FAILED");
+  assert.deepEqual(r.restored,before);
+  assert.deepEqual(docs,before);
+  assert.equal(r.tokenIssued,false);
+});
+
+test("offline journal: stale snapshot or missing ownership proof blocks before staging",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const revisions=syntheticRevisions(docs);
+  revisions.social++;
+  const r=offlineJournalAndRollbackRehearsal({
+    proofs:verifiedProofs(),documents:docs,expectedRevisions:revisions,
+  });
+  assert.equal(r.outcome,"HOLD");
+  assert.equal(r.reason,"STALE_OR_CONFLICTING_SERVER_SNAPSHOT");
+  const proofs=verifiedProofs();
+  proofs.independentProof=null;
+  const noProof=offlineJournalAndRollbackRehearsal({
+    proofs,documents:docs,expectedRevisions:syntheticRevisions(docs),
+  });
+  assert.equal(noProof.outcome,"HOLD");
+  assert.equal(noProof.reason,"INDEPENDENT_PROOF_REQUIRED");
+});
