@@ -205,6 +205,28 @@ jobs:
           Path(os.environ['RUNNER_TEMP'],'deda-point1-firebase-alternate-iam.json').write_text(
               json.dumps(out,sort_keys=True,indent=2)+'\n')
           PY
+      - name: Check existing Firebase CLI login credential WITHOUT deployment
+        shell: bash
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FIREBASE_TOKEN:-}" ]; then
+            echo 'FIREBASE_CLI_TOKEN_CONFIGURED=false'
+            exit 0
+          fi
+          echo 'FIREBASE_CLI_TOKEN_CONFIGURED=true'
+          if timeout 120 npx --yes firebase-tools@13.35.1 functions:list \
+              --project deda-25b88 --token "$FIREBASE_TOKEN" --non-interactive \
+              > "$RUNNER_TEMP/deda-point1-cli-readonly.txt" 2>/dev/null; then
+            echo 'FIREBASE_CLI_TOKEN_CAN_LIST_FUNCTIONS=true'
+            grep -q 'dedaGoogleExistingUidTokenV1' "$RUNNER_TEMP/deda-point1-cli-readonly.txt" \
+              && echo 'GOOGLE_ORIGINAL_UID_PRODUCTION_FUNCTION_PRESENT=true' \
+              || echo 'GOOGLE_ORIGINAL_UID_PRODUCTION_FUNCTION_PRESENT=false'
+          else
+            echo 'FIREBASE_CLI_TOKEN_CAN_LIST_FUNCTIONS=false'
+          fi
+          rm -f "$RUNNER_TEMP/deda-point1-cli-readonly.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: DEDA-POINT1-GOOGLE-PRODUCTION-READONLY-STATUS
