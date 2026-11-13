@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -16,6 +17,28 @@ import 'deda_step2_spark_linked_uid_readonly.dart';
 /// existing PIN login, Firebase rules and financial records stay unchanged.
 const bool dedaStep2GoogleReplacementLoginEnabled = bool.fromEnvironment(
   'DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN', defaultValue: false);
+
+/// Token for the exact previously-linked Firebase UID. Never accept a
+/// client-chosen UID; cross-check against no-create Identity Toolkit proof.
+class DedaGoogleExistingUidServerTicket {
+  const DedaGoogleExistingUidServerTicket({
+    required this.originalUid, required this.customToken,
+  });
+  final String originalUid, customToken;
+  factory DedaGoogleExistingUidServerTicket.fromCallable(Object? raw, {
+    required String expectedExistingUid,
+  }) {
+    if (raw is! Map) throw StateError('google-existing-uid-server-denied');
+    final uid = raw['originalUid'], token = raw['customToken'];
+    if (uid is! String || !RegExp(r'^[A-Za-z0-9:_-]{6,128}$').hasMatch(uid) ||
+        uid != expectedExistingUid || token is! String ||
+        token.isEmpty || token.length > 8192) {
+      throw StateError('google-existing-uid-server-mismatch');
+    }
+    return DedaGoogleExistingUidServerTicket(
+        originalUid: uid, customToken: token);
+  }
+}
 
 class DedaGoogleVerifiedExistingOwner {
   const DedaGoogleVerifiedExistingOwner({
@@ -146,6 +169,22 @@ class DedaGoogleReplacementLogin {
 
   /// A successfully verified IDENTITY is not a restored profile or wallet.
   /// No DEDA profile preferences or database writes occur in this method.
+  /// Trusted callable: signed Google subject + provider + original UID,
+  /// verified by AppCheck and canonical account documents before token issue.
+  /// A missing or unapproved endpoint must fail without Firebase SDK sign-in.
+  static Future<DedaGoogleExistingUidServerTicket> _serverTicket(
+      String idToken, String expectedUid) async {
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'dedaGoogleExistingUidTokenV1',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+    );
+    final response = await callable.call(<String, Object>{
+      'googleIdToken': idToken,
+    });
+    return DedaGoogleExistingUidServerTicket.fromCallable(
+      response.data, expectedExistingUid: expectedUid);
+  }
+
   static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
     required bool explicitUserAction,
     required bool Function() isCurrentIntent,
@@ -183,8 +222,13 @@ class DedaGoogleReplacementLogin {
     }
     onProgress?.call(
         DedaGoogleRecoveryStage.existingGoogleProviderResolved);
-    final credential = GoogleAuthProvider.credential(
-        idToken: idToken, accessToken: tokens.accessToken);
+    // signInWithCredential can CREATE an unrelated UID on a provider race.
+    // Server issues a custom token strictly for the pre-existing original UID.
+    final ticket = await _serverTicket(idToken, existingUid);
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid ||
+        ticket.originalUid != existingUid) {
+      throw StateError('google-existing-owner-ticket-expired');
+    }
     try {
       return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
         kind: DedaSessionTransitionKind.ownerLogin,
@@ -200,7 +244,7 @@ class DedaGoogleReplacementLogin {
           final result = await DedaAuthRuntime.controller
               .transition<UserCredential>(
             kind: DedaSessionTransitionKind.ownerLogin,
-            action: () => auth.signInWithCredential(credential),
+            action: () => auth.signInWithCustomToken(ticket.customToken),
             accepts: (result, live) =>
                 result.user?.uid == existingUid && live.uid == existingUid &&
                 live.kind == DedaSessionAuthKind.authenticated,
