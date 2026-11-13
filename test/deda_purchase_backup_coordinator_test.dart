@@ -22,6 +22,18 @@ class PurchaseRead implements DedaLegacyPurchaseReadStore {
       key.endsWith('FRAME_03')?paid:key.endsWith('FRAME_05')?'charging':null};
   }
 }
+// Real old phones may have no progress keys but an existing frame journal.
+// All-null evidence is explicitly absent, never a fabricated zero balance.
+class EmptyProgressRead implements DedaLegacyProgressReadStore {
+  @override
+  Future<Map<String,String?>> readStrings(List<String> keys) async =>
+      {for(final key in keys) key:null};
+}
+class EmptyPurchaseRead implements DedaLegacyPurchaseReadStore {
+  @override
+  Future<Map<String,Object?>> readValues(List<String> keys) async =>
+      {for(final key in keys) key:null};
+}
 class PurchaseIo extends fixture.Io {
   bool losePurchaseAck=false;
   @override
@@ -35,9 +47,14 @@ class H {
   final io=PurchaseIo(),source=fixture.Source(),journal=fixture.Journal(),read=PurchaseRead();
   late final archive=DedaProgressEvidenceStore(io);
   late final sidecar=DedaLegacyPurchaseEvidenceStore(archive);
-  DedaProgressBackupCoordinator fresh({bool purchases=true})=>DedaProgressBackupCoordinator(
-    reader:DedaLegacyProgressReader(source),archive:archive,journal:journal,
-    purchaseReader:purchases?DedaLegacyPurchaseReader(read):null,purchaseArchive:purchases?sidecar:null);
+  DedaProgressBackupCoordinator fresh({
+    bool purchases=true,
+    DedaLegacyProgressReadStore? progressSource,
+    DedaLegacyPurchaseReadStore? purchaseSource,
+  })=>DedaProgressBackupCoordinator(
+    reader:DedaLegacyProgressReader(progressSource??source),archive:archive,journal:journal,
+    purchaseReader:purchases?DedaLegacyPurchaseReader(purchaseSource??read):null,
+    purchaseArchive:purchases?sidecar:null);
   late final backup=fresh();
   Future<DedaProgressBackupIntent> prepare()=>backup.prepare(accountKey:account,captureId:id,isCurrent:()=>true);
   Future<DedaProgressBackupResult> upload({DedaProgressBackupCoordinator? via})=>
@@ -47,6 +64,48 @@ class H {
 }
 void main(){
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('prelink accepts real frame inventory/journal when all optional progress keys are absent',() async {
+    final h=H(),backup=h.fresh(progressSource:EmptyProgressRead());
+    final saved=await backup.prepare(accountKey:account,captureId:id,
+        isCurrent:()=>true,requireNonEmptyEvidence:true);
+    expect(saved.capture.hasAnyLocalRecord,isFalse);
+    expect(saved.purchaseCapture?.hasAnyLocalRecord,isTrue);
+    expect(h.journal.values[account],saved.encode());
+    // A lost acknowledgement/restart uses the exact saved source, not new bytes.
+    final retry=await h.fresh(progressSource:EmptyProgressRead()).prepare(
+        accountKey:account,captureId:'different_safe_capture_id_00002',
+        isCurrent:()=>true,requireNonEmptyEvidence:true);
+    expect(retry.encode(),saved.encode());
+    final result=await backup.uploadPending(accountKey:account,isCurrent:()=>true);
+    expect(result.purchaseEvidence?.capture.encode(),saved.purchaseCapture?.encode());
+    expect(result.journalCleared,isTrue);
+    expect(h.io.writes,2);
+  });
+
+  test('prelink refuses to mint evidence or UID transition when progress and purchases are both absent',() async {
+    final h=H(),backup=h.fresh(
+        progressSource:EmptyProgressRead(),purchaseSource:EmptyPurchaseRead());
+    await expectLater(backup.prepare(accountKey:account,captureId:id,
+        isCurrent:()=>true,requireNonEmptyEvidence:true),
+        throwsA(isA<DedaProgressEvidenceMissing>()));
+    expect(h.journal.values[account],isNull);
+    expect(h.io.writes,0);
+  });
+
+  test('prelink will not adopt an already-pending empty snapshot as an account archive',() async {
+    final h=H();
+    final old=h.fresh(progressSource:EmptyProgressRead(),purchaseSource:EmptyPurchaseRead());
+    final saved=await old.prepare(accountKey:account,captureId:id,isCurrent:()=>true);
+    expect(saved.capture.hasAnyLocalRecord,isFalse);
+    expect(saved.purchaseCapture?.hasAnyLocalRecord,isFalse);
+    await expectLater(h.fresh().prepare(accountKey:account,
+        captureId:'different_safe_capture_id_00003',
+        isCurrent:()=>true,requireNonEmptyEvidence:true),
+        throwsA(isA<DedaProgressEvidenceMissing>()));
+    expect(h.journal.values[account],saved.encode());
+    expect(h.io.writes,0);
+  });
+
   test('prepare persists one v2 intent containing progress and exact paid/charging snapshot before either upload',() async {
     final h=H(),intent=await h.prepare();final encoded=h.journal.values[account]!;
     expect(jsonDecode(encoded)['format'],2);expect(intent.purchaseCapture!.journals['FRAME_03'],'paid');
