@@ -59,8 +59,8 @@ jobs:
           o=clients[0].get('oauth_client',[]) if len(clients)==1 else []
           web=[x for x in o if x.get('client_type')==3]
           android=[x for x in o if x.get('client_type')==1]
-          report['androidOAuthConfig']='one_web_one_or_more_android' if
-              len(web)==1 and bool(android) else 'not_verified'
+          report['androidOAuthConfig']=('one_web_one_or_more_android' if
+              len(web)==1 and bool(android) else 'not_verified')
           # Checking a signed QA APK SHA1 is NOT Play app signing approval.
           report['playSigningFingerprint']='not_proven_by_qa_certificate'
           raw=os.getenv('PROD_SA') or os.getenv('FALLBACK_SA') or ''
@@ -91,24 +91,24 @@ jobs:
               report['cloudFunctionsV2']='available' if status==200 else f'http_{status}'
               if status==200:
                   names=[str(f.get('name','')).split('/')[-1] for f in data.get('functions',[])]
-                  report['existingGoogleEndpoint']='active_present' if
-                      'dedaGoogleExistingUidTokenV1' in names else 'not_deployed'
+                  report['existingGoogleEndpoint']=('active_present' if
+                      'dedaGoogleExistingUidTokenV1' in names else 'not_deployed')
               perms=['cloudfunctions.functions.create','cloudfunctions.functions.update',
                 'cloudfunctions.functions.get','iam.serviceAccounts.actAs',
                 'cloudbuild.builds.create','run.services.create']
               status,data=ask('POST',f'https://cloudresourcemanager.googleapis.com/v1/{p}:testIamPermissions',
                 {'permissions':perms})
               allowed=set(data.get('permissions',[])) if status==200 else set()
-              report['permissions']={k:k in allowed for k in perms} if
-                  status==200 else f'unverified_http_{status}'
+              report['permissions']=({k:k in allowed for k in perms} if
+                  status==200 else f'unverified_http_{status}')
               report['canDeployFunctions']=status==200 and all(k in allowed for k in [
                   'cloudfunctions.functions.create','cloudfunctions.functions.update',
                   'iam.serviceAccounts.actAs'])
               for api,name in [('cloudbuild','cloudBuild'),('run','cloudRun')]:
                   status,data=ask('GET',
                     f'https://serviceusage.googleapis.com/v1/{p}/services/{api}.googleapis.com')
-                  report[name]='enabled' if status==200 and data.get('state')=='ENABLED' else
-                      f'unverified_http_{status}'
+                  report[name]=('enabled' if status==200 and data.get('state')=='ENABLED' else
+                      f'unverified_http_{status}')
               # App Check registration must be verified with actual Play
               # package/certificate; lack of read permission is UNKNOWN.
               status,data=ask('GET',
@@ -117,8 +117,8 @@ jobs:
               status,data=ask('GET',
                   f'https://identitytoolkit.googleapis.com/admin/v2/{p}/config')
               google=(data.get('signIn',{}).get('allowDuplicateEmails') if status==200 else None)
-              report['authGoogleProvider']='config_readable_requires_provider_review' if
-                  status==200 else f'unverified_http_{status}'
+              report['authGoogleProvider']=('config_readable_requires_provider_review' if
+                  status==200 else f'unverified_http_{status}')
           print('DEDA_POINT1_READONLY_RELEASE_STATUS='+json.dumps(report,sort_keys=True))
           Path(os.environ['RUNNER_TEMP'],'deda-point1-google-readiness.json').write_text(
                json.dumps(report,sort_keys=True,indent=2)+'\n')
