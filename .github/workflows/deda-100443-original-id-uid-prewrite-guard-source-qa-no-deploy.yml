@@ -8,6 +8,10 @@ on:
       - "lib/deda_backend.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
       - "lib/deda_100430_owner_uid_continuity.dart"
+      - "lib/deda_step1_google_settings_link_100439.dart"
+      - "lib/deda_step2_google_replacement_login_100439.dart"
+      - "test/deda_google_settings_card_private_test.dart"
+      - "test/deda_google_replacement_existing_uid_private_test.dart"
       - "test/deda_session_transition_gate_test.dart"
       - "test/deda_google_original_uid_link_private_test.dart"
       - "test/deda_step2_spark_linked_uid_readonly_private_test.dart"
@@ -99,6 +103,20 @@ jobs:
           assert 'live.kind == DedaSessionAuthKind.authenticated' in section
           assert 'DedaAuthRuntime.checkSnapshot(linkedSnapshot)' in section
           print('PASS_SAME_UID_ORIGINAL_PHONE_LINK_ARCHIVE_AND_SHARED_AUTH_LANE')
+          google=s.split('  static Future<String> linkGoogleToConfirmedOriginalUid({',1)[1]
+          google=google.split('  static String validatedServerProfileName(',1)[0]
+          assert 'DedaAuthRuntime.controller.transition<UserCredential>(' in google
+          assert 'live.uid == uid' in google
+          assert 'auth.currentUser!.reload()' in google
+          assert 'auth.signInWithCredential(' not in google
+          card=Path('lib/deda_step1_google_settings_link_100439.dart').read_text()
+          assert '_linkDetachedAnonymous' not in card
+          assert 'mayOfferDetachedGoogleLink' not in card
+          assert 'linkWithCredential(' not in card
+          assert card.count('DedaOwnerUidContinuity.linkGoogleToConfirmedOriginalUid(')==1
+          assert 'DedaLinkedOwnerSessionPolicy.verified(owner, account)' in card
+          assert 'auth.currentUser?.uid != startingUid' in card
+          print('PASS_GOOGLE_SETTINGS_VERIFIED_OWNER_UID_ONLY_NO_DETACHED_SESSION')
           PY
       - name: Rebuild EXACT 100441 full original assembly SOURCE ONLY without APK
         shell: bash
@@ -155,7 +173,18 @@ jobs:
             flutter pub get
             dart analyze --no-fatal-warnings \
               lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
-              lib/deda_100431_linked_owner_session_policy.dart
+              lib/deda_100431_linked_owner_session_policy.dart \
+              lib/deda_100430_owner_uid_continuity.dart \
+              lib/deda_step1_google_settings_link_100439.dart \
+              lib/deda_step2_google_replacement_login_100439.dart
+            mkdir -p test
+            cp "$GITHUB_WORKSPACE/test/deda_google_settings_card_private_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_google_original_uid_link_private_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_google_replacement_existing_uid_private_test.dart" test/
+            flutter test --no-pub \
+              test/deda_google_settings_card_private_test.dart \
+              test/deda_google_original_uid_link_private_test.dart \
+              test/deda_google_replacement_existing_uid_private_test.dart
           )
       - name: Confirm NO signing, APK, Firebase write or Play deployment
         run: echo "PASS_DEDA_100443_SOURCE_ONLY_PRODUCTION_UNCHANGED"
