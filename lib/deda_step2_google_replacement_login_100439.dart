@@ -47,8 +47,10 @@ class DedaGoogleReplacementProof {
 
   static String existingUidOnly(Map<String, dynamic> response) {
     final value = response['localId'];
+    // A missing isNewUser verdict is NOT evidence of an existing
+    // Google-linked Firebase principal. Deny rather than risk a new UID.
     if (value is! String || value.length < 6 ||
-        response['isNewUser'] == true ||
+        response['isNewUser'] != false ||
         response['needConfirmation'] == true) {
       throw StateError('google-provider-does-not-resolve-existing-uid');
     }
