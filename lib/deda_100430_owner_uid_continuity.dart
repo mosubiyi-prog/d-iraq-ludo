@@ -282,16 +282,35 @@ class DedaOwnerUidContinuity {
       kind: DedaSessionTransitionKind.credentialChange,
       origin: DedaSessionTransitionOrigin.userAction,
       action: () async {
-        if (auth.currentUser?.uid != uid) {
+        DedaAuthRuntime.checkSnapshot(authSnapshot);
+        final liveOwner = auth.currentUser;
+        if (liveOwner?.uid != uid || liveOwner?.isAnonymous != false) {
           throw StateError('google-owner-changed-before-credential-link');
         }
-        return auth.currentUser!.linkWithCredential(googleCredential);
+        // Reuse the existing session transition controller. In particular,
+        // do not signInWithCredential: that can create a different UID.
+        return DedaAuthRuntime.controller.transition<UserCredential>(
+          kind: DedaSessionTransitionKind.credentialChange,
+          action: () => liveOwner!.linkWithCredential(googleCredential),
+          accepts: (result, live) =>
+              result.user?.uid == uid &&
+              live.uid == uid &&
+              live.kind == DedaSessionAuthKind.authenticated,
+        );
       },
     );
     DedaAuthRuntime.checkSnapshot(authSnapshot);
     if (linked.user?.uid != uid || auth.currentUser?.uid != uid ||
         auth.currentUser?.isAnonymous != false) {
       throw StateError('google-link-must-preserve-original-uid');
+    }
+    // Confirm that Google really joined the existing Auth principal.
+    // A stale provider cache is never interpreted as a completed link.
+    await auth.currentUser!.reload();
+    DedaAuthRuntime.checkSnapshot(authSnapshot);
+    if (auth.currentUser?.uid != uid ||
+        auth.currentUser?.isAnonymous != false) {
+      throw StateError('google-linked-owner-changed-during-reload');
     }
     await _verifyOriginalUid(
       accountKey: accountKey, originalId: originalId, uid: uid);
