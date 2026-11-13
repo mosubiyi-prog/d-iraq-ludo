@@ -6,6 +6,7 @@ on:
       - deda-100441-source-audit-isolated-recovery-2026-11-12
     paths:
       - "functions/deda_google_existing_uid_token_exchange_PRIVATE_NOT_EXPORTED.js"
+      - "functions/deda_google_existing_uid_callable_wiring_PRIVATE_NOT_EXPORTED.js"
       - "functions/test/deda_google_existing_uid_token_exchange_PRIVATE.test.js"
       - "lib/deda_step2_google_replacement_login_100439.dart"
       - "test/deda_google_replacement_existing_uid_private_test.dart"
@@ -40,20 +41,25 @@ jobs:
           const core=fs.readFileSync('functions/index.js','utf8');
           const client=fs.readFileSync('lib/deda_step2_google_replacement_login_100439.dart','utf8');
           const server=fs.readFileSync('functions/deda_google_existing_uid_token_exchange_PRIVATE_NOT_EXPORTED.js','utf8');
+          const wiring=fs.readFileSync('functions/deda_google_existing_uid_callable_wiring_PRIVATE_NOT_EXPORTED.js','utf8');
           if(core.includes('deda_google_existing_uid_token_exchange_PRIVATE_NOT_EXPORTED') ||
+             core.includes('deda_google_existing_uid_callable_wiring_PRIVATE_NOT_EXPORTED') ||
              core.includes('dedaGoogleExistingUidTokenV1'))throw Error('unexpected production export');
           if(client.includes('auth.signInWithCredential(') ||
              !client.includes('auth.signInWithCustomToken(ticket.customToken)') ||
              !client.includes('DedaGoogleExistingUidServerTicket.fromCallable(') ||
              !client.includes('autoCreate') ||
-             !client.includes("'DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN', defaultValue: false")) {
+             !client.includes("'DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN', defaultValue: false") ||
+             !client.includes('FirebaseAppCheck.instance.getToken()') ||
+             !client.includes('AndroidProvider.playIntegrity')) {
              throw Error('client Google identity admission guard not intact');
           }
           if(server.includes('auth.createUser(') || server.includes('auth.updateUser(') ||
              server.includes('auth.deleteUser(') ||
              !server.includes('getUserByProviderUid("google.com"') ||
              !server.includes('enforceAppCheck:true') ||
-             !server.includes('createCustomToken(uid')) {
+             !server.includes('createCustomToken(uid') ||
+             !wiring.includes('ownerApproved!==true')) {
              throw Error('server exact UID gate not intact');
           }
           console.log('PASS_NO_PRODUCTION_MUTATION_OR_GOOGLE_NEW_UID_SDK_FALLBACK');
