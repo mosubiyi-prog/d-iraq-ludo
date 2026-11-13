@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_auth_session_runtime.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_session_diagnostic_readonly_100441.dart';
 import 'deda_pin_auth.dart';
 
 /// Isolated owner-only Google link card; never activated in protected 100439.
@@ -90,11 +91,41 @@ class _DedaGoogleSettingsLinkCardState
       final owner = auth.currentUser;
       final startingUid = owner?.uid;
       final account = DedaPinAuth.accountKeyForPhone(widget.phone);
-      // Only the EXISTING, server-proved DEDA owner may select Google.
-      // Never offer a detached anonymous Google session as a replacement
-      // for this phone's historical DEDA account.
-      if (startingUid == null || owner!.isAnonymous ||
-          !await DedaLinkedOwnerSessionPolicy.verified(owner, account) ||
+      // The original 100340 DEDA owner may still be anonymous. Never attach
+      // Google to that anonymous principal directly; the existing ORIGINAL
+      // PHONE confirmation button must first verify PIN, immutable same-UID
+      // server routing and the pre-link progress/purchase archive.
+      if (startingUid == null) {
+        throw StateError('deda-original-owner-session-required');
+      }
+      if (owner!.isAnonymous) {
+        final report = await DedaSessionDiagnosticReadOnly.inspect(widget.phone);
+        if (!mounted || auth.currentUser?.uid != startingUid ||
+            auth.currentUser?.isAnonymous != true) {
+          throw StateError('original-anonymous-session-changed');
+        }
+        final mayConfirm = DedaSessionDiagnosticReadOnly
+            .mayOfferOriginalAnonymousConfirmation(report);
+        setState(() {
+          _message = mayConfirm
+              ? _t('هذه جلسة حساب ديدا الأصلي المجهولة. '
+                    'اضغط «تأكيد الحساب» فوق «تسجيل الخروج» أولاً '
+                    'لإثبات الحساب وحفظ بيانات الهاتف القديم بنفس UID، '
+                    'ثم ارجع لهذه البطاقة واربط Google. لا تسجل خروجك.',
+                    'This is your original anonymous DEDA session. '
+                    'First use Confirm account above Sign out to verify '
+                    'and archive the same UID. Then return to link Google.')
+              : _t('تعذّر إثبات أن الجلسة المجهولة هي حساب ديدا الأصلي. '
+                    'لن نربط Google بحساب بديل؛ يلزم فحص الحساب '
+                    'دون حذف التطبيق أو تسجيل الخروج.',
+                    'Anonymous session does not match confirmed original '
+                    'DEDA records. Linking is on hold; do not sign out.');
+        });
+        return; // Read-only decision, not a credential transition.
+      }
+      // Only the EXISTING, already confirmed same-UID DEDA principal
+      // may proceed to choose and link a Google provider.
+      if (!await DedaLinkedOwnerSessionPolicy.verified(owner, account) ||
           auth.currentUser?.uid != startingUid) {
         throw StateError('deda-original-owner-confirmation-required');
       }
