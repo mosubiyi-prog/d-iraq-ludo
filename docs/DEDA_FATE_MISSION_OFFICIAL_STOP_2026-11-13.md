@@ -161,3 +161,21 @@
 **فحص مثبت:** GitHub Actions [43460661675](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43460661675) = `SUCCESS` على `787da660e87a8c0db7e66a6b1f4e89641904c1b1` (تحليل Flutter واختبارات وسلامة المصدر المجمع وعدم تعديل Firebase/Play/Android). لا APK ولا Firebase writes ولا Google link حقيقي حدث.
 
 **الحاجز المتبقي ضمن الخطة نفسها:** فلاگ `DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT` ما زال `defaultValue:false` في المصدر العام. لا يُنفذ تحويل Anonymous فعلياً في النسخة العامة قبل تهيئة/اختبار pre-link archive مع القواعد القائمة وإثبات القراءة على هاتف حقيقي سليم، ثم تجربة Google بنفس UID والجهاز الثاني. دقة الملكية والممتلكات تظل مطلوبة؛ مرور الاختبارات لا يجيز التفعيل العام أو استرجاع أرصدة بلا مصدر. **المسار التالي الوحيد:** اعتماد وفحص عمل التأكيد/الأرشفة قبل ربط Google للحسابات السليمة، لا إعادة فحص A/B/C ولا إنشاء مسار هوية جديد.
+
+---
+
+## ملحق عمل الأرشفة واختبار القواعد الحية — 13 نوفمبر 2026
+
+**المرجع التنفيذي:** نفس الفرع `deda-100441-source-audit-isolated-recovery-2026-11-12`؛ أساس هذه الجولة `b97a45663d9faa436ceaa0c1f58b12d19641cd45`، وآخر SHA برمجي مفحوص `7c1ea496821b16565da45c98486afd80f45eff92`. متابعة هدف **جميع مستخدمي DEDA ذوي الحسابات السليمة**؛ لا مساس بالحساب المتعارض A/B/C ولا اختيار UID له.
+
+**الخلل الذي أُصلح فعلاً:** `DedaProgressBackupCoordinator.prepare(requireNonEmptyEvidence:true)` كان يشترط وجود واحد من سجلات progress الثلاثة، فيرفض هاتف مستخدم سليم عنده سجلات ملكية إطارات أو مشتريات محلية فقط. دون توسيع سلطة تلك السجلات، صار شرط **وجود مصدر محلي حقيقي واحد على الأقل**: progress **أو** purchase/frame inventory/journal؛ إذا كلاهما غائب أو أرشيف قديم فارغ، `HOLD` بدون اختراع صفر أو منح رصيد. التغيير في `lib/deda_progress_backup_coordinator.dart` و`lib/deda_legacy_purchase_evidence.dart`. بقيت الرسائل الخام كما هي؛ لا حذف أو تعديل للمصدر المحلي.
+
+**اختبارات مضافة على المصدر الموجود:**
+- `test/deda_purchase_backup_coordinator_test.dart`: أرشفة purchase-only رغم غياب progress؛ إعادة المحاولة تستخدم journal ذاته؛ عدم قبول خلو المصدرين؛ عدم قبول journal فارغ قديم.
+- `test/deda_google_original_uid_link_private_test.dart`: منع التحويل إذا تغير UID أو أصبحت الجلسة غير مجهولة، رفض اختلاف مصدر UID أو غياب readback للتقدم/المشتريات، والقراءة المؤكدة لا تسمح بإعلان استرجاع مال.
+- توسيع Workflow **الحالي** `.github/workflows/deda-100443-original-id-uid-prewrite-guard-source-qa-no-deploy.yml` لاختبارات Flutter/المصدر الكامل، مع قراءة قواعد Firestore الحية بواسطة `firebase.readonly` فقط ثم نسخة خاصة بمحاكي Auth/Firestore؛ لا استخدام Production Document API ولا Firebase mutation ولا APK/Play.
+
+**نتائج مثبتة لا مجرد توقع:** GitHub Actions `43462931401` = SUCCESS لفحوص مصدر الأرشفة. GitHub Actions [`43464849099`](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43464849099) = **SUCCESS**؛ قراءة إصدار قواعد الإنتاج الحي بثلاثة `GET` خاصة بقواعد Firebase فقط، ووجدت **مساري progress وpurchase**. بعد ذلك استخدمت نسخة من قواعد الإنتاج الحية في محاكي منفصل `demo-deda-100436-journal-qa`، وكانت **18/18 اختبارات Auth+Firestore ناجحة**: anonymous original UID، أرشفة progress/purchase مرة واحدة، ملكية الوصول ورفض الغريب، وربط password بنفس UID ثم وصول هاتفين آخرين للأرشيف. لا نشر قواعد ولا Firebase Auth live، ولا بيانات إنتاجية.
+**تنبيه:** `firestore.rules` الموجود بالمستودع يختلف عن إصدار القواعد الحية، فلا يُستخدم بديلاً عن الأخير ولا يُنشر دفعة واحدة.
+
+**الحد المتبقي دون تغيير الخطة:** `DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT` ما زال `defaultValue:false` ولا يوجد إصدار عام مؤهّل لاختبار ربط Google الحقيقي. اختبارات المحاكي تثبت مسار أرشيف/PIN/UID في بيئة اصطناعية؛ لا تثبت اختيار Google على الهاتف الأصلي أو تسجيل دخول Google على الهاتف البديل أو استرجاع كل الممتلكات. **الخطوة التالية الوحيدة:** تجهيز وفحص حزمة اختبار خاصة آمنة للحسابات السليمة، تبدأ بأرشفة فعلية مثبتة قبل أي تحويل anonymous، ثم ربط Google بنفس UID واختبار الجهاز الثاني وحارس المجالات. الحساب A/B/C يبقى SAFE HOLD، ولا نشر على Play ولا عمليات إنتاجية خطرة دون الموافقة المحددة والقراءة قبل/بعد.
