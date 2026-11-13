@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'deda_pin_auth.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_auth_session_runtime.dart';
+import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
 import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
 import 'deda_step2_spark_linked_uid_readonly.dart';
 
@@ -94,11 +95,14 @@ class DedaOwnerUidContinuity {
     Future<void> Function(String accountKey, String originalUid)?
         beforeLinkedIdentityTransition,
   }) async {
-    // Under Spark, never link an older anonymous UID until its ORIGINAL
-    // phone has an approved purchase/progress archival checkpoint. This
-    // must run before any sign-in or credential transition side effect.
+    // ALL opt-in legacy owner conversions (not just Spark) must archive
+    // confirmed local progress/purchases before losing anonymous-only
+    // archive write access. No silent unarchived fallback.
+    if (!DedaAuthRuntime.enabled || !dedaLinkedOwnerCompatEnabled) {
+      throw StateError('original-owner-link-requires-shared-auth-guardian');
+    }
     DedaStep2SparkLegacyPrelinkPolicy.requireEvidenceBeforeLink(
-      sparkPilotEnabled: dedaStep2SparkLinkedUidReadOnlyEnabled,
+      sparkPilotEnabled: true,
       linkedOwnerCompatEnabled: dedaLinkedOwnerCompatEnabled,
       prelinkCheckpointEnabled: dedaStep2PreLinkEvidenceCheckpointEnabled,
       hasArchiveCallback: beforeLinkedIdentityTransition != null,
@@ -112,6 +116,7 @@ class DedaOwnerUidContinuity {
       throw StateError('original-anonymous-phone-session-required');
     }
     final originalUid = before.uid;
+    final sessionSnapshot = DedaAuthRuntime.capture();
     // Real existing 100340 Firestore server PIN/owner check; must NOT be
     // replaced by a local stored PIN or an unverified premium identifier.
     final signedIn = await DedaPinAuth.signIn(phone: phone, pin: pin);
@@ -119,14 +124,17 @@ class DedaOwnerUidContinuity {
         FirebaseAuth.instance.currentUser?.uid != originalUid) {
       throw StateError('account-changed-during-original-pin-verification');
     }
+    DedaAuthRuntime.checkSnapshot(sessionSnapshot);
     await _verifyOriginalUid(
       accountKey: accountKey, originalId: originalId, uid: originalUid,
     );
+    DedaAuthRuntime.checkSnapshot(sessionSnapshot);
     if (beforeLinkedIdentityTransition != null) {
       // The old phone's original anonymous UID must remain live while all
       // source-only receipts are written and read back. Never link on a
       // missing/denied/partially acknowledged archive.
       await beforeLinkedIdentityTransition(accountKey, originalUid);
+      DedaAuthRuntime.checkSnapshot(sessionSnapshot);
       final stillOriginal = FirebaseAuth.instance.currentUser;
       if (stillOriginal == null || stillOriginal.uid != originalUid ||
           !stillOriginal.isAnonymous) {
@@ -136,6 +144,7 @@ class DedaOwnerUidContinuity {
       await _verifyOriginalUid(
         accountKey: accountKey, originalId: originalId, uid: originalUid,
       );
+      DedaAuthRuntime.checkSnapshot(sessionSnapshot);
       if (FirebaseAuth.instance.currentUser?.uid != originalUid ||
           FirebaseAuth.instance.currentUser?.isAnonymous != true) {
         throw StateError('original-owner-changed-before-link');
@@ -144,11 +153,46 @@ class DedaOwnerUidContinuity {
     final credential = EmailAuthProvider.credential(
       email: authEmail(phone), password: pin,
     );
-    final linked = await FirebaseAuth.instance.currentUser!
-      .linkWithCredential(credential);
+    // One explicit credential transition under the EXISTING shared Auth
+    // runtime; preserve the authenticated principal and reject UID rotation.
+    // An expired SDK transport is never retried automatically.
+    DedaAuthRuntime.checkSnapshot(sessionSnapshot);
+    final auth = FirebaseAuth.instance;
+    final linked = await DedaAuthRuntime.run<UserCredential>(
+      kind: DedaSessionTransitionKind.credentialChange,
+      origin: DedaSessionTransitionOrigin.userAction,
+      action: () async {
+        DedaAuthRuntime.checkSnapshot(sessionSnapshot);
+        final original = auth.currentUser;
+        if (original?.uid != originalUid || original?.isAnonymous != true) {
+          throw StateError('original-owner-changed-before-credential-link');
+        }
+        return DedaAuthRuntime.controller.transition<UserCredential>(
+          kind: DedaSessionTransitionKind.credentialChange,
+          action: () => original!.linkWithCredential(credential),
+          accepts: (result, live) =>
+              result.user?.uid == originalUid &&
+              live.uid == originalUid &&
+              live.kind == DedaSessionAuthKind.authenticated,
+        );
+      },
+    );
     if (linked.user?.uid != originalUid ||
-        FirebaseAuth.instance.currentUser?.uid != originalUid) {
+        auth.currentUser?.uid != originalUid ||
+        auth.currentUser?.isAnonymous != false) {
       throw StateError('uid-linking-provenance-conflict');
+    }
+    // A successful credential change never grants any DEDA data by itself.
+    // Re-read immutable original ownership with the new provider and reject
+    // any intervening A/B/A session switch before reporting completion.
+    final linkedSnapshot = DedaAuthRuntime.capture();
+    await _verifyOriginalUid(
+      accountKey: accountKey, originalId: originalId, uid: originalUid,
+    );
+    DedaAuthRuntime.checkSnapshot(linkedSnapshot);
+    if (auth.currentUser?.uid != originalUid ||
+        auth.currentUser?.isAnonymous != false) {
+      throw StateError('linked-original-owner-changed-before-readback');
     }
     return originalUid;
   }
