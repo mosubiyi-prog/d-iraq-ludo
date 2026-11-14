@@ -20,8 +20,8 @@ def fixture_project(directory):
     (project / "internal-build-inputs.json").write_text(json.dumps({
         "financialRestoreEnabled": False,
         "weekly100439AdminWinnersPrizeReport": {"singlePanelNoDuplicate": True},
-        "googleOriginalUidSettings": {"googleProgressDrivenByVerifiedOperations": True},
-        "smartSecondStageAccount": {"defaultOff": True},
+        
+        "smartSecondStageAccount": {"defaultOff": True, "existingPinGuardianCallbackReused": True},
         "sourceHashes": {},
     }))
     script = (ROOT / "tools/admin_diamond_backend_100270_2026_10_04.py"
@@ -48,7 +48,7 @@ class CompensationGuards(unittest.TestCase):
             self.assertIn("wallet-server-proof-failed", contents)
             self.assertIn("amount > generalManagerSingleDiamondGiftLimit", contents)
             self.assertNotIn("'initialBalance': generalManagerDiamondGiftBudget", contents)
-            self.assertTrue(metadata["googleOriginalUidSettings"]["googleProgressDrivenByVerifiedOperations"])
+            self.assertTrue(metadata["smartSecondStageAccount"]["existingPinGuardianCallbackReused"])
             self.assertTrue(metadata["smartSecondStageAccount"]["defaultOff"])
             self.assertFalse(metadata["financialRestoreEnabled"])
             self.assertTrue(metadata["generalManagerCompensation100m"]["defaultNotFunded"])

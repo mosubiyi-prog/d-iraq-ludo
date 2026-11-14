@@ -120,7 +120,7 @@ jobs:
           print("PASS_FULL_SOURCE_100M_ADMIN_WITHOUT_LIVE_CREDIT")
           PY
 
-      - name: Full owner app parity, protection, PIN and admin wallet QA
+      - name: Google-removed owner parity, PIN and admin wallet QA
         shell: bash
         run: |
           set -euo pipefail
