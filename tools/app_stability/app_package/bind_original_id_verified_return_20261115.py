@@ -140,9 +140,11 @@ import 'deda_qa32_manager_original_owner_proof.dart';""", 1)
     else:
         project_proof.write_bytes(reviewed_proof.read_bytes())
     meta["sourceHashes"][proof_name] = sha(project_proof)
-    marker = "  static Future<List<DedaStage71OwnedIdentifier>> owned(String originalId) async {"
+    # The historical `owned` signature may be reformatted, but `use` is
+    # the stable, single verified server action in the protected assembly.
+    marker = "  static Future<void> use("
     if before.count(marker) != 1:
-        raise ValueError("Owner service insertion anchor changed")
+        raise ValueError("Exact server Use insertion anchor changed")
     after = before.replace(marker, add + marker, 1)
     after = after.replace(old_panel, new_panel, 1)
     if block(after, "  static Future<void> use(", "/// User's Edit Profile:") != use_before:
