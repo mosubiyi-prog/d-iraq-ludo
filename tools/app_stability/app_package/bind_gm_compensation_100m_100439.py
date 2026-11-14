@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Stage owner-approved GM administrative compensation capacity in the SAME isolated
-100439 Google/recovery assembly. Never touch the signed 100439 original or Firebase.
+100439 recovery assembly. Never touch the signed 100439 original or Firebase.
 
 This is capacity support, not a credit: the visible balance is always the REAL
 Firestore wallet balance. A trusted, audited server-only 99m allocation and a
@@ -92,9 +92,9 @@ def bind(project):
     if not meta.get("weekly100439AdminWinnersPrizeReport", {}).get(
             "singlePanelNoDuplicate"):
         fail("approved manager-winners base missing")
-    if not meta.get("googleOriginalUidSettings", {}).get(
-            "googleProgressDrivenByVerifiedOperations"):
-        fail("Google guardian integration missing")
+    if not meta.get("smartSecondStageAccount", {}).get(
+            "existingPinGuardianCallbackReused"):
+        fail("original PIN guardian integration missing")
     if not meta.get("smartSecondStageAccount", {}).get("defaultOff"):
         fail("smart second stage proof missing")
     backend = project / BACKEND

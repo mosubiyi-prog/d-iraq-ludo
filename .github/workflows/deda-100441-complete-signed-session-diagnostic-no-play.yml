@@ -212,6 +212,10 @@ jobs:
           page=(root/'lib/main.dart').read_text()
           assert 'DedaGoogleSettingsLinkCard(' not in page
           assert 'deda_step1_google_settings_link_100439.dart' not in page
+          for removed in ('deda_step1_google_settings_link_100439.dart',
+            'deda_step2_google_replacement_login_100439.dart',
+            'deda_google_recovery_progress_100439.dart'):
+            assert not (root/'lib'/removed).exists()
           assert page.count('DedaSmartSecondStageAccountPage(')==1
           lookup='final exists = await DedaPinAuth.accountExists(normalizedPhone);'
           assert page.count(lookup)==1
