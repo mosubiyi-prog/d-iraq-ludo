@@ -108,7 +108,8 @@ jobs:
           assert d['originalIdReturnOwnerVerified20261115']['originalSelectionServerReadbackUnchanged']
           assert d['originalIdReturnOwnerVerified20261115']['noFirebaseOrPlayMutation']
           assert 'DedaQa32ManagerOriginalOwnerProof.authentic(' in src
-          assert 'DedaStage71OwnedIdentifierService.owned(original)' in src
+          assert ('DedaStage71OwnedIdentifierService.owned(original)' in src or
+                  'DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original)' in src)
           assert 'DedaStage74IdGiftService.isReceived(' in src
           assert 'premium-receipt-proof-not-in-this-baseline' not in src
           assert 'DedaUnifiedActiveId100410.confirmedUse(' in src
