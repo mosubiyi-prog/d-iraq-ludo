@@ -85,7 +85,22 @@ def bind(project: Path) -> None:
             raise ValueError("Premium helper adapter anchor changed")
         new_panel = new_panel.replace(
             premium_fetch,
-            "        throw StateError('premium-receipt-proof-not-in-this-baseline');", 1)
+            """        // Preserve ALL previously owned premium IDs in the full app.
+        // Read the old server-verified owner registry and separately verify
+        // gift acceptance before showing any gifted premium selection.
+        final inventory =
+            await DedaStage71OwnedIdentifierService.owned(original);
+        final rows = <DedaStage71OwnedIdentifier>[];
+        for (final item in inventory) {
+          if (item.kind == 'gifted' &&
+              !await DedaStage74IdGiftService.isReceived(
+                  original, item.identifier)) {
+            continue;
+          }
+          if (item.kind == 'gifted' || item.kind == 'self_used') {
+            rows.add(item);
+          }
+        }""", 1)
     if "verifyOriginalOwner(String originalId)" in before:
         raise ValueError("Original return already patched; refuse duplicate")
     if "static Future<String> _requireOriginal(" not in before:
