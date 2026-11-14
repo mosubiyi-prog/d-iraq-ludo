@@ -41,14 +41,47 @@ def bind(project: Path) -> None:
     wanted = (ROOT / NAME).read_text()
     old_panel = block(before, PANEL_START, PANEL_END)
     new_panel = block(wanted, PANEL_START, PANEL_END)
-    if ("DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original)"
-            not in old_panel or "if (currentRows != null)" not in old_panel
-            or "Future<void> _load() async" not in old_panel):
-        raise ValueError("Not the approved original owner selection widget")
+    # The full-app assembly comes from the earlier immutable baseline, so
+    # its original panel may predate the newer library's premium-list helpers.
+    # Preserve the actual service and its strict UID guards; replace the panel
+    # only if the exact prior owner-picker structure is present.
+    if ("Future<void> _load() async" not in old_panel or
+            "Future<void> _use(String id) async" not in old_panel or
+            "DedaStage71OwnedIdentifierService" not in old_panel or
+            "widget.originalId" not in old_panel):
+        raise ValueError("Original owner selection panel changed; safe stop")
     if ("verifyOriginalOwner(original)" not in new_panel
             or "if (originalVerified)" not in new_panel
             or "_premiumLoadFailed" not in new_panel):
         raise ValueError("Independent original owner gate missing from source")
+    # Full 100410 app Use has TWO parameters and itself validates + reads back;
+    # the staging-source-only panel has a newer optional callback. Do not
+    # rewrite or weaken the real Use service to satisfy a UI callback.
+    use_with_callback = """      await DedaStage71OwnedIdentifierService.use(
+        original, id,
+        onServerConfirmed: () {
+          // Never optimistic: the canonical ID has been written and read
+          // back on the same verified UID before this callback runs.
+          if (!mounted || generation != _generation ||
+              widget.originalId != original || _currentUid() != uid) return;
+          setState(() => _active = id);
+        },
+      );"""
+    if new_panel.count(use_with_callback) != 1:
+        raise ValueError("Source panel server-confirmed callback unexpectedly changed")
+    new_panel = new_panel.replace(
+        use_with_callback,
+        "      await DedaStage71OwnedIdentifierService.use(original, id);", 1)
+    # A historical assembled version lacking the VERIFIED/RECEIVED premium
+    # helper must not display raw unaccepted gift records as owned IDs.
+    if "static Future<List<DedaStage71OwnedIdentifier>> acceptedOwnedForMyStore(" not in before:
+        premium_fetch = """        final rows = await
+            DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original);"""
+        if new_panel.count(premium_fetch) != 1:
+            raise ValueError("Premium helper adapter anchor changed")
+        new_panel = new_panel.replace(
+            premium_fetch,
+            "        throw StateError('premium-receipt-proof-not-in-this-baseline');", 1)
     if "verifyOriginalOwner(String originalId)" in before:
         raise ValueError("Original return already patched; refuse duplicate")
     if ("DedaQa32ManagerOriginalOwnerProof.authentic(" not in before
