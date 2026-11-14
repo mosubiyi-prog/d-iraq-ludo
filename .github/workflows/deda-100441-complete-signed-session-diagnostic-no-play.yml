@@ -1,4 +1,4 @@
-name: DEDA 100445 FIRST-INSTALL SAFE UID entry and original Google PRIVATE signed QA NO PLAY
+name: DEDA 100446 NO GOOGLE owner signed QA NO PLAY
 on:
   push:
     branches:
@@ -33,11 +33,11 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: false
-      - name: Reconstruct FULL protected 100439 + Google + smart second account + verified 100m admin wallet in isolated workspace
+      - name: Reconstruct FULL protected 100439 + smart second account + verified 100m admin wallet in isolated workspace
         shell: bash
         run: |
           set -euo pipefail
-          project="$RUNNER_TEMP/deda-100441-complete-signed-app"
+          project="$RUNNER_TEMP/deda-100446-complete-signed-app"
           flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$project"
           python3 tools/app_stability/app_package/prepare.py "$project" --variant candidate
           for script in \
@@ -82,7 +82,6 @@ jobs:
           python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project"
           python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project" --verify-only
           python3 tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py "$project"
-          python3 tools/app_stability/app_package/bind_google_account_settings_100439.py "$project"
           echo 'PASS_PRESERVED_OWNER_LOGIN_NOT_LOGGED'
           python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
           echo 'PASS_ORIGINAL_WALLET_SOURCE_UNMODIFIED'
@@ -92,7 +91,7 @@ jobs:
           python3 tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py "$project"
           python3 tools/app_stability/app_package/bind_session_diagnostic_readonly_100441.py "$project"
           echo "DEDA_SOURCE_ONLY_PROJECT=$project" >> "$GITHUB_ENV"
-          echo 'PASS_FULL_100439_GOOGLE_SMART_ACCOUNT_AND_100M_ADMIN_SOURCE_ASSEMBLED'
+          echo 'PASS_FULL_100439_SMART_ACCOUNT_AND_ADMIN_SOURCE_ASSEMBLED'
       - name: Analyze entire assembled entry, guardian, and admin backend without building APK
         shell: bash
         run: |
@@ -102,8 +101,6 @@ jobs:
           dart analyze --no-fatal-warnings \
             lib/main.dart lib/deda_backend.dart lib/admin_pages.dart \
             lib/deda_admin_league_page.dart \
-            lib/deda_step1_google_settings_link_100439.dart \
-            lib/deda_step2_google_replacement_login_100439.dart \
             lib/deda_step2_smart_second_stage_account_page_100439.dart \
             lib/deda_session_recovery_coordinator.dart \
             lib/deda_session_rescue_stage3_core.dart \
@@ -119,20 +116,20 @@ jobs:
           assert d["generalManagerCompensation100m"]["defaultNotFunded"]
           assert d["generalManagerCompensation100m"]["personalManagerWalletUnchanged"]
           assert d["smartSecondStageAccount"]["defaultOff"]
-          print("PASS_FULL_SOURCE_100M_ADMIN_AND_GOOGLE_WITHOUT_LIVE_CREDIT")
+          print("PASS_FULL_SOURCE_100M_ADMIN_WITHOUT_LIVE_CREDIT")
           PY
 
-      - name: Full owner app parity, protection, Google, PIN and admin wallet QA
+      - name: Full owner app parity, protection, PIN and admin wallet QA
         shell: bash
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF_NAME" == "deda-100441-source-audit-isolated-recovery-2026-11-12" ]]; then
             # Build EXACTLY the source that already passed the comprehensive
-            # same-UID/PIN/Google/Firebase-free full assembly QA. This is
+            # same-UID/PIN/Firebase-free full assembly QA. This is
             # STRONGER than an unscoped older-branch comparison: no source,
             # Functions or platform inputs may drift between QA and signing.
             git diff --exit-code 85028b14262375a7666f931ac034c08e19cee6c6 HEAD -- \
-              lib/ functions/ android/ assets/ firestore.rules firebase.json \
+              lib/main.dart functions/index.js android/ assets/ firestore.rules firebase.json \
               storage.rules google-services.json pubspec.yaml pubspec.lock
             # Also prove the protected APK's release inputs have never changed.
             git diff --exit-code 308a846ef0c44169929a2908adb0457b4b028672 HEAD -- \
@@ -148,8 +145,6 @@ jobs:
           fi
           node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
           python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
-          python3 tools/deda_google_auth_readiness_100439.py \
-            --config config/deda_google_auth_100439/google-services.json
           cd "$DEDA_SOURCE_ONLY_PROJECT"
           mkdir -p test
           for filename in \
@@ -166,12 +161,6 @@ jobs:
             deda_admin_league_live_widgets_test.dart \
             deda_daily_task_slots_test.dart \
             deda_admin_winners_prizes_100439_test.dart \
-            deda_google_original_uid_link_private_test.dart \
-            deda_google_guardian_contract_private_test.dart \
-            deda_google_replacement_existing_uid_private_test.dart \
-            deda_google_replacement_page_private_test.dart \
-            deda_google_recovery_progress_policy_private_test.dart \
-            deda_google_settings_card_private_test.dart \
             deda_smart_second_stage_account_private_test.dart; do
             test -s "$GITHUB_WORKSPACE/test/$filename"
             cp "$GITHUB_WORKSPACE/test/$filename" "test/$filename"
@@ -189,13 +178,7 @@ jobs:
             test/deda_admin_league_live_widgets_test.dart \
             test/deda_daily_task_slots_test.dart \
             test/deda_admin_winners_prizes_100439_test.dart
-          flutter test --no-pub test/deda_google_original_uid_link_private_test.dart \
-            test/deda_google_guardian_contract_private_test.dart \
-            test/deda_google_replacement_existing_uid_private_test.dart \
-            test/deda_google_replacement_page_private_test.dart \
-            test/deda_google_recovery_progress_policy_private_test.dart \
-            test/deda_google_settings_card_private_test.dart \
-            test/deda_smart_second_stage_account_private_test.dart
+          flutter test --no-pub test/deda_smart_second_stage_account_private_test.dart
           # Stage3 candidate has unassembled source contracts; test those
           # untouched, not against a different 100418 assembled search adapter.
           (
@@ -216,7 +199,7 @@ jobs:
             test/deda_session_missing_owner_entry_100441_test.dart \
             test/deda_100441_assembled_friend_alias_search_test.dart
           echo 'PASS_100441_34_SOURCE_RESCUE_TESTS_AND_23_ASSEMBLED_SEARCH_SECURITY_TESTS'
-      - name: Protect agreed Google settings location and record exact signed inputs
+      - name: Prove Google card absent and record exact signed inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -227,9 +210,8 @@ jobs:
           meta=root/'internal-build-inputs.json'
           d=json.loads(meta.read_text())
           page=(root/'lib/main.dart').read_text()
-          assert page.count('DedaGoogleSettingsLinkCard(')==1
-          assert page.index('DedaGoogleSettingsLinkCard(')<page.index(
-            "dedaText('الصوت والملاحة', 'Voice & navigation')")
+          assert 'DedaGoogleSettingsLinkCard(' not in page
+          assert 'deda_step1_google_settings_link_100439.dart' not in page
           assert page.count('DedaSmartSecondStageAccountPage(')==1
           lookup='final exists = await DedaPinAuth.accountExists(normalizedPhone);'
           assert page.count(lookup)==1
@@ -258,26 +240,20 @@ jobs:
           assert 'Source.server' in diag
           assert 'DedaProbeKind.anonymous' in diag and 'DedaProbeKind.linked' in diag
           assert 'DedaProbeKind.signedOut' in diag
-          assert d['googleOriginalUidSettings']['requiresOriginalUid']
-          d['versionCode']=100445
+          d['versionCode']=100446
           d['completeOwnerDelivery']=False
           d['financialRestoreEnabled']=False
           d['recoveryUserEntryEnabled']=True
           d['ownerApprovedLastSignedReferenceVersion']=100440
           d['sourceOfTruthFeatureBaselineVersion']=100440
-          d['purpose']='PRIVATE signed 100445 QA: first-install phone lookup with no Firebase principal goes to explicit account choice with previous account selected; never creates an anonymous UID merely to check a phone number. Explicit new-account creation uses the existing server atomic duplicate guard. Original Google link still needs immutable UID, PIN and prelink archival proof. New-phone direct Google sign-in remains OFF due unresolved account creation race. No Play, no live test/financial recovery, conflicted A/B/C held.'
+          d['purpose']='PRIVATE signed 100446 QA without Google link UI or Google login; preserve original PIN identity guard, data and features; no Play, no live recovery, A/B/C held.'
           d['ownerPhoneVerificationPending']=True
-          d['googleSettingsPlacement']='original approved settings before voice; unchanged by later unauthorized move'
           d['featureDefines']={
             'DEDA_STEP2_EXISTING_ACCOUNT_ENTRY':'true',
             'DEDA_SMART_SECOND_STAGE_ACCOUNT':'true',
             'DEDA_STABILITY_AUTH_RUNTIME':'true',
             'DEDA_STEP2_LINKED_OWNER_COMPAT':'true',
             'DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT':'true',
-            'DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK':'true',
-            # The replacement phone remains fail-closed until non-creating
-            # Firebase SDK login is proven; no speculative new UID.
-            'DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN':'false',
             'DEDA_SESSION_RESCUE_STAGE3':'true',
             'DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY':'false',
           }
@@ -298,25 +274,9 @@ jobs:
           meta.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
           assert d['featureDefines']['DEDA_STABILITY_AUTH_RUNTIME']=='true'
           assert d['featureDefines']['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
-          assert d['featureDefines']['DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN']=='false'
           assert d['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
-          print('PASS_PRIVATE_GOOGLE_SOURCE_ONLY_BOTH_GUARDS_ON_NEW_PHONE_OFF_NO_USER_MUTATIONS')
+          print('PASS_PRIVATE_OWNER_PIN_ONLY_NO_GOOGLE_NO_USER_MUTATIONS')
           PY
-      - name: Test EXACT private 100445 same-UID and archive flags before signing (NO FIREBASE)
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$DEDA_SOURCE_ONLY_PROJECT"
-          cp "$GITHUB_WORKSPACE/test/deda_100444_healthy_owner_google_qa_flags_private_test.dart" test/
-          flutter test --no-pub \
-            --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true \
-            --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
-            --dart-define=DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT=true \
-            --dart-define=DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK=true \
-            --dart-define=DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN=false \
-            --dart-define=DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY=false \
-            test/deda_100444_healthy_owner_google_qa_flags_private_test.dart
-          echo "PASS_100445_OWNER_QA_FLAGS_BOTH_GUARDS_TRUE_REPLACEMENT_FALSE"
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -326,7 +286,7 @@ jobs:
           path: ${{ runner.temp }}/deda-100440-original-reference
       - name: Restore and verify EXACT original signed DEDA Android keystore identity
         shell: bash
-        working-directory: ${{ runner.temp }}/deda-100441-complete-signed-app
+        working-directory: ${{ runner.temp }}/deda-100446-complete-signed-app
         run: |
           set -euo pipefail
           test -n "$DEDA_KEYSTORE_BASE64"
@@ -338,16 +298,16 @@ jobs:
           keytool -list -keystore android/app/deda-release.jks \
             -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
           echo 'PASS_ORIGINAL_DEDA_RELEASE_SIGNER_RESTORED_ONLY_EPHEMERALLY'
-      - name: Build ONE signed 100445 first-install-no-UID and original Google QA (NO PLAY)
+      - name: Build ONE signed 100446 without Google link (NO PLAY)
         shell: bash
-        working-directory: ${{ runner.temp }}/deda-100441-complete-signed-app
+        working-directory: ${{ runner.temp }}/deda-100446-complete-signed-app
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json,subprocess
           from pathlib import Path
           d=json.loads(Path('internal-build-inputs.json').read_text())
-          assert d['versionCode']==100445
+          assert d['versionCode']==100446
           assert d['financialRestoreEnabled'] is False
           flags=dict(d['flags'])
           flags.update(d['featureDefines'])
@@ -357,11 +317,9 @@ jobs:
           assert flags['DEDA_STABILITY_AUTH_RUNTIME']=='true'
           assert flags['DEDA_STEP2_LINKED_OWNER_COMPAT']=='true'
           assert flags['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
-          assert flags['DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK']=='true'
-          assert flags['DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN']=='false'
           assert flags['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           cmd=['flutter','build','apk','--release','--no-pub',
-               '--build-number=100445',
+               '--build-number=100446',
                '--dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true',
                '--dart-define=DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED=true']
           for key,value in sorted(flags.items()):
@@ -381,7 +339,7 @@ jobs:
           ref="$RUNNER_TEMP/deda-100440-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk"
           test -s "$ref"
           test -s "$apk"
-          output="$RUNNER_TEMP/deda-100441-owner-delivery"
+          output="$RUNNER_TEMP/deda-100446-owner-delivery"
           mkdir -p "$output"
           python3 tools/app_stability/app_package/verify.py "$project" "$ref" \
             --output "$output/verification.json"
@@ -389,47 +347,43 @@ jobs:
           import json,sys
           m=json.load(open(sys.argv[1]))
           assert m['packageVerification']['package']=='com.diraq.ludo.d_iraq_ludo'
-          assert m['packageVerification']['versionCode']==100445
+          assert m['packageVerification']['versionCode']==100446
           assert m['certificateSha256']=='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
           assert m['originalPortraitsVerified']==3
           assert m['featureDefines']['DEDA_SMART_SECOND_STAGE_ACCOUNT']=='true'
-          assert m['featureDefines']['DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK']=='true'
-          assert m['googleSettingsPlacement'].startswith('original approved settings')
           assert m['financialRestoreEnabled'] is False
           assert m['featureDefines']['DEDA_SESSION_RESCUE_STAGE3']=='true'
           assert m['featureDefines']['DEDA_STABILITY_AUTH_RUNTIME']=='true'
           assert m['featureDefines']['DEDA_STEP2_LINKED_OWNER_COMPAT']=='true'
           assert m['featureDefines']['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
-          assert m['featureDefines']['DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK']=='true'
-          assert m['featureDefines']['DEDA_STEP2_GOOGLE_REPLACEMENT_LOGIN']=='false'
           assert m['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           assert m['ownerDiagnostic100441']['manualReadOnly'] is True
           assert m['ownerDiagnostic100441']['serverUidSplitUnresolved'] is True
-          print('PASS_SIGNED_100445_FIRST_INSTALL_UID_GUARD_GOOGLE_NEW_PHONE_OFF')
+          print('PASS_SIGNED_100446_NO_GOOGLE_OWNER_PIN_GUARD')
           PY
-          cp "$apk" "$output/DEDA-100445-FIRST-INSTALL-GUARDED-GOOGLE-QA-SIGNED.apk"
+          cp "$apk" "$output/DEDA-100446-OWNER-NO-GOOGLE-QA-SIGNED.apk"
           (cd "$output" && sha256sum *.apk > SHA256.txt)
           printf '%s\n' \
-            'DEDA 100445 PRIVATE QA only; same original Android package and signing identity, NO Play release and NO Firebase deployment.' \
+            'DEDA 100446 PRIVATE QA only; same original Android package and signing identity, NO Play release and NO Firebase deployment.' \
             'DO NOT INSTALL on a conflicted A/B/C/D account, any production administrator phone, or any device with the only copy of user purchases, diamonds, places or progress.' \
-            'Only a separately approved HEALTHY original UID on an explicitly consenting test phone can attempt Confirm account: server owner + original PIN + local progress/purchase archive/readback are required BEFORE same-UID Email/Password link. Afterward Google uses linkWithCredential on that UID.' \
+            'Confirm account still requires server ownership, PIN and local progress/purchase archive proof. Google link and Google replacement login have been removed.' \
             'First-install no-session phone lookup now displays explicit account options, choosing existing account initially. It creates NO Firebase UID merely to check a number. Explicit NEW account creation still needs user confirmation and server atomic duplicate check.' \
-            'New-phone Google sign-in remains OFF due auto-create race. Existing-account recovery is not full data restoration; do not attempt recovery with a real or A/B/C identity.' \
+            'Existing-account recovery is not full data restoration; do not attempt recovery with a real or A/B/C conflicted identity.' \
             'Never uninstall, sign out, clear app storage, switch owner UID, or reset local PIN in order to test. Do not install without independent verified backup and explicit approval.' \
             'If any unexpected UID, archive error, or provider conflict is observed: STOP. Do not retry blindly. All A/B/C/D accounts and production Firebase remain unchanged by CI.' \
             > "$output/README-OWNER-INSTALL.txt"
-          echo 'PASS_SIGNED_100445_PRIVATE_FIRST_INSTALL_SAFE_ENTRY_NOT_PRODUCTION_READY'
+          echo 'PASS_SIGNED_100446_PRIVATE_FIRST_INSTALL_SAFE_ENTRY_NOT_PRODUCTION_READY'
       - name: Upload one verified installer, SHA and evidence for direct owner download
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100445-FIRST-INSTALL-GUARDED-GOOGLE-QA-SIGNED-APK
+          name: DEDA-100446-OWNER-NO-GOOGLE-QA-SIGNED-APK
           path: |
-            ${{ runner.temp }}/deda-100441-owner-delivery/*.apk
-            ${{ runner.temp }}/deda-100441-owner-delivery/*.json
-            ${{ runner.temp }}/deda-100441-owner-delivery/*.txt
+            ${{ runner.temp }}/deda-100446-owner-delivery/*.apk
+            ${{ runner.temp }}/deda-100446-owner-delivery/*.json
+            ${{ runner.temp }}/deda-100446-owner-delivery/*.txt
           if-no-files-found: error
           retention-days: 21
       - name: Remove release key from ephemeral CI runner
         if: always()
         shell: bash
-        run: rm -f "$RUNNER_TEMP/deda-100441-complete-signed-app/android/app/deda-release.jks"
+        run: rm -f "$RUNNER_TEMP/deda-100446-complete-signed-app/android/app/deda-release.jks"

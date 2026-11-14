@@ -97,10 +97,10 @@ class _DedaOwnerPinDialogState extends State<_DedaOwnerPinDialog> {
 
 /// Same-UID user-triggered continuation policy. Source confirmation,
 /// optional archives and the current Firebase principal must all agree
-/// BEFORE a second provider may be attached. No UID change, money grant,
+/// BEFORE a verified account continuation. No UID change, money grant,
 /// local session write or phone cutover occurs in this pure policy.
-class DedaGoogleOneEntryContinuation {
-  const DedaGoogleOneEntryContinuation._();
+class DedaOwnerEvidenceContinuation {
+  const DedaOwnerEvidenceContinuation._();
 
   static bool mayContinue({
     required bool confirmedSameLinkedUid,
@@ -131,7 +131,7 @@ class DedaOwnerConfirmButton extends StatefulWidget {
   final bool forTesting;
   final Future<String> Function(String phone,String pin,String originalId)? confirm;
   /// Called only after same-UID confirmation and all required source
-  /// readbacks; the caller MUST reverify the current UID before using Google.
+  /// readbacks; the caller MUST reverify the current UID before continuing.
   final Future<void> Function(String uid)? onConfirmed;
   final void Function(bool running)? onRunningChanged;
 
@@ -332,7 +332,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
         if (dedaStep2GlobalPlacesSettingsArchiveEnabled) {
           try {
             // A declined attribution request is NOT permission to continue
-            // with Google while old device-global data may be unarchived.
+            // while old device-global data may be unarchived.
             final confirmed =
                 await _archiveLinkedOriginalGlobalData(existingUser.uid);
             globalArchiveUnconfirmed = !confirmed;
@@ -345,7 +345,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           }
         }
         if (!mounted) return;
-        if (DedaGoogleOneEntryContinuation.mayContinue(
+        if (DedaOwnerEvidenceContinuation.mayContinue(
           confirmedSameLinkedUid: FirebaseAuth.instance.currentUser?.uid ==
               existingUser.uid &&
               FirebaseAuth.instance.currentUser?.isAnonymous == false,
@@ -508,10 +508,10 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       if (!mounted ||
           (dedaStep2OwnerPlaceLocalArchiveEnabled &&
               FirebaseAuth.instance.currentUser?.uid != uid)) return;
-      // A one-entry Google flow may continue only if no required post-link
+      // A verified owner flow may continue only if no required post-link
       // old-phone archive failed. A failure retains the linked account and
-      // its source data, but cannot initiate a Google provider transition.
-      if (DedaGoogleOneEntryContinuation.mayContinue(
+      // its source data, but cannot authorize a further identity transition.
+      if (DedaOwnerEvidenceContinuation.mayContinue(
         confirmedSameLinkedUid: widget.confirm != null ||
             (FirebaseAuth.instance.currentUser?.uid == uid &&
              FirebaseAuth.instance.currentUser?.isAnonymous == false),

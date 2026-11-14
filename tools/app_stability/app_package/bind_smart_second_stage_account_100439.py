@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bind the owner-approved smart SECOND account screen to an isolated assembly.
 
-Run AFTER bind_google_account_settings_100439.py, in a disposable full app
+Run AFTER the verified Stage2 assembly, in a disposable full app
 assembly only. The original 100439 source, APK, app resources, Firebase and
 wallet are never written by this script. Fail closed on unexpected anchors.
 """
@@ -55,7 +55,7 @@ def exactly_once(text, before, after, label):
 
 
 def _build_methods(arguments):
-    # Original verified Google and PIN guardian callbacks are preserved as
+    # Original verified PIN guardian callback is preserved as
     # EXACT text, not rewritten or simplified. The existing route and smart
     # switch share one widget builder and one guardian handler.
     common = """  Widget _buildExistingAccountForm(BuildContext pageContext, {
@@ -168,11 +168,8 @@ def bind(project):
             project / "deda-stage2-core-merge-proof.json").is_file():
         abort("full original 100439 guardian assembly missing")
     meta = json.loads(manifest.read_text())
-    google = meta.get("googleOriginalUidSettings", {})
-    if not google.get("googleProgressDrivenByVerifiedOperations") or not (
-            meta.get("weekly100439AdminWinnersPrizeReport", {})
-            .get("singlePanelNoDuplicate")):
-        abort("expected full manager-prizes plus Google UI assembly missing")
+    if not meta.get("weekly100439AdminWinnersPrizeReport", {}).get("singlePanelNoDuplicate"):
+        abort("expected full manager-prizes assembly missing")
     if meta.get("financialRestoreEnabled") is not False:
         abort("financial restore must remain disabled")
 
@@ -195,14 +192,12 @@ def bind(project):
     if match is None:
         abort("guardian-backed existing route changed: review required")
     args = match.group("arguments")
-    if "verifiedGoogleLogin: (reportProgress) async {" not in args or (
-            "verifiedLogin: (phone, pin) async {" not in args) or (
+    if "verifiedLogin: (phone, pin) async {" not in args or (
             "if (!login.fullAccountRestored" not in args):
-        abort("existing Google/PIN guardian flow or hold gate missing")
+        abort("existing PIN guardian flow or hold gate missing")
     current = current[:start] + _build_methods(args) + current[end:]
     current = exactly_once(current, IMPORT, IMPORT +
         "\nimport 'deda_pin_auth.dart';" +
-        "\nimport 'deda_google_recovery_progress_100439.dart';" +
         "\nimport 'deda_step2_smart_second_stage_account_page_100439.dart';",
         "additive second page and new PIN creator imports")
     # Original signed 100436/100439 login has an existing-account lookup,
@@ -287,10 +282,10 @@ def bind(project):
         "originalFirstScreenVisibleFieldsUnchanged": True,
         "newAccountNameAndSixDigitPinPreserved": True,
         "existingAccountSameScreen": True,
-        "existingGoogleProgressAndGuardianCallbacksReused": True,
+        "existingPinGuardianCallbackReused": True,
         "newAccountDuplicateCheckBeforeServerAtomicCreate": True,
         "newAccountServerUIDReadbackBeforeLocalLogin": True,
-        "noNewAccountOnGoogleOrExistingMode": True,
+        "noNewAccountOnExistingMode": True,
         "defaultOff": True,
         "financialRestoreEnabled": False,
         "noFirebaseOrPlayDeploy": True,
