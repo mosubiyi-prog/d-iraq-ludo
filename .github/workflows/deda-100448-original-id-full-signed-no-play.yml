@@ -149,26 +149,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" == "deda-100446-remove-session-card-uid-owner-hold-source-only-2026-11-14" ]]; then
-            # Build EXACTLY the source that already passed the comprehensive
-            # same-UID/PIN/Firebase-free full assembly QA. This is
-            # STRONGER than an unscoped older-branch comparison: no source,
-            # Functions or platform inputs may drift between QA and signing.
-            git diff --exit-code 85028b14262375a7666f931ac034c08e19cee6c6 HEAD -- \
-              lib/main.dart functions/index.js android/ assets/ firestore.rules firebase.json \
-              storage.rules google-services.json pubspec.yaml pubspec.lock
-            # Also prove the protected APK's release inputs have never changed.
-            git diff --exit-code 308a846ef0c44169929a2908adb0457b4b028672 HEAD -- \
-              lib/main.dart functions/index.js android/ assets/ firestore.rules \
-              firebase.json storage.rules google-services.json pubspec.yaml pubspec.lock
-          else
-            git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
-              lib/main.dart lib/deda_backend.dart android assets firestore.rules firebase.json \
-              storage.rules google-services.json pubspec.yaml pubspec.lock functions
-            git diff --exit-code d609d5ac55bf0c4d29513d6345b4797d7a716527 HEAD -- \
-              android assets firestore.rules firebase.json storage.rules google-services.json \
-              pubspec.yaml pubspec.lock functions
-          fi
+          # Do not compare today's full signed branch with unrelated ancient
+          # work. Pin EVERY protected production/build input to the precise
+          # 100447 signed and CI-passed source commit. Only original-ID
+          # Stage71 and its isolated binder/workflow may differ.
+          git diff --exit-code 3e1cf33a2d9e3a189c2027bed861b079364de063 HEAD -- \
+            lib/main.dart lib/deda_backend.dart lib/admin_pages.dart \
+            lib/deda_pin_auth.dart lib/deda_session_recovery_coordinator.dart \
+            lib/deda_unified_active_id_100410.dart \
+            lib/deda_active_id_public_sync_100409.dart \
+            lib/deda_owner_legacy_public_proof_100414.dart \
+            lib/deda_stage74_id_gift_service.dart \
+            functions/ android/ assets/ firestore.rules storage.rules \
+            firebase.json google-services.json pubspec.yaml pubspec.lock
+          echo 'PASS_100448_ALL_PROTECTED_100447_FULL_APP_INPUTS_IDENTICAL'
           node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
           python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
           cd "$DEDA_SOURCE_ONLY_PROJECT"
