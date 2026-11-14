@@ -101,6 +101,11 @@ class DedaStage71OwnedIdentifierService {
     return uid;
   }
 
+  /// Independently prove original ownership on the same authenticated UID.
+  /// Premium receipts must never gate the permanent original ID.
+  static Future<String> verifyOriginalOwner(String originalId) =>
+      _requireOriginal(originalId);
+
   static Future<List<DedaStage71OwnedIdentifier>> owned(String originalId) async {
     final uid=await _requireOriginal(originalId);
     final db=FirebaseFirestore.instance;
@@ -286,6 +291,7 @@ class _DedaStage71OwnedIdsPanelState
   // login transition. Its old premium rows MUST NOT remain usable or visible.
   StreamSubscription<User?>? _auth;
   String? _verifiedUid;
+  bool _premiumLoadFailed = false;
 
   String? _currentUid() {
     try {
@@ -303,6 +309,7 @@ class _DedaStage71OwnedIdsPanelState
       _ids = null;
       _active = null;
       _verifiedUid = null;
+      _premiumLoadFailed = false;
       _busy = false;
       _pendingUseId = null;
     });
@@ -338,6 +345,7 @@ class _DedaStage71OwnedIdsPanelState
       _ids = null;
       _active = null;
       _verifiedUid = null;
+      _premiumLoadFailed = false;
       _busy = false;
       _pendingUseId = null;
       _load();
@@ -357,46 +365,64 @@ class _DedaStage71OwnedIdsPanelState
     final generation = ++_generation;
     final original = widget.originalId;
     final uid = _currentUid();
-    if (uid == null) {
-      if (mounted) {
-        setState(() {
-          _ids = null;
-          _active = null;
-          _verifiedUid = null;
-        });
-      }
+
+    bool stillSameOwner() =>
+        mounted && generation == _generation &&
+        widget.originalId == original && _currentUid() == uid;
+
+    // Clear prior ownership proof and paid inventory on refresh/account change.
+    if (mounted && (_ids != null || _active != null ||
+        _verifiedUid != null || _premiumLoadFailed)) {
+      setState(() {
+        _ids = null;
+        _active = null;
+        _verifiedUid = null;
+        _premiumLoadFailed = false;
+      });
+    }
+    if (uid == null) return;
+
+    try {
+      // The permanent original ID has its OWN server proof. Do not require
+      // a successful premium receipt or active-alias read to show its Use.
+      final provenUid =
+          await DedaStage71OwnedIdentifierService.verifyOriginalOwner(original);
+      if (!stillSameOwner() || provenUid != uid) return;
+      setState(() => _verifiedUid = uid);
+    } catch (_) {
+      // Never offer an original-ID action to an unverified/split UID.
       return;
     }
-    try {
-      // DEDA_100377_UNIFIED_ACCEPTED_OWNERSHIP_PROFILE_AND_MY_STORE
-      // The Edit Profile Use panel and My Store share one server-verified
-      // owned/received filter. No extra per-item round trip, and no pending
-      // gift can become usable through this local list.
-      // Both reads independently verify server ownership and the same UID.
-      // Launch together: the active ID must not wait for gift receipts.
-      final verified = await Future.wait<Object>([
-        DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original),
-        DedaStage71OwnedIdentifierService.active(original),
-      ]);
-      final rows = verified[0] as List<DedaStage71OwnedIdentifier>;
-      final chosen = verified[1] as String;
-      if (!mounted || generation != _generation ||
-          widget.originalId != original || _currentUid() != uid) return;
-      setState(() {
-        _ids = rows;
-        _active = chosen;
-        _verifiedUid = uid;
-      });
-    } catch (_) {
-      if (mounted && generation == _generation &&
-          widget.originalId == original && _currentUid() == uid) {
+
+    Future<void> readActive() async {
+      try {
+        final chosen = await DedaStage71OwnedIdentifierService.active(original);
+        if (!stillSameOwner() || _verifiedUid != uid) return;
+        setState(() => _active = chosen);
+      } catch (_) {
+        // Original Use independently revalidates and reads back from server.
+      }
+    }
+
+    Future<void> readPremium() async {
+      try {
+        final rows = await
+            DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original);
+        if (!stillSameOwner() || _verifiedUid != uid) return;
+        setState(() {
+          _ids = rows;
+          _premiumLoadFailed = false;
+        });
+      } catch (_) {
+        if (!stillSameOwner() || _verifiedUid != uid) return;
         setState(() {
           _ids = null;
-          _active = null;
-          _verifiedUid = null;
+          _premiumLoadFailed = true;
         });
       }
     }
+
+    await Future.wait<void>([readActive(), readPremium()]);
   }
 
   Future<void> _use(String id) async {
@@ -448,9 +474,10 @@ class _DedaStage71OwnedIdsPanelState
     }
     // Enforce current account on EVERY frame; auth change events can arrive
     // after widget rebuild. Old rows are never rendered in the interim.
-    final currentRows = _verifiedUid != null &&
-            _currentUid() == _verifiedUid ? _ids : null;
-    final currentActive = currentRows == null ? null : _active;
+    final originalVerified = _verifiedUid != null &&
+        _currentUid() == _verifiedUid;
+    final currentRows = originalVerified ? _ids : null;
+    final currentActive = originalVerified ? _active : null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -462,14 +489,19 @@ class _DedaStage71OwnedIdsPanelState
               IconButton(onPressed:_busy?null:_load,
                 icon:const Icon(Icons.refresh)),
             ]),
-            if(currentRows==null) const Text('الملكية بانتظار التحقق من الخادم'),
-            if(currentRows!=null && currentRows.isEmpty)
+            if (!originalVerified)
+              const Text('الملكية بانتظار التحقق من الخادم'),
+            if (originalVerified && currentRows == null)
+              Text(_premiumLoadFailed
+                  ? 'تعذّر تحميل المعرفات المميزة، لكن يمكنك استخدام الأصلي'
+                  : 'جارِ تحميل المعرفات المميزة'),
+            if (currentRows != null && currentRows.isEmpty)
               const Text('لا توجد معرّفات ممنوحة بعد'),
             // QA32: original is never lost and is always available to
             // reactivate when a gifted or self-used premium ID is active.
             // Switching only changes the ACTIVE display alias, not the
             // immutable original account/share routing identifier.
-            if (currentRows != null)
+            if (originalVerified)
               ListTile(
                 key: const Key('deda_qa32_permanent_original_owned_row'),
                 dense: true,
