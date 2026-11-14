@@ -71,7 +71,11 @@ def bind(project: Path) -> None:
         raise ValueError("Source panel server-confirmed callback unexpectedly changed")
     new_panel = new_panel.replace(
         use_with_callback,
-        "      await DedaStage71OwnedIdentifierService.use(original, id);", 1)
+        """      final ownerUid = await
+          DedaStage71OwnedIdentifierService.verifyOriginalOwner(original);
+      if (ownerUid != uid || !mounted || generation != _generation ||
+          widget.originalId != original || _currentUid() != uid) return;
+      await DedaStage71OwnedIdentifierService.use(original, id);""", 1)
     # A historical assembled version lacking the VERIFIED/RECEIVED premium
     # helper must not display raw unaccepted gift records as owned IDs.
     if "static Future<List<DedaStage71OwnedIdentifier>> acceptedOwnedForMyStore(" not in before:
@@ -84,18 +88,58 @@ def bind(project: Path) -> None:
             "        throw StateError('premium-receipt-proof-not-in-this-baseline');", 1)
     if "verifyOriginalOwner(String originalId)" in before:
         raise ValueError("Original return already patched; refuse duplicate")
-    if ("DedaQa32ManagerOriginalOwnerProof.authentic(" not in before
-            or "static Future<String> _requireOriginal(" not in before):
-        raise ValueError("Exact UID/route/session original proof is missing")
+    if "static Future<String> _requireOriginal(" not in before:
+        raise ValueError("Assembled original owner route verifier is absent")
+    # Protected full-app snapshot predates modern owner proof. Add the exact
+    # server proof solely for original reactivation, preserving existing Use.
     # The genuine premium Use implementation is kept byte-for-byte,
     # including public projection, verified readback and same-UID checks.
     use_before = block(before, "  static Future<void> use(", "/// User's Edit Profile:")
-    add = (
-        "  /// Independently verify the same server owner for original return.\n"
-        "  /// This does NOT authorize a foreign or anonymous Firebase UID.\n"
-        "  static Future<String> verifyOriginalOwner(String originalId) =>\n"
-        "      _requireOriginal(originalId);\n\n"
-    )
+    add = """  /// Original-only, server-authoritative proof, independent of gift loading.
+  /// A split, anonymous or foreign Firebase UID never receives this action.
+  static Future<String> verifyOriginalOwner(String originalId) async {
+    final uid = await _requireOriginal(originalId);
+    if (Firebase.apps.isEmpty || FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('original-owner-session-rotated');
+    }
+    final db = FirebaseFirestore.instance;
+    final records = await Future.wait([
+      db.collection('users').doc(uid)
+          .get(const GetOptions(source: Source.server)),
+      db.collection('deda_sessions').doc(uid)
+          .get(const GetOptions(source: Source.server)),
+      db.collection('deda_share_ids').doc(originalId)
+          .get(const GetOptions(source: Source.server)),
+    ]);
+    if (FirebaseAuth.instance.currentUser?.uid != uid ||
+        !DedaQa32ManagerOriginalOwnerProof.authentic(
+          expectedOriginal: originalId,
+          authUid: uid,
+          account: records[0].data() ?? <String, dynamic>{},
+          session: records[1].data() ?? <String, dynamic>{},
+          route: records[2].data() ?? <String, dynamic>{},
+        )) {
+      throw StateError('original-owner-server-proof-not-matched');
+    }
+    return uid;
+  }
+
+"""
+    if "import 'deda_qa32_manager_original_owner_proof.dart';" not in before:
+        legacy_import = "import 'deda_qa32_spark_public_identifier_directory.dart';"
+        if before.count(legacy_import) != 1:
+            raise ValueError("Cannot attach exact original owner proof import")
+        before = before.replace(legacy_import, """import 'deda_qa32_spark_public_identifier_directory.dart';
+import 'deda_qa32_manager_original_owner_proof.dart';""", 1)
+    proof_name = "lib/deda_qa32_manager_original_owner_proof.dart"
+    reviewed_proof = ROOT / proof_name
+    project_proof = project / proof_name
+    if project_proof.is_file():
+        if project_proof.read_bytes() != reviewed_proof.read_bytes():
+            raise ValueError("Existing original owner proof differs: STOP")
+    else:
+        project_proof.write_bytes(reviewed_proof.read_bytes())
+    meta["sourceHashes"][proof_name] = sha(project_proof)
     marker = "  static Future<List<DedaStage71OwnedIdentifier>> owned(String originalId) async {"
     if before.count(marker) != 1:
         raise ValueError("Owner service insertion anchor changed")
