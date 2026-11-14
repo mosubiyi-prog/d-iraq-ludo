@@ -41,8 +41,6 @@ jobs:
           for(const privateModule of [
             'deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED',
             'deda_100441_server_canonical_uid_read_adapter_PRIVATE_NOT_EXPORTED',
-            'deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED',
-            'deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED',
           ]) {
             if(idx.includes(privateModule)) throw Error('private source mistakenly deployed: '+privateModule);
             const s=fs.readFileSync('functions/'+privateModule+'.js','utf8');
@@ -66,6 +64,6 @@ jobs:
           set -euo pipefail
           node --check functions/deda_100441_owner_split_identity_challenge_review_private_v1.js
           node --test test/deda_100443_legacy_owner_review_no_grant.test.js
-          node --test functions/test/deda_100441_canonical_uid_anti_split_preflight_PRIVATE.test.js functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js
+          node --test functions/test/deda_100441_canonical_uid_anti_split_preflight_PRIVATE.test.js functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js
       - name: No Firebase/Play deployment, no APK or credentials
         run: echo PASS_OWNER_REVIEW_GATE_SOURCE_ONLY_SAFE_STOP

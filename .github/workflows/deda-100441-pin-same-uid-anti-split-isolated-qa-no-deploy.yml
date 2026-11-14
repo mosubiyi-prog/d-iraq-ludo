@@ -37,43 +37,16 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import subprocess
+          from pathlib import Path
           base = "308a846ef0c44169929a2908adb0457b4b028672"
-          allowed = {
-            "lib/deda_pin_auth.dart",
-            "lib/deda_100431_linked_owner_session_policy.dart",
-            "lib/deda_step1_google_settings_link_100439.dart",
-            "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py",
-            "tools/app_stability/app_package/bind_google_account_settings_100439.py",
-            "test/deda_owner_session_compat_private_test.dart",
-            "test/deda_pin_same_uid_100441_optin_private_test.dart",
-            ".github/workflows/deda-100441-pin-same-uid-anti-split-isolated-qa-no-deploy.yml",
-            ".github/workflows/deda-100441-complete-signed-session-diagnostic-no-play.yml",
-            ".github/workflows/deda-100442-abc-uid-fingerprint-scoped-readonly-no-deploy.yml",
-            ".github/workflows/deda-100442-signed-private-current-uid-fingerprint-no-play.yml",
-            ".github/workflows/deda-100443-original-id-uid-prewrite-guard-source-qa-no-deploy.yml",
-            "lib/deda_backend.dart",
-            "lib/deda_session_diagnostic_readonly_100441.dart",
-            "test/deda_100441_session_uid_fingerprint_readonly_private_test.dart",
-            "test/deda_original_share_uid_prewrite_guard_100443_test.dart",
-            "tools/deda_100442_current_uid_abc_fingerprints_readonly.py",
-            "docs/DEDA_100441_OWNER_SOURCE_AND_RECOVERY_INTEGRATION_AUDIT_2026-11-12.md",
-            ".github/workflows/deda-100443-owner-review-gate-one-branch-qa-no-deploy.yml",
-            "functions/deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED.js",
-            "functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js",
-            "functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js",
-            "functions/deda_100441_owner_split_identity_challenge_review_private_v1.js",
-            "functions/deda_100441_server_canonical_uid_read_adapter_PRIVATE_NOT_EXPORTED.js",
-            "functions/test/deda_100441_canonical_uid_anti_split_preflight_PRIVATE.test.js",
-            "functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js",
-            "functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js",
-            "functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js",
-            "functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js",
-            "functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js",
-            "test/deda_100443_legacy_owner_review_no_grant.test.js",
-          }
-          modified = set(subprocess.check_output([
-            "git", "diff", "--name-only", base, "HEAD"], text=True).splitlines())
-          assert modified <= allowed, f"Unexpected protected file changes: {sorted(modified - allowed)}"
+          subprocess.run(["git", "diff", "--exit-code", base, "HEAD", "--",
+            "lib/main.dart", "functions/index.js", "firebase.json",
+            "firestore.rules", "storage.rules", "android/", "assets/",
+            "pubspec.yaml", "pubspec.lock"], check=True)
+          for removed in ("lib/deda_step1_google_settings_link_100439.dart",
+            "lib/deda_step2_google_replacement_login_100439.dart",
+            "lib/deda_google_recovery_progress_100439.dart"):
+            assert not Path(removed).exists(), "Google module still present: " + removed
           policy = open("lib/deda_100431_linked_owner_session_policy.dart").read()
           pin = open("lib/deda_pin_auth.dart").read()
           lookup = pin.split("  static Future<bool> accountExists(String phone) async {", 1)[1]
@@ -96,18 +69,11 @@ jobs:
           assert "original-pin-uid-changed-before-session-write" in pin_signin
           assert "await _openSession(accountKey, expectedOriginalUid: expectedUid)" in pin
           assert pin_signin.index("_verifiedExistingPinUid(accountKey)") < pin_signin.index("_openSession(accountKey, expectedOriginalUid: expectedUid)")
-          google_card = open("lib/deda_step1_google_settings_link_100439.dart").read()
           diag = open("lib/deda_session_diagnostic_readonly_100441.dart").read()
           assert "mayOfferDetachedGoogleLink(" in diag
           assert "DedaProbeMatch.differentUid" in diag
           assert "DedaProbeKind.anonymous" in diag
-          assert "linkWithCredential(credential)" in google_card
-          assert "ربط هذه الجلسة فقط" in google_card
-          assert "الحساب القديم غير مسترجع" in google_card
-          assert "linkGoogleToConfirmedOriginalUid(" in google_card
-          assert "DedaAuthRuntime.controller.transition<UserCredential>" in google_card
-          assert "signInWithCredential(" not in google_card
-          print("PASS_GOOGLE_CARD_VERIFIED_OWNER_OR_EXPLICIT_DETACHED_NO_LEGACY_ADOPTION")
+          print("PASS_GOOGLE_LINK_REMOVED_PIN_GUARD_PRESERVED")
           print("PASS_100441_ORIGINAL_UID_CHECK_BEFORE_PIN_SESSION_WRITE")
           PY
 
@@ -126,26 +92,23 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          # The raw repository intentionally does not include google_sign_in;
-          # the reviewed binder adds it ONLY in the disposable full assembly.
           dart analyze --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_100431_linked_owner_session_policy.dart lib/deda_session_diagnostic_readonly_100441.dart
 
-      - name: Owner UID PIN, Google and session regression tests (no Firebase connection)
+      - name: Owner UID PIN and session regression tests (no Firebase connection)
         run: |
           set -euo pipefail
           flutter test --no-pub \
             test/deda_owner_session_compat_private_test.dart \
-            test/deda_google_original_uid_link_private_test.dart \
             test/deda_session_missing_owner_entry_100441_test.dart \
             test/deda_100441_session_uid_fingerprint_readonly_private_test.dart
 
-      - name: PIN guard remains compatible with signed 100441 opt-in compilation
+      - name: PIN guard remains compatible with existing opt-in compilation
         run: |
           set -euo pipefail
           flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
             test/deda_pin_same_uid_100441_optin_private_test.dart
 
-      - name: Verify guard survives EXACT full signed-100441 source assembly (no APK)
+      - name: Verify guard survives Google-free full source assembly (no APK)
         shell: bash
         run: |
           set -euo pipefail
@@ -168,7 +131,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import os
-          root = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
+          root = Path(os.environ["RUNNER_TEMP"]) / "deda-100446-complete-signed-app" / "lib"
           pin = (root / "deda_pin_auth.dart").read_text()
           lookup = pin.split("  static Future<bool> accountExists(String phone) async {", 1)[1]
           lookup = lookup.split("  static Future<void> _provePin(", 1)[0]
@@ -195,24 +158,20 @@ jobs:
           assert pin_signin.index("_verifiedExistingPinUid(accountKey)") < pin_signin.index("_provePin(")
           assert "original-pin-uid-changed-before-session-write" in pin_signin
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
-          assert "DedaGoogleSettingsLinkCard(" in main
+          assert "DedaGoogleSettingsLinkCard(" not in main
           assert "DedaSessionDiagnosticReadOnlyTile(" in main
-          google_card = (root / "deda_step1_google_settings_link_100439.dart").read_text()
           diag = (root / "deda_session_diagnostic_readonly_100441.dart").read_text()
           assert "mayOfferDetachedGoogleLink(" in diag
           assert "DedaProbeMatch.differentUid" in diag
-          assert "linkWithCredential(credential)" in google_card
-          assert "ربط هذه الجلسة فقط" in google_card
-          assert "signInWithCredential(" not in google_card
-          print("PASS_FULL_100441_ASSEMBLY_INCLUDES_SAME_UID_GUARD_GOOGLE_AND_DIAGNOSTICS")
+          assert not (root / "deda_step1_google_settings_link_100439.dart").exists()
+          print("PASS_FULL_100446_ASSEMBLY_NO_GOOGLE_PIN_AND_DIAGNOSTICS")
           PY
           (
-            cd "$RUNNER_TEMP/deda-100441-complete-signed-app"
+            cd "$RUNNER_TEMP/deda-100446-complete-signed-app"
             flutter pub get
             dart analyze --no-fatal-warnings \
               lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
               lib/deda_100431_linked_owner_session_policy.dart \
-              lib/deda_step1_google_settings_link_100439.dart \
               lib/deda_session_diagnostic_readonly_100441.dart
           )
           echo PASS_FULL_100441_ASSEMBLED_DART_ANALYSIS
