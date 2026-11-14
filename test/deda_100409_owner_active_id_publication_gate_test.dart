@@ -42,6 +42,48 @@ void main() {
     ), isFalse);
   });
 
+  test('remote change back to an earlier premium ID must be reconciled', () {
+    final active = <String, dynamic>{
+      'originalId': original,
+      'activeId': '@DEDA-NEWER',
+      'baseColor': 'royal',
+      'updatedAt': 'server-time',
+    };
+    final staleRoute = <String, dynamic>{
+      'aliasId': premium,
+      'originalId': original,
+      'baseColor': 'gold',
+      'updatedAt': 'server-time',
+    };
+    // This ID may have been successfully published previously. That success
+    // is not evidence that the present public projection still matches.
+    expect(DedaActiveIdPublicSync100409.needsPublication(
+      originalId: original, activeId: premium, fixedColor: 'gold',
+      currentProjection: active, aliasRoute: staleRoute,
+    ), isTrue);
+  });
+
+  test('matching premium projection does not require a Firestore write', () {
+    final active = <String, dynamic>{
+      'originalId': original,
+      'activeId': premium,
+      'baseColor': 'gold',
+      'updatedAt': 'server-time',
+    };
+    final route = <String, dynamic>{
+      'aliasId': premium, 'originalId': original,
+      'baseColor': 'gold', 'updatedAt': 'server-time',
+    };
+    expect(DedaActiveIdPublicSync100409.needsPublication(
+      originalId: original, activeId: premium, fixedColor: 'gold',
+      currentProjection: active, aliasRoute: route,
+    ), isFalse);
+    expect(DedaActiveIdPublicSync100409.needsPublication(
+      originalId: original, activeId: original, fixedColor: null,
+      currentProjection: active, aliasRoute: null,
+    ), isTrue);
+  });
+
   test('strict public projection proof rejects stale, mismatched aliases', () {
     final exact = <String, dynamic>{
       'originalId': original, 'activeId': premium,

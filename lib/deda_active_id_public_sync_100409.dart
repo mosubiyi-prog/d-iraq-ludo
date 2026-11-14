@@ -16,7 +16,6 @@ import 'deda_qa32_spark_public_identifier_directory.dart';
 class DedaActiveIdPublicSync100409 {
   DedaActiveIdPublicSync100409._();
   static final Set<String> _pending = <String>{};
-  static final Map<String, String> _success = <String, String>{};
 
   @visibleForTesting
   static bool shouldPublish({
@@ -32,6 +31,35 @@ class DedaActiveIdPublicSync100409 {
             const {'gold', 'diamond', 'royal', 'pink'}.contains(fixedColor));
   }
 
+
+  /// Compare live, server-read public projections against a freshly verified
+  /// owner selection. Never skip this read because a past publication worked:
+  /// another device may have changed the public alias in the meantime.
+  @visibleForTesting
+  static bool needsPublication({
+    required String originalId,
+    required String activeId,
+    required String? fixedColor,
+    required Map<String, dynamic>? currentProjection,
+    required Map<String, dynamic>? aliasRoute,
+  }) {
+    final exactNormal = activeId == originalId &&
+        currentProjection != null && currentProjection.length == 4 &&
+        currentProjection['originalId'] == originalId &&
+        currentProjection['activeId'] == originalId &&
+        currentProjection['baseColor'] == null &&
+        currentProjection['updatedAt'] != null;
+    if (activeId == originalId) return !exactNormal;
+    final proof = DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
+        originalId, currentProjection);
+    final routeOriginal =
+        DedaQa32SparkPublicIdentifierDirectory.originalFromProjection(
+            activeId, aliasRoute, currentProjection);
+    return proof?['displayId'] != activeId ||
+        proof?['permanentColor'] != fixedColor ||
+        routeOriginal != originalId;
+  }
+
   static Future<void> publishAfterVerifiedRead({
     required String uid,
     required String originalId,
@@ -45,8 +73,7 @@ class DedaActiveIdPublicSync100409 {
           currentUid: FirebaseAuth.instance.currentUser?.uid,
         )) return;
     final key = '$uid|$originalId';
-    final value = '$activeId|$fixedColor';
-    if (_pending.contains(key) || _success[key] == value) return;
+    if (_pending.contains(key)) return;
     _pending.add(key);
     try {
       // Avoid network writes if this server-confirmed public projection
@@ -60,29 +87,18 @@ class DedaActiveIdPublicSync100409 {
               .get(const GetOptions(source: Source.server)),
       ]).timeout(const Duration(seconds: 5));
       if (FirebaseAuth.instance.currentUser?.uid != uid) return;
-      final active = docs[0].data();
-      final exactNormal = activeId == originalId &&
-          active != null && active.length == 4 &&
-          active['originalId'] == originalId &&
-          active['activeId'] == originalId && active['baseColor'] == null;
-      final proof = activeId == originalId
-          ? null : DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
-              originalId, active);
-      final consistentOriginal = activeId == originalId
-          ? null : DedaQa32SparkPublicIdentifierDirectory.originalFromProjection(
-              activeId, docs[1].data(), active);
-      if (activeId == originalId ? !exactNormal :
-          proof?['displayId'] != activeId ||
-          proof?['permanentColor'] != fixedColor ||
-          consistentOriginal != originalId) {
+      if (needsPublication(
+        originalId: originalId,
+        activeId: activeId,
+        fixedColor: fixedColor,
+        currentProjection: docs[0].data(),
+        aliasRoute: activeId == originalId ? null : docs[1].data(),
+      )) {
         await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
           originalId: originalId,
           selectedAlias: activeId,
           permanentColor: fixedColor,
         ).timeout(const Duration(seconds: 8));
-      }
-      if (FirebaseAuth.instance.currentUser?.uid == uid) {
-        _success[key] = value;
       }
     } catch (error) {
       // Never delay/hide a verified owner ID because optional public

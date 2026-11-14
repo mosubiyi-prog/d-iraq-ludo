@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_qa32_spark_public_identifier_directory.dart';
+import 'deda_active_id_public_sync_100409.dart';
 import 'deda_stage71_free_manager_200_service.dart';
 import 'deda_stage71_free_owned_use_profile.dart';
 import 'deda_verified_active_id_store.dart';
@@ -144,6 +145,15 @@ class DedaUnifiedActiveId100410 {
     if(uid!=current) return;
     DedaVerifiedActiveIdStore.confirmed(
         uid:current,originalId:original,displayId:active,fixedColor:color);
+    // The same UID, original ID, selected ID and registry/receipt have been
+    // confirmed by Stage71. Repair only an outdated PUBLIC display projection.
+    // Nonblocking and idempotent: no new UID, no grant and no owner data move.
+    if (uid == current) {
+      unawaited(DedaActiveIdPublicSync100409.publishAfterVerifiedRead(
+        uid: current, originalId: original,
+        activeId: active, fixedColor: color,
+      ));
+    }
   }
 
   /// This is invoked ONLY after server-persisted use() + ownership readback.
