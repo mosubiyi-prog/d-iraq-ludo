@@ -87,6 +87,7 @@ jobs:
           echo 'PASS_ORIGINAL_WALLET_SOURCE_UNMODIFIED'
           python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
           python3 tools/app_stability/app_package/bind_session_rescue_stage3_100441.py "$project"
+          test ! -e "$project/lib/deda_step1_google_settings_link_100439.dart"
           python3 tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py "$project"
           python3 tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py "$project"
           python3 tools/app_stability/app_package/bind_session_diagnostic_readonly_100441.py "$project"

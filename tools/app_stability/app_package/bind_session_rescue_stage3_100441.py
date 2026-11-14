@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage3 SOURCE-ONLY opt-in binder on assembled protected 100440 source.
 
-Run AFTER 100440 Google and smart second-stage binders in a disposable project.
+Run AFTER the smart second-stage binder in a disposable project.
 Never mutate source 100440, production Firebase, a released APK or Play.
 """
 from __future__ import annotations
@@ -21,12 +21,10 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def bind(project: Path) -> None:
     project = Path(project)
     main_path = project / "lib/main.dart"
-    google_path = project / "lib/deda_step1_google_settings_link_100439.dart"
-    if not main_path.is_file() or not google_path.is_file():
-        raise ValueError("BLOCK_STAGE3_MISSING_ASSEMBLED_GOOGLE_OR_MAIN")
+    if not main_path.is_file():
+        raise ValueError("BLOCK_STAGE3_MISSING_ASSEMBLED_MAIN")
     main = main_path.read_text()
-    google = google_path.read_text()
-    if "DedaSessionRescueStage3Bridge" in main or "DedaSessionRescueStage3Bridge" in google:
+    if "DedaSessionRescueStage3Bridge" in main:
         raise ValueError("BLOCK_STAGE3_DUPLICATE_BIND")
 
     main = replace_once(
@@ -135,47 +133,6 @@ def bind(project: Path) -> None:
       }""",
         "home single initializer safe sequential rescue",
     )
-    google = replace_once(
-        google,
-        "import 'deda_100430_owner_uid_continuity.dart';",
-        "import 'deda_100430_owner_uid_continuity.dart';\n"
-        "import 'deda_session_rescue_stage3_bridge.dart';",
-        "google module import",
-    )
-    google = replace_once(
-        google,
-        """  void initState() {
-    super.initState();
-    unawaited(_refresh());
-  }""",
-        """  void initState() {
-    super.initState();
-    if (dedaSessionRescueStage3Enabled) {
-      DedaSessionRescueStage3Bridge.updates.addListener(_onRescueReady);
-    }
-    unawaited(_refresh());
-  }
-
-  void _onRescueReady() {
-    final checked = DedaSessionRescueStage3Bridge.updates.value;
-    if (!mounted || _busy || !_active ||
-        checked?.mayRecheckGoogleCard != true ||
-        checked?.originalId != widget.originalId ||
-        checked?.uid != FirebaseAuth.instance.currentUser?.uid) return;
-    // Refresh the verified-state badge ONLY. Never auto-open/attach Google.
-    unawaited(_refresh());
-  }
-
-  @override
-  void dispose() {
-    if (dedaSessionRescueStage3Enabled) {
-      DedaSessionRescueStage3Bridge.updates.removeListener(_onRescueReady);
-    }
-    super.dispose();
-  }""",
-        "google ready badge refresh without linking",
-    )
-
     for file_name in (
         "deda_session_recovery_coordinator.dart",
         "deda_session_rescue_stage3_core.dart",
@@ -187,7 +144,6 @@ def bind(project: Path) -> None:
             raise ValueError("BLOCK_STAGE3_SOURCE_OVERWRITE:" + file_name)
     # Validate all source anchors before the first write. Clones only.
     main_path.write_text(main)
-    google_path.write_text(google)
     for file_name in (
         "deda_session_recovery_coordinator.dart",
         "deda_session_rescue_stage3_core.dart",
@@ -206,11 +162,11 @@ def bind(project: Path) -> None:
             "activePremiumIdMinLength": 4,
             "immutableOriginalIdLength": 6,
             "adminEntryMustRemainServerAuthorized": True,
-            "googleNoAutoLink": True,
+            "noImplicitProviderLink": True,
             "ownerPhoneVerificationPending": True,
         }
         metadata.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    print("PASS_STAGE3_DISPOSABLE_BRIDGE_GUARD_GOOGLE_ADMIN_4CHAR_NO_APK")
+    print("PASS_STAGE3_DISPOSABLE_BRIDGE_GUARD_ADMIN_4CHAR_NO_APK")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
