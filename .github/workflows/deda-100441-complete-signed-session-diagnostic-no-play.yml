@@ -1,4 +1,4 @@
-name: DEDA 100446 NO GOOGLE owner signed QA NO PLAY
+name: DEDA 100446 owner QA NO GOOGLE NO SESSION CARD (manual only)
 on:
   push:
     branches:
@@ -90,7 +90,6 @@ jobs:
           test ! -e "$project/lib/deda_step1_google_settings_link_100439.dart"
           python3 tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py "$project"
           python3 tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py "$project"
-          python3 tools/app_stability/app_package/bind_session_diagnostic_readonly_100441.py "$project"
           echo "DEDA_SOURCE_ONLY_PROJECT=$project" >> "$GITHUB_ENV"
           echo 'PASS_FULL_100439_SMART_ACCOUNT_AND_ADMIN_SOURCE_ASSEMBLED'
       - name: Analyze entire assembled entry, guardian, and admin backend without building APK
@@ -106,8 +105,7 @@ jobs:
             lib/deda_session_recovery_coordinator.dart \
             lib/deda_session_rescue_stage3_core.dart \
             lib/deda_session_rescue_stage3_bridge.dart \
-            lib/deda_session_missing_owner_entry_100441.dart \
-            lib/deda_session_diagnostic_readonly_100441.dart
+            lib/deda_session_missing_owner_entry_100441.dart
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -236,15 +234,11 @@ jobs:
           assert d['financialRestoreEnabled'] is False
           assert d['generalManagerCompensation100m']['targetAdminPoolDiamonds']==100000000
           assert d['smartSecondStageAccount']['originalFirstScreenVisibleFieldsUnchanged']
-          assert page.count('DedaSessionDiagnosticReadOnlyTile(')==1
+          assert 'DedaSessionDiagnosticReadOnlyTile(' not in page
+          assert "import 'deda_session_diagnostic_readonly_100441.dart';" not in page
+          assert "تشخيص الجلسة" not in page
           assert 'DEDA_100441_FRIENDS_RETRY_FIX' in page
           assert 'DedaMissingOwnerEntryPolicy.canOffer' in page
-          diag=(root/'lib/deda_session_diagnostic_readonly_100441.dart').read_text()
-          for banned in ('signInAnonymously(', 'signOut(', '.set(', '.update(', '.delete('):
-            assert banned not in diag
-          assert 'Source.server' in diag
-          assert 'DedaProbeKind.anonymous' in diag and 'DedaProbeKind.linked' in diag
-          assert 'DedaProbeKind.signedOut' in diag
           d['versionCode']=100446
           d['completeOwnerDelivery']=False
           d['financialRestoreEnabled']=False
@@ -262,13 +256,11 @@ jobs:
             'DEDA_SESSION_RESCUE_STAGE3':'true',
             'DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY':'false',
           }
-          d['ownerDiagnostic100441']={
-            'manualReadOnly':True,
-            'showsUid':False,
-            'directSparkLinkedUidLoginEnabled':False,
-            'serverUidSplitUnresolved':True,
+          d['ownerSessionCardRemoval']={
+            'settingsCardAbsent':True,
+            'ownerUidSplitUnresolved':True,
+            'noNewIdentityOrOwnerTransfer':True,
             'friendsRetryIncluded':True,
-            'premiumFourCharSupported':True,
             'noFirebaseDeployment':True,
           }
           d['sourceHashes']={
@@ -362,8 +354,8 @@ jobs:
           assert m['featureDefines']['DEDA_STEP2_LINKED_OWNER_COMPAT']=='true'
           assert m['featureDefines']['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
           assert m['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
-          assert m['ownerDiagnostic100441']['manualReadOnly'] is True
-          assert m['ownerDiagnostic100441']['serverUidSplitUnresolved'] is True
+          assert m['ownerSessionCardRemoval']['settingsCardAbsent'] is True
+          assert m['ownerSessionCardRemoval']['ownerUidSplitUnresolved'] is True
           print('PASS_SIGNED_100446_NO_GOOGLE_OWNER_PIN_GUARD')
           PY
           cp "$apk" "$output/DEDA-100446-OWNER-NO-GOOGLE-QA-SIGNED.apk"
