@@ -1,0 +1,45 @@
+name: DEDA 100446 premium-ID sync SOURCE QA (NO APK)
+on:
+  push:
+    branches:
+      - deda-100446-remove-session-card-uid-owner-hold-source-only-2026-11-14
+    paths:
+      - '.github/workflows/deda-100446-premium-id-sync-source-qa-no-apk.yml'
+      - 'lib/deda_active_id_public_sync_100409.dart'
+      - 'lib/deda_unified_active_id_100410.dart'
+      - 'test/deda_100409_owner_active_id_publication_gate_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-premium-id-sync-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Dart analyze verified ID source
+        run: |
+          flutter pub get
+          dart analyze --no-fatal-warnings \
+            lib/deda_active_id_public_sync_100409.dart \
+            lib/deda_unified_active_id_100410.dart \
+            test/deda_100409_owner_active_id_publication_gate_test.dart
+      - name: Premium ID publication and owner-view regression tests (NO APK)
+        run: |
+          flutter test --no-pub \
+            test/deda_100409_owner_active_id_publication_gate_test.dart \
+            test/deda_100410_unified_active_id_test.dart
+      - name: Prove original UID and server ownership guards unchanged
+        run: |
+          git diff --exit-code 4c57b198ecd8c8a2c30475d5d2533398bbfd786c HEAD -- \
+            lib/deda_pin_auth.dart lib/deda_backend.dart \
+            lib/deda_100431_linked_owner_session_policy.dart \
+            lib/deda_stage71_free_owned_use_profile.dart \
+            lib/deda_stage71_free_manager_200_service.dart \
+            functions/ firestore.rules firebase.json android/ lib/main.dart
+          echo 'PASS_NO_UID_CHANGES_NO_FIREBASE_DEPLOY_NO_APK'
