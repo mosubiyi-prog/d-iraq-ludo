@@ -16,7 +16,6 @@ class DedaOwnerLegacyPublicProof100414 {
   DedaOwnerLegacyPublicProof100414._();
 
   static final Set<String> _inFlight = {};
-  static final Set<String> _completed = {};
 
   static bool sameAuthenticatedOwner({
     required String expectedUid,
@@ -71,7 +70,10 @@ class DedaOwnerLegacyPublicProof100414 {
           currentUid: FirebaseAuth.instance.currentUser?.uid,
         )) return;
     final key = '$uid|$originalId|$activeId|$fixedColor';
-    if (_inFlight.contains(key) || _completed.contains(key)) return;
+    // Do not permanently suppress a previously used ID: another device may
+    // change the canonical selection and public projection later.
+    // Only an in-flight operation is deduplicated.
+    if (_inFlight.contains(key)) return;
     _inFlight.add(key);
     try {
       final db = FirebaseFirestore.instance;
@@ -150,7 +152,7 @@ class DedaOwnerLegacyPublicProof100414 {
           projection['updatedAt'] == null) {
         throw StateError('public-id-projection-not-confirmed');
       }
-      if (FirebaseAuth.instance.currentUser?.uid == uid) _completed.add(key);
+      // The server readback above proves this attempt only; no lifetime cache.
     } on FirebaseException catch (error) {
       // Operational telemetry only: neither ID, phone nor account key logged.
       debugPrint('DEDA legacy active ID proof deferred: ${error.code}');
