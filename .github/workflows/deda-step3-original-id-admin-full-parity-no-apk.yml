@@ -19,7 +19,7 @@ permissions:
   actions: read
 concurrency:
   group: deda-step3-admin-and-functional-id-source-qa
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   validate-step3-source-only:
     runs-on: ubuntu-24.04
