@@ -219,9 +219,9 @@ def patch_stage49(text):
         "!DedaStage48ActiveInkBridge.enabled) return;\n",
         "STAGE49_NO_PREMIUM_SUBSCRIPTION")
     body=once(body,
-        "    if (!mounted || !DedaStage48ActiveInkBridge.enabled) return;\n",
-        "    if (!mounted || DedaOriginalFunctionalIdPolicy20261115.originalOnly"
-        " || !DedaStage48ActiveInkBridge.enabled) return;\n",
+        "  Future<void> _fetch() async {\n",
+        "  Future<void> _fetch() async {\n"
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) return;\n",
         "STAGE49_NO_PREMIUM_REMOTE_READ")
     body=once(body,
         "  Widget build(BuildContext context) {\n",
