@@ -82,12 +82,14 @@ def bind(project: Path) -> None:
         raise ValueError("STEP2_PROFILE_BOUNDARIES_CHANGED")
     old_panel = source[left:right]
     old_foil = source[foil:]
-    if not all(x in old_panel for x in (
-        "DedaStage71OwnedIdentifierService.use(",
-        "DedaStage71OwnedIdentifierService.owned(original)",
-        "if (originalVerified)",
-        "_verifiedUid",
-    )):
+    if (not all(x in old_panel for x in (
+            "DedaStage71OwnedIdentifierService.use(",
+            "if (originalVerified)",
+            "_verifiedUid",
+        )) or not any(x in old_panel for x in (
+            "DedaStage71OwnedIdentifierService.owned(original)",
+            "DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original)",
+        ))):
         raise ValueError("STEP2_OLD_SERVER_USE_PANEL_MISMATCH")
     if not (old_foil.count("return widget.fallback;") == 1 and
             "DedaUnifiedActiveId100410.ensureOwner(widget.originalId)" in old_foil
