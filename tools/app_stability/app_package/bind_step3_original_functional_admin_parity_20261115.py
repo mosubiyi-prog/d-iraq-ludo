@@ -134,15 +134,17 @@ def patch_friend(text):
            "        Firebase.apps.isEmpty) return fallback;")
     text = once(text,old,new,"FRIEND_CARD_ORIGINAL")
     # Two independent public premium renderers also must never draw it.
-    marker = "class DedaStage50PremiumPublicCard extends StatelessWidget {"
-    p = text.index(marker)
-    part1, rest = text[:p], text[p:]
-    rest = once(rest,
+    premium_marker = "class DedaStage50PremiumPublicCard extends StatelessWidget {"
+    next_marker = "class DedaStage50FriendIdInkText extends StatelessWidget {"
+    start = text.index(premium_marker)
+    finish = text.index(next_marker, start)
+    segment = text[start:finish]
+    segment = once(segment,
         "  Widget build(BuildContext context) {\n",
         """  Widget build(BuildContext context) {
     if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) return fallback;
 """, "PREMIUM_PUBLIC_CARD_FALLBACK")
-    text = part1+rest
+    text = text[:start] + segment + text[finish:]
     marker = "class DedaStage50FriendIdInkText extends StatelessWidget {"
     p = text.index(marker)
     first, remainder = text[:p],text[p:]
