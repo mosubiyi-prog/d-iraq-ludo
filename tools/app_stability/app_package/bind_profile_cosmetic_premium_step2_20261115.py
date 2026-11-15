@@ -18,6 +18,22 @@ COSMETIC = "lib/deda_cosmetic_premium_profile_20261115.dart"
 PANEL_START = "class _DedaStage71OwnedIdsPanelState"
 PANEL_END = "/// On the user's personal hero"
 FOIL_START = "class _DedaStage71ActiveProfileFoilState"
+FOIL_STATELESS = "class DedaStage71ActiveProfileFoil extends StatelessWidget {"
+COSMETIC_STATELESS_FOIL = """class DedaStage71ActiveProfileFoil extends StatelessWidget {
+  final String originalId;
+  final Widget fallback;
+  const DedaStage71ActiveProfileFoil({
+    super.key, required this.originalId, required this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) =>
+      DedaCosmeticPremiumProfileFoil20261115(
+        originalId: originalId,
+        fallback: fallback,
+      );
+}
+"""
 COSMETIC_IMPORT = "import 'deda_cosmetic_premium_profile_20261115.dart';\n"
 
 COSMETIC_PANEL = """class _DedaStage71OwnedIdsPanelState
@@ -68,16 +84,18 @@ def bind(project: Path) -> None:
             raise ValueError("STEP2_ASSEMBLY_HASH_MISMATCH_" + relative)
     stage_path = project / STAGE
     source = stage_path.read_text()
+    stateful = source.count(FOIL_START) == 1
+    stateless = source.count(FOIL_STATELESS) == 1
     if (source.count(PANEL_START) != 1 or
             source.count(PANEL_END) != 1 or
-            source.count(FOIL_START) != 1 or
+            stateful == stateless or
             source.count(COSMETIC_IMPORT) != 0 or
             source.count("class DedaStage71ActiveProfileFoil") != 1 or
             source.count("class DedaStage71OwnedIdsPanel") != 1):
         raise ValueError("STEP2_EXACT_PROFILE_MARKERS_REQUIRED")
     left = source.index(PANEL_START)
     right = source.index(PANEL_END)
-    foil = source.index(FOIL_START)
+    foil = source.index(FOIL_START if stateful else FOIL_STATELESS)
     if not 0 < left < right < foil:
         raise ValueError("STEP2_PROFILE_BOUNDARIES_CHANGED")
     old_panel = source[left:right]
@@ -91,13 +109,21 @@ def bind(project: Path) -> None:
             "DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original)",
         ))):
         raise ValueError("STEP2_OLD_SERVER_USE_PANEL_MISMATCH")
-    if not (old_foil.count("return widget.fallback;") == 1 and
-            "DedaUnifiedActiveId100410.ensureOwner(widget.originalId)" in old_foil
-            and "DedaPremiumIdCard(" not in old_foil and
-            old_foil.endswith("  }\n}\n")):
-        # STEP1 already removed ONLY foil build; prior network subscriptions
-        # still exist. Step2 removes those subscriptions and obsolete listeners.
-        raise ValueError("STEP2_EXPECTED_STEP1_FOIL_NOT_FOUND")
+    if stateful:
+        if not (old_foil.count("return widget.fallback;") == 1 and
+                "DedaUnifiedActiveId100410.ensureOwner(widget.originalId)" in old_foil
+                and "DedaPremiumIdCard(" not in old_foil and
+                old_foil.endswith("  }\\n}\\n")):
+            raise ValueError("STEP2_EXPECTED_STEP1_STATEFUL_FOIL_NOT_FOUND")
+        replacement_foil = COSMETIC_FOIL
+    else:
+        # Correct assembled source is Stateless after the 100382 binder.
+        if not (old_foil.count("return fallback;") == 1 and
+                "DedaQa32ActiveAccountScope(" not in old_foil and
+                "DedaPremiumIdCard(" not in old_foil and
+                old_foil.endswith("  }\\n}\\n")):
+            raise ValueError("STEP2_EXPECTED_STEP1_STATELESS_FOIL_NOT_FOUND")
+        replacement_foil = COSMETIC_STATELESS_FOIL
     # No old selectors are left within the two profile widgets; the protected
     # Stage71 service is byte-identical, so its 200-ID grants are untouched.
     preserved_service = source[:left]
@@ -105,7 +131,7 @@ def bind(project: Path) -> None:
         preserved_service
         + COSMETIC_PANEL
         + source[right:foil]
-        + COSMETIC_FOIL
+        + replacement_foil
     )
     anchor = "import 'deda_verified_active_id_store.dart';\n"
     if updated.count(anchor) != 1:
@@ -150,6 +176,7 @@ def bind(project: Path) -> None:
     meta["sourceHashes"][STAGE] = sha(stage_path)
     meta["profileCosmeticPremiumStep2"] = {
         "originalVisibleWithoutCosmeticChoice": True,
+        "assembledFoilVariant": ("stateful100410" if stateful else "stateless100382"),
         "premiumOldProfileLocationPreserved": True,
         "premiumActivationLocalOnly": True,
         "premiumActivationRequiresServerOwnedGiftProof": True,
