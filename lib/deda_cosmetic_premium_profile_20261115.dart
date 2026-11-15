@@ -120,6 +120,7 @@ class _DedaCosmeticPremiumProfileFoil20261115State
   ValueNotifier<int>? _selection;
   String? _selectedUid;
   DedaStage71OwnedIdentifier? _approved;
+  String? _approvedUid;
   int _generation = 0;
 
   String? _uid() {
@@ -169,8 +170,8 @@ class _DedaCosmeticPremiumProfileFoil20261115State
     final epoch = ++_generation;
     final uid = _uid();
     final original = widget.originalId;
-    if (mounted && _approved != null) {
-      setState(() => _approved = null);
+    if (mounted && (_approved != null || _approvedUid != null)) {
+      setState(() { _approved = null; _approvedUid = null; });
     }
     if (uid == null) return;
     try {
@@ -183,7 +184,7 @@ class _DedaCosmeticPremiumProfileFoil20261115State
           _uid() != uid || widget.originalId != original) return;
       for (final item in allowed) {
         if (item.identifier == chosen) {
-          setState(() => _approved = item);
+          setState(() { _approved = item; _approvedUid = uid; });
           return;
         }
       }
@@ -205,6 +206,7 @@ class _DedaCosmeticPremiumProfileFoil20261115State
   Widget build(BuildContext context) {
     final premium = _uid() != null &&
             _uid() == _selectedUid &&
+            _uid() == _approvedUid &&
             _approved?.recipientOriginalId == widget.originalId
         ? _approved : null;
     if (premium == null) return widget.fallback;
@@ -347,7 +349,7 @@ class _DedaCosmeticPremiumSelectorPanel20261115State
 
   @override
   Widget build(BuildContext context) {
-    final owner = _uid() == _verifiedUid;
+    final owner = _verifiedUid != null && _uid() == _verifiedUid;
     final rows = owner ? _owned : null;
     final selected = owner ? _cosmetic : null;
     return Card(
