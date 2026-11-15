@@ -353,13 +353,40 @@ def patch_admin200_self_use(text):
     grant = "DedaStage71Admin200.assign("
     if method.count(grant) != 1:
         raise ValueError("STEP3_ADMIN200_GRANT_MISSING_OR_DUPLICATED")
-    pattern = re.compile(
+    # Some assembled variants append an owner-confirmation callback to Use.
+    # Only accept the exact manager-owned target and row identifier. Locate
+    # its balanced call and replace that call, never the grant transaction.
+    header = re.compile(
         r"await\s+DedaStage71OwnedIdentifierService\.use\(\s*"
-        r"target\s*,\s*row\.identifier\s*,?\s*\);"
+        r"target\s*,\s*row\.identifier\b"
     )
-    matches = list(pattern.finditer(method))
+    matches = list(header.finditer(method))
     if len(matches) != 1 or matches[0].start() < method.index(grant):
         raise ValueError("STEP3_ADMIN200_SELF_USE_MARKER_CHANGED")
+    begin = matches[0].start()
+    open_paren = method.index("(", begin)
+    depth = 0
+    closing = -1
+    for pos in range(open_paren, len(method)):
+        char = method[pos]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                closing = pos
+                break
+    if closing < 0 or depth != 0:
+        raise ValueError("STEP3_ADMIN200_SELF_USE_CALL_UNBALANCED")
+    after_close = closing + 1
+    while after_close < len(method) and method[after_close].isspace():
+        after_close += 1
+    if after_close >= len(method) or method[after_close] != ";":
+        raise ValueError("STEP3_ADMIN200_SELF_USE_CALL_NOT_TERMINATED")
+    old_call = method[begin:after_close + 1]
+    if (old_call.count("DedaStage71OwnedIdentifierService.use(") != 1 or
+            "row.identifier" not in old_call or "target" not in old_call):
+        raise ValueError("STEP3_ADMIN200_SELF_USE_UNVERIFIED")
     new_call = """if (uid == null ||
               FirebaseAuth.instance.currentUser?.uid != uid) {
             throw StateError('manager-cosmetic-account-changed');
@@ -367,7 +394,7 @@ def patch_admin200_self_use(text):
           await DedaCosmeticPremiumChoice20261115.select(
             uid, target!, row.identifier,
           );"""
-    method = pattern.sub(new_call, method, count=1)
+    method = method[:begin] + new_call + method[after_close + 1:]
     text = before + method + after
     for old, new in (
         ("'تم تأكيد الاستخدام أو المنح وحفظ الملكية'",
