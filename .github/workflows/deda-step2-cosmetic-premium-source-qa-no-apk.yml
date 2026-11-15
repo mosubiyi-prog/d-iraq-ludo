@@ -4,7 +4,7 @@ on:
     branches:
       - deda-profile-cosmetic-premium-step2-isolated-2026-11-15
     paths:
-      - '.github/workflows/deda-step1-profile-original-source-qa-no-apk.yml'
+      - '.github/workflows/deda-step2-cosmetic-premium-source-qa-no-apk.yml'
       - 'tools/app_stability/app_package/bind_profile_original_immediate_step1_20261115.py'
       - 'test/test_deda_profile_original_immediate_step1.py'
       - 'tools/app_stability/app_package/bind_profile_cosmetic_premium_step2_20261115.py'
