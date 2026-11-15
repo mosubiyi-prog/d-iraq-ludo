@@ -338,6 +338,7 @@ jobs:
           assert evidence['adminCardRechecksOnAuthAndResume']
           assert evidence['protectedBackendAdminAnd200IdsUnchanged']
           assert evidence['publicActiveAliasPublicationDisabled']
+          assert evidence['allLegacyPremiumBadgesOutsideOwnerProfileDisabled']
           for name, digest in manifest['sourceHashes'].items():
             if not name.startswith('lib/'): continue
             p = root/name
@@ -363,6 +364,8 @@ jobs:
             lib/deda_unified_active_id_100410.dart \
             lib/deda_six_active_identity.dart \
             lib/deda_stage50_verified_friend_ink_badge.dart \
+            lib/deda_stage48_verified_active_profile_ink.dart \
+            lib/deda_stage49_verified_share_id_badge.dart \
             lib/deda_active_id_public_sync_100409.dart \
             lib/deda_original_functional_id_policy_20261115.dart \
             lib/deda_cosmetic_premium_profile_20261115.dart \
