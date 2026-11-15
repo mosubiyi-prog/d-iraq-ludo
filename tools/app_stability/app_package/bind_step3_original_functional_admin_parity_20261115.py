@@ -99,12 +99,17 @@ def patch_six(text):
         )
       : DedaQa32ActiveAccountScope(
 """, "ORIGINAL_TEXT_BEFORE_SCOPE")
-    text = once(text,
-        "  Widget build(BuildContext context) {\n    if (Firebase.apps.isEmpty || !DedaQa32SparkPublicIdentifierDirectory.enabled ||",
-        """  Widget build(BuildContext context) {
-    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) return fallback;
-    if (Firebase.apps.isEmpty || !DedaQa32SparkPublicIdentifierDirectory.enabled ||""",
-        "ORIGINAL_LOCATION_SENDER")
+    # The assembled received-sender view differs from the checked-in
+    # standalone helper. Restrict the insertion to this one class and
+    # preserve its complete original implementation after the early guard.
+    begin=text.index("class DedaSixReceivedIdentity")
+    end=text.index("class DedaSixIdentityCopy",begin)
+    piece=text[begin:end]
+    piece=once(piece, "  Widget build(BuildContext context) {\n",
+        "  Widget build(BuildContext context) {\n"
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
+        "return fallback;\n", "ORIGINAL_LOCATION_SENDER")
+    text=text[:begin]+piece+text[end:]
     text = once(text,
         "  static Future<String?> resolve(String original) async {\n",
         """  static Future<String?> resolve(String original) async {
