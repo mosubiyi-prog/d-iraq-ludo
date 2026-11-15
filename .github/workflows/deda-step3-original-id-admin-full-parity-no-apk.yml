@@ -13,6 +13,7 @@ on:
       - 'lib/deda_original_functional_id_policy_20261115.dart'
       - 'tools/app_stability/app_package/bind_step3_original_functional_admin_parity_20261115.py'
       - 'test/deda_step3_original_functional_visibility_widget_test.dart'
+      - 'test/test_deda_step3_admin200_cosmetic_source.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -326,6 +327,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m unittest discover -s test -p 'test_deda_step3_admin200_cosmetic_source.py' -v
           python3 tools/app_stability/app_package/bind_step3_original_functional_admin_parity_20261115.py "$DEDA_SOURCE_ONLY_PROJECT"
           python3 - <<'PY'
           import hashlib, json, os
@@ -340,6 +342,7 @@ jobs:
           assert evidence['protectedBackendAdminAnd200IdsUnchanged']
           assert evidence['publicActiveAliasPublicationDisabled']
           assert evidence['allLegacyPremiumBadgesOutsideOwnerProfileDisabled']
+          assert evidence['admin200GrantPreservedSelfUseCosmeticOnly']
           for name, digest in manifest['sourceHashes'].items():
             if not name.startswith('lib/'): continue
             p = root/name
@@ -356,6 +359,10 @@ jobs:
           assert "DedaAdminLoginPage" in main
           assert "DedaAdminDashboardPage" in admin
           assert "DedaStage71Admin200" in (root/'lib/deda_stage71_free_manager_200_service.dart').read_text()
+          dual=(root/'lib/deda_stage71_dual_admin_page.dart').read_text()
+          assert 'DedaStage71Admin200.assign(' in dual
+          assert 'DedaCosmeticPremiumChoice20261115.select(' in dual
+          assert 'DedaStage71OwnedIdentifierService.use(' not in dual
           assert not evidence['firebaseOrPlayChanged'] and not evidence['apkBuilt']
           print('PASS_STEP3_ID_FRIENDS_LEAGUE_SHARE_ADMIN_SERVER_GATES_PRESERVED')
           PY
