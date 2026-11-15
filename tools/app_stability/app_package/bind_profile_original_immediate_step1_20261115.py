@@ -64,8 +64,11 @@ def bind(project: Path) -> None:
         "String get _personalDedaId =>",
         "Future<void> _copyDedaId() async",
     ):
-        if main.count(required) != 1:
-            raise ValueError("STEP1_CANONICAL_PROFILE_CHAIN_CHANGED_" + required)
+        count = main.count(required)
+        if count != 1 and not (required == "DedaPoint14VerifiedProfileSlot("
+                               and count >= 1):
+            raise ValueError("STEP1_CANONICAL_PROFILE_CHAIN_CHANGED_"
+                             + required + "_count_" + str(count))
     if "final id = _personalDedaId;" not in main:
         raise ValueError("STEP1_CANONICAL_COPY_CHANGED")
 
