@@ -174,10 +174,16 @@ jobs:
           assert not proof['apkBuilt'] and not proof['firebaseOrPlayChanged']
           main=(root/'lib/main.dart').read_text()
           src=(root/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
-          owner=src.split('class _DedaStage71ActiveProfileFoilState',1)[1]
-          display=owner.split('  @override\n  Widget build(BuildContext context)',1)[1]
-          assert 'return widget.fallback;' in display
-          assert 'جارِ تأكيد الآيدي' not in display
+          variant=proof['assembledFoilVariant']
+          if variant=='stateless100382':
+            owner=src.split('class DedaStage71ActiveProfileFoil extends StatelessWidget {',1)[1]
+            assert 'return fallback;' in owner
+            assert 'DedaQa32ActiveAccountScope(' not in owner
+          else:
+            assert variant=='stateful100410'
+            owner=src.split('class _DedaStage71ActiveProfileFoilState',1)[1]
+            assert 'return widget.fallback;' in owner
+            assert 'جارِ تأكيد الآيدي' not in owner
           assert 'DedaStage71FreeProfileFoil(' in main
           assert 'DedaPoint14VerifiedProfileSlot(' in main
           assert 'final id = _personalDedaId;' in main
