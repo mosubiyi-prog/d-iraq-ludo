@@ -90,7 +90,7 @@ def bind(project: Path) -> None:
     )):
         raise ValueError("STEP2_OLD_SERVER_USE_PANEL_MISMATCH")
     if not (old_foil.count("return widget.fallback;") == 1 and
-            "DedaVerifiedActiveIdStore.read(uid,widget.originalId)" in old_foil
+            "DedaUnifiedActiveId100410.ensureOwner(widget.originalId)" in old_foil
             and "DedaPremiumIdCard(" not in old_foil and
             old_foil.endswith("  }\n}\n")):
         # STEP1 already removed ONLY foil build; prior network subscriptions
