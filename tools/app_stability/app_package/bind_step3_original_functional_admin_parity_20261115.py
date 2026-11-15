@@ -336,9 +336,9 @@ def patch_admin200_self_use(text):
     # Keep the 200-ID original catalog, Firestore assignment transaction,
     # grant history and all manager privileges. Only redirect the legacy
     # post-grant "use myself" server-active alias write to local profile art.
-    old_import = "import 'deda_stage71_free_owned_use_profile.dart';\\n"
+    old_import = "import 'deda_stage71_free_owned_use_profile.dart';\n"
     new_import = (old_import +
-                  "import 'deda_cosmetic_premium_profile_20261115.dart';\\n")
+                  "import 'deda_cosmetic_premium_profile_20261115.dart';\n")
     text = once(text, old_import, new_import, "DUAL_ADMIN_LOCAL_IMPORT")
     before = """      // A manager self-use must also mark their newly owned ID as active.
       // Once-only ownership remains valid even if the separate active
