@@ -133,7 +133,7 @@ def bind(project: Path) -> None:
         + source[right:foil]
         + replacement_foil
     )
-    anchor = "import 'deda_verified_active_id_store.dart';\n"
+    anchor = "import 'deda_stage71_free_manager_200_service.dart';\n"
     if updated.count(anchor) != 1:
         raise ValueError("STEP2_IMPORT_ANCHOR_CHANGED")
     updated = updated.replace(anchor, anchor + COSMETIC_IMPORT, 1)
