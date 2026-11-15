@@ -22,7 +22,7 @@ class Admin200CosmeticAndEntryGuardTest(unittest.TestCase):
         self.assertNotIn("DedaStage71OwnedIdentifierService.use(", converted)
         self.assertIn("DedaCosmeticPremiumChoice20261115.select(", converted)
         self.assertIn("FirebaseAuth.instance.currentUser?.uid != uid", converted)
-        self.assertIn("admin-cosmetic-account-changed", converted)
+        self.assertIn("manager-cosmetic-account-changed", converted)
         self.assertIn("تفعيل للزينة", converted)
         self.assertIn("DedaStage71Admin200.assign(", source)
         self.assertEqual(source.count("DedaStage71Admin200.assign("), 1)
