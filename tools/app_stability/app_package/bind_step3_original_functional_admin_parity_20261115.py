@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -333,68 +334,61 @@ NEW_ADMIN_STATE = """class _DedaSettingsPageState extends State<DedaSettingsPage
 
 
 def patch_admin200_self_use(text):
-    # Keep the 200-ID original catalog, Firestore assignment transaction,
-    # grant history and all manager privileges. Only redirect the legacy
-    # post-grant "use myself" server-active alias write to local profile art.
+    # Source format varies between the checked-in manager page and the fully
+    # reconstructed 100448 assembly. Match the actual isolated self-use call,
+    # NOT its neighboring comments, which legitimately changed between builds.
+    # Fail closed unless the manager grant and the one self-use call coexist
+    # in the same _assign method, in that order.
     old_import = "import 'deda_stage71_free_owned_use_profile.dart';\n"
     new_import = (old_import +
                   "import 'deda_cosmetic_premium_profile_20261115.dart';\n")
     text = once(text, old_import, new_import, "DUAL_ADMIN_LOCAL_IMPORT")
-    before = """      // A manager self-use must also mark their newly owned ID as active.
-      // Once-only ownership remains valid even if the separate active
-      // display update loses the network response.
-      var activationConfirmed = gift;
-      if (!gift) {
-        try {
-          await DedaStage71OwnedIdentifierService.use(
-            target, row.identifier,
-          );
-          activationConfirmed = true;
-        } catch (_) {
-          activationConfirmed = false;
-        }
-      }
-"""
-    after = """      // The ownership transaction above is unchanged and server-confirmed.
-      // For self-use, premium is LOCAL artwork only. Never activate a
-      // public alias; the permanent original remains functional everywhere.
-      var activationConfirmed = gift;
-      if (!gift) {
-        try {
-          if (uid == null ||
+    method_start = text.find("Future<void> _assign(")
+    method_end = text.find("void _history()", method_start)
+    if method_start < 0 or method_end < method_start:
+        raise ValueError("STEP3_ADMIN200_ASSIGN_BOUNDARY_UNVERIFIED")
+    before, method, after = (
+        text[:method_start], text[method_start:method_end], text[method_end:]
+    )
+    grant = "DedaStage71Admin200.assign("
+    if method.count(grant) != 1:
+        raise ValueError("STEP3_ADMIN200_GRANT_MISSING_OR_DUPLICATED")
+    pattern = re.compile(
+        r"await\s+DedaStage71OwnedIdentifierService\.use\(\s*"
+        r"target\s*,\s*row\.identifier\s*,?\s*\);"
+    )
+    matches = list(pattern.finditer(method))
+    if len(matches) != 1 or matches[0].start() < method.index(grant):
+        raise ValueError("STEP3_ADMIN200_SELF_USE_MARKER_CHANGED")
+    new_call = """if (uid == null ||
               FirebaseAuth.instance.currentUser?.uid != uid) {
             throw StateError('manager-cosmetic-account-changed');
           }
           await DedaCosmeticPremiumChoice20261115.select(
             uid, target!, row.identifier,
-          );
-          activationConfirmed = true;
-        } catch (_) {
-          activationConfirmed = false;
-        }
-      }
-"""
-    text = once(text, before, after, "ADMIN200_SELF_USE_LOCAL_ONLY")
-    text = once(text,
-        "'تم تأكيد الاستخدام أو المنح وحفظ الملكية'",
-        "'تم تأكيد الزينة أو المنح وحفظ الملكية'",
-        "ADMIN200_CONFIRMATION_LABEL")
-    text = once(text,
-        "'Grant and ownership confirmed'",
-        "'Decorative choice or grant and ownership confirmed'",
-        "ADMIN200_ENGLISH_CONFIRMATION_LABEL")
-    text = once(text,
-        "'تم تثبيت الملكية. افتح معرّفاتي واضغط استخدام لتفعيله.'",
-        "'تم تثبيت الملكية. افتح معرّفاتي واضغط تفعيل للزينة.'",
-        "ADMIN200_FAILOVER_LABEL")
-    text = once(text,
-        "'Ownership confirmed. Activate it in My IDs.'",
-        "'Ownership confirmed. Activate decoration in My IDs.'",
-        "ADMIN200_ENGLISH_FAILOVER_LABEL")
-    if ("DedaStage71OwnedIdentifierService.use(" in text or
-            text.count("DedaStage71Admin200.assign(") != 1):
-        raise ValueError("STEP3_ADMIN200_GRANT_OR_OLD_ALIAS_USE_UNSAFE")
+          );"""
+    method = pattern.sub(new_call, method, count=1)
+    text = before + method + after
+    for old, new in (
+        ("'تم تأكيد الاستخدام أو المنح وحفظ الملكية'",
+         "'تم تأكيد الزينة أو المنح وحفظ الملكية'"),
+        ("'Grant and ownership confirmed'",
+         "'Decorative choice or grant and ownership confirmed'"),
+        ("'تم تثبيت الملكية. افتح معرّفاتي واضغط استخدام لتفعيله.'",
+         "'تم تثبيت الملكية. افتح معرّفاتي واضغط تفعيل للزينة.'"),
+        ("'Ownership confirmed. Activate it in My IDs.'",
+         "'Ownership confirmed. Activate decoration in My IDs.'"),
+        ("'استخدام لنفسي: '", "'زينة لملفي: '"),
+        ("'Use myself: '", "'Decorate my profile: '"),
+    ):
+        if old in text:
+            text = text.replace(old, new, 1)
+    if (text.count(grant) != 1 or
+            "DedaStage71OwnedIdentifierService.use(" in text or
+            "DedaCosmeticPremiumChoice20261115.select(" not in text):
+        raise ValueError("STEP3_ADMIN200_GRANT_OR_ALIAS_USE_UNSAFE")
     return text
+
 
 
 def patch_admin_main(text):
