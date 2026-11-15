@@ -213,7 +213,6 @@ class _DedaCosmeticPremiumProfileFoil20261115State
     );
     // Intentionally NO tap/copy/search/share handler on premium artwork.
     return DedaPremiumIdCard(
-      key: const Key('deda_cosmetic_premium_profile_only'),
       identifier: premium.identifier,
       color: color,
       height: 50,
@@ -278,6 +277,7 @@ class _DedaCosmeticPremiumSelectorPanel20261115State
         _owned = null;
         _verifiedUid = null;
         _cosmetic = null;
+        _busy = false; // Account/selection refresh cancels an obsolete pending tap.
         _failed = false;
       });
     }
