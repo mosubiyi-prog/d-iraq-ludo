@@ -362,6 +362,12 @@ def patch_admin200_self_use(text):
     )
     matches = list(header.finditer(method))
     if len(matches) != 1 or matches[0].start() < method.index(grant):
+        # Source-only diagnostic: print only the Dart call site, never data
+        # or user account records.
+        where = method.find("DedaStage71OwnedIdentifierService.use(")
+        print("STEP3_ADMIN200_OLD_USE_SOURCE_AROUND_CALL",
+              repr(method[max(0, where-100):where+540])
+              if where >= 0 else "NO_LEGACY_GLOBAL_USE_IN_ASSIGN")
         raise ValueError("STEP3_ADMIN200_SELF_USE_MARKER_CHANGED")
     begin = matches[0].start()
     open_paren = method.index("(", begin)
