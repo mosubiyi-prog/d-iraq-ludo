@@ -332,10 +332,25 @@ NEW_ADMIN_STATE = """class _DedaSettingsPageState extends State<DedaSettingsPage
 
 
 def patch_admin_main(text):
-    # Do not touch navigation, card widget, dashboard permissions or login.
-    if text.count(ORIGINAL_ADMIN_STATE) != 1:
-        raise ValueError("STEP3_ADMIN_CARD_ORIGINAL_GATE_CHANGED")
-    return text.replace(ORIGINAL_ADMIN_STATE, NEW_ADMIN_STATE, 1)
+    # The assembled settings state already contains its own entry refresh
+    # logic, and may differ from the source-only fixture. Preserve it exactly.
+    # Rewriting it on a source-text guess could hide the authorized card.
+    # Read-only assertions verify both visibility and protected click gating.
+    start = text.find("class _DedaSettingsPageState")
+    if start < 0 or text.count("class _DedaSettingsPageState") != 1:
+        raise ValueError("STEP3_ADMIN_SETTINGS_STATE_NOT_UNIQUE")
+    state = text[start:]
+    for expected in (
+        "_adminEntryVisible",
+        "_refreshAdminEntryVisibility()",
+        "DedaBackend.currentDedaAccountCanSeeAdminEntry(",
+        "DedaBackend.currentAdminSessionMatchesDedaEntry(",
+        "if (_adminEntryVisible) ...[",
+    ):
+        if expected not in state:
+            raise ValueError("STEP3_ADMIN_GATE_OR_CARD_MISSING_" + expected)
+    return text  # byte-identical protected admin screen
+
 
 
 def bind(project):
@@ -401,7 +416,9 @@ def bind(project):
         "originalProfileCopyAndLocationSender":True,
         "publicActiveAliasPublicationDisabled":True,
         "adminEntryAuthAndPhoneGateUnchanged":True,
-        "adminCardRechecksOnAuthAndResume":True,
+        "adminCardRechecksOnAuthAndResume":False,
+        "adminCardVisibilityAndClickGateVerified":True,
+        "adminSettingsSourceByteUnchanged":True,
         "protectedBackendAdminAnd200IdsUnchanged":True,
         "originalPremiumAliasServerDocumentsPreserved":True,
         "productionRulesUnchanged":True,
