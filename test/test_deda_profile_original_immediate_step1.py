@@ -112,5 +112,27 @@ class ProfileOriginalImmediateStep1Test(unittest.TestCase):
             binder.bind(self.root)
 
 
+    def test_actual_100382_stateless_foil_restores_original_directly(self):
+        source = (ROOT / "tools/app_stability/bind_unified_active_id_100382.py").read_text()
+        part = source.split(
+            'social = head + """class DedaStage71ActiveProfileFoil extends StatelessWidget {', 1
+        )[1].split('"""', 1)[0]
+        self.stage.write_text(
+            "// Existing verified service untouched\\n"
+            + 'class DedaStage71ActiveProfileFoil extends StatelessWidget {'
+            + part
+        )
+        self.write_meta()
+        binder.bind(self.root)
+        now = self.stage.read_text()
+        self.assertIn("class DedaStage71ActiveProfileFoil extends StatelessWidget", now)
+        self.assertIn("return fallback;", now)
+        self.assertNotIn("DedaQa32ActiveAccountScope(", now)
+        self.assertEqual(
+            json.loads(self.meta.read_text())["profileOriginalImmediateStep1"]
+            ["assembledFoilVariant"], "stateless100382",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
