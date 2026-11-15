@@ -27,6 +27,30 @@ class Admin200CosmeticAndEntryGuardTest(unittest.TestCase):
         self.assertIn("DedaStage71Admin200.assign(", source)
         self.assertEqual(source.count("DedaStage71Admin200.assign("), 1)
 
+    def test_assembled_stability_wrapped_manager_self_use(self):
+        # Exact shape observed in full 100448 assembled GitHub Actions source.
+        source = DUAL.read_text()
+        direct = (
+            "await DedaStage71OwnedIdentifierService.use(\\n"
+            "            target, row.identifier,\\n"
+            "          );"
+        )
+        wrapped = (
+            "await DedaSectionOperationContext.wait(() => "
+            "DedaStage71OwnedIdentifierService.use(\\n"
+            "            selectedTarget,\\n"
+            "            row.identifier,\\n"
+            "          ));"
+        )
+        self.assertEqual(source.count(direct), 1)
+        rebuilt = source.replace(direct, wrapped)
+        patched = binding.patch_admin200_self_use(rebuilt)
+        self.assertIn("DedaSectionOperationContext.wait(() =>", patched)
+        self.assertIn("DedaCosmeticPremiumChoice20261115.select(", patched)
+        self.assertIn("uid, selectedTarget, row.identifier", patched)
+        self.assertNotIn("DedaStage71OwnedIdentifierService.use(", patched)
+        self.assertIn("DedaStage71Admin200.assign(", patched)
+
     def test_admin_entry_not_mutated_by_step3(self):
         original = MAIN.read_text()
         updated = binding.patch_admin_main(original)
