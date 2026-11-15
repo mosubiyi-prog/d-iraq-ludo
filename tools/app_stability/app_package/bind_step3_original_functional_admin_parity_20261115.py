@@ -344,7 +344,7 @@ def patch_admin_main(text):
         "_adminEntryVisible",
         "_refreshAdminEntryVisibility()",
         "DedaBackend.currentDedaAccountCanSeeAdminEntry(",
-        "DedaBackend.currentAdminSessionMatchesDedaEntry(",
+        ".currentAdminSessionMatchesDedaEntry(",
         "if (_adminEntryVisible) ...[",
     ):
         if expected not in state:
