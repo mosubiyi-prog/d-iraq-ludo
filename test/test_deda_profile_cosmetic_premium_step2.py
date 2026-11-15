@@ -121,7 +121,7 @@ class DedaCosmeticPremiumStep2Test(unittest.TestCase):
                     "bind_profile_original_immediate_step1_20261115.py").read_text()
         stateless = original.split('ORIGINAL_ONLY_STATELESS = """',1)[1].split('"""',1)[0]
         prior = self.stage.read_text()
-        marker = binder.FOIL_START
+        marker = "class DedaStage71ActiveProfileFoil extends StatefulWidget {"
         self.stage.write_text(prior[:prior.index(marker)] + stateless)
         self.write_meta()
         binder.bind(self.project)
