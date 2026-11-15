@@ -24,6 +24,7 @@ ADMIN = "lib/admin_pages.dart"
 STAGE = "lib/deda_stage71_free_owned_use_profile.dart"
 INK48 = "lib/deda_stage48_verified_active_profile_ink.dart"
 SHARE49 = "lib/deda_stage49_verified_share_id_badge.dart"
+DUAL_ADMIN = "lib/deda_stage71_dual_admin_page.dart"
 
 POLICY_TYPE = "DedaOriginalFunctionalIdPolicy20261115.originalOnly"
 POLICY_IMPORT = "import 'deda_original_functional_id_policy_20261115.dart';\n"
@@ -331,6 +332,71 @@ NEW_ADMIN_STATE = """class _DedaSettingsPageState extends State<DedaSettingsPage
 """
 
 
+def patch_admin200_self_use(text):
+    # Keep the 200-ID original catalog, Firestore assignment transaction,
+    # grant history and all manager privileges. Only redirect the legacy
+    # post-grant "use myself" server-active alias write to local profile art.
+    old_import = "import 'deda_stage71_free_owned_use_profile.dart';\\n"
+    new_import = (old_import +
+                  "import 'deda_cosmetic_premium_profile_20261115.dart';\\n")
+    text = once(text, old_import, new_import, "DUAL_ADMIN_LOCAL_IMPORT")
+    before = """      // A manager self-use must also mark their newly owned ID as active.
+      // Once-only ownership remains valid even if the separate active
+      // display update loses the network response.
+      var activationConfirmed = gift;
+      if (!gift) {
+        try {
+          await DedaStage71OwnedIdentifierService.use(
+            target, row.identifier,
+          );
+          activationConfirmed = true;
+        } catch (_) {
+          activationConfirmed = false;
+        }
+      }
+"""
+    after = """      // The ownership transaction above is unchanged and server-confirmed.
+      // For self-use, premium is LOCAL artwork only. Never activate a
+      // public alias; the permanent original remains functional everywhere.
+      var activationConfirmed = gift;
+      if (!gift) {
+        try {
+          if (uid == null ||
+              FirebaseAuth.instance.currentUser?.uid != uid) {
+            throw StateError('manager-cosmetic-account-changed');
+          }
+          await DedaCosmeticPremiumChoice20261115.select(
+            uid, target!, row.identifier,
+          );
+          activationConfirmed = true;
+        } catch (_) {
+          activationConfirmed = false;
+        }
+      }
+"""
+    text = once(text, before, after, "ADMIN200_SELF_USE_LOCAL_ONLY")
+    text = once(text,
+        "'تم تأكيد الاستخدام أو المنح وحفظ الملكية'",
+        "'تم تأكيد الزينة أو المنح وحفظ الملكية'",
+        "ADMIN200_CONFIRMATION_LABEL")
+    text = once(text,
+        "'Grant and ownership confirmed'",
+        "'Decorative choice or grant and ownership confirmed'",
+        "ADMIN200_ENGLISH_CONFIRMATION_LABEL")
+    text = once(text,
+        "'تم تثبيت الملكية. افتح معرّفاتي واضغط استخدام لتفعيله.'",
+        "'تم تثبيت الملكية. افتح معرّفاتي واضغط تفعيل للزينة.'",
+        "ADMIN200_FAILOVER_LABEL")
+    text = once(text,
+        "'Ownership confirmed. Activate it in My IDs.'",
+        "'Ownership confirmed. Activate decoration in My IDs.'",
+        "ADMIN200_ENGLISH_FAILOVER_LABEL")
+    if ("DedaStage71OwnedIdentifierService.use(" in text or
+            text.count("DedaStage71Admin200.assign(") != 1):
+        raise ValueError("STEP3_ADMIN200_GRANT_OR_OLD_ALIAS_USE_UNSAFE")
+    return text
+
+
 def patch_admin_main(text):
     # The assembled settings state already contains its own entry refresh
     # logic, and may differ from the source-only fixture. Preserve it exactly.
@@ -370,7 +436,7 @@ def bind(project):
             or "originalFunctionalAndAdminParityStep3" in meta):
         raise ValueError("STEP3_VERIFIED_STEP2_ASSEMBLY_REQUIRED")
 
-    paths = (UNI,SIX,FRIEND,SYNC,INK48,SHARE49,MAIN,BACKEND,ADMIN,STAGE)
+    paths = (UNI,SIX,FRIEND,SYNC,INK48,SHARE49,DUAL_ADMIN,MAIN,BACKEND,ADMIN,STAGE)
     before = {}
     for relative in paths:
         path=project/relative
@@ -395,6 +461,7 @@ def bind(project):
         SYNC:patch_public_sync(before[SYNC]),
         INK48:patch_stage48(before[INK48]),
         SHARE49:patch_stage49(before[SHARE49]),
+        DUAL_ADMIN:patch_admin200_self_use(before[DUAL_ADMIN]),
         MAIN:patch_admin_main(before[MAIN]),
     }
     policy_src=ROOT/POLICY
@@ -418,6 +485,7 @@ def bind(project):
         "adminEntryAuthAndPhoneGateUnchanged":True,
         "adminCardRechecksOnAuthAndResume":False,
         "adminCardVisibilityAndClickGateVerified":True,
+        "admin200GrantPreservedSelfUseCosmeticOnly":True,
         "adminSettingsSourceByteUnchanged":True,
         "protectedBackendAdminAnd200IdsUnchanged":True,
         "originalPremiumAliasServerDocumentsPreserved":True,
