@@ -22,6 +22,8 @@ MAIN = "lib/main.dart"
 BACKEND = "lib/deda_backend.dart"
 ADMIN = "lib/admin_pages.dart"
 STAGE = "lib/deda_stage71_free_owned_use_profile.dart"
+INK48 = "lib/deda_stage48_verified_active_profile_ink.dart"
+SHARE49 = "lib/deda_stage49_verified_share_id_badge.dart"
 
 POLICY_TYPE = "DedaOriginalFunctionalIdPolicy20261115.originalOnly"
 POLICY_IMPORT = "import 'deda_original_functional_id_policy_20261115.dart';\n"
@@ -164,6 +166,71 @@ def patch_public_sync(text):
     return text
 
 
+def patch_stage48(text):
+    text = once(text,
+        "import 'deda_verified_identifier_ink.dart';\\n",
+        "import 'deda_verified_identifier_ink.dart';\\n"+POLICY_IMPORT,
+        "STAGE48_POLICY_IMPORT")
+    marker="class _DedaStage48ActiveInkProfileSlotState"
+    if text.count(marker)!=1: raise ValueError("STEP3_STAGE48_PROFILE_SLOT_MISSING")
+    start=text.index(marker)
+    before,body=text[:start],text[start:]
+    body=once(body,
+        "    if (!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
+        "!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "STAGE48_NO_PREMIUM_AUTH_SUBSCRIPTION")
+    body=once(body,
+        "    if (!DedaStage48ActiveInkBridge.enabled || !mounted) return;\\n",
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
+        "!DedaStage48ActiveInkBridge.enabled || !mounted) return;\\n",
+        "STAGE48_NO_PREMIUM_REMOTE_READ")
+    body=once(body,
+        "  Widget build(BuildContext context) {\\n",
+        "  Widget build(BuildContext context) {\\n"
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
+        "return widget.fallback;\\n",
+        "STAGE48_ORIGINAL_DISPLAY")
+    return before+body
+
+
+def patch_stage49(text):
+    text=once(text,
+        "import 'deda_verified_identifier_ink.dart';\\n",
+        "import 'deda_verified_identifier_ink.dart';\\n"+POLICY_IMPORT,
+        "STAGE49_POLICY_IMPORT")
+    first="class _DedaStage49VerifiedShareIdBadgeState"
+    second="class DedaStage49VerifiedShareIdPreview"
+    if text.count(first)!=1 or text.count(second)!=1:
+        raise ValueError("STEP3_STAGE49_CARD_OR_PREVIEW_CHANGED")
+    begin=text.index(first)
+    end=text.index(second,begin)
+    pre,body,tail=text[:begin],text[begin:end],text[end:]
+    body=once(body,
+        "    if (!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
+        "!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "STAGE49_NO_PREMIUM_SUBSCRIPTION")
+    body=once(body,
+        "    if (!mounted || !DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "    if (!mounted || DedaOriginalFunctionalIdPolicy20261115.originalOnly"
+        " || !DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "STAGE49_NO_PREMIUM_REMOTE_READ")
+    body=once(body,
+        "  Widget build(BuildContext context) {\\n",
+        "  Widget build(BuildContext context) {\\n"
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
+        "return const SizedBox.shrink();\\n",
+        "STAGE49_QR_PREMIUM_BADGE_HIDDEN")
+    tail=once(tail,
+        "  Widget build(BuildContext context) {\\n",
+        "  Widget build(BuildContext context) {\\n"
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
+        "return const SizedBox.shrink();\\n",
+        "STAGE49_PREVIEW_PREMIUM_HIDDEN")
+    return pre+body+tail
+
+
 ORIGINAL_ADMIN_STATE = """class _DedaSettingsPageState extends State<DedaSettingsPage> {
   bool _adminEntryVisible = false;
 
@@ -281,7 +348,7 @@ def bind(project):
             or "originalFunctionalAndAdminParityStep3" in meta):
         raise ValueError("STEP3_VERIFIED_STEP2_ASSEMBLY_REQUIRED")
 
-    paths = (UNI,SIX,FRIEND,SYNC,MAIN,BACKEND,ADMIN,STAGE)
+    paths = (UNI,SIX,FRIEND,SYNC,INK48,SHARE49,MAIN,BACKEND,ADMIN,STAGE)
     before = {}
     for relative in paths:
         path=project/relative
@@ -304,6 +371,8 @@ def bind(project):
         SIX:patch_six(before[SIX]),
         FRIEND:patch_friend(before[FRIEND]),
         SYNC:patch_public_sync(before[SYNC]),
+        INK48:patch_stage48(before[INK48]),
+        SHARE49:patch_stage49(before[SHARE49]),
         MAIN:patch_admin_main(before[MAIN]),
     }
     policy_src=ROOT/POLICY
@@ -319,6 +388,7 @@ def bind(project):
         assert (project/relative).read_text()==before[relative]
     meta["originalFunctionalAndAdminParityStep3"]={
         "ownerProfileCosmeticPreserved":True,
+        "allLegacyPremiumBadgesOutsideOwnerProfileDisabled":True,
         "allUnifiedFriendLeagueAndShareLabelsOriginal":True,
         "allUnifiedPremiumWatchesDisabled":True,
         "originalProfileCopyAndLocationSender":True,
