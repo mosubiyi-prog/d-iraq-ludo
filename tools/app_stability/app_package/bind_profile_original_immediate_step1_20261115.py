@@ -16,6 +16,21 @@ ROOT = Path(__file__).resolve().parents[3]
 STAGE = "lib/deda_stage71_free_owned_use_profile.dart"
 MAIN = "lib/main.dart"
 FOIL_CLASS = "class _DedaStage71ActiveProfileFoilState"
+FOIL_STATELESS = "class DedaStage71ActiveProfileFoil extends StatelessWidget {"
+ORIGINAL_ONLY_STATELESS = """class DedaStage71ActiveProfileFoil extends StatelessWidget {
+  final String originalId;
+  final Widget fallback;
+  const DedaStage71ActiveProfileFoil({
+    super.key, required this.originalId, required this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Original card paints immediately. Premium decoration comes in STEP2.
+    return fallback;
+  }
+}
+"""
 BUILD = "  @override\n  Widget build(BuildContext context) {"
 ORIGINAL_ONLY_BUILD = """  @override
   Widget build(BuildContext context) {
@@ -77,26 +92,46 @@ def bind(project: Path) -> None:
 
     stage_file = project / STAGE
     source = stage_file.read_text()
-    if source.count(FOIL_CLASS) != 1:
-        raise ValueError("STEP1_FOIL_NOT_UNIQUE")
-    start = source.index(FOIL_CLASS)
-    state_class = source[start:]
-    if state_class.count(BUILD) != 1 or not state_class.endswith("  }\n}\n"):
-        raise ValueError("STEP1_FOIL_CLASS_CHANGED")
-    build_start = state_class.index(BUILD)
-    old_build = state_class[build_start:]
-    for expected in (
-        "DedaVerifiedActiveIdStore.read(uid,widget.originalId)",
-        "DedaPremiumIdCard(",
-        "return widget.fallback;",
-        "جارِ تأكيد الآيدي...",
-    ):
-        if expected not in old_build:
-            raise ValueError("STEP1_PREMIUM_PRESENTATION_UNEXPECTED_" + expected)
-    # Keep all historic checks/services, grants and state handlers unchanged;
-    # replace precisely the last owner-profile widget build method.
-    updated = source[:start + build_start] + ORIGINAL_ONLY_BUILD
-    if updated.count("return widget.fallback;") < 1:
+    # 100382 converted the actual assembled foil into StatelessWidget.
+    # 100410 skipped its own Stateful replacement, as proven by QA log.
+    if source.count(FOIL_STATELESS) == 1 and source.count(FOIL_CLASS) == 0:
+        start = source.index(FOIL_STATELESS)
+        old_foil = source[start:]
+        for proof in (
+            "DedaQa32ActiveAccountScope(",
+            "if (proof == null)",
+            "جارٍ التحقق من المعرّف",
+            "DedaPremiumIdCard(",
+            "if (!proof.isPremium) return fallback;",
+        ):
+            if proof not in old_foil:
+                raise ValueError("STEP1_STATELESS_FOIL_UNEXPECTED_" + proof)
+        if not old_foil.endswith("  );\\n}\\n"):
+            raise ValueError("STEP1_STATELESS_FOIL_TERMINATION_CHANGED")
+        updated = source[:start] + ORIGINAL_ONLY_STATELESS
+        fallback_check = "return fallback;"
+        foil_variant = "stateless100382"
+    elif source.count(FOIL_CLASS) == 1 and source.count(FOIL_STATELESS) == 0:
+        start = source.index(FOIL_CLASS)
+        state_class = source[start:]
+        if state_class.count(BUILD) != 1 or not state_class.endswith("  }\\n}\\n"):
+            raise ValueError("STEP1_FOIL_CLASS_CHANGED")
+        build_start = state_class.index(BUILD)
+        old_build = state_class[build_start:]
+        for expected in (
+            "DedaVerifiedActiveIdStore.read(uid,widget.originalId)",
+            "DedaPremiumIdCard(",
+            "return widget.fallback;",
+            "جارِ تأكيد الآيدي...",
+        ):
+            if expected not in old_build:
+                raise ValueError("STEP1_PREMIUM_PRESENTATION_UNEXPECTED_" + expected)
+        updated = source[:start + build_start] + ORIGINAL_ONLY_BUILD
+        fallback_check = "return widget.fallback;"
+        foil_variant = "stateful100410"
+    else:
+        raise ValueError("STEP1_FOIL_VARIANT_NOT_IDENTIFIED")
+    if fallback_check not in updated:
         raise ValueError("STEP1_CANONICAL_CARD_NOT_RESTORED")
     stage_file.write_text(updated)
     meta["sourceHashes"][STAGE] = digest(stage_file)
@@ -104,6 +139,7 @@ def bind(project: Path) -> None:
         "canonicalIdDisplayedWithoutPremiumProof": True,
         "canonicalIdSource": "DedaBackend.personalShareIdForPhone",
         "existingOriginalCardAndCopyPreserved": True,
+        "assembledFoilVariant": foil_variant,
         "premiumOwnershipAndSelectionUntouched": True,
         "friendsLeagueShareCodeUntouched": True,
         "premiumDecorativePresentationDeferredToStep2": True,
