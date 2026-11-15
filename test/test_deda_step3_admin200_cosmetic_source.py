@@ -31,15 +31,15 @@ class Admin200CosmeticAndEntryGuardTest(unittest.TestCase):
         # Exact shape observed in full 100448 assembled GitHub Actions source.
         source = DUAL.read_text()
         direct = (
-            "await DedaStage71OwnedIdentifierService.use(\\n"
-            "            target, row.identifier,\\n"
+            "await DedaStage71OwnedIdentifierService.use(\n"
+            "            target, row.identifier,\n"
             "          );"
         )
         wrapped = (
             "await DedaSectionOperationContext.wait(() => "
-            "DedaStage71OwnedIdentifierService.use(\\n"
-            "            selectedTarget,\\n"
-            "            row.identifier,\\n"
+            "DedaStage71OwnedIdentifierService.use(\n"
+            "            selectedTarget,\n"
+            "            row.identifier,\n"
             "          ));"
         )
         self.assertEqual(source.count(direct), 1)
