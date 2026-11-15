@@ -116,5 +116,25 @@ class DedaCosmeticPremiumStep2Test(unittest.TestCase):
             binder.bind(self.project)
 
 
+    def test_real_stateless_100382_foil_becomes_cosmetic_only(self):
+        original = (ROOT / "tools/app_stability/app_package/"
+                    "bind_profile_original_immediate_step1_20261115.py").read_text()
+        stateless = original.split('ORIGINAL_ONLY_STATELESS = """',1)[1].split('"""',1)[0]
+        prior = self.stage.read_text()
+        marker = binder.FOIL_START
+        self.stage.write_text(prior[:prior.index(marker)] + stateless)
+        self.write_meta()
+        binder.bind(self.project)
+        current = self.stage.read_text()
+        expected = current.split(binder.FOIL_STATELESS,1)[1]
+        self.assertIn("DedaCosmeticPremiumProfileFoil20261115", expected)
+        self.assertIn("fallback: fallback", expected)
+        self.assertNotIn("DedaQa32ActiveAccountScope(", expected)
+        self.assertEqual(
+            json.loads(self.meta.read_text())["profileCosmeticPremiumStep2"]
+            ["assembledFoilVariant"], "stateless100382",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
