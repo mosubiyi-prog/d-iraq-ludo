@@ -168,36 +168,36 @@ def patch_public_sync(text):
 
 def patch_stage48(text):
     text = once(text,
-        "import 'deda_verified_identifier_ink.dart';\\n",
-        "import 'deda_verified_identifier_ink.dart';\\n"+POLICY_IMPORT,
+        "import 'deda_verified_identifier_ink.dart';\n",
+        "import 'deda_verified_identifier_ink.dart';\n"+POLICY_IMPORT,
         "STAGE48_POLICY_IMPORT")
     marker="class _DedaStage48ActiveInkProfileSlotState"
     if text.count(marker)!=1: raise ValueError("STEP3_STAGE48_PROFILE_SLOT_MISSING")
     start=text.index(marker)
     before,body=text[:start],text[start:]
     body=once(body,
-        "    if (!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "    if (!DedaStage48ActiveInkBridge.enabled) return;\n",
         "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
-        "!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "!DedaStage48ActiveInkBridge.enabled) return;\n",
         "STAGE48_NO_PREMIUM_AUTH_SUBSCRIPTION")
     body=once(body,
-        "    if (!DedaStage48ActiveInkBridge.enabled || !mounted) return;\\n",
+        "    if (!DedaStage48ActiveInkBridge.enabled || !mounted) return;\n",
         "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
-        "!DedaStage48ActiveInkBridge.enabled || !mounted) return;\\n",
+        "!DedaStage48ActiveInkBridge.enabled || !mounted) return;\n",
         "STAGE48_NO_PREMIUM_REMOTE_READ")
     body=once(body,
-        "  Widget build(BuildContext context) {\\n",
-        "  Widget build(BuildContext context) {\\n"
+        "  Widget build(BuildContext context) {\n",
+        "  Widget build(BuildContext context) {\n"
         "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
-        "return widget.fallback;\\n",
+        "return widget.fallback;\n",
         "STAGE48_ORIGINAL_DISPLAY")
     return before+body
 
 
 def patch_stage49(text):
     text=once(text,
-        "import 'deda_verified_identifier_ink.dart';\\n",
-        "import 'deda_verified_identifier_ink.dart';\\n"+POLICY_IMPORT,
+        "import 'deda_verified_identifier_ink.dart';\n",
+        "import 'deda_verified_identifier_ink.dart';\n"+POLICY_IMPORT,
         "STAGE49_POLICY_IMPORT")
     first="class _DedaStage49VerifiedShareIdBadgeState"
     second="class DedaStage49VerifiedShareIdPreview"
@@ -207,26 +207,26 @@ def patch_stage49(text):
     end=text.index(second,begin)
     pre,body,tail=text[:begin],text[begin:end],text[end:]
     body=once(body,
-        "    if (!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "    if (!DedaStage48ActiveInkBridge.enabled) return;\n",
         "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
-        "!DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "!DedaStage48ActiveInkBridge.enabled) return;\n",
         "STAGE49_NO_PREMIUM_SUBSCRIPTION")
     body=once(body,
-        "    if (!mounted || !DedaStage48ActiveInkBridge.enabled) return;\\n",
+        "    if (!mounted || !DedaStage48ActiveInkBridge.enabled) return;\n",
         "    if (!mounted || DedaOriginalFunctionalIdPolicy20261115.originalOnly"
-        " || !DedaStage48ActiveInkBridge.enabled) return;\\n",
+        " || !DedaStage48ActiveInkBridge.enabled) return;\n",
         "STAGE49_NO_PREMIUM_REMOTE_READ")
     body=once(body,
-        "  Widget build(BuildContext context) {\\n",
-        "  Widget build(BuildContext context) {\\n"
+        "  Widget build(BuildContext context) {\n",
+        "  Widget build(BuildContext context) {\n"
         "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
-        "return const SizedBox.shrink();\\n",
+        "return const SizedBox.shrink();\n",
         "STAGE49_QR_PREMIUM_BADGE_HIDDEN")
     tail=once(tail,
-        "  Widget build(BuildContext context) {\\n",
-        "  Widget build(BuildContext context) {\\n"
+        "  Widget build(BuildContext context) {\n",
+        "  Widget build(BuildContext context) {\n"
         "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) "
-        "return const SizedBox.shrink();\\n",
+        "return const SizedBox.shrink();\n",
         "STAGE49_PREVIEW_PREMIUM_HIDDEN")
     return pre+body+tail
 
