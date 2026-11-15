@@ -106,7 +106,7 @@ def bind(project: Path) -> None:
         ):
             if proof not in old_foil:
                 raise ValueError("STEP1_STATELESS_FOIL_UNEXPECTED_" + proof)
-        if not old_foil.endswith("  );\\n}\\n"):
+        if not old_foil.endswith("  );\n}\n"):
             raise ValueError("STEP1_STATELESS_FOIL_TERMINATION_CHANGED")
         updated = source[:start] + ORIGINAL_ONLY_STATELESS
         fallback_check = "return fallback;"
@@ -114,7 +114,7 @@ def bind(project: Path) -> None:
     elif source.count(FOIL_CLASS) == 1 and source.count(FOIL_STATELESS) == 0:
         start = source.index(FOIL_CLASS)
         state_class = source[start:]
-        if state_class.count(BUILD) != 1 or not state_class.endswith("  }\\n}\\n"):
+        if state_class.count(BUILD) != 1 or not state_class.endswith("  }\n}\n"):
             raise ValueError("STEP1_FOIL_CLASS_CHANGED")
         build_start = state_class.index(BUILD)
         old_build = state_class[build_start:]
