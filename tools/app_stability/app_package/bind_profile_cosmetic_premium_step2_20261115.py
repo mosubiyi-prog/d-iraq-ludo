@@ -113,7 +113,7 @@ def bind(project: Path) -> None:
         if not (old_foil.count("return widget.fallback;") == 1 and
                 "DedaUnifiedActiveId100410.ensureOwner(widget.originalId)" in old_foil
                 and "DedaPremiumIdCard(" not in old_foil and
-                old_foil.endswith("  }\\n}\\n")):
+                old_foil.endswith("  }\n}\n")):
             raise ValueError("STEP2_EXPECTED_STEP1_STATEFUL_FOIL_NOT_FOUND")
         replacement_foil = COSMETIC_FOIL
     else:
@@ -121,7 +121,7 @@ def bind(project: Path) -> None:
         if not (old_foil.count("return fallback;") == 1 and
                 "DedaQa32ActiveAccountScope(" not in old_foil and
                 "DedaPremiumIdCard(" not in old_foil and
-                old_foil.endswith("  }\\n}\\n")):
+                old_foil.endswith("  }\n}\n")):
             raise ValueError("STEP2_EXPECTED_STEP1_STATELESS_FOIL_NOT_FOUND")
         replacement_foil = COSMETIC_STATELESS_FOIL
     # No old selectors are left within the two profile widgets; the protected
