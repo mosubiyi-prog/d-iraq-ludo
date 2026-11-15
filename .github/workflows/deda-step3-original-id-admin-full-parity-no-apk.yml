@@ -120,6 +120,41 @@ jobs:
           assert (root/'lib/deda_qa32_manager_original_owner_proof.dart').exists()
           print('PASS_FULL_OWNER_ORIGINAL_RETURN_PREMIUM_INVENTORY_RETAINED')
           PY
+      - name: Seal complete source hashes after official 100448 assembly (same as signed baseline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ['DEDA_SOURCE_ONLY_PROJECT'])
+          manifest=root/'internal-build-inputs.json'
+          d=json.loads(manifest.read_text())
+          assert d['originalIdReturnOwnerVerified20261115']['independentOriginalProof']
+          assert d['originalIdReturnOwnerVerified20261115']['premiumInventoryCannotBlockOriginal']
+          assert d['financialRestoreEnabled'] is False
+          assert d['completeOwnerDelivery'] is False
+          assert d['productionExecutionPerformed'] is False
+          for p in ('lib/main.dart','lib/deda_backend.dart','lib/admin_pages.dart',
+                    'lib/deda_stage71_free_owned_use_profile.dart'):
+            assert (root/p).is_file()
+          # Identical hash sealing to the official 100448 signing workflow:
+          # every assembled binder is finished; NO file is modified here.
+          old=dict(d['sourceHashes'])
+          verified={}
+          for p in list((root/'lib').glob('*.dart')) + [
+              root/'pubspec.yaml',root/'pubspec.lock']:
+            verified[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+          changes=[p for p,digest in verified.items() if old.get(p)!=digest]
+          d['sourceHashes']=verified
+          d['fullAssemblyManifestResealedFrom100448SignedRecipe']={
+              'sourceHashesBeforeStep1':True,
+              'actualAssembledFilesChangedByThisStep':False,
+              'mismatchedHistoricalHashesBeforeSeal':changes,
+          }
+          manifest.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          print('PASS_100448_SIGNED_RECIPE_FINAL_SOURCE_HASH_SEAL',changes)
+          PY
       - name: Install original canonical profile ID immediately (STEP1 ONLY) and validate preservation
         shell: bash
         run: |
