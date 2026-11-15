@@ -188,9 +188,9 @@ def patch_stage48(text):
         "!DedaStage48ActiveInkBridge.enabled) return;\n",
         "STAGE48_NO_PREMIUM_AUTH_SUBSCRIPTION")
     body=once(body,
-        "    if (!DedaStage48ActiveInkBridge.enabled || !mounted) return;\n",
-        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly || "
-        "!DedaStage48ActiveInkBridge.enabled || !mounted) return;\n",
+        "  Future<void> _read() async {\n",
+        "  Future<void> _read() async {\n"
+        "    if (DedaOriginalFunctionalIdPolicy20261115.originalOnly) return;\n",
         "STAGE48_NO_PREMIUM_REMOTE_READ")
     body=once(body,
         "  Widget build(BuildContext context) {\n",
