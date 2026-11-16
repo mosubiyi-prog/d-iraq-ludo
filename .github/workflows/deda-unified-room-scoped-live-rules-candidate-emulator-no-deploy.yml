@@ -125,6 +125,27 @@ jobs:
             allow get: if request.auth != null && request.auth.uid == uid
               && request.auth.token.keys().hasAny(['firebase']);
           }
+          match /qa_room_auth_probe_grant/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && exists(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id)
+              && get(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id).data.status == 'active';
+          }
+          match /qa_room_auth_probe_issued/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && get(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id).data.issuedAt <= request.time;
+          }
+          match /qa_room_auth_probe_expires/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && get(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id).data.expiresAt > request.time;
+          }
+          match /qa_room_auth_probe_duration/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && get(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id).data.expiresAt <= get(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id).data.issuedAt + duration.value(10, 'm');
+          }
+          match /qa_room_auth_probe_source/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && get(/databases/$(database)/documents/deda_unified_room_read_grants/$(uid)/domains/original_id).data.sourceUid == get(/databases/$(database)/documents/deda_unified_room_private_views/$(uid)/domains/original_id).data.sourceUid;
+          }
           """
           candidate=live[:place]+patch+'\n'+providerProbe+'\n'+live[place:]
           pathlib.Path('/tmp/deda-room-live-rules.rules').write_text(live)
