@@ -108,24 +108,24 @@ jobs:
           if any(x in patch for x in ('allow write: if true','allow read: if true')):
             print('SAFE_STOP_BROAD_CANDIDATE_PERMISSION');sys.exit(3)
           providerProbe="""
-    // EMULATOR DEBUG ONLY; remove after diagnosis.
-    match /qa_room_auth_probe/{uid} {
-      allow get: if request.auth != null && request.auth.uid == uid;
-    }
-    match /qa_room_auth_probe_provider/{uid} {
-      allow get: if request.auth != null && request.auth.uid == uid
-        && request.auth.token.firebase.sign_in_provider == 'password';
-    }
-    match /qa_room_auth_probe_email/{uid} {
-      allow get: if request.auth != null && request.auth.uid == uid
-        && request.auth.token.keys().hasAny(['email_verified'])
-        && request.auth.token.email_verified == true;
-    }
-    match /qa_room_auth_probe_firebase/{uid} {
-      allow get: if request.auth != null && request.auth.uid == uid
-        && request.auth.token.keys().hasAny(['firebase']);
-    }
-"""
+          // EMULATOR DEBUG ONLY; remove after diagnosis.
+          match /qa_room_auth_probe/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid;
+          }
+          match /qa_room_auth_probe_provider/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && request.auth.token.firebase.sign_in_provider == 'password';
+          }
+          match /qa_room_auth_probe_email/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && request.auth.token.keys().hasAny(['email_verified'])
+              && request.auth.token.email_verified == true;
+          }
+          match /qa_room_auth_probe_firebase/{uid} {
+            allow get: if request.auth != null && request.auth.uid == uid
+              && request.auth.token.keys().hasAny(['firebase']);
+          }
+          """
           candidate=live[:place]+patch+'\n'+providerProbe+'\n'+live[place:]
           pathlib.Path('/tmp/deda-room-live-rules.rules').write_text(live)
           pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(candidate)
