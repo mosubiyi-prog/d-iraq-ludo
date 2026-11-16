@@ -253,3 +253,64 @@ test("internal historical friend and external friend remain isolated",()=>{
   assert.equal(domain(x,"friends").status,
     "INTERNAL_ALIAS_RELATION_REVIEW_REQUIRED");
 });
+
+test("valid admin gift is metadata-only and never credits wallet",()=>{
+  const s=sources();s.gifts.push({id:"admin-gift-01",giftId:"admin-gift-01",
+    sourceType:"admin",targetPublicId:id,amount:1000000,
+    status:"pending",createdAtMs:1794700000000,cached:false,pendingWrites:false});
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"gifts").status,"GIFT_RECEIPTS_SHAPE_MATCHED_NO_REISSUE");
+  assert.equal(x.financialGrantPermitted,false);
+});
+test("admin gift claimed once is a receipt, not authority to reissue",()=>{
+  const s=sources();s.gifts.push({id:"admin-gift-02",giftId:"admin-gift-02",
+    sourceType:"admin",targetPublicId:id,amount:120,
+    status:"received",createdAtMs:1794700000000,
+    claimedAtMs:1794700002000,cached:false,pendingWrites:false});
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"gifts").status,"GIFT_RECEIPTS_SHAPE_MATCHED_NO_REISSUE");
+});
+test("admin gift ID mismatch or excessive amount fails closed",()=>{
+  for (const fn of [
+    x=>x.giftId="OTHER",x=>x.amount=1000001,
+    x=>x.amount=-1,x=>x.amount="50"
+  ]) {
+    const s=sources(),item={id:"admin-gift-03",giftId:"admin-gift-03",
+      sourceType:"admin",targetPublicId:id,amount:200,status:"pending",
+      createdAtMs:1794700000000,cached:false,pendingWrites:false};
+    fn(item);s.gifts.push(item);
+    const x=run({sourceRows:s});locked(x);
+    assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("admin gift requires consistent claim transition metadata",()=>{
+  for (const fn of [
+    x=>x.status="claimed",
+    x=>x.claimedAtMs=1794700003000,
+    x=>x.createdAtMs=0
+  ]) {
+    const s=sources(),item={id:"admin-gift-04",giftId:"admin-gift-04",
+      sourceType:"admin",targetPublicId:id,amount:20,status:"pending",
+      createdAtMs:1794700000000,cached:false,pendingWrites:false};
+    fn(item);s.gifts.push(item);
+    const x=run({sourceRows:s});locked(x);
+    assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("received admin gift must have claim time after creation",()=>{
+  for(const claimedAtMs of [null,0,1794699999999]){
+    const s=sources();s.gifts.push({id:"admin-gift-05",giftId:"admin-gift-05",
+      sourceType:"admin",targetPublicId:id,amount:20,status:"received",
+      createdAtMs:1794700000000,claimedAtMs,cached:false,pendingWrites:false});
+    const x=run({sourceRows:s});locked(x);
+    assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("unknown historical gift source gets review, not deletion or credit",()=>{
+  const s=sources();s.gifts.push({id:"legacy-receipt-06",
+    targetPublicId:id,sourceType:"legacy",amount:250,
+    cached:false,pendingWrites:false});
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"gifts").status,"UNKNOWN_GIFT_SOURCE_REVIEW_REQUIRED");
+  assert.equal(JSON.stringify(x).includes("250"),false);
+});
