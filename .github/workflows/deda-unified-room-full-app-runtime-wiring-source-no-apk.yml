@@ -377,8 +377,8 @@ jobs:
     permissions:
       contents: read
     env:
-      DEDA_RULES_READONLY_SA: "\${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}"
-      DEDA_RULES_FALLBACK: "\${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+      DEDA_RULES_READONLY_SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}"
+      DEDA_RULES_FALLBACK: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
     steps:
       - uses: actions/checkout@v4
         with:
