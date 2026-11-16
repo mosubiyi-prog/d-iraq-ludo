@@ -1,0 +1,42 @@
+
+    // PRIVATE QA CANDIDATE ONLY — never deploy by itself.
+    // Server-generated views/grants only; authenticated clients cannot write.
+    // NEVER use accountKey, PIN, device fingerprint or self-projected IDs
+    // to authorize cross-UID data access.
+    function dedaPrivateRoomScope(readerUid, domain) {
+      let grantPath = /databases/$(database)/documents/deda_unified_room_read_grants/$(readerUid)/domains/$(domain);
+      let grant = get(grantPath).data;
+      return request.auth != null
+        && request.auth.uid == readerUid
+        && request.auth.token.firebase.sign_in_provider in ['password', 'google.com', 'phone']
+        && domain in ['profile', 'original_id', 'premium_id', 'friends', 'league', 'gifts', 'wallet', 'places']
+        && exists(grantPath)
+        && grant.readerUid == readerUid
+        && grant.domain == domain
+        && grant.status == 'active'
+        && grant.proofKind == 'independent_verified'
+        && grant.scopeVersion == 1
+        && grant.issuedAt is timestamp
+        && grant.expiresAt is timestamp
+        && grant.issuedAt <= request.time
+        && grant.expiresAt > request.time
+        && grant.expiresAt <= grant.issuedAt + duration.value(10, 'm')
+        && grant.canonicalAccountId == resource.data.canonicalAccountId
+        && grant.originalId == resource.data.originalId
+        && grant.sourceUid == resource.data.sourceUid
+        && resource.data.readerUid == readerUid
+        && resource.data.domain == domain
+        && resource.data.scopeVersion == 1;
+    }
+
+    match /deda_unified_room_read_grants/{readerUid}/domains/{domain} {
+      // No client may issue, enumerate or inspect a trusted grant.
+      allow get, list, create, update, delete: if false;
+    }
+
+    match /deda_unified_room_private_views/{readerUid}/domains/{domain} {
+      // Safe sanitized VIEW only, created by a future trusted service.
+      // This does not permit reading historical raw users/A, wallet, etc.
+      allow get: if dedaPrivateRoomScope(readerUid, domain);
+      allow list, create, update, delete: if false;
+    }
