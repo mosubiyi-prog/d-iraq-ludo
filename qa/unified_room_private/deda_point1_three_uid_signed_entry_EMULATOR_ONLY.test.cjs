@@ -27,7 +27,8 @@ const canonicalAccountId="QA_POINT1_ONE_ROOM_ABC_123456789";
 const reviewId="QA_POINT1_TWO_REVIEWERS_123456";
 const domains=["profile","original_id","friends"];
 const source={profile:B,original_id:A,friends:C};
-const now=1800000000000,nonce="QA_POINT1_SINGLE_SESSION_NONCE_123";
+// Firestore rules use emulator server wall-clock: match it in this QA fixture.
+const now=Date.now(),nonce="QA_POINT1_SINGLE_SESSION_NONCE_123";
 const friendshipKey=[C,F].sort().join("__");
 const get=async(db,p)=>{const s=await db.doc(p).get();return s.exists?s.data():null};
 const put=(db,p,d)=>db.doc(p).set(d);
