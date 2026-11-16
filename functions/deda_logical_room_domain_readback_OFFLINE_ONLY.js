@@ -32,9 +32,11 @@ function goodUnsigned(n) {
 function checkFriends(rows,originalUidSet) {
   if (rows == null) return "SOURCE_ABSENT_UNKNOWN";
   if (!Array.isArray(rows) || rows.length>LIMIT) return null;
-  const seen=new Set();
+  const seen=new Set(), aliasesPerExternal=new Map();
+  let internalHistoricalPair=false, repeatedExternalAcrossAliases=false;
   for(const row of rows) {
-    if (!row || typeof row!=="object" || !UID.test(row.requesterUid||"") ||
+    if (!row || typeof row!=="object" || row.cached!==false ||
+        row.pendingWrites!==false || !UID.test(row.requesterUid||"") ||
         !UID.test(row.recipientUid||"") ||
         row.requesterUid===row.recipientUid ||
         !Array.isArray(row.members) || row.members.length!==2 ||
@@ -43,12 +45,25 @@ function checkFriends(rows,originalUidSet) {
         !row.members.includes(row.recipientUid) ||
         !row.members.every(x=>typeof x==="string" && UID.test(x)) ||
         !row.members.some(x=>originalUidSet.has(x)) ||
-        row.members.every(x=>originalUidSet.has(x)) ||
         !["accepted","pending","rejected"].includes(row.status)) return null;
     const id=[...row.members].sort().join("__");
     if(row.id!==id || row.pairKey!==id || seen.has(id)) return null;
     seen.add(id);
+    const fromThisAccount=row.members.filter(x=>originalUidSet.has(x));
+    if(fromThisAccount.length===2) {
+      // Both sides are A/B/C historical aliases. Never silently transform
+      // this into a friendship between the unified account and itself.
+      internalHistoricalPair=true;
+      continue;
+    }
+    const externalUid=row.members.find(x=>!originalUidSet.has(x));
+    const origins=aliasesPerExternal.get(externalUid)||new Set();
+    origins.add(fromThisAccount[0]);
+    if(origins.size>1) repeatedExternalAcrossAliases=true;
+    aliasesPerExternal.set(externalUid,origins);
   }
+  if(internalHistoricalPair) return "INTERNAL_ALIAS_RELATION_REVIEW_REQUIRED";
+  if(repeatedExternalAcrossAliases) return "ALIAS_FRIEND_DUPLICATE_REVIEW_REQUIRED";
   return rows.length===0?"SOURCE_EMPTY_HISTORICAL_UNKNOWN":
     "FRIEND_UID_PAIRS_SHAPE_MATCHED_NOT_AUTHORIZED";
 }
@@ -57,7 +72,8 @@ function checkGifts(rows,originalId) {
   if (!Array.isArray(rows) || rows.length>LIMIT) return null;
   const seen=new Set();
   for(const row of rows) {
-    if(!row || typeof row!=="object" || typeof row.id!=="string" ||
+    if(!row || typeof row!=="object" || row.cached!==false ||
+       row.pendingWrites!==false || typeof row.id!=="string" ||
        !/^[A-Za-z0-9_-]{5,160}$/.test(row.id) || seen.has(row.id) ||
        row.targetPublicId!==originalId ||
        !Number.isSafeInteger(row.amount) || row.amount<=0 ||
@@ -86,12 +102,14 @@ function checkPremium(row,originalId) {
 }
 function checkLeague(a,c,s,originalId,accountKey) {
   if(a==null && c==null && s==null)return "SOURCE_ABSENT_UNKNOWN";
+  if(a==null && (c!=null || s!=null))return null;
   if(a!=null && (!a || a.publicId!==originalId ||
       a.accountKey!==accountKey))return null;
   if(c!=null && (!c || typeof c.weekId!=="string" ||
       !WEEK.test(c.weekId)))return null;
   if(s!=null && (!c || !s || s.weekId!==c.weekId ||
       s.publicId!==originalId || !goodUnsigned(s.weeklyXp)))return null;
+  if(c==null)return "LEAGUE_CONTROL_MISSING_HISTORICAL_UNKNOWN";
   return "LEAGUE_SOURCE_SHAPE_MATCHED_NOT_AWARD_AUTHORITY";
 }
 function inspectDomainSources({roomSnapshot,sourceRows,sessionUid}={}) {
