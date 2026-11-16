@@ -147,6 +147,18 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
       originalEqual:persistedGrant?.originalId===persistedView?.originalId,
       versionEqual:persistedGrant?.scopeVersion===persistedView?.scopeVersion
     }));
+    console.log("QA_REAL_AUTH_USERS_B_READ",
+      await can(()=>b.doc("users/"+B).get()));
+    console.log("QA_REAL_AUTH_SHARE_ID_READ",
+      await can(()=>b.doc("deda_share_ids/"+originalId).get()));
+    const simulatedPassword=env.authenticatedContext(B,{
+      firebase:{sign_in_provider:"password"}}).firestore();
+    console.log("QA_SYNTH_PASSWORD_READ",
+      await can(()=>simulatedPassword.doc(view("original_id")).get()));
+    const simulatedGoogle=env.authenticatedContext(B,{
+      firebase:{sign_in_provider:"google.com"}}).firestore();
+    console.log("QA_SYNTH_GOOGLE_READ",
+      await can(()=>simulatedGoogle.doc(view("original_id")).get()));
     let bReadError="";
     try{await b.doc(view("original_id")).get();}
     catch(e){bReadError=String(e.message).slice(0,450);}
