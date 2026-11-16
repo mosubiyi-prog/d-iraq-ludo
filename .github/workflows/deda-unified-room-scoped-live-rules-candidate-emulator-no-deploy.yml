@@ -10,7 +10,9 @@ on:
       - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.cjs'
       - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
       - 'qa/unified_room_private/deda_profile_original_premium_REAL_SCHEMA_EMULATOR_ONLY.cjs'
-      - 'qa/unified_room_private/deda_first_scope_real_sources_EMULATOR_ONLY.test.cjs'
+      - 'qa/unified_room_private/deda_first_scope_real_sources_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_second_scope_real_sources_EMULATOR_ONLY.test.cjs'
+      - 'qa/unified_room_private/deda_friends_league_gifts_REAL_SCHEMA_EMULATOR_ONLY.cjs'
+      - 'qa/unified_room_private/deda_second_scope_real_sources_EMULATOR_ONLY.test.cjs'
       - '.github/workflows/deda-unified-room-scoped-live-rules-candidate-emulator-no-deploy.yml'
   workflow_dispatch:
 
@@ -133,6 +135,11 @@ jobs:
           grep -Fq "collection('deda_share_ids').doc(id)" lib/deda_stage71_free_owned_use_profile.dart
           grep -Fq "deda_stage71_active_identifier" lib/deda_stage71_free_owned_use_profile.dart
           grep -Fq "deda_stage71_granted_registry" lib/deda_stage71_free_manager_200_service.dart
+          grep -Fq "deda_stage74_id_gift_receipts" lib/deda_stage74_id_gift_service.dart
+          grep -Fq ".collection('deda_friendships')" lib/deda_social_service.dart
+          grep -Fq "deda_social_profiles" lib/deda_social_service.dart
+          grep -Fq "deda_weekly_direct_weeks" lib/deda_weekly_firestore_direct_bridge.dart
+          grep -Fq "deda_weekly_direct_accounts" lib/deda_weekly_firestore_direct_bridge.dart
           grep -Fq "deda_stage74_id_gift_receipts" lib/deda_stage74_id_gift_service.dart
           echo 'PASS_REAL_DEDA_COLLECTIONS_SOURCE_MAPPING_VERIFIED'
       - name: Execute legacy Play regression, scoped grants, and Admin Auth+Firestore emulator integration
