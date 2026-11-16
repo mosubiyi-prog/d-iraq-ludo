@@ -32,8 +32,12 @@ def bind(project):
         record.get('completeOwnerDelivery') is not False:
         raise RuntimeError('BLOCK_ORIGINAL_APP_AND_FINANCIAL_GUARDS')
     text = main_file.read_text()
-    if text.count(HOME) != 1 or text.count('import \'dart:async\';') != 1:
-        raise RuntimeError('BLOCK_AMBIGUOUS_MAIN_OR_ASYNC_IMPORT')
+    # Assembly patches may retain repeated harmless dart:async imports;
+    # require it to exist, but only require ONE actual HomePage state class.
+    if text.count(HOME) != 1 or text.count("import 'dart:async';") < 1:
+        raise RuntimeError('BLOCK_AMBIGUOUS_MAIN_OR_ASYNC_IMPORT:' +
+                           str(text.count(HOME)) + ':' +
+                           str(text.count("import 'dart:async';")))
     if ENTRY.strip() in text or 'DedaUnifiedRoomRuntimeReadOnly' in text or \
         module_file.exists():
         raise RuntimeError('BLOCK_DUPLICATE_ROOM_RUNTIME_INTEGRATION')
