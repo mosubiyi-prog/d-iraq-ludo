@@ -128,7 +128,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "collection('users').doc(uid)" lib/deda_backend.dart
+          grep -Fq "'name': name.trim()" lib/deda_backend.dart
+          grep -Fq "collection('users').doc(uid)" lib/deda_stage71_free_owned_use_profile.dart
           grep -Fq "collection('deda_share_ids').doc(id)" lib/deda_stage71_free_owned_use_profile.dart
           grep -Fq "deda_stage71_active_identifier" lib/deda_stage71_free_owned_use_profile.dart
           grep -Fq "deda_stage71_granted_registry" lib/deda_stage71_free_manager_200_service.dart
