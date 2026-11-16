@@ -136,7 +136,10 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     assert.equal(issue.status,"QA_FIXTURE_ISSUED",issue.reason);
     assert.equal(issue.productionAccess,false);
     for(const probe of ["qa_room_auth_probe","qa_room_auth_probe_provider",
-      "qa_room_auth_probe_email","qa_room_auth_probe_firebase"]){
+      "qa_room_auth_probe_email","qa_room_auth_probe_firebase",
+      "qa_room_auth_probe_grant","qa_room_auth_probe_issued",
+      "qa_room_auth_probe_expires","qa_room_auth_probe_duration",
+      "qa_room_auth_probe_source"]){
       await set(db,probe+"/"+B,{probe:"emulator"});
       console.log("QA_REAL_B_PROBE",probe,
         await can(()=>b.doc(probe+"/"+B).get()));
