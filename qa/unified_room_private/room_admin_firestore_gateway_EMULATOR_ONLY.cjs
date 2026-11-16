@@ -18,6 +18,8 @@ const {projectDedaRealSchema,reviewedDomains} =
   require("./deda_profile_original_premium_REAL_SCHEMA_EMULATOR_ONLY.cjs");
 const {projectDedaSecondSchema,domains:secondDomains} =
   require("./deda_friends_league_gifts_REAL_SCHEMA_EMULATOR_ONLY.cjs");
+const {projectDedaThirdSchema,domains:thirdDomains} =
+  require("./deda_wallet_places_REAL_SCHEMA_EMULATOR_ONLY.cjs");
 const PROJECT = "demo-deda-room-live-additive-compare";
 const FIRESTORE_HOST = "127.0.0.1:8088";
 const AUTH_HOST = "127.0.0.1:9099";
@@ -99,7 +101,11 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
        typeof reference==="string")
       return db.collection("deda_stage71_granted_registry")
         .where("recipientOriginalId","==",reference).limit(201);
-    throw Error("QA_SAFE_STOP_UNKNOWN_SOCIAL_OR_GIFT_QUERY");
+    if(kind==="deda_published_places_by_account" && typeof reference==="string")
+      return db.collection("published_places")
+        .where("accountKey","==",reference)
+        .where("published","==",true).limit(101);
+    throw Error("QA_SAFE_STOP_UNKNOWN_SOCIAL_OR_GIFT_OR_PLACE_QUERY");
   };
   const query=async(kind,reference,tx)=>{
     const q=buildQuery(kind,reference);
@@ -165,6 +171,12 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
           const actual=await projectDedaSecondSchema(plan,
             async path=>data(await tx.get(db.doc(path))),
             async (kind,ref)=>query(kind,ref,tx),now);
+          if(!actual || !equal(actual,view.payload)) return false;
+        }
+        if(realSourceMode && thirdDomains.has(domain)){
+          const actual=await projectDedaThirdSchema(plan,
+            async path=>data(await tx.get(db.doc(path))),
+            async (kind,ref)=>query(kind,ref,tx));
           if(!actual || !equal(actual,view.payload)) return false;
         }
         const auditId=digest("issue",uid,domain,plan.ownerReviewId);
@@ -237,6 +249,9 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
       if(realSourceMode && secondDomains.has(plan.domain))
         return projectDedaSecondSchema(plan,read,
           (kind,ref)=>query(kind,ref),clock());
+      if(realSourceMode && thirdDomains.has(plan.domain))
+        return projectDedaThirdSchema(plan,read,
+          (kind,ref)=>query(kind,ref));
       const source=await read(paths.source(plan.sourceUid,plan.domain));
       if(!source || source.canonicalAccountId!==plan.canonicalAccountId ||
          source.sourceUid!==plan.sourceUid ||
