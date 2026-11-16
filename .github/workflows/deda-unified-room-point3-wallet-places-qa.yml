@@ -1,0 +1,92 @@
+name: DEDA point3/4 isolated wallet places and eight-domain safety QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-unified-room-point3-wallet-places-qa-2026-11-16
+    paths:
+      - 'qa/unified_room_private/**'
+      - '.github/workflows/deda-unified-room-point3-wallet-places-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protected-source-and-local-unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - name: No changes in protected app, Firebase rules, Play, functions
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          base='fd8cfd590d0f6703e34d6fe8c6913b091c3468fd'
+          changes=subprocess.check_output(
+              ['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          assert changes
+          assert all(p.startswith('qa/unified_room_private/') or (
+              p.startswith('.github/workflows/deda-unified-room-') and p.endswith('.yml'))
+              for p in changes), repr(changes)
+          print('PASS_PROTECTED_SOURCE_NO_CHANGE')
+          PY
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Actual offline validation for independent source scopes
+        run: |
+          node --check qa/unified_room_private/deda_wallet_places_REAL_SCHEMA_EMULATOR_ONLY.cjs
+          node --test qa/unified_room_private/deda_third_scope_real_sources_OFFLINE_QA.test.cjs
+      - name: Never export test fixture as Firebase function
+        run: |
+          ! grep -Fq "deda_wallet_places_REAL_SCHEMA_EMULATOR_ONLY" functions/index.js
+          echo 'PASS_PRIVATE_QA_NEVER_DEPLOYED'
+
+  synthetic-firestore-auth-transaction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-room-live-additive-compare
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8088
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - name: Build local emulator candidate from REPO rules only, no live Google GET
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,re,json
+          base=pathlib.Path('firestore.rules').read_text()
+          patch=pathlib.Path(
+            'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
+          ).read_text()
+          assert 'match /deda_unified_room_private_views/' not in base
+          assert not any(x in patch for x in ('allow read: if true','allow write: if true'))
+          candidates=list(re.finditer(r'(?m)^  \}\s*\n\}\s*',base))
+          assert candidates,'FAILED_CLOSED_UNEXPECTED_RULES_LAYOUT'
+          i=candidates[-1].start()
+          output=base[:i]+patch+'\n'+base[i:]
+          pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(output)
+          pathlib.Path('/tmp/deda-room-emulators.json').write_text(json.dumps({
+            'firestore':{'rules':'/tmp/deda-room-candidate-rules.rules'},
+            'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
+             'auth':{'host':'127.0.0.1','port':9099},'ui':{'enabled':False}}
+          }))
+          print('PASS_ONLY_LOCAL_RULES_EMULATOR_NO_PRODUCTION_FETCH')
+          PY
+      - name: Install dev-only emulator packages, no app build
+        run: npm install --no-save --no-package-lock --no-audit --no-fund --ignore-scripts @firebase/rules-unit-testing@4.0.0 firebase@11.10.0 firebase-admin@13.4.0
+      - name: One Firebase Auth UID B and historical A/C fake Firestore sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-room-live-additive-compare \
+            --config /tmp/deda-room-emulators.json \
+            --only firestore,auth --non-interactive \
+            'node --test --test-concurrency=1 qa/unified_room_private/deda_third_scope_real_sources_EMULATOR_ONLY.test.cjs'
+      - run: echo 'NO_PRODUCTION_DATA_NO_USER_UID_CHANGE_NO_FINANCIAL_CREDIT_NO_APK_NO_PLAY'
