@@ -16,6 +16,8 @@ const {Timestamp} = require("firebase-admin/firestore");
 const {trustedPayload} = require("./room_grant_lifecycle_PRIVATE_OFFLINE_QA.cjs");
 const {projectDedaRealSchema,reviewedDomains} =
   require("./deda_profile_original_premium_REAL_SCHEMA_EMULATOR_ONLY.cjs");
+const {projectDedaSecondSchema,domains:secondDomains} =
+  require("./deda_friends_league_gifts_REAL_SCHEMA_EMULATOR_ONLY.cjs");
 const PROJECT = "demo-deda-room-live-additive-compare";
 const FIRESTORE_HOST = "127.0.0.1:8088";
 const AUTH_HOST = "127.0.0.1:9099";
@@ -89,6 +91,21 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
     throw Error("QA_SAFE_STOP_UNKNOWN_SOURCE_MODE");
   const realSourceMode=sourceMode==="deda-real-schema-qa";
   const read=(path)=>db.doc(path).get().then(data);
+  const buildQuery=(kind,reference)=>{
+    if(kind==="deda_friendships_members" && typeof reference==="string")
+      return db.collection("deda_friendships")
+        .where("members","array-contains",reference).limit(201);
+    if(kind==="deda_stage71_grants_by_recipient" &&
+       typeof reference==="string")
+      return db.collection("deda_stage71_granted_registry")
+        .where("recipientOriginalId","==",reference).limit(201);
+    throw Error("QA_SAFE_STOP_UNKNOWN_SOCIAL_OR_GIFT_QUERY");
+  };
+  const query=async(kind,reference,tx)=>{
+    const q=buildQuery(kind,reference);
+    const snap=tx?await tx.get(q):await q.get();
+    return snap.docs.map(d=>({id:d.id,data:d.data()}));
+  };
   const store={
     environment:"isolated-fake-only",
     async issueAtomic({plan,session,view,grant,expectedOwnerReview}) {
@@ -128,6 +145,12 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
         if(realSourceMode && reviewedDomains.has(domain)){
           const actual=await projectDedaRealSchema(plan,async path=>
             data(await tx.get(db.doc(path))));
+          if(!actual || !equal(actual,view.payload)) return false;
+        }
+        if(realSourceMode && secondDomains.has(domain)){
+          const actual=await projectDedaSecondSchema(plan,
+            async path=>data(await tx.get(db.doc(path))),
+            async (kind,ref)=>query(kind,ref,tx),now);
           if(!actual || !equal(actual,view.payload)) return false;
         }
         if (!matchSession(data(sess),session,plan) ||
@@ -212,6 +235,9 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
       if (!DOMAINS.has(plan?.domain)) return null;
       if(realSourceMode && reviewedDomains.has(plan.domain))
         return projectDedaRealSchema(plan,read);
+      if(realSourceMode && secondDomains.has(plan.domain))
+        return projectDedaSecondSchema(plan,read,
+          (kind,ref)=>query(kind,ref),clock());
       const source=await read(paths.source(plan.sourceUid,plan.domain));
       if(!source || source.canonicalAccountId!==plan.canonicalAccountId ||
          source.sourceUid!==plan.sourceUid ||
