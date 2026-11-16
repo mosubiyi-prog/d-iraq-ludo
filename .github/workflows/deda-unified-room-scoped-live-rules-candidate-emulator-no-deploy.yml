@@ -1,0 +1,136 @@
+name: DEDA unified room scoped server views candidate vs live Rules EMULATOR ONLY
+on:
+  push:
+    branches:
+      - deda-unified-room-authz-scopes-isolated-qa-2026-11-16
+    paths:
+      - 'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
+      - 'qa/unified_room_private/room_live_additive_compat_emulator.test.cjs'
+      - '.github/workflows/deda-unified-room-scoped-live-rules-candidate-emulator-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: deda-unified-room-scoped-rules-candidate-no-deploy
+  cancel-in-progress: false
+
+jobs:
+  additive-scoped-rules-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      DEDA_READONLY_SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}"
+      DEDA_FALLBACK_SA: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify checkpoint and protected DEDA project untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          base='fd8cfd590d0f6703e34d6fe8c6913b091c3468fd'
+          changed=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          allowed={
+            '.github/workflows/deda-unified-room-flutter-firestore-private-qa.yml',
+            '.github/workflows/deda-unified-room-authz-scope-live-rules-readonly.yml',
+            '.github/workflows/deda-unified-room-live-rules-emulator-observation-no-deploy.yml',
+            '.github/workflows/deda-unified-room-scoped-live-rules-candidate-emulator-no-deploy.yml'
+          }
+          assert all(x.startswith('qa/unified_room_private/') or x in allowed for x in changed), \
+            'PROTECTED_DEDA_SOURCE_CHANGED'
+          print('PASS_PROTECTED_DEDA_2026_11_15_CHECKPOINT_SOURCE_UNCHANGED')
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download published Rules only (REST GET), compose additive candidate in /tmp
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json,sys,hashlib,pathlib,re,requests
+          from google.oauth2.service_account import Credentials
+          from google.auth.transport.requests import Request
+          raw=os.getenv('DEDA_READONLY_SA') or os.getenv('DEDA_FALLBACK_SA')
+          if not raw:
+            print('SAFE_STOP_NO_READONLY_RULES_ACCESS');sys.exit(3)
+          data=json.loads(raw)
+          if data.get('project_id')!='deda-25b88':
+            print('SAFE_STOP_WRONG_PROJECT');sys.exit(3)
+          cred=Credentials.from_service_account_info(data,scopes=[
+            'https://www.googleapis.com/auth/cloud-platform'])
+          cred.refresh(Request())
+          h={'Authorization':'Bearer '+cred.token}
+          def get(url):
+            res=requests.get('https://firebaserules.googleapis.com/v1/'+url,
+              headers=h,timeout=25)
+            if res.status_code!=200:
+              print('SAFE_STOP_RULES_READ_HTTP',res.status_code);sys.exit(3)
+            return res.json()
+          release=get('projects/deda-25b88/releases/cloud.firestore')
+          ruleset=release.get('rulesetName','')
+          if not ruleset.startswith('projects/deda-25b88/rulesets/'):
+            print('SAFE_STOP_RULESET_NAME');sys.exit(3)
+          files=get(ruleset)['source']['files']
+          if len(files)!=1:print('SAFE_STOP_MULTIFILE_LIVE_RULES');sys.exit(3)
+          live=files[0]['content']
+          sha=lambda s:hashlib.sha256(s.encode()).hexdigest()
+          expected='0de9f230a043e1ef8915c94abd0832a9d9e413864ef1f3e346e793f5e5550eaf'
+          if sha(live)!=expected:
+            print('SAFE_STOP_LIVE_RULES_DRIFT',sha(live));sys.exit(3)
+          if ('deda_unified_room_private_views' in live or
+              'deda_unified_room_read_grants' in live or
+              re.search(r'match\s+/\{[a-zA-Z_]+=\*\*\}',live)):
+            print('SAFE_STOP_RULES_COLLISION_OR_CATCH_ALL');sys.exit(3)
+          boundary=list(re.finditer(r'(?m)^  \}\s*\n\}\s*$',live))
+          if not boundary:
+            print('SAFE_STOP_UNEXPECTED_LIVE_RULES_LAYOUT');sys.exit(3)
+          place=boundary[-1].start()
+          patch=pathlib.Path(
+            'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
+          ).read_text(encoding='utf-8')
+          if any(x in patch for x in ('allow write: if true','allow read: if true')):
+            print('SAFE_STOP_BROAD_CANDIDATE_PERMISSION');sys.exit(3)
+          candidate=live[:place]+patch+'\n'+live[place:]
+          pathlib.Path('/tmp/deda-room-live-rules.rules').write_text(live)
+          pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(candidate)
+          config={
+            'firestore':{'rules':'/tmp/deda-room-candidate-rules.rules'},
+            'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
+                         'ui':{'enabled':False}}
+          }
+          pathlib.Path('/tmp/deda-room-candidate-config.json').write_text(json.dumps(config))
+          print('PASS_EXACT_LIVE_RULESET_SHA',sha(live))
+          print('PASS_ADDITIVE_ONLY_POLICY_BYTES',len(patch))
+          print('PASS_ALL_LEGACY_RULES_IDENTICAL_IN_CANDIDATE',candidate.replace(patch+'\n','',1)==live)
+          print('NO_REAL_USER_RECORD_READ_NO_PRODUCTION_RULES_DEPLOY')
+          PY
+      - name: Execute old Play compatibility regression + 8 independent room scopes against local emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-room-live-additive-compare \
+            --only firestore \
+            --config /tmp/deda-room-candidate-config.json \
+            --non-interactive \
+            'node --test qa/unified_room_private/room_live_additive_compat_emulator.test.cjs'
+      - name: Explicit no production, no APK and no Play
+        run: |
+          echo 'PASS_PRIVATE_QA_SYNTHETIC_USERS_ONLY'
+          echo 'NO_PRODUCTION_FIRESTORE_READ_WRITE_NO_RULES_DEPLOY_NO_APK_NO_PLAY'
