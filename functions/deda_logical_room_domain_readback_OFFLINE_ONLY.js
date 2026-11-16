@@ -26,6 +26,12 @@ function result(decision,reason,domains=[]) {
     domains:Object.freeze(domains.map(x=>Object.freeze(x))),
   });
 }
+// Freshness metadata is a prerequisite for a shape label, NOT proof of
+// server provenance: an untrusted caller could forge these flags.
+function freshSource(row) {
+  return row && typeof row==="object" && !Array.isArray(row) &&
+    row.cached===false && row.pendingWrites===false;
+}
 function goodUnsigned(n) {
   return Number.isSafeInteger(n) && n>=0 && n<=MAX_SAFE;
 }
@@ -107,26 +113,27 @@ function checkGifts(rows,originalId) {
 }
 function checkWallet(row,originalId) {
   if(row==null)return "SOURCE_ABSENT_UNKNOWN_NOT_ZERO";
-  if(!row || typeof row!=="object" || row.publicId!==originalId ||
+  if(!freshSource(row) || row.publicId!==originalId ||
       !goodUnsigned(row.balance))return null;
   return "GIFT_WALLET_SHAPE_MATCHED_NOT_TOTAL_BALANCE";
 }
 function checkPremium(row,originalId) {
   if(row==null)return "SOURCE_ABSENT_OWNERSHIP_UNKNOWN";
-  if(!row || typeof row!=="object" || row.originalId!==originalId ||
+  if(!freshSource(row) || row.originalId!==originalId ||
       typeof row.activeId!=="string" || !ACTIVE_ID.test(row.activeId))return null;
   return "DISPLAY_SELECTION_SHAPE_MATCHED_NOT_OWNERSHIP";
 }
 function checkLeague(a,c,s,originalId,accountKey) {
   if(a==null && c==null && s==null)return "SOURCE_ABSENT_UNKNOWN";
   if(a==null && (c!=null || s!=null))return null;
-  if(a!=null && (!a || a.publicId!==originalId ||
+  if(a!=null && (!freshSource(a) || a.publicId!==originalId ||
       a.accountKey!==accountKey))return null;
-  if(c!=null && (!c || typeof c.weekId!=="string" ||
+  if(c!=null && (!freshSource(c) || typeof c.weekId!=="string" ||
       !WEEK.test(c.weekId)))return null;
-  if(s!=null && (!c || !s || s.weekId!==c.weekId ||
+  if(s!=null && (!c || !freshSource(s) || s.weekId!==c.weekId ||
       s.publicId!==originalId || !goodUnsigned(s.weeklyXp)))return null;
   if(c==null)return "LEAGUE_CONTROL_MISSING_HISTORICAL_UNKNOWN";
+  if(s==null)return "LEAGUE_SCORE_MISSING_HISTORICAL_UNKNOWN";
   return "LEAGUE_SOURCE_SHAPE_MATCHED_NOT_AWARD_AUTHORITY";
 }
 function inspectDomainSources({roomSnapshot,sourceRows,sessionUid}={}) {
