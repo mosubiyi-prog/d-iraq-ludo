@@ -13,8 +13,8 @@ REPO = Path(__file__).resolve().parents[3]
 ADAPTER = 'deda_unified_room_runtime_readonly.dart'
 ENTRY = "import 'deda_unified_room_runtime_readonly.dart';\n"
 CALL = '    unawaited(DedaUnifiedRoomRuntimeReadOnly.preflightOnHome());\n'
-HOME = 'class _HomePageState extends State<HomePage> {'
-INIT = '  @override\n  void initState() {\n    super.initState();\n'
+HOME = 'class HomePage extends '
+CREATE = 'State<HomePage> createState() => _HomePageState();'
 
 def bind(project):
     project = Path(project).resolve()
@@ -32,12 +32,14 @@ def bind(project):
         record.get('completeOwnerDelivery') is not False:
         raise RuntimeError('BLOCK_ORIGINAL_APP_AND_FINANCIAL_GUARDS')
     text = main_file.read_text()
-    # Assembly patches may retain repeated harmless dart:async imports;
-    # require it to exist, but only require ONE actual HomePage state class.
-    if text.count(HOME) != 1 or text.count("import 'dart:async';") < 1:
-        raise RuntimeError('BLOCK_AMBIGUOUS_MAIN_OR_ASYNC_IMPORT:' +
-                           str(text.count(HOME)) + ':' +
-                           str(text.count("import 'dart:async';")))
+    # The complete 100447 generated HomePageState may use a modified class
+    # declaration. Anchor to the unchanged unique HomePage state factory
+    # instead, preserved since the signed 100436 source.
+    if text.count(HOME) != 1 or text.count(CREATE) != 1 or \
+        text.count("import 'dart:async';") < 1:
+        raise RuntimeError('BLOCK_AMBIGUOUS_HOME_FACTORY:' +
+                           str(text.count(HOME)) + ':' + str(text.count(CREATE)) +
+                           ':' + str(text.count("import 'dart:async';")))
     if ENTRY.strip() in text or 'DedaUnifiedRoomRuntimeReadOnly' in text or \
         module_file.exists():
         raise RuntimeError('BLOCK_DUPLICATE_ROOM_RUNTIME_INTEGRATION')
@@ -45,20 +47,20 @@ def bind(project):
         'DedaSessionDiagnosticReadOnlyTile(' in text or \
         'deda_step1_google_settings_link_100439.dart' in text:
         raise RuntimeError('BLOCK_REMOVED_CARD_REINTRODUCED')
-    after_home = text.index(HOME) + len(HOME)
-    pos = text.find(INIT, after_home)
-    if pos == -1 or pos - after_home > 70000:
-        raise RuntimeError('BLOCK_HOME_LIFECYCLE_ANCHOR_MISSING')
+    if text.index(CREATE) < text.index(HOME) or \
+        text.index(CREATE)-text.index(HOME)>3000:
+        raise RuntimeError('BLOCK_HOME_FACTORY_OUTSIDE_HOME_WIDGET')
     original = (REPO / 'lib' / ADAPTER).read_bytes()
     if b'defaultValue: false' not in original or \
         b'FirebaseFunctions.instance' not in original or \
         b'preflightOnHome' not in original:
         raise RuntimeError('BLOCK_UNVERIFIED_REAL_ROOM_SDK_MODULE')
-    patched = ENTRY + text
-    # Only the intended HomePage lifecycle is touched, never login, cards
-    # admin, premium ID, league, wallet, PIN, or existing stored user state.
-    lifecycle = patched.index(INIT, patched.index(HOME))
-    patched = patched[:lifecycle+len(INIT)] + CALL + patched[lifecycle+len(INIT):]
+    # Hook exactly the existing HomePage factory (called upon entering
+    # the logged-in home), without altering login/session, cards or widgets.
+    # Feature default false => zero network calls and zero UI state changes.
+    replacement = ("State<HomePage> createState() {\n" +
+                   CALL + "    return _HomePageState();\n  }")
+    patched = ENTRY + text.replace(CREATE, replacement, 1)
     if patched.count(CALL) != 1 or patched.count(ENTRY) != 1:
         raise RuntimeError('BLOCK_DUPLICATE_OR_MISSING_BIND')
     main_file.write_text(patched)
