@@ -72,7 +72,7 @@ jobs:
           output=base[:i]+patch+'\n'+base[i:]
           pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(output)
           pathlib.Path('/tmp/deda-room-emulators.json').write_text(json.dumps({
-            'firestore':{'rules':'/tmp/deda-room-candidate-rules.rules'},
+            'firestore':{'rules':'deda-room-candidate-rules.rules'},
             'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
              'auth':{'host':'127.0.0.1','port':9099},'ui':{'enabled':False}}
           }))
