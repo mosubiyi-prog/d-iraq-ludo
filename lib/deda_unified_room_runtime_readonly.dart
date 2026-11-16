@@ -75,6 +75,30 @@ class DedaUnifiedRoomRuntimeReadOnly {
     return true;
   }
 
+  /// Pure policy check for the callable response, testable without Firebase.
+  /// Missing historical data is HOLD, never fabricated level/coins/diamonds.
+  static DedaUnifiedRoomReadResult acceptServerReply(
+    String domain, Map<String, dynamic> data,
+  ) {
+    if (!_domains.contains(domain) ||
+        data['status'] != 'VERIFIED_READ_ONLY' ||
+        data['domain'] != domain ||
+        data['authorized'] != true ||
+        data['accountRestored'] != false ||
+        data['financialRestore'] != false ||
+        data['uidChanged'] != false ||
+        !_validPayload(domain, data['payload'])) {
+      return DedaUnifiedRoomReadResult.hold;
+    }
+    return DedaUnifiedRoomReadResult._(
+      'VERIFIED_READ_ONLY',
+      domain,
+      Map<String, dynamic>.unmodifiable(
+        Map<String, dynamic>.from(data['payload'] as Map),
+      ),
+    );
+  }
+
   /// Only reads the current Firebase user's independently approved,
   /// server-sanitized scope. A/C historical UIDs are NEVER user inputs.
   /// The held/absent result must not replace on-device progress with zero.
@@ -104,22 +128,7 @@ class DedaUnifiedRoomRuntimeReadOnly {
       if (FirebaseAuth.instance.currentUser?.uid != authUser.uid) {
         return DedaUnifiedRoomReadResult.hold;
       }
-      final data = result.data;
-      if (data['status'] != 'VERIFIED_READ_ONLY' ||
-          data['domain'] != domain || data['authorized'] != true ||
-          data['accountRestored'] != false ||
-          data['financialRestore'] != false ||
-          data['uidChanged'] != false ||
-          !_validPayload(domain, data['payload'])) {
-        return DedaUnifiedRoomReadResult.hold;
-      }
-      return DedaUnifiedRoomReadResult._(
-        'VERIFIED_READ_ONLY',
-        domain,
-        Map<String, dynamic>.unmodifiable(
-          Map<String, dynamic>.from(data['payload'] as Map),
-        ),
-      );
+      return acceptServerReply(domain, result.data);
     } catch (_) {
       // Offline/expired proof/404/revoked AppCheck/HOLD never becomes an
       // inferred empty profile, UID replacement, retry or financial write.
