@@ -58,3 +58,21 @@
 - المصدر المقروء: وثيقة الالتزام، تقرير توافق النقطة الأولى، نقطة توقف 15 نوفمبر، تقارير الجرد المحفوظة؛ ملفات `functions/deda_100441_owner_split_identity_challenge_review_private_v1.js`، `functions/deda_100441_server_canonical_uid_read_adapter_PRIVATE_NOT_EXPORTED.js`، `functions/deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED.js`، `functions/deda_owner_pin_verify_private_v1.js`، `functions/deda_pin_manual_recovery_compat_private_v1.js`، `functions/deda_pin_auto_recovery_policy.js`، `functions/deda_pin_auto_recovery_worker.js`، `lib/deda_recovery_admin.dart`، `lib/deda_step2_original_install_continuity_candidate.dart`، `lib/deda_session_recovery_coordinator.dart`.
 - لا تغيير للمصدر أو قاعدة البيانات أو قواعد الصلاحيات أو الأكواد المحمية؛ **وثيقة توثيق فقط** على فرع منفصل.
 - نتيجة المراجعة: `PASS` لتحديد معيار الإثبات وحالة نقصه؛ `HOLD` لإثبات ملكية الحساب الفعلي والإذن بتغيير الوصول.
+
+
+## 8. ملحق مراجعة مسارات إثبات UID القديمة — استكمال 16 نوفمبر (قراءة فقط)
+**المراجع الأصلية الثابتة:** `fd8cfd590d0f6703e34d6fe8c6913b091c3468fd`، ولا مراجعة خادم إنتاجي جديدة. تمت مراجعة وثيقة الالتزام قبل هذه الجولة.
+
+| المسار | ما يثبته فعلياً | لماذا لا يفتح الاسترجاع المتعارض |
+|---|---|---|
+| `lib/deda_owner_legacy_public_proof_100414.dart` | فحص UID مالك الآيدي الأصلي الحالي قبل إصلاح حقول عرض قديمة | يتطلب أصلاً تطابق `route.ownerUid` و`FirebaseAuth.currentUser.uid`؛ لا يسترجع Firebase UID مفقوداً |
+| `lib/deda_owner18_original_account_proof.dart` | يتحقق من `accountKey` والجلسة والآيدي، وقد يستخدم قراءة إيصال إطار محمية بقواعد Firestore عندما يختلف UID | نتيجة القراءة المحمية ليست مصادقة مستقلة للشخص ولا تصريحاً بدمج A/B/C أو بفتح الإدارة |
+| `lib/deda_100430_owner_uid_continuity.dart` | مسار اختياري لتثبيت تسجيل دخول على **نفس UID الأصلي** بعد إثبات جلسة قديمة ورقم ورمز وملكية الآيدي وحفظ الأدلة | يرفض الحالات التي `directory.createdUid != route.ownerUid`؛ لا يعالج تعارض B/A الحالي، والمزامنة اختيارية وغير مفعّلة افتراضياً |
+| `lib/deda_step2_spark_linked_uid_readonly.dart` | مقارنة بيانات الجلسة ذات UID المرتبط سلفاً وتحقق من تطابق تسجيل الحساب والآيدي والجلسة | يحتاج UID مصادقاً ومربوطاً بالفعل؛ ليس مصدر إثبات جديداً |
+| `lib/deda_100377_point13_unified_identity_projection_staged.dart` | توحيد آيدي **العرض** مع إبقاء المسار الأصلي | لا يتعلق بتوحيد Firebase UID أو ملكية حساب المستخدم |
+
+**نتيجة التحقق الإضافي:** لم يظهر في هذه المسارات عامل تحقق مستقل تاريخي مفقود من الجرد السابق. وهذا حكم على **المصادر المقروءة** لا على الحالة الحية في هاتف المستخدم أو Firebase؛ لا يجوز إعلان انعدام كل الأدلة في العالم. موضع الاعتماد الخارجي لم يتغير.
+
+**قرار البوابة:** **HOLD** لاسترجاع UID أو إنشاء تفويض الغرفة الموحدة الحقيقي. إن ظهرت لاحقاً جلسة أصلية يمكن التحقق منها بخادم موثوق أو دليل مستقل مقبول ومدقق، يمكن عندها فحص أهلية التنفيذ المعزول وفق وثيقة الالتزام؛ لا تعديل تطبيق أو Firebase أو Play أو بيانات المستخدمين في هذه الجولة.
+
+**سجل التغيير:** تحديث هذا التقرير على فرع التوثيق فقط. لا فروع تنفيذ أو أكواد أو قواعد أو حسابات جديدة؛ ولا إعادة جرد A/B/C.
