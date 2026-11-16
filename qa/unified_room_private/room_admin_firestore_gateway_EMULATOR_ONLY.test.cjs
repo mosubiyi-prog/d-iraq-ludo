@@ -121,7 +121,27 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     const issue=await issueFixture({idToken:token,domain:"original_id"},gateway);
     assert.equal(issue.status,"QA_FIXTURE_ISSUED",issue.reason);
     assert.equal(issue.productionAccess,false);
-    assert.equal(await can(()=>b.doc(view("original_id")).get()),true);
+    const persistedGrant=(await db.doc(grant("original_id")).get()).data();
+    const persistedView=(await db.doc(view("original_id")).get()).data();
+    console.log("QA_ADMIN_PERSISTED_GRANT",JSON.stringify({
+      readerUid:persistedGrant?.readerUid,
+      domain:persistedGrant?.domain,status:persistedGrant?.status,
+      issuedAt:persistedGrant?.issuedAt?.toMillis?.(),
+      expiresAt:persistedGrant?.expiresAt?.toMillis?.(),
+      canonicalEqual:persistedGrant?.canonicalAccountId===persistedView?.canonicalAccountId,
+      sourceEqual:persistedGrant?.sourceUid===persistedView?.sourceUid,
+      originalEqual:persistedGrant?.originalId===persistedView?.originalId,
+      versionEqual:persistedGrant?.scopeVersion===persistedView?.scopeVersion
+    }));
+    let bReadError="";
+    try{await b.doc(view("original_id")).get();}
+    catch(e){bReadError=String(e.message).slice(0,450);}
+    console.log("QA_ADMIN_B_RULES_READ",bReadError||"ALLOWED");
+    const bGoogle=env.authenticatedContext(B,{
+      firebase:{sign_in_provider:"google.com"}}).firestore();
+    console.log("QA_ADMIN_B_GOOGLE_PROVIDER_PROBE",
+      await can(()=>bGoogle.doc(view("original_id")).get()));
+    assert.equal(bReadError,"");
     assert.equal(await can(()=>a.doc(view("original_id")).get()),false);
     assert.equal(await can(()=>d.doc(view("original_id")).get()),false);
     assert.equal(await can(()=>anon.doc(view("original_id")).get()),false);
