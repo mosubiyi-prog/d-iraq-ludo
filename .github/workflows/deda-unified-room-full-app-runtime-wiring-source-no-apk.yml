@@ -370,3 +370,109 @@ jobs:
           echo 'FULL_APP_ROOM_SOURCE_WIRING_QA_ONLY'
           echo 'SERVER_GATE=OFF CLIENT_GATE=OFF'
           echo 'NO_APK_NO_AAB_NO_SIGNING_NO_FIREBASE_DEPLOY_NO_PLAY'
+
+  verify-live-rules-vs-legacy-play-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      DEDA_RULES_READONLY_SA: "\${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}"
+      DEDA_RULES_FALLBACK: "\${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify current published Firestore rules with GET only and keep the 16 Nov approved baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json,sys,hashlib,pathlib,re,requests
+          from google.oauth2.service_account import Credentials
+          from google.auth.transport.requests import Request
+          raw=os.environ.get('DEDA_RULES_READONLY_SA') or os.environ.get('DEDA_RULES_FALLBACK')
+          if not raw:
+              print('HOLD_NO_READONLY_RULES_CREDENTIAL');sys.exit(3)
+          try: info=json.loads(raw)
+          except (ValueError,TypeError):
+              print('HOLD_INVALID_RULES_CREDENTIAL');sys.exit(3)
+          if info.get('project_id')!='deda-25b88':
+              print('HOLD_WRONG_FIREBASE_PROJECT');sys.exit(3)
+          creds=Credentials.from_service_account_info(info,
+            scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          def get(path):
+              res=requests.get('https://firebaserules.googleapis.com/v1/'+path,
+                headers={'Authorization':'Bearer '+creds.token},timeout=25)
+              if res.status_code!=200:
+                  print('HOLD_FIREBASE_RULES_GET_HTTP',res.status_code);sys.exit(3)
+              return res.json()
+          release=get('projects/deda-25b88/releases/cloud.firestore')
+          ruleset=release.get('rulesetName','')
+          if not ruleset.startswith('projects/deda-25b88/rulesets/'):
+              print('HOLD_INVALID_PUBLISHED_RULESET');sys.exit(3)
+          files=get(ruleset).get('source',{}).get('files',[])
+          if len(files)!=1 or not isinstance(files[0].get('content'),str):
+              print('HOLD_UNSUPPORTED_RULES_FILES');sys.exit(3)
+          live=files[0]['content']
+          digest=hashlib.sha256(live.encode()).hexdigest()
+          print('CURRENT_PUBLISHED_RULES_SHA256',digest)
+          expected='0de9f230a043e1ef8915c94abd0832a9d9e413864ef1f3e346e793f5e5550eaf'
+          if digest!=expected:
+              print('HOLD_RULES_DRIFT_FROM_PREVIOUS_VERIFIED_BASELINE');sys.exit(3)
+          if ('deda_unified_room_private_views' in live or
+              'deda_unified_room_read_grants' in live or
+              re.search(r'match\s+/\{[a-zA-Z_]+=\*\*\}',live)):
+              print('HOLD_RULES_NAMESPACE_COLLISION');sys.exit(3)
+          boundaries=list(re.finditer(r'(?m)^  \}\s*\n\}\s*$',live))
+          if not boundaries:
+              print('HOLD_UNEXPECTED_RULES_LAYOUT');sys.exit(3)
+          patch=pathlib.Path(
+            'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
+          ).read_text()
+          if 'allow write: if true' in patch or 'allow read: if true' in patch:
+              print('HOLD_UNSCOPED_CANDIDATE_PERMISSIONS');sys.exit(3)
+          candidate=live[:boundaries[-1].start()]+patch+'\n'+live[boundaries[-1].start():]
+          if candidate.replace(patch+'\n','',1)!=live:
+              print('HOLD_LEGACY_RULES_CHANGED');sys.exit(3)
+          pathlib.Path('/tmp/deda-room-live-rules.rules').write_text(live)
+          pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(candidate)
+          cfg={'firestore':{'rules':'/tmp/deda-room-candidate-rules.rules'},
+               'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
+                            'auth':{'host':'127.0.0.1','port':9099},
+                            'ui':{'enabled':False}}}
+          pathlib.Path('/tmp/deda-room-readonly-config.json').write_text(json.dumps(cfg))
+          print('PASS_EXACT_PUBLISHED_BASELINE_AND_ADDITIVE_CANDIDATE_NO_DEPLOY')
+          print('NO_FIRESTORE_USER_DATA_READ_NO_RULES_WRITE_NO_SECRETS_LOGGED')
+          PY
+      - name: Test published rule behavior, eight private domains, and OLD Play compatibility in LOCAL emulator
+        shell: bash
+        env:
+          DEDA_RULES_READONLY_SA: ""
+          DEDA_RULES_FALLBACK: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          GCLOUD_PROJECT: demo-deda-room-live-additive-compare
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0 firebase-admin@13.4.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-room-live-additive-compare \
+            --only firestore,auth \
+            --config /tmp/deda-room-readonly-config.json \
+            --non-interactive \
+            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
+      - name: Confirm production and releases untouched
+        run: echo 'NO_FIREBASE_DEPLOY_NO_USER_WRITES_NO_UID_CREATION_NO_APK_NO_PLAY'
