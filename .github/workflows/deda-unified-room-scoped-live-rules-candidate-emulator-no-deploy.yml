@@ -107,11 +107,30 @@ jobs:
           ).read_text(encoding='utf-8')
           if any(x in patch for x in ('allow write: if true','allow read: if true')):
             print('SAFE_STOP_BROAD_CANDIDATE_PERMISSION');sys.exit(3)
-          candidate=live[:place]+patch+'\n'+live[place:]
+          providerProbe="""
+    // EMULATOR DEBUG ONLY; remove after diagnosis.
+    match /qa_room_auth_probe/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+    }
+    match /qa_room_auth_probe_provider/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'password';
+    }
+    match /qa_room_auth_probe_email/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid
+        && request.auth.token.keys().hasAny(['email_verified'])
+        && request.auth.token.email_verified == true;
+    }
+    match /qa_room_auth_probe_firebase/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid
+        && request.auth.token.keys().hasAny(['firebase']);
+    }
+"""
+          candidate=live[:place]+patch+'\n'+providerProbe+'\n'+live[place:]
           pathlib.Path('/tmp/deda-room-live-rules.rules').write_text(live)
           pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(candidate)
           config={
-            'firestore':{'rules':'/tmp/deda-room-candidate-rules.rules'},
+            'firestore':{'rules':'deda-room-candidate-rules.rules'},
             'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
                          'auth':{'host':'127.0.0.1','port':9099},
                          'ui':{'enabled':False}}
@@ -119,7 +138,7 @@ jobs:
           pathlib.Path('/tmp/deda-room-candidate-config.json').write_text(json.dumps(config))
           print('PASS_EXACT_LIVE_RULESET_SHA',sha(live))
           print('PASS_ADDITIVE_ONLY_POLICY_BYTES',len(patch))
-          print('PASS_ALL_LEGACY_RULES_IDENTICAL_IN_CANDIDATE',candidate.replace(patch+'\n','',1)==live)
+          print('PASS_ALL_LEGACY_RULES_IDENTICAL_IN_CANDIDATE',candidate.replace(patch+'\n','',1).replace(providerProbe+'\n','',1)==live)
           print('NO_REAL_USER_RECORD_READ_NO_PRODUCTION_RULES_DEPLOY')
           PY
       - name: Execute legacy Play regression, scoped grants, and Admin Auth+Firestore emulator integration
