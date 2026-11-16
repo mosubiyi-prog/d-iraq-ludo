@@ -59,7 +59,8 @@ test("real Firestore emulator: issue/revoke fake server scopes, fail closed, zer
    store:{
      environment:"isolated-fake-only",
      issueAtomic:async ({plan,session:expected,view:v,grant:g,expectedOwnerReview})=>{
-       return server(async db=>db.runTransaction(async tx=>{
+       let committed=false;
+       await server(async db=>{committed=await db.runTransaction(async tx=>{
          const sr=db.doc(session(B));
          const prev=await tx.get(sr);
          const s=prev.data();
@@ -81,10 +82,12 @@ test("real Firestore emulator: issue/revoke fake server scopes, fail closed, zer
          tx.set(rr,{...g,issuedAt:stamp(g.issuedAtMs),
            expiresAt:stamp(g.expiresAtMs)});
          return true;
-       }));
+       });});
+       return committed;
      },
-     revokeAtomic:async ({readerUid,domain,session:expected})=>
-       server(async db=>db.runTransaction(async tx=>{
+     revokeAtomic:async ({readerUid,domain,session:expected})=>{
+       let revoked=false;
+       await server(async db=>{revoked=await db.runTransaction(async tx=>{
          const sr=db.doc(session(readerUid));
          const gr=db.doc(grant(readerUid,domain));
          const s=(await tx.get(sr)).data();
@@ -94,7 +97,9 @@ test("real Firestore emulator: issue/revoke fake server scopes, fail closed, zer
          if(!g.exists)return false;
          tx.update(gr,{status:"revoked"});
          return true;
-       }))
+       });});
+       return revoked;
+     }
    }
  };
  try {
