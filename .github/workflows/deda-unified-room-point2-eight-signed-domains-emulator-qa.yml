@@ -52,7 +52,9 @@ jobs:
           node --check qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.cjs
           node --check qa/unified_room_private/deda_point1_three_uid_signed_entry_EMULATOR_ONLY.test.cjs
           node --check qa/unified_room_private/deda_point2_all_eight_signed_domains_EMULATOR_ONLY.test.cjs
-          node --test qa/unified_room_private/deda_eight_domains_restore_coverage_PRIVATE_QA.test.cjs
+          node --check qa/unified_room_private/deda_point2_legacy_progress_reconciliation_PRIVATE_QA.cjs
+          node --check qa/unified_room_private/deda_point2_legacy_progress_reconciliation_PRIVATE_QA.test.cjs
+          node --test qa/unified_room_private/deda_eight_domains_restore_coverage_PRIVATE_QA.test.cjs qa/unified_room_private/deda_point2_legacy_progress_reconciliation_PRIVATE_QA.test.cjs
           node --test qa/unified_room_private/room_owner_proof_source_binding_PRIVATE_QA.test.cjs
       - name: Build additive-only Firestore rule candidate locally, no live Google reads
         shell: bash
