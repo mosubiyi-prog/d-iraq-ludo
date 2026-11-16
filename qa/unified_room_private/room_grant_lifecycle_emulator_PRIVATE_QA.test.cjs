@@ -66,10 +66,17 @@ test("real Firestore emulator: issue/revoke fake server scopes, fail closed, zer
          if(!s||s.revision!==expected.revision ||
            s.sessionNonce!==expected.sessionNonce ||
            s.uid!==plan.readerUid||s.active!==true||
-           expectedOwnerReview!==fakeReview.reviewId) return false;
+           expectedOwnerReview!==fakeReview.reviewId) {
+           console.log('QA_TRANSACTION_GUARD',JSON.stringify({
+             exists:!!s,revisionMatches:s?.revision===expected.revision,
+             nonceMatches:s?.sessionNonce===expected.sessionNonce,
+             uidMatches:s?.uid===plan.readerUid,active:s?.active===true,
+             ownerReviewMatches:expectedOwnerReview===fakeReview.reviewId}));
+           return false;
+         }
          const rr=db.doc(grant(B,plan.domain)),vr=db.doc(view(B,plan.domain));
          const prior=await tx.get(rr);
-         if(prior.exists)return false;
+         if(prior.exists){console.log('QA_TRANSACTION_ALREADY_GRANTED');return false;}
          tx.set(vr,v);
          tx.set(rr,{...g,issuedAt:stamp(g.issuedAtMs),
            expiresAt:stamp(g.expiresAtMs)});
