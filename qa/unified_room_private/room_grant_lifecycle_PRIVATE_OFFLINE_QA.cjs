@@ -11,7 +11,7 @@ const DOMAINS = Object.freeze({
   friends: ["friendCount"],
   league: ["weeklyPoints"],
   gifts: ["giftCount"],
-  wallet: ["balanceDisplay"],
+  wallet: ["balanceDisplay", "giftWalletBalance"],
   places: ["publishedPlaceCount"],
 });
 const allowed = new Set(Object.keys(DOMAINS));
@@ -22,7 +22,7 @@ const failure = reason => Object.freeze({status:"HOLD",reason,productionAccess:f
 const ok = (status,domain) => Object.freeze({status,domain,productionAccess:false,
   authTokenIssued:false,accountUidChanged:false});
 function valueOkay(key,v) {
-  if (["level","weeklyPoints","friendCount","giftCount","publishedPlaceCount","balanceDisplay"].includes(key))
+  if (["level","weeklyPoints","friendCount","giftCount","publishedPlaceCount","balanceDisplay","giftWalletBalance"].includes(key))
     return Number.isSafeInteger(v) && v >= 0 && v <= 1000000000;
   if (typeof v !== "string" || v.length < 1 || v.length > 96) return false;
   if (key === "publicId") return /^@DEDA-[A-Z0-9]{6}$/.test(v);
