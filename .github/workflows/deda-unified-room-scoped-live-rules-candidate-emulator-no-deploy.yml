@@ -7,6 +7,8 @@ on:
       - 'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
       - 'qa/unified_room_private/room_live_additive_compat_emulator.test.cjs'
       - 'qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs'
+      - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.cjs'
+      - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
       - '.github/workflows/deda-unified-room-scoped-live-rules-candidate-emulator-no-deploy.yml'
   workflow_dispatch:
 
@@ -111,6 +113,7 @@ jobs:
           config={
             'firestore':{'rules':'/tmp/deda-room-candidate-rules.rules'},
             'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
+                         'auth':{'host':'127.0.0.1','port':9099},
                          'ui':{'enabled':False}}
           }
           pathlib.Path('/tmp/deda-room-candidate-config.json').write_text(json.dumps(config))
@@ -119,18 +122,23 @@ jobs:
           print('PASS_ALL_LEGACY_RULES_IDENTICAL_IN_CANDIDATE',candidate.replace(patch+'\n','',1)==live)
           print('NO_REAL_USER_RECORD_READ_NO_PRODUCTION_RULES_DEPLOY')
           PY
-      - name: Execute old Play compatibility regression + 8 independent room scopes against local emulator
+      - name: Execute legacy Play regression, scoped grants, and Admin Auth+Firestore emulator integration
         shell: bash
+        env:
+          GCLOUD_PROJECT: demo-deda-room-live-additive-compare
+          DEDA_READONLY_SA: ""
+          DEDA_FALLBACK_SA: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
         run: |
           set -euo pipefail
           npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false \
-            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0 firebase-admin@13.4.0
           npx --yes firebase-tools@13.35.1 emulators:exec \
             --project demo-deda-room-live-additive-compare \
-            --only firestore \
+            --only firestore,auth \
             --config /tmp/deda-room-candidate-config.json \
             --non-interactive \
-            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs'
+            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
       - name: Explicit no production, no APK and no Play
         run: |
           echo 'PASS_PRIVATE_QA_SYNTHETIC_USERS_ONLY'
