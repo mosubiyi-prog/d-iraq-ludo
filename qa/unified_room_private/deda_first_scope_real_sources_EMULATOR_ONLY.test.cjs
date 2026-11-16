@@ -110,6 +110,21 @@ test("First point: profile + original ID + premium ID from real DEDA collections
     read(db,"deda_share_ids/"+id),read(db,"deda_stage71_granted_registry/"+alias)
   ]);
   const gateway=makeEmulatorGateway({db,auth,sourceMode:"deda-real-schema-qa"});
+  // Server source changes after preview, before transaction: the gate
+  // must RE-READ Stage71 active selection inside the same atomic operation.
+  const raceGateway={...gateway,buildProjection:async plan=>{
+    const preview=await gateway.buildProjection(plan);
+    if(plan.domain==="premium_id"){
+      await db.doc("deda_stage71_active_identifier/"+id).update({activeId:id});
+    }
+    return preview;
+  }};
+  const stale=await issueFixture({idToken:tok,domain:"premium_id"},raceGateway);
+  assert.equal(stale.status,"HOLD");
+  assert.equal((await db.doc(paths.grant(B,"premium_id")).get()).exists,false);
+  assert.equal((await db.doc(paths.view(B,"premium_id")).get()).exists,false);
+  await db.doc("deda_stage71_active_identifier/"+id).update({activeId:alias});
+  console.log("PASS_PREMIUM_ACTIVE_ID_RACE_BLOCKED_BEFORE_GRANT");
   const client=env.authenticatedContext(B,{
     firebase:{sign_in_provider:"password"}}).firestore();
   const other=env.authenticatedContext(C,{
