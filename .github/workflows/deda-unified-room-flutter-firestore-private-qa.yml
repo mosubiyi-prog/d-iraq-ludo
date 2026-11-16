@@ -59,10 +59,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dart analyze --no-fatal-warnings --no-fatal-infos \
+          for file in \
             lib/deda_unified_room_flutter_gateway_PRIVATE_QA.dart \
             lib/deda_unified_room_flutter_firestore_ports_PRIVATE_QA.dart \
-            test/deda_unified_room_flutter_private_qa_test.dart
+            test/deda_unified_room_flutter_private_qa_test.dart; do
+            dart analyze --no-fatal-warnings "$file"
+          done
       - name: Run ten actual Flutter unit tests with fake authorization (NO LIVE FIREBASE)
         run: |
           flutter test --no-pub -r expanded \
