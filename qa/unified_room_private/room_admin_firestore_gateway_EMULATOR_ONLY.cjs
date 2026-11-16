@@ -138,21 +138,6 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
         ]);
         const now=clock();
         const rm=data(room),src=data(source);
-        // In this first-scope QA mode, validate the actual DEDA legacy
-        // collections once more INSIDE the transaction. A stale profile,
-        // revoked premium registry, changed receipt or changed ID route
-        // cannot be projected using an earlier cached response.
-        if(realSourceMode && reviewedDomains.has(domain)){
-          const actual=await projectDedaRealSchema(plan,async path=>
-            data(await tx.get(db.doc(path))));
-          if(!actual || !equal(actual,view.payload)) return false;
-        }
-        if(realSourceMode && secondDomains.has(domain)){
-          const actual=await projectDedaSecondSchema(plan,
-            async path=>data(await tx.get(db.doc(path))),
-            async (kind,ref)=>query(kind,ref,tx),now);
-          if(!actual || !equal(actual,view.payload)) return false;
-        }
         if (!matchSession(data(sess),session,plan) ||
             !rm || rm.canonicalAccountId!==cid ||
             rm.originalId!==plan.originalId ||
@@ -168,6 +153,20 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
             !equal(trustedPayload(domain,src.payload),view.payload) ||
             grant.issuedAtMs>now || grant.expiresAtMs<=now ||
             prior.exists) return false;
+        // Only AFTER validated owner/session/scope: evaluate true-source
+        // projections again inside this transaction, before any write.
+        // A/B/C never become interchangeable credentials.
+        if(realSourceMode && reviewedDomains.has(domain)){
+          const actual=await projectDedaRealSchema(plan,async path=>
+            data(await tx.get(db.doc(path))));
+          if(!actual || !equal(actual,view.payload)) return false;
+        }
+        if(realSourceMode && secondDomains.has(domain)){
+          const actual=await projectDedaSecondSchema(plan,
+            async path=>data(await tx.get(db.doc(path))),
+            async (kind,ref)=>query(kind,ref,tx),now);
+          if(!actual || !equal(actual,view.payload)) return false;
+        }
         const auditId=digest("issue",uid,domain,plan.ownerReviewId);
         tx.set(refs.view,view);
         tx.set(refs.grant,{...grant,
