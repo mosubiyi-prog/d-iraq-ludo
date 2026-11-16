@@ -34,7 +34,7 @@ jobs:
       - name: Actual offline validation for independent source scopes
         run: |
           node --check qa/unified_room_private/deda_wallet_places_REAL_SCHEMA_EMULATOR_ONLY.cjs
-          node --test qa/unified_room_private/deda_third_scope_real_sources_OFFLINE_QA.test.cjs
+          node --test qa/unified_room_private/deda_third_scope_real_sources_OFFLINE_QA.test.cjs qa/unified_room_private/deda_eight_domains_restore_coverage_PRIVATE_QA.test.cjs
       - name: Never export test fixture as Firebase function
         run: |
           ! grep -Fq "deda_wallet_places_REAL_SCHEMA_EMULATOR_ONLY" functions/index.js
