@@ -37,12 +37,19 @@ async function projectDedaRealSchema(plan,read) {
   // Caller (existing emulator gateway) establishes independent reviewed
   // scope. Read only *the source UID* from that reviewed domain proof.
   const sourceUid=plan.sourceUid;
-  const [user,session,route]=await Promise.all([
+  const [user,session,route,room]=await Promise.all([
     read("users/"+sourceUid),
     read("deda_sessions/"+sourceUid),
     read("deda_share_ids/"+plan.originalId),
+    read("qa_room_accounts/"+plan.canonicalAccountId),
   ]);
-  if(!user || !session || !route ||
+  if(!user || !session || !route || !room ||
+     room.canonicalAccountId!==plan.canonicalAccountId ||
+     room.originalId!==plan.originalId ||
+     !Array.isArray(room.historicalUids) ||
+     !room.historicalUids.includes(sourceUid) ||
+     !room.historicalUids.includes(route.ownerUid) ||
+     user.accountKey!==room.accountKey ||
      !validUid(route.ownerUid) ||
      route.publicId!==plan.originalId ||
      route.kind!=="personal" || route.active!==true ||
