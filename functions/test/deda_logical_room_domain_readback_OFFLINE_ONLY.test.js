@@ -21,10 +21,12 @@ const pair=[A,fuid].sort().join("__");
 function sources(){
   return {
     friends:[{id:pair,pairKey:pair,members:[A,fuid],
-      requesterUid:A,recipientUid:fuid,status:"accepted"}],
+      requesterUid:A,recipientUid:fuid,status:"accepted",
+      cached:false,pendingWrites:false}],
     gifts:[{id:"deda-weekly-2026-11-14-DEDA-ABC123",giftId:"deda-weekly-2026-11-14-DEDA-ABC123",
       sourceType:"weekly_league",targetPublicId:id,
-      amount:100,status:"received",createdAtMs:1794700000000}],
+      amount:100,status:"received",createdAtMs:1794700000000,
+      cached:false,pendingWrites:false}],
     giftWallet:{publicId:id,balance:120},
     premium:{originalId:id,activeId:"@DEDA-GOLD1"},
     leagueAccount:{publicId:id,accountKey:acct},
@@ -77,11 +79,13 @@ test("invalid pair key rejected instead of creating new one",()=>{
   const s=sources();s.friends[0].pairKey="fake";
   const x=run({sourceRows:s});assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");locked(x);
 });
-test("intra-room historical friend pair cannot be treated as outside friend",()=>{
+test("intra-room historical friend pair is flagged, not auto-transferred",()=>{
   const s=sources();const self=[A,C].sort().join("__");
   s.friends=[{id:self,pairKey:self,members:[A,C],requesterUid:A,
-    recipientUid:C,status:"accepted"}];
-  assert.equal(run({sourceRows:s}).reason,"DOMAIN_SOURCE_CONFLICT");
+    recipientUid:C,status:"accepted",cached:false,pendingWrites:false}];
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"friends").status,
+    "INTERNAL_ALIAS_RELATION_REVIEW_REQUIRED");
 });
 test("duplicate gift receipt is rejected; never reissued",()=>{
   const s=sources();s.gifts.push({...s.gifts[0]});
@@ -189,4 +193,63 @@ test("invalid domain source container denied",()=>{
     const x=run({sourceRows});locked(x);
     assert.equal(x.reason,"INVALID_READBACK_INPUT");
   }
+});
+test("two historical aliases with one external friend are not merged",()=>{
+  const s=sources();const aliasPair=[C,fuid].sort().join("__");
+  s.friends.push({id:aliasPair,pairKey:aliasPair,
+    members:[C,fuid],requesterUid:C,recipientUid:fuid,
+    status:"accepted",cached:false,pendingWrites:false});
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"friends").status,
+    "ALIAS_FRIEND_DUPLICATE_REVIEW_REQUIRED");
+  assert.equal(x.domains.length,14);
+});
+test("alias duplicate friend remains flagged if member order is reversed",()=>{
+  const s=sources();const aliasPair=[C,fuid].sort().join("__");
+  s.friends.push({id:aliasPair,pairKey:aliasPair,
+    members:[fuid,C],requesterUid:fuid,recipientUid:C,
+    status:"pending",cached:false,pendingWrites:false});
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"friends").status,
+    "ALIAS_FRIEND_DUPLICATE_REVIEW_REQUIRED");
+});
+test("missing or cached friend provenance fails closed",()=>{
+  for (const mutate of [
+    row=>delete row.cached,row=>row.cached=true,
+    row=>row.pendingWrites=true,row=>delete row.pendingWrites
+  ]) {
+    const s=sources();mutate(s.friends[0]);
+    const x=run({sourceRows:s});locked(x);
+    assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("missing or cached gift provenance fails closed",()=>{
+  for (const mutate of [
+    row=>delete row.cached,row=>row.cached=true,
+    row=>row.pendingWrites=true,row=>delete row.pendingWrites
+  ]) {
+    const s=sources();mutate(s.gifts[0]);
+    const x=run({sourceRows:s});locked(x);
+    assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("league score without account link cannot be marked consistent",()=>{
+  const s=sources();delete s.leagueAccount;
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(x.reason,"DOMAIN_SOURCE_CONFLICT");
+});
+test("league account without control is historical unknown not a zero",()=>{
+  const s=sources();delete s.leagueControl;delete s.leagueScore;
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"league").status,
+    "LEAGUE_CONTROL_MISSING_HISTORICAL_UNKNOWN");
+});
+test("internal historical friend and external friend remain isolated",()=>{
+  const s=sources();const internal=[A,C].sort().join("__");
+  s.friends.push({id:internal,pairKey:internal,members:[A,C],
+    requesterUid:A,recipientUid:C,status:"accepted",
+    cached:false,pendingWrites:false});
+  const x=run({sourceRows:s});locked(x);
+  assert.equal(domain(x,"friends").status,
+    "INTERNAL_ALIAS_RELATION_REVIEW_REQUIRED");
 });
