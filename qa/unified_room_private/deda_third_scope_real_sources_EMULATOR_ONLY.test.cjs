@@ -38,7 +38,7 @@ async function seed(db){
   put(db,paths.review(cid,B),{
     source:"independent_server_review",independentlyVerified:true,
     ownerApproved:true,backupVerified:true,rollbackDocumented:true,
-    originalId:original,canonicalAccountId:cid,authUid:B,
+    accountKey:account,originalId:original,canonicalAccountId:cid,authUid:B,
     reviewId,verifiedAtMs:Date.now()-1000}),
   put(db,paths.session(B),{uid:B,canonicalAccountId:cid,revision:34,
     active:true,sessionNonce:"QA_POINT3_EXISTING_SESSION_34"}),
