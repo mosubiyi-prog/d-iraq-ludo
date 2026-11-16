@@ -38,6 +38,23 @@ exports.dedaVerifyExistingOwnerPin = createOwnerPinVerifyCallable({
     stage2LiveGateEnabled("pinProof"),
 });
 
+// DEDA unified-room SDK connection: READ-ONLY, mandatory App Check,
+// SERVER RELEASE HOLD. QA signatures or client-provided UID/PIN cannot enable
+// the function or grant A/B/C access. No rights, data or balances are written.
+// Do not change the literal false without a separately reviewed real owner
+// evidence issuer, domain-scoped grants, deployed rules and phone tests.
+const {createRoomReadonlyGuard} =
+  require("./deda_unified_room_readonly_guard_v1.js");
+const dedaUnifiedRoomReadonlyGuard = createRoomReadonlyGuard({
+  db:getFirestore(), auth:getAuth(), enabled:false,
+});
+exports.dedaUnifiedRoomReadOnlyV1 = onCall(
+  {enforceAppCheck:true},
+  (request) => dedaUnifiedRoomReadonlyGuard({
+    auth:request.auth, app:request.app, input:request.data,
+  }),
+);
+
 // Both callables reuse the previously tested original-UID grant and journal
 // contracts. They independently check the same server-only production gate.
 // Nothing here deploys Firebase, enables credentials or changes live rules.
