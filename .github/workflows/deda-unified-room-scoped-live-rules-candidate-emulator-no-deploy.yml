@@ -158,7 +158,7 @@ jobs:
             --only firestore,auth \
             --config /tmp/deda-room-candidate-config.json \
             --non-interactive \
-            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_first_scope_real_sources_EMULATOR_ONLY.test.cjs'
+            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_first_scope_real_sources_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_second_scope_real_sources_EMULATOR_ONLY.test.cjs'
       - name: Explicit no production, no APK and no Play
         run: |
           echo 'PASS_PRIVATE_QA_SYNTHETIC_USERS_ONLY'
