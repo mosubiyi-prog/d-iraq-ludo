@@ -88,5 +88,5 @@ jobs:
             --project demo-deda-room-live-additive-compare \
             --config /tmp/deda-room-emulators.json \
             --only firestore,auth --non-interactive \
-            'node --test --test-concurrency=1 qa/unified_room_private/deda_third_scope_real_sources_EMULATOR_ONLY.test.cjs'
+            'node --test --test-concurrency=1 qa/unified_room_private/deda_third_scope_real_sources_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_eight_domains_one_session_EMULATOR_ONLY.test.cjs'
       - run: echo 'NO_PRODUCTION_DATA_NO_USER_UID_CHANGE_NO_FINANCIAL_CREDIT_NO_APK_NO_PLAY'
