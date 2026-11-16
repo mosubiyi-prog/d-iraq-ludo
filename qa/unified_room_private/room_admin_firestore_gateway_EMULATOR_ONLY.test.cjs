@@ -86,6 +86,7 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
   assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST,AUTH_HOST);
   const app=initializeApp({projectId:PROJECT},"DEDA_ROOM_QA_ADMIN_GATEWAY_TEST");
   const db=getFirestore(app),auth=getAuth(app);
+  let clientApp=null;
   const rules=fs.readFileSync("/tmp/deda-room-candidate-rules.rules","utf8");
   const env=await initializeTestEnvironment({
     projectId:PROJECT,firestore:{rules,host:"127.0.0.1",port:8088}
@@ -108,8 +109,21 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     const baseB=(await db.doc("users/"+B).get()).data();
     const baseC=(await db.doc("users/"+C).get()).data();
     const gateway=makeEmulatorGateway({db,auth});
-    const b=env.authenticatedContext(B,{
-      firebase:{sign_in_provider:"password"}}).firestore();
+    // Use the ACTUAL Firebase Auth emulator password session, not synthetic
+    // rules-unit-testing claims; this exercises the single real emulator UID.
+    const firebaseCompat=require("firebase/compat/app");
+    require("firebase/compat/auth");
+    require("firebase/compat/firestore");
+    clientApp=firebaseCompat.initializeApp({
+      apiKey:"qa-emulator-key",projectId:PROJECT,authDomain:"qa.invalid"
+    },"DEDA_ROOM_QA_SINGLE_UID_CLIENT");
+    const clientAuth=clientApp.auth();
+    clientAuth.useEmulator("http://"+AUTH_HOST);
+    const b=clientApp.firestore();
+    b.useEmulator("127.0.0.1",8088);
+    const credential=await clientAuth.signInWithEmailAndPassword(
+      "qa-deda-b@example.test",tokenPassword);
+    assert.equal(credential.user.uid,B);
     const a=env.authenticatedContext(A,{
       firebase:{sign_in_provider:"password"}}).firestore();
     const d=env.authenticatedContext(D,{
@@ -137,10 +151,8 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     try{await b.doc(view("original_id")).get();}
     catch(e){bReadError=String(e.message).slice(0,450);}
     console.log("QA_ADMIN_B_RULES_READ",bReadError||"ALLOWED");
-    const bGoogle=env.authenticatedContext(B,{
-      firebase:{sign_in_provider:"google.com"}}).firestore();
-    console.log("QA_ADMIN_B_GOOGLE_PROVIDER_PROBE",
-      await can(()=>bGoogle.doc(view("original_id")).get()));
+    console.log("QA_REAL_AUTH_EMULATOR_PASSWORD_PROVIDER",
+      claims.firebase.sign_in_provider);
     assert.equal(bReadError,"");
     assert.equal(await can(()=>a.doc(view("original_id")).get()),false);
     assert.equal(await can(()=>d.doc(view("original_id")).get()),false);
@@ -216,6 +228,7 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     }finally{await deleteApp(invalidApp)}
     console.log("PASS_EMULATOR_PROJECT_GUARD_AND_BAD_TOKEN_FAIL_CLOSED");
   }finally{
+    if(clientApp) await clientApp.delete();
     await env.cleanup();
     await deleteApp(app);
   }
