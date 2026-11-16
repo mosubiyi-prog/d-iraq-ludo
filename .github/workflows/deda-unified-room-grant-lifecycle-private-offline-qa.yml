@@ -1,0 +1,58 @@
+name: DEDA unified room grant lifecycle OFFLINE QA - NO DEPLOY
+on:
+  push:
+    branches: [deda-unified-room-authz-scopes-isolated-qa-2026-11-16]
+    paths:
+      - 'qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.cjs'
+      - 'qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.test.cjs'
+      - '.github/workflows/deda-unified-room-grant-lifecycle-private-offline-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-fake-server-grant-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify DEDA source and Firebase integration were not modified
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,pathlib
+          base='fd8cfd590d0f6703e34d6fe8c6913b091c3468fd'
+          changed=subprocess.check_output(
+            ['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          assert all(p.startswith('qa/unified_room_private/') or (
+            p.startswith('.github/workflows/deda-unified-room-') and p.endswith('.yml')
+          ) for p in changed), 'PROTECTED_APPLICATION_OR_FIREBASE_SOURCE_CHANGED'
+          src=pathlib.Path('qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.cjs').read_text()
+          index=pathlib.Path('functions/index.js').read_text()
+          assert 'room_grant_lifecycle_PRIVATE_OFFLINE_QA' not in index
+          for bad in ('firebase-admin', 'createCustomToken(', 'createUser(', 'signInAnonymously(',
+                      'FirebaseFirestore.instance', 'https://firebaserules.googleapis.com'):
+            assert bad not in src,'PRIVILEGED_OR_NETWORK_PATH_IN_OFFLINE_SERVICE:'+bad
+          assert 'isolated-fake-only' in src and 'productionAccess:false' in src
+          print('PASS_PROTECTED_SOURCE_AND_SINGLE_SESSION_NO_UID_CREATION')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Actual Node safety and state-transition tests on fake atomic store
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.cjs
+          node --check qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.test.cjs
+          node --test \
+            qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.test.cjs \
+            qa/unified_room_private/trusted_room_scope_service_CANDIDATE_ONLY.test.cjs \
+            qa/unified_room_private/room_scope_review_PRIVATE_NO_GRANT.test.cjs
+      - name: No APK/Play, Firebase Auth, Firestore, Functions or deployment
+        run: echo 'ONLY_SYNTHETIC_DATA_NO_LIVE_FIREBASE_NO_TOKEN_ISSUE_NO_DEPLOY'
