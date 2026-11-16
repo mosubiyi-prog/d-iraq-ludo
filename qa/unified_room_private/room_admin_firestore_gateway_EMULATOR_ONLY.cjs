@@ -35,7 +35,7 @@ function assertLab({db,auth,clock}) {
   if (process.env.FIRESTORE_EMULATOR_HOST !== FIRESTORE_HOST ||
       process.env.FIREBASE_AUTH_EMULATOR_HOST !== AUTH_HOST ||
       process.env.GCLOUD_PROJECT !== PROJECT ||
-      db?.app?.options?.projectId !== PROJECT ||
+      (db?.app?.options?.projectId !== PROJECT && db?.projectId !== PROJECT) ||
       typeof auth?.verifyIdToken !== "function" ||
       typeof db?.runTransaction !== "function" ||
       typeof clock !== "function") {
