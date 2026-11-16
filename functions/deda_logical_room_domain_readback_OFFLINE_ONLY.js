@@ -71,20 +71,37 @@ function checkGifts(rows,originalId) {
   if (rows == null) return "SOURCE_ABSENT_UNKNOWN";
   if (!Array.isArray(rows) || rows.length>LIMIT) return null;
   const seen=new Set();
+  let unknownHistoricalType=false;
   for(const row of rows) {
     if(!row || typeof row!=="object" || row.cached!==false ||
        row.pendingWrites!==false || typeof row.id!=="string" ||
        !/^[A-Za-z0-9_-]{5,160}$/.test(row.id) || seen.has(row.id) ||
        row.targetPublicId!==originalId ||
-       !Number.isSafeInteger(row.amount) || row.amount<=0 ||
-       (row.sourceType==="weekly_league" &&
-          (row.giftId!==row.id ||
-           !/^deda-weekly-20\d{2}-\d{2}-\d{2}-DEDA-[A-Z0-9]{6}$/.test(row.id) ||
-           !row.id.endsWith("-"+originalId.substring(1)) ||
-           !["pending","received","claimed"].includes(row.status) ||
-           !goodUnsigned(row.createdAtMs) || row.createdAtMs===0))) return null;
+       !Number.isSafeInteger(row.amount) || row.amount<=0) return null;
     seen.add(row.id);
+    if(row.sourceType==="weekly_league") {
+      if(row.giftId!==row.id ||
+         !/^deda-weekly-20\d{2}-\d{2}-\d{2}-DEDA-[A-Z0-9]{6}$/.test(row.id) ||
+         !row.id.endsWith("-"+originalId.substring(1)) ||
+         !["pending","received","claimed"].includes(row.status) ||
+         !goodUnsigned(row.createdAtMs) || row.createdAtMs===0) return null;
+    } else if (row.sourceType==="admin") {
+      // Production rules require giftId == document ID and max 1M per gift;
+      // pending -> received is atomic with wallet credit, not simulated here.
+      if(row.giftId!==row.id || row.amount>1000000 ||
+         !["pending","received"].includes(row.status) ||
+         !goodUnsigned(row.createdAtMs) || row.createdAtMs===0 ||
+         (row.status==="pending" && row.claimedAtMs!=null) ||
+         (row.status==="received" &&
+           (!goodUnsigned(row.claimedAtMs) ||
+            row.claimedAtMs<row.createdAtMs))) return null;
+    } else {
+      // Do not erase or credit old/unknown receipt types. Flag for separate
+      // source-aware review. Not a claim that these receipts are invalid.
+      unknownHistoricalType=true;
+    }
   }
+  if(unknownHistoricalType) return "UNKNOWN_GIFT_SOURCE_REVIEW_REQUIRED";
   return rows.length===0?"SOURCE_EMPTY_HISTORICAL_UNKNOWN":
     "GIFT_RECEIPTS_SHAPE_MATCHED_NO_REISSUE";
 }
