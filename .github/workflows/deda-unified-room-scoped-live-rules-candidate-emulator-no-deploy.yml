@@ -9,6 +9,8 @@ on:
       - 'qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs'
       - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.cjs'
       - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
+      - 'qa/unified_room_private/deda_profile_original_premium_REAL_SCHEMA_EMULATOR_ONLY.cjs'
+      - 'qa/unified_room_private/deda_first_scope_real_sources_EMULATOR_ONLY.test.cjs'
       - '.github/workflows/deda-unified-room-scoped-live-rules-candidate-emulator-no-deploy.yml'
   workflow_dispatch:
 
@@ -122,6 +124,16 @@ jobs:
           print('PASS_ALL_LEGACY_RULES_IDENTICAL_IN_CANDIDATE',candidate.replace(patch+'\n','',1)==live)
           print('NO_REAL_USER_RECORD_READ_NO_PRODUCTION_RULES_DEPLOY')
           PY
+      - name: Verify first-point adapter matches real unmodified DEDA source paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "collection('users').doc(uid)" lib/deda_backend.dart
+          grep -Fq "collection('deda_share_ids').doc(id)" lib/deda_stage71_free_owned_use_profile.dart
+          grep -Fq "deda_stage71_active_identifier" lib/deda_stage71_free_owned_use_profile.dart
+          grep -Fq "deda_stage71_granted_registry" lib/deda_stage71_free_manager_200_service.dart
+          grep -Fq "deda_stage74_id_gift_receipts" lib/deda_stage74_id_gift_service.dart
+          echo 'PASS_REAL_DEDA_COLLECTIONS_SOURCE_MAPPING_VERIFIED'
       - name: Execute legacy Play regression, scoped grants, and Admin Auth+Firestore emulator integration
         shell: bash
         env:
@@ -138,7 +150,7 @@ jobs:
             --only firestore,auth \
             --config /tmp/deda-room-candidate-config.json \
             --non-interactive \
-            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
+            'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_first_scope_real_sources_EMULATOR_ONLY.test.cjs'
       - name: Explicit no production, no APK and no Play
         run: |
           echo 'PASS_PRIVATE_QA_SYNTHETIC_USERS_ONLY'
