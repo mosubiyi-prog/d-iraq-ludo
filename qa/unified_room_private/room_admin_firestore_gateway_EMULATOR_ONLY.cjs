@@ -14,6 +14,8 @@
 const crypto = require("node:crypto");
 const {Timestamp} = require("firebase-admin/firestore");
 const {trustedPayload} = require("./room_grant_lifecycle_PRIVATE_OFFLINE_QA.cjs");
+const {projectDedaRealSchema,reviewedDomains} =
+  require("./deda_profile_original_premium_REAL_SCHEMA_EMULATOR_ONLY.cjs");
 const PROJECT = "demo-deda-room-live-additive-compare";
 const FIRESTORE_HOST = "127.0.0.1:8088";
 const AUTH_HOST = "127.0.0.1:9099";
@@ -80,8 +82,12 @@ function proofStillValid(proof,plan,now) {
     Number.isSafeInteger(proof.verifiedAtMs) &&
     proof.verifiedAtMs<=now && now-proof.verifiedAtMs<=600000;
 }
-function makeEmulatorGateway({db,auth,clock=()=>Date.now()}={}) {
+function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
+  sourceMode="legacy-qa"}={}) {
   assertLab({db,auth,clock});
+  if(!["legacy-qa","deda-real-schema-qa"].includes(sourceMode))
+    throw Error("QA_SAFE_STOP_UNKNOWN_SOURCE_MODE");
+  const realSourceMode=sourceMode==="deda-real-schema-qa";
   const read=(path)=>db.doc(path).get().then(data);
   const store={
     environment:"isolated-fake-only",
@@ -115,6 +121,15 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now()}={}) {
         ]);
         const now=clock();
         const rm=data(room),src=data(source);
+        // In this first-scope QA mode, validate the actual DEDA legacy
+        // collections once more INSIDE the transaction. A stale profile,
+        // revoked premium registry, changed receipt or changed ID route
+        // cannot be projected using an earlier cached response.
+        if(realSourceMode && reviewedDomains.has(domain)){
+          const actual=await projectDedaRealSchema(plan,async path=>
+            data(await tx.get(db.doc(path))));
+          if(!actual || !equal(actual,view.payload)) return false;
+        }
         if (!matchSession(data(sess),session,plan) ||
             !rm || rm.canonicalAccountId!==cid ||
             rm.originalId!==plan.originalId ||
@@ -195,6 +210,8 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now()}={}) {
     async buildProjection(plan){
       assertLab({db,auth,clock});
       if (!DOMAINS.has(plan?.domain)) return null;
+      if(realSourceMode && reviewedDomains.has(plan.domain))
+        return projectDedaRealSchema(plan,read);
       const source=await read(paths.source(plan.sourceUid,plan.domain));
       if(!source || source.canonicalAccountId!==plan.canonicalAccountId ||
          source.sourceUid!==plan.sourceUid ||
