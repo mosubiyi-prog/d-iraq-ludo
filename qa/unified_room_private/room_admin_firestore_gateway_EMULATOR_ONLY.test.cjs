@@ -135,46 +135,9 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     const issue=await issueFixture({idToken:token,domain:"original_id"},gateway);
     assert.equal(issue.status,"QA_FIXTURE_ISSUED",issue.reason);
     assert.equal(issue.productionAccess,false);
-    for(const probe of ["qa_room_auth_probe","qa_room_auth_probe_provider",
-      "qa_room_auth_probe_email","qa_room_auth_probe_firebase",
-      "qa_room_auth_probe_grant","qa_room_auth_probe_issued",
-      "qa_room_auth_probe_expires","qa_room_auth_probe_duration",
-      "qa_room_auth_probe_source"]){
-      await set(db,probe+"/"+B,{probe:"emulator"});
-      console.log("QA_REAL_B_PROBE",probe,
-        await can(()=>b.doc(probe+"/"+B).get()));
-    }
-    const persistedGrant=(await db.doc(grant("original_id")).get()).data();
-    const persistedView=(await db.doc(view("original_id")).get()).data();
-    console.log("QA_ADMIN_PERSISTED_GRANT",JSON.stringify({
-      readerUid:persistedGrant?.readerUid,
-      domain:persistedGrant?.domain,status:persistedGrant?.status,
-      issuedAt:persistedGrant?.issuedAt?.toMillis?.(),
-      expiresAt:persistedGrant?.expiresAt?.toMillis?.(),
-      canonicalEqual:persistedGrant?.canonicalAccountId===persistedView?.canonicalAccountId,
-      sourceEqual:persistedGrant?.sourceUid===persistedView?.sourceUid,
-      originalEqual:persistedGrant?.originalId===persistedView?.originalId,
-      versionEqual:persistedGrant?.scopeVersion===persistedView?.scopeVersion
-    }));
-    console.log("QA_REAL_AUTH_USERS_B_READ",
-      await can(()=>b.doc("users/"+B).get()));
-    console.log("QA_REAL_AUTH_SHARE_ID_READ",
-      await can(()=>b.doc("deda_share_ids/"+originalId).get()));
-    const simulatedPassword=env.authenticatedContext(B,{
-      firebase:{sign_in_provider:"password"}}).firestore();
-    console.log("QA_SYNTH_PASSWORD_READ",
-      await can(()=>simulatedPassword.doc(view("original_id")).get()));
-    const simulatedGoogle=env.authenticatedContext(B,{
-      firebase:{sign_in_provider:"google.com"}}).firestore();
-    console.log("QA_SYNTH_GOOGLE_READ",
-      await can(()=>simulatedGoogle.doc(view("original_id")).get()));
-    let bReadError="";
-    try{await b.doc(view("original_id")).get();}
-    catch(e){bReadError=String(e.message).slice(0,450);}
-    console.log("QA_ADMIN_B_RULES_READ",bReadError||"ALLOWED");
-    console.log("QA_REAL_AUTH_EMULATOR_PASSWORD_PROVIDER",
-      claims.firebase.sign_in_provider);
-    assert.equal(bReadError,"");
+    assert.equal(await can(()=>b.doc(view("original_id")).get()),true,
+      "server issued view must be readable with existing Auth Emulator UID");
+
     assert.equal(await can(()=>a.doc(view("original_id")).get()),false);
     assert.equal(await can(()=>d.doc(view("original_id")).get()),false);
     assert.equal(await can(()=>anon.doc(view("original_id")).get()),false);

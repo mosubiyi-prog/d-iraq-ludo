@@ -18,7 +18,8 @@
         && grant.scopeVersion == 1
         && grant.issuedAt is timestamp
         && grant.expiresAt is timestamp
-        && grant.issuedAt <= request.time
+        // At most 5s trusted-server/Rules clock skew; future-dated forgeries still denied.
+        && grant.issuedAt <= request.time + duration.value(5, 's')
         && grant.expiresAt > request.time
         && grant.expiresAt <= grant.issuedAt + duration.value(10, 'm')
         && grant.canonicalAccountId == resource.data.canonicalAccountId

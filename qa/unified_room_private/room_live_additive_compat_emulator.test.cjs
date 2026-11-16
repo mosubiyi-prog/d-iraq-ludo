@@ -113,6 +113,11 @@ test("scoped room candidate, revoked grants, and old Play paths",async()=>{
     assert.equal(await can(()=>b.doc(doc(B,"league")).get()),false);
     await adminSet(grant(B,"places"),{...permit(B,"places"),proofKind:"pin-only"});
     assert.equal(await can(()=>b.doc(doc(B,"places")).get()),false);
+    await adminSet(grant(B,"profile"),{
+      ...permit(B,"profile"),issuedAt:stamp(now+20000),
+      expiresAt:stamp(now+250000)});
+    assert.equal(await can(()=>b.doc(doc(B,"profile")).get()),false,
+      "future-dated grant beyond 5s skew must remain denied");
     console.log("PASS_REVOKE_EXPIRY_MISMATCH_AND_FORGED_GRANT_DENIAL");
   }finally{
     if(base) await base.cleanup();
