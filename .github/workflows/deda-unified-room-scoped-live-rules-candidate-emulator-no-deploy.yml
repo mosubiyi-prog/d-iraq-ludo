@@ -6,6 +6,7 @@ on:
     paths:
       - 'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
       - 'qa/unified_room_private/room_live_additive_compat_emulator.test.cjs'
+      - 'qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs'
       - '.github/workflows/deda-unified-room-scoped-live-rules-candidate-emulator-no-deploy.yml'
   workflow_dispatch:
 
@@ -129,7 +130,7 @@ jobs:
             --only firestore \
             --config /tmp/deda-room-candidate-config.json \
             --non-interactive \
-            'node --test qa/unified_room_private/room_live_additive_compat_emulator.test.cjs'
+            'node --test qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs'
       - name: Explicit no production, no APK and no Play
         run: |
           echo 'PASS_PRIVATE_QA_SYNTHETIC_USERS_ONLY'
