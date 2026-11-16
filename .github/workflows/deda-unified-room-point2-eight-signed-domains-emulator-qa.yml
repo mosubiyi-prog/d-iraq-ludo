@@ -1,0 +1,93 @@
+name: DEDA Point2 Eight Signed Domains and Progress Preservation (QA)
+on:
+  push:
+    branches:
+      - deda-unified-room-point2-eight-domains-progress-qa-2026-11-17
+    paths:
+      - 'qa/unified_room_private/**'
+      - '.github/workflows/deda-unified-room-point2-eight-signed-domains-emulator-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-owner-challenge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-room-live-additive-compare
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8088
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - name: Verify protected app baseline unchanged and proof never exported
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,pathlib
+          base='fd8cfd590d0f6703e34d6fe8c6913b091c3468fd'
+          files=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          assert files
+          assert all(p.startswith('qa/unified_room_private/') or (
+             p.startswith('.github/workflows/deda-unified-room-') and p.endswith('.yml'))
+             for p in files), repr(files)
+          index=pathlib.Path('functions/index.js').read_text()
+          names=['room_owner_atomic_challenge_EMULATOR_ONLY','room_owner_proof_source_binding_PRIVATE_QA']
+          assert all(name not in index for name in names)
+          module=pathlib.Path('qa/unified_room_private/room_owner_atomic_challenge_EMULATOR_ONLY.cjs').read_text()
+          assert 'QA_SAFE_STOP_EMULATOR_ONLY' in module
+          for forbidden in ['createCustomToken(', 'createUser(', 'signInAnonymously(', 'admin.auth().', 'httpsCallable(']:
+            assert forbidden not in module, forbidden
+          print('PASS_PROTECTED_DEDA_APP_UNMODIFIED_PRIVATE_PROOF_NOT_DEPLOYABLE')
+          PY
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - name: Verify syntax and previous signed proof regression
+        run: |
+          node --check qa/unified_room_private/room_owner_atomic_challenge_EMULATOR_ONLY.cjs
+          node --check qa/unified_room_private/room_owner_atomic_challenge_EMULATOR_ONLY.test.cjs
+          node --check qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.cjs
+          node --check qa/unified_room_private/deda_point1_three_uid_signed_entry_EMULATOR_ONLY.test.cjs
+          node --check qa/unified_room_private/deda_point2_all_eight_signed_domains_EMULATOR_ONLY.test.cjs
+          node --test qa/unified_room_private/deda_eight_domains_restore_coverage_PRIVATE_QA.test.cjs
+          node --test qa/unified_room_private/room_owner_proof_source_binding_PRIVATE_QA.test.cjs
+      - name: Build additive-only Firestore rule candidate locally, no live Google reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re,json,pathlib
+          src=pathlib.Path('firestore.rules').read_text()
+          patch=pathlib.Path('qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt').read_text()
+          assert 'deda_unified_room_private_views' not in src
+          assert not any(x in patch for x in ['allow read: if true','allow write: if true'])
+          boundaries=list(re.finditer(r'(?m)^  \}\s*\n\}\s*$',src))
+          assert boundaries,"UNKNOWN_RULES_SHAPE_STOP"
+          pos=boundaries[-1].start()
+          pathlib.Path('/tmp/deda-room-candidate-rules.rules').write_text(src[:pos]+patch+'\n'+src[pos:])
+          pathlib.Path('/tmp/deda-room-atomic-emulators.json').write_text(json.dumps({
+             'firestore':{'rules':'deda-room-candidate-rules.rules'},
+             'emulators':{'firestore':{'host':'127.0.0.1','port':8088},
+                          'auth':{'host':'127.0.0.1','port':9099},
+                          'ui':{'enabled':False}}
+          }))
+          print('PASS_LOCAL_ONLY_ADD_ON_RULES_BASELINE')
+          PY
+      - name: Install emulator/test libraries (CI only)
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund --ignore-scripts \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0 firebase-admin@13.4.0
+      - name: Test all eight DEDA domains and signed owner gate, including original B/A/C
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+             --project demo-deda-room-live-additive-compare \
+             --config /tmp/deda-room-atomic-emulators.json \
+             --only firestore,auth --non-interactive \
+             'node --test --test-concurrency=1 qa/unified_room_private/room_owner_atomic_challenge_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_point1_three_uid_signed_entry_EMULATOR_ONLY.test.cjs qa/unified_room_private/deda_point2_all_eight_signed_domains_EMULATOR_ONLY.test.cjs'
+      - name: No production connection, no deployment or APK
+        run: echo 'QA_ONLY_NO_FIREBASE_PROD_NO_GOOGLE_PLAY_NO_UID_OR_FUNDS_MUTATION'
