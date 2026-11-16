@@ -27,11 +27,11 @@ function sources(){
       sourceType:"weekly_league",targetPublicId:id,
       amount:100,status:"received",createdAtMs:1794700000000,
       cached:false,pendingWrites:false}],
-    giftWallet:{publicId:id,balance:120},
-    premium:{originalId:id,activeId:"@DEDA-GOLD1"},
-    leagueAccount:{publicId:id,accountKey:acct},
-    leagueControl:{weekId:"2026-11-14"},
-    leagueScore:{publicId:id,weekId:"2026-11-14",weeklyXp:65},
+    giftWallet:{publicId:id,balance:120,cached:false,pendingWrites:false},
+    premium:{originalId:id,activeId:"@DEDA-GOLD1",cached:false,pendingWrites:false},
+    leagueAccount:{publicId:id,accountKey:acct,cached:false,pendingWrites:false},
+    leagueControl:{weekId:"2026-11-14",cached:false,pendingWrites:false},
+    leagueScore:{publicId:id,weekId:"2026-11-14",weeklyXp:65,cached:false,pendingWrites:false},
   };
 }
 const run=(overrides={})=>inspectDomainSources({
@@ -313,4 +313,58 @@ test("unknown historical gift source gets review, not deletion or credit",()=>{
   const x=run({sourceRows:s});locked(x);
   assert.equal(domain(x,"gifts").status,"UNKNOWN_GIFT_SOURCE_REVIEW_REQUIRED");
   assert.equal(JSON.stringify(x).includes("250"),false);
+});
+
+test("cache and pending flags must be explicitly fresh on gift wallet",()=>{
+  for(const mutate of [x=>delete x.cached,x=>x.cached=true,x=>delete x.pendingWrites,
+    x=>x.pendingWrites=true]){
+    const s=sources();mutate(s.giftWallet);
+    const out=run({sourceRows:s});locked(out);
+    assert.equal(out.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("premium display selection from cache cannot look server verified",()=>{
+  for(const mutate of [x=>delete x.cached,x=>x.cached=true,
+    x=>delete x.pendingWrites,x=>x.pendingWrites=true]){
+    const s=sources();mutate(s.premium);
+    const out=run({sourceRows:s});locked(out);
+    assert.equal(out.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("league account requires fresh server read metadata",()=>{
+  for(const mutate of [x=>delete x.cached,x=>x.cached=true,x=>x.pendingWrites=true]){
+    const s=sources();mutate(s.leagueAccount);
+    const out=run({sourceRows:s});locked(out);
+    assert.equal(out.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("league week control cannot be stale cached data",()=>{
+  for(const mutate of [x=>delete x.pendingWrites,x=>x.cached=true,x=>x.pendingWrites=true]){
+    const s=sources();mutate(s.leagueControl);
+    const out=run({sourceRows:s});locked(out);
+    assert.equal(out.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("league score cannot be from cache or pending local writes",()=>{
+  for(const mutate of [x=>delete x.cached,x=>x.cached=true,x=>x.pendingWrites=true]){
+    const s=sources();mutate(s.leagueScore);
+    const out=run({sourceRows:s});locked(out);
+    assert.equal(out.reason,"DOMAIN_SOURCE_CONFLICT");
+  }
+});
+test("absent week score remains unknown, not confirmed zero",()=>{
+  const s=sources();delete s.leagueScore;
+  const out=run({sourceRows:s});locked(out);
+  assert.equal(domain(out,"league").status,"LEAGUE_SCORE_MISSING_HISTORICAL_UNKNOWN");
+});
+test("valid existing zero gift wallet is not authorization or gift credit",()=>{
+  const s=sources();s.giftWallet.balance=0;
+  const out=run({sourceRows:s});locked(out);
+  assert.equal(domain(out,"diamonds").status,
+    "GIFT_WALLET_SHAPE_MATCHED_NOT_TOTAL_BALANCE");
+  assert.equal(out.financialGrantPermitted,false);
+});
+test("mock server-fresh flags do not constitute independent ownership",()=>{
+  const out=run({sessionUid:A});locked(out);
+  assert.equal(out.decision,"HOLD_FOR_INDEPENDENT_OWNER_PROOF");
 });
