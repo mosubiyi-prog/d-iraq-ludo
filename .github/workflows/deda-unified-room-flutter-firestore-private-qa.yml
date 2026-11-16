@@ -1,0 +1,114 @@
+name: DEDA unified room private Flutter + Firestore emulator QA (NO DEPLOY)
+on:
+  push:
+    branches: [deda-unified-room-flutter-firestore-isolated-qa-2026-11-16]
+    paths:
+      - 'qa/unified_room_private/**'
+      - '.github/workflows/deda-unified-room-flutter-firestore-private-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-unified-room-private-qa-2026-11-16
+  cancel-in-progress: false
+
+jobs:
+  flutter-synthetic-gateway:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify no protected DEDA code, credentials, production rules, or Play files changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          base='fd8cfd590d0f6703e34d6fe8c6913b091c3468fd'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          expected={
+            'qa/unified_room_private/qa_suite_2026-11-16.tgz.b64',
+            '.github/workflows/deda-unified-room-flutter-firestore-private-qa.yml'
+          }
+          assert set(paths) == expected, 'UNAUTHORIZED_FILES_CHANGED: '+repr(paths)
+          print('PASS_PINNED_SOURCE_UNCHANGED',base)
+          PY
+      - name: Extract SHA-verified synthetic QA files into runner workspace only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda-room-qa
+          base64 --decode qa/unified_room_private/qa_suite_2026-11-16.tgz.b64 >/tmp/deda-room-qa.tgz
+          echo '1c99e9b848b02dd62d09a332eb258412ddcebd87111e5ae7ba6ce3e4ede8f68a  /tmp/deda-room-qa.tgz' | sha256sum -c -
+          tar -xzf /tmp/deda-room-qa.tgz -C /tmp/deda-room-qa
+          cp /tmp/deda-room-qa/dart_candidate/*.dart lib/
+          cp /tmp/deda-room-qa/test/*.dart test/
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Fetch project Flutter dependencies (no deployment)
+        run: flutter pub get
+      - name: Analyze actual isolated Dart integration sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart analyze --no-fatal-warnings --no-fatal-infos \
+            lib/deda_unified_room_flutter_gateway_PRIVATE_QA.dart \
+            lib/deda_unified_room_flutter_firestore_ports_PRIVATE_QA.dart \
+            test/deda_unified_room_flutter_private_qa_test.dart
+      - name: Run ten actual Flutter unit tests with fake authorization (NO LIVE FIREBASE)
+        run: |
+          flutter test --no-pub -r expanded \
+            --dart-define=DEDA_UNIFIED_ROOM_PRIVATE_QA=true \
+            --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true \
+            test/deda_unified_room_flutter_private_qa_test.dart
+      - name: Explicit no release/no production confirmation
+        run: echo "PRIVATE_FLUTTER_QA_ONLY_NO_APK_NO_AAB_NO_FIREBASE_NO_PLAY"
+
+  firestore-source-rule-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Extract same SHA-verified fixture to temp (NOT LIVE RULES)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda-room-firestore
+          base64 --decode qa/unified_room_private/qa_suite_2026-11-16.tgz.b64 >/tmp/deda-room-firestore.tgz
+          echo '1c99e9b848b02dd62d09a332eb258412ddcebd87111e5ae7ba6ce3e4ede8f68a  /tmp/deda-room-firestore.tgz' | sha256sum -c -
+          tar -xzf /tmp/deda-room-firestore.tgz -C /tmp/deda-room-firestore
+          mkdir -p /tmp/deda-room-firestore/work
+          cp firestore.rules /tmp/deda-room-firestore/work/firestore.rules
+          cp /tmp/deda-room-firestore/qa/firestore_emulator/* /tmp/deda-room-firestore/work/
+          sed -i 's/deda-unified-room-qa-only/demo-deda-unified-room-qa-only/g' /tmp/deda-room-firestore/work/test_rules.cjs
+      - name: Test ten real Firestore Security Rules on LOCAL emulator only
+        working-directory: /tmp/deda-room-firestore/work
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-unified-room-qa-only \
+            --only firestore --config firebase.json --non-interactive \
+            'node --test test_rules.cjs'
+      - name: Explicit no release/no production confirmation
+        run: echo "FIRESTORE_EMULATOR_ONLY_FAKE_PROJECT_NO_DEPLOY_NO_PRODUCTION_DATA"
