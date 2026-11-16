@@ -36,6 +36,8 @@ const paths = Object.freeze({
   view: (uid,domain) => "deda_unified_room_private_views/"+uid+"/domains/"+domain,
   grant: (uid,domain) => "deda_unified_room_read_grants/"+uid+"/domains/"+domain,
   audit: key => "qa_room_audit_events/"+key,
+  ownerChallenge: (uid,domain) => "qa_room_owner_challenges/"+uid+"/domains/"+domain,
+  ownerCandidate: (uid,domain) => "qa_room_owner_review_candidates/"+uid+"/domains/"+domain,
 });
 function assertLab({db,auth,clock}) {
   if (process.env.FIRESTORE_EMULATOR_HOST !== FIRESTORE_HOST ||
@@ -87,10 +89,12 @@ function proofStillValid(proof,plan,now) {
     proof.verifiedAtMs<=now && now-proof.verifiedAtMs<=600000;
 }
 function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
-  sourceMode="legacy-qa"}={}) {
+  sourceMode="legacy-qa",requireSignedCandidate=false}={}) {
   assertLab({db,auth,clock});
   if(!["legacy-qa","deda-real-schema-qa"].includes(sourceMode))
     throw Error("QA_SAFE_STOP_UNKNOWN_SOURCE_MODE");
+  if (typeof requireSignedCandidate!=="boolean")
+    throw Error("QA_SAFE_STOP_INVALID_PROOF_MODE");
   const realSourceMode=sourceMode==="deda-real-schema-qa";
   const read=(path)=>db.doc(path).get().then(data);
   const buildQuery=(kind,reference)=>{
@@ -134,7 +138,9 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
         proof:doc(db,paths.proof(cid,domain)),
         source:doc(db,paths.source(plan.sourceUid,domain)),
         grant:doc(db,paths.grant(uid,domain)),
-        view:doc(db,paths.view(uid,domain))
+        view:doc(db,paths.view(uid,domain)),
+        ownerChallenge:doc(db,paths.ownerChallenge(uid,domain)),
+        ownerCandidate:doc(db,paths.ownerCandidate(uid,domain))
       };
       return db.runTransaction(async tx=>{
         // ALL reads before writes. Revalidate after any concurrent mutation.
@@ -142,8 +148,15 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
           tx.get(refs.session),tx.get(refs.room),tx.get(refs.review),
           tx.get(refs.proof),tx.get(refs.source),tx.get(refs.grant)
         ]);
+        // Signed evidence is re-read INSIDE THIS SAME transaction.
+        // No client may substitute a proof between approval and issuance.
+        const signedProof=requireSignedCandidate ? await Promise.all([
+          tx.get(refs.ownerChallenge),tx.get(refs.ownerCandidate)
+        ]) : null;
         const now=clock();
         const rm=data(room),src=data(source);
+        const ch=signedProof?data(signedProof[0]):null;
+        const ca=signedProof?data(signedProof[1]):null;
         if (!matchSession(data(sess),session,plan) ||
             !rm || rm.canonicalAccountId!==cid ||
             rm.originalId!==plan.originalId ||
@@ -159,6 +172,28 @@ function makeEmulatorGateway({db,auth,clock=()=>Date.now(),
             !equal(trustedPayload(domain,src.payload),view.payload) ||
             grant.issuedAtMs>now || grant.expiresAtMs<=now ||
             prior.exists) return false;
+        if(requireSignedCandidate && (
+            // This flag labels simulated evidence as QA, never a real proof.
+            data(review)?.syntheticQaOnly!==true ||
+            !ch || !ca ||
+            ch.domain!==domain || ch.readerUid!==uid ||
+            ch.canonicalAccountId!==cid || ch.originalId!==plan.originalId ||
+            ch.sessionRevision!==session.revision ||
+            ch.sessionNonce!==session.sessionNonce ||
+            ch.consumed!==true || ch.active!==false ||
+            !Number.isSafeInteger(ch.consumedAtMs) ||
+            ch.consumedAtMs>now || now-ch.consumedAtMs>600000 ||
+            ca.state!=="pending-independent-real-world-provenance" ||
+            ca.readerUid!==uid || ca.domain!==domain ||
+            ca.canonicalAccountId!==cid ||
+            ca.challengeHash!==ch.challengeHash ||
+            typeof ca.signatureEvidenceRef!=="string" ||
+            ca.signatureEvidenceRef.length<12 ||
+            !Number.isSafeInteger(ca.createdAtMs) ||
+            ca.createdAtMs!==ch.consumedAtMs ||
+            ca.createdAtMs>now || now-ca.createdAtMs>600000 ||
+            ca.grantsAccess!==false || ca.grantsWrite!==false
+        )) return false;
         // Only AFTER validated owner/session/scope: evaluate true-source
         // projections again inside this transaction, before any write.
         // A/B/C never become interchangeable credentials.
