@@ -92,14 +92,23 @@ def social_patch(src):
         ("removeRelation", "profileForFriend"),
     ]:
         def guard_write(body):
-            # Retain the original session's membership/ownership logic.
-            # Only add a real UID recheck at the final mutation boundary.
+            # The 100447 member methods may use the immutable public ID
+            # instead of a local 'user' variable. Capture the real Auth UID
+            # before the first await, then recheck at the write boundary.
+            if body.count("async {\n") != 1:
+                stop("FRIEND_METHOD_ASYNC_ANCHOR_" + name)
+            body = body.replace("async {\n",
+                "async {\n"
+                "    final principalAtEntry = FirebaseAuth.instance.currentUser?.uid;\n"
+                "    if (principalAtEntry == null) {\n"
+                "      throw StateError('social-session-missing');\n"
+                "    }\n",1)
             matches = list(re.finditer(r"(?m)^    await (?:DedaSectionOperationContext\.wait\(\(\) => )?ref\.(?:update|delete)\(",body))
             if len(matches) != 1:
                 stop("FRIEND_MUTATION_UNEXPECTED_" + name)
             i = matches[0].start()
             return body[:i] + (
-                "    if (FirebaseAuth.instance.currentUser?.uid != user.uid) {\n"
+                "    if (FirebaseAuth.instance.currentUser?.uid != principalAtEntry) {\n"
                 "      throw StateError('social-session-changed');\n"
                 "    }\n"
             ) + body[i:]
