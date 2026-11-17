@@ -127,6 +127,11 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        // Historical B Auth session is not required. Only the current
        // independently approved reader session is checked.
        return fail("ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
+    // A valid historical UID in the WRONG domain is not ownership.
+    // A=original/premium/gifts/wallet/places; B=profile/league; C=friends.
+    const expectedSourceUid=domain==="friends"?room.historicalUids[2]:
+      ["profile","league"].includes(domain)?room.historicalUids[1]:
+      room.historicalUids[0];
     if(grant.readerUid!==uid||grant.domain!==domain||
        grant.scopeVersion!==1||
        grant.status!=="active"||
@@ -134,7 +139,9 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        grant.ownerEvidenceDigest!==owner.evidenceDigest||
        grant.canonicalAccountId!==owner.canonicalAccountId||
        grant.originalId!==owner.originalId||
-       !room.historicalUids.includes(grant.sourceUid)||
+       grant.sourceUid!==expectedSourceUid||
+       grant.sessionRevision!==session.revision||
+       grant.sessionNonce!==session.sessionNonce||
        !validTime(serverTimeMs(grant.issuedAt))||serverTimeMs(grant.issuedAt)>now||
        !validTime(serverTimeMs(grant.expiresAt))||serverTimeMs(grant.expiresAt)<=now||
        serverTimeMs(grant.expiresAt)-serverTimeMs(grant.issuedAt)>5*60*1000||
@@ -143,6 +150,8 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        return fail("SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
     if(view.readerUid!==uid||view.domain!==domain||
        view.sourceUid!==grant.sourceUid||
+       view.sessionRevision!==session.revision||
+       view.sessionNonce!==session.sessionNonce||
        view.canonicalAccountId!==owner.canonicalAccountId||
        view.originalId!==owner.originalId||
        view.scopeVersion!==1||
