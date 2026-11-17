@@ -107,13 +107,15 @@ class DedaUnifiedRoomRuntimeReadOnly {
         Firebase.apps.isEmpty || !DedaAuthRuntime.enabled) {
       return DedaUnifiedRoomReadResult.hold;
     }
-    final before = DedaAuthRuntime.capture();
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null || authUser.isAnonymous ||
-        before == null || before.uid != authUser.uid) {
-      return DedaUnifiedRoomReadResult.hold;
-    }
     try {
+      // Even an Auth observer failure must fail closed. This method may be
+      // launched unawaited by HomePage, so never leak an unhandled exception.
+      final before = DedaAuthRuntime.capture();
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null || authUser.isAnonymous ||
+          before == null || before.uid != authUser.uid) {
+        return DedaUnifiedRoomReadResult.hold;
+      }
       // The callable requires App Check and an existing durable Firebase UID.
       // Never send UID, PIN, accountKey, or premium-ID routing as input.
       final result = await FirebaseFunctions.instance
