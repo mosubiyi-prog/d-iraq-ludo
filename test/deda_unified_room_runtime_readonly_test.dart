@@ -25,6 +25,9 @@ void main() {
     }
     final invalid = await DedaUnifiedRoomRuntimeReadOnly.readDomain('admin');
     expect(invalid.status, 'HOLD');
+    expect(DedaUnifiedRoomRuntimeReadOnly.homeSectionDomains,
+      <String>['profile', 'original_id', 'premium_id', 'friends', 'league']);
+    expect(await DedaUnifiedRoomRuntimeReadOnly.readHomeSections(), isEmpty);
     await DedaUnifiedRoomRuntimeReadOnly.preflightOnHome();
   });
 
