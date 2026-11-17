@@ -218,7 +218,11 @@ class DedaBackend {
 
     final ref =
         FirebaseFirestore.instance.collection('admins').doc(user.uid);
-    final snapshot = await ref.get();
+    final snapshot = await ref.get(const GetOptions(source: Source.server));
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+      _clearAdminProfileCache();
+      throw StateError('admin-session-changed-during-profile-read');
+    }
     final data = snapshot.data();
     if (!snapshot.exists ||
         data?['active'] != true ||
@@ -1375,12 +1379,15 @@ class DedaBackend {
         return false;
       }
 
+      final readerUid = FirebaseAuth.instance.currentUser?.uid;
+      if (readerUid == null) return false;
       final access = await FirebaseFirestore.instance
           .collection('admin_entry_access')
           .doc(accountKey)
-          .get();
+          .get(const GetOptions(source: Source.server));
       final data = access.data();
-      return access.exists &&
+      return FirebaseAuth.instance.currentUser?.uid == readerUid &&
+          access.exists &&
           data?['accountKey'] == accountKey &&
           _adminEntryAccessVisible(data);
     } catch (_) {
@@ -1450,7 +1457,10 @@ class DedaBackend {
       final access = await FirebaseFirestore.instance
           .collection('admin_entry_access')
           .doc(accountKey)
-          .get();
+          .get(const GetOptions(source: Source.server));
+      if (FirebaseAuth.instance.currentUser?.uid != profile['uid']) {
+        return false;
+      }
       final data = access.data();
       if (!access.exists ||
           data == null ||
@@ -1495,7 +1505,8 @@ class DedaBackend {
       // Best-effort self-heal for an older member gateway whose UID predates
       // the current Firebase Auth account. Security rules still decide whether
       // this repair is allowed; failure here must not block a valid login.
-      if (!uidMatches && emailMatches && accessType == 'member') {
+      if (!uidMatches && emailMatches && accessType == 'member' &&
+          FirebaseAuth.instance.currentUser?.uid == profileUid) {
         try {
           await FirebaseFirestore.instance
               .collection('admin_entry_access')
@@ -1509,7 +1520,7 @@ class DedaBackend {
           });
         } catch (_) {}
       }
-      return true;
+      return FirebaseAuth.instance.currentUser?.uid == profileUid;
     } catch (_) {
       return false;
     }
