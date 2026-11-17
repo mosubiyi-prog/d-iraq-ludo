@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'deda_weekly_community_outbox.dart';
 import 'deda_weekly_league_clock.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
 
 /// Same original +20 XP -> direct Firestore score; no Functions, money or XP grants.
 class DedaWeeklyFirestoreDirectBridge {
@@ -29,8 +30,12 @@ class DedaWeeklyFirestoreDirectBridge {
   static Future<({String uid, String id, String name})?> identity(
       String accountKey) async {
     final user = FirebaseAuth.instance.currentUser;
+    // Legacy Play uses a verified anonymous DEDA session. A separately
+    // provider-linked SAME-UID owner is allowed in the opt-in pilot only;
+    // the original deda_sessions + users/accountKey checks below still
+    // reject foreign or newly created principals.
     if (!accountPattern.hasMatch(accountKey) || user == null ||
-        !user.isAnonymous) return null;
+        (!user.isAnonymous && !dedaLinkedOwnerCompatEnabled)) return null;
     final uid = user.uid;
     final sess = await db.collection('deda_sessions').doc(uid).get();
     if (sess.data()?['accountKey'] != accountKey) return null;
@@ -117,7 +122,8 @@ class DedaWeeklyFirestoreDirectBridge {
     required String accountKey, required String taskId,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || !user.isAnonymous ||
+    if (user == null ||
+        (!user.isAnonymous && !dedaLinkedOwnerCompatEnabled) ||
         !DedaWeeklyLeagueClock.at(DateTime.now().toUtc()).canAccumulate ||
         !DedaWeeklyCommunityOutbox.tasks.contains(taskId)) return false;
     try {
