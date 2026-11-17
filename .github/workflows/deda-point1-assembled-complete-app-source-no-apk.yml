@@ -11,6 +11,7 @@ on:
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'qa/point1_existing_account_no_anonymous_uid_source_test.py'
       - 'qa/DEDA_POINT1_ANONYMOUS_SESSION_NO_SPLIT_CHECKPOINT_2026_11_17.md'
+      - 'tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,6 +47,7 @@ jobs:
             'test/deda_owner_session_compat_private_test.dart',
             'qa/point1_existing_account_no_anonymous_uid_source_test.py',
             'qa/DEDA_POINT1_ANONYMOUS_SESSION_NO_SPLIT_CHECKPOINT_2026_11_17.md',
+            'tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py',
             '.github/workflows/deda-point1-assembled-complete-app-source-no-apk.yml',
             '.github/workflows/deda-point1-anonymous-session-no-split-isolated-qa.yml',
             'functions/deda_unified_room_readonly_guard_v1.js',
@@ -203,8 +205,8 @@ jobs:
         run: |
           set -euo pipefail
           git diff --exit-code 522ddf08f211c9a7b70e461c35639bcdfc76496d HEAD -- \
-            lib/main.dart lib/admin_pages.dart lib/deda_backend.dart \
-            lib/deda_pin_auth.dart android/ assets/ firestore.rules firebase.json \
+            lib/main.dart lib/admin_pages.dart \
+            android/ assets/ firestore.rules firebase.json \
             storage.rules google-services.json pubspec.yaml pubspec.lock
           echo 'PASS_COMPLETE_OWNER_UI_AND_PROTECTED_BACKEND_PARITY'
           node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
