@@ -137,10 +137,12 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
     if(expiresAtMs<=now)return hold("PROOF_EXPIRED");
     const viewRecord={readerUid:uid,domain,canonicalAccountId:
       evidence.canonicalAccountId,originalId:evidence.originalId,sourceUid,
-      scopeVersion:1,payload:projected};
+      scopeVersion:1,sessionRevision:session.revision,
+      sessionNonce:session.sessionNonce,payload:projected};
     const grantRecord={readerUid:uid,domain,
       canonicalAccountId:evidence.canonicalAccountId,
       originalId:evidence.originalId,sourceUid,scopeVersion:1,
+      sessionRevision:session.revision,sessionNonce:session.sessionNonce,
       ownerEvidenceDigest:evidence.evidenceDigest,status:"active",
       proofKind:"independent_verified",canWrite:false,canCredit:false,
       issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs)};
