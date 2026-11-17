@@ -8,9 +8,11 @@ on:
       - 'lib/deda_unified_room_runtime_readonly.dart'
       - 'functions/deda_unified_room_readonly_guard_v1.js'
       - 'functions/deda_unified_room_grant_issuer_private_v1.js'
+      - 'functions/deda_unified_room_session_bootstrap_private_v1.js'
       - 'functions/index.js'
       - 'functions/test/deda_unified_room_readonly_guard_v1.test.js'
       - 'functions/test/deda_unified_room_grant_issuer_private_v1.test.js'
+      - 'functions/test/deda_unified_room_session_bootstrap_private_v1.test.js'
       - 'test/deda_unified_room_runtime_readonly_test.dart'
       - 'tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py'
       - 'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
@@ -49,7 +51,9 @@ jobs:
             'lib/deda_unified_room_runtime_readonly.dart',
             'functions/deda_unified_room_readonly_guard_v1.js',
             'functions/deda_unified_room_grant_issuer_private_v1.js',
+            'functions/deda_unified_room_session_bootstrap_private_v1.js',
             'functions/test/deda_unified_room_grant_issuer_private_v1.test.js',
+            'functions/test/deda_unified_room_session_bootstrap_private_v1.test.js',
             'functions/index.js',
             'functions/test/deda_unified_room_readonly_guard_v1.test.js',
             'test/deda_unified_room_runtime_readonly_test.dart',
@@ -327,7 +331,8 @@ jobs:
           node --check functions/index.js
           node --check functions/deda_unified_room_readonly_guard_v1.js
           node --check functions/deda_unified_room_grant_issuer_private_v1.js
-          node --test functions/test/deda_unified_room_readonly_guard_v1.test.js functions/test/deda_unified_room_grant_issuer_private_v1.test.js
+          node --check functions/deda_unified_room_session_bootstrap_private_v1.js
+          node --test functions/test/deda_unified_room_readonly_guard_v1.test.js functions/test/deda_unified_room_grant_issuer_private_v1.test.js functions/test/deda_unified_room_session_bootstrap_private_v1.test.js
           echo 'PASS_SERVER_READ_ONLY_HOLD_AND_EIGHT_DOMAIN_SECURITY'
       - name: Inject exact read-only Flutter SDK hook into already assembled full 100447 app
         shell: bash
