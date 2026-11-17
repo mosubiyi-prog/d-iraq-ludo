@@ -208,4 +208,33 @@ void main() {
       currentIsAnonymous: false,
     ), false);
   });
+
+  test('owner helper cannot mint a UID when recovery pilot lacks Auth', () {
+    bool allowed({required bool pilot, required bool current,
+      bool enrollment = false, bool recovery = false}) =>
+      DedaLinkedOwnerSessionPolicy.mayPrepareAnonymousForAction(
+        linkedOwnerPilotEnabled: pilot,
+        hasCurrentPrincipal: current,
+        explicitNewAccount: enrollment,
+        explicitRecoveryRequest: recovery,
+      );
+    expect(allowed(pilot: true, current: false), false);
+    expect(allowed(pilot: true, current: true), true);
+    expect(allowed(pilot: true, current: false, enrollment: true), true);
+    expect(allowed(pilot: true, current: false, recovery: true), true);
+    // The original Play login and fresh enrollment retain their old path.
+    expect(allowed(pilot: false, current: false), true);
+    expect(allowed(pilot: false, current: true), true);
+  });
+
+  test('known existing phone cannot enter new-account enrollment in pilot', () {
+    expect(DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
+      linkedOwnerPilotEnabled: true, previouslyKnownAccount: true), false);
+    expect(DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
+      linkedOwnerPilotEnabled: true, previouslyKnownAccount: false), true);
+    expect(DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
+      linkedOwnerPilotEnabled: false, previouslyKnownAccount: true), true);
+    expect(DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
+      linkedOwnerPilotEnabled: false, previouslyKnownAccount: false), true);
+  });
 }
