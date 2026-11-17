@@ -83,6 +83,11 @@ test("eight scoped domains are issued atomically, no historic records mutated",a
   assert.equal(f.stats.writes.length,3);
   const grant=f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/"+domain);
   assert.equal(grant.canWrite,false);assert.equal(grant.canCredit,false);
+  assert.equal(grant.sessionRevision,1);
+  assert.equal(grant.sessionNonce,"QA_CANONICAL_SESSION_NONCE_2026");
+  const view=f.docs.get("deda_unified_room_private_views/"+uid+"/domains/"+domain);
+  assert.equal(view.sessionRevision,1);
+  assert.equal(view.sessionNonce,"QA_CANONICAL_SESSION_NONCE_2026");
   assert.equal(grant.issuedAt.toMillis(),now);assert.ok(grant.expiresAt.toMillis()<=now+60000);
   assert.equal(JSON.stringify([...f.docs].slice(0,7)),before);
   const reader=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>now,enabled:true});
@@ -176,4 +181,21 @@ test("unknown or disabled revocation never creates any grant",async()=>{
  await no(f.build(false).revoke({uid,domain:"profile"}),"ISSUER_NOT_ENABLED");
  await no(f.build(true).revoke({uid,domain:"profile"}),"TRUSTED_GRANT_NOT_FOUND");
  assert.equal(f.stats.writes.length,0);
+});
+
+test("grant issuer remains bounded to the current reader session and domain source",async()=>{
+ for(const domain of ["profile","league","friends","original_id"]){
+  const f=fixture(domain);
+  const out=await f.build(true).issue({uid,domain});
+  assert.equal(out.grantIssued,true);
+  const grant=f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/"+domain);
+  const expected=domain==="friends"?C:["profile","league"].includes(domain)?B:A;
+  assert.equal(grant.sourceUid,expected);
+  f.docs.get("deda_sessions/"+uid).sessionNonce="QA_NEW_SESSION_NONCE_REPLAY_BLOCK";
+  const reader=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>now,enabled:true});
+  const response=await reader({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
+   app:{appId:"QA_FIREBASE_APP_123456"},input:{domain}});
+  assert.equal(response.status,"HOLD");
+  assert.equal(response.reason,"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+ }
 });
