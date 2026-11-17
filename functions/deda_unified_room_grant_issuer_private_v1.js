@@ -14,6 +14,10 @@ const ACCOUNT=/^(?:07\d{9}|9647\d{9})$/;
 const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
 const SHA=/^[a-f0-9]{64}$/;
 const DOMAIN_SET=new Set(Object.keys(DOMAINS));
+const VERIFIED_REVIEW_SOURCES=new Set([
+ "verified_offline_authority",
+ "trusted_independent_recovery_service"
+]);
 const hold=reason=>Object.freeze({status:"HOLD",reason,grantIssued:false,
   uidChanged:false,financialCredit:false,adminAccess:false});
 const validTime=n=>Number.isSafeInteger(n)&&n>0;
@@ -49,7 +53,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
   // The separate trust adapter MUST verify the real source of the evidence,
   // signatures and a human decision before returning a positive attestation.
   if(evidence?.status!=="INDEPENDENTLY_ATTESTED"||
-     evidence.independentEvidenceSource!=="verified_offline_authority"||
+     !VERIFIED_REVIEW_SOURCES.has(evidence.independentEvidenceSource)||
      evidence.syntheticQaOnly===true||
      evidence.readerUid!==uid||evidence.domain!==domain||
      !ACCOUNT.test(evidence.accountKey||"")||

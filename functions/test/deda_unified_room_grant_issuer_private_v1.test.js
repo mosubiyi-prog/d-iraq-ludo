@@ -95,6 +95,23 @@ test("cannot issue from PIN, phone or claimed sourceUid as client inputs",async(
  const f=fixture();await no(f.build(true).issue({accountKey:account,pin:"123456",domain:"profile"}),"INVALID_SCOPE");
  assert.equal(f.stats.writes.length,0);
 });
+test("trusted independent recovery authority is allowed WITHOUT telephone papers",async()=>{
+ const f=fixture("profile");
+ f.evidence.independentEvidenceSource="trusted_independent_recovery_service";
+ f.docs.get("deda_unified_room_owner_authorizations/"+uid)
+  .independentEvidenceSource="trusted_independent_recovery_service";
+ const out=await f.build(true).issue({uid,domain:"profile"});
+ assert.equal(out.status,"ISSUED_READ_ONLY");
+ assert.equal(f.docs.has("deda_sessions/"+B),false);
+});
+test("unverified client declaration of telephone ownership never issues grants",async()=>{
+ const f=fixture("profile");
+ f.evidence.independentEvidenceSource="phone_document_only";
+ f.docs.get("deda_unified_room_owner_authorizations/"+uid)
+  .independentEvidenceSource="phone_document_only";
+ await no(f.build(true).issue({uid,domain:"profile"}),"INDEPENDENT_ATTESTATION_REQUIRED");
+ assert.equal(f.stats.writes.length,0);
+});
 test("absent independent attestation or synthetic proof never grants",async()=>{
  const f=fixture();f.evidence.syntheticQaOnly=true;
  await no(f.build(true).issue({uid,domain:"profile"}),"INDEPENDENT_ATTESTATION_REQUIRED");

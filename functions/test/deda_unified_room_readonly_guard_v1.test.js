@@ -106,6 +106,19 @@ test("client cannot request historic A or C as a different reader",async()=>{
  const g=fixture();g.request.input={domain:"original_id",readerUid:a};
  await hold(()=>g.guard(true)(g.request),"EXACT_SINGLE_DOMAIN_REQUIRED");
 });
+test("trusted independent recovery-service owner authorization passes",async()=>{
+ const f=fixture("profile");
+ f.docs.get("deda_unified_room_owner_authorizations/"+uid)
+  .independentEvidenceSource="trusted_independent_recovery_service";
+ const result=await f.guard(true)(f.request);
+ assert.equal(result.status,"VERIFIED_READ_ONLY");
+});
+test("an asserted telephone document alone never approves owner access",async()=>{
+ const f=fixture("profile");
+ f.docs.get("deda_unified_room_owner_authorizations/"+uid)
+  .independentEvidenceSource="phone_document_only";
+ await hold(()=>f.guard(true)(f.request),"INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
+});
 test("review source must be independent, two reviewers distinct, not QA",async()=>{
  const f=fixture();const x=f.docs.get("deda_unified_room_owner_authorizations/"+uid);
  x.independentEvidenceSource="isolated-fake-only";

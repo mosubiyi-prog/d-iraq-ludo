@@ -25,6 +25,10 @@ const UID=/^[A-Za-z0-9:_-]{6,128}$/;
 const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
 const ACCOUNT=/^(?:07\d{9}|9647\d{9})$/;
 const SHA=/^[a-f0-9]{64}$/;
+const VERIFIED_REVIEW_SOURCES=new Set([
+ "verified_offline_authority",
+ "trusted_independent_recovery_service"
+]);
 const fail=reason=>Object.freeze({status:"HOLD",reason,authorized:false,
    accountRestored:false,financialRestore:false,uidChanged:false});
 const data=s=>s&&s.exists===true?s.data():null;
@@ -98,7 +102,7 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        new Set(owner.historicalUids).size!==3||
        !owner.historicalUids.every(x=>typeof x==="string"&&UID.test(x))||
        owner.status!=="independently_verified"||
-       owner.independentEvidenceSource!=="verified_offline_authority"||
+       !VERIFIED_REVIEW_SOURCES.has(owner.independentEvidenceSource)||
        !SHA.test(owner.evidenceDigest||"")||
        !Array.isArray(owner.reviewers)||owner.reviewers.length!==2||
        owner.reviewers[0]===owner.reviewers[1]||
