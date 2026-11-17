@@ -90,7 +90,45 @@ def _backend_share_prewrite_guard_100443(ours, base, theirs):
     return None
 
 
+def _point2_backend_admin_same_session(ours, base, theirs):
+    """Six exact admin/profile reads: keep signed AuthRuntime.wait AND
+    point2 server-only and UID-stability checks. No blanket conflict resolution.
+    """
+    if (("final snapshot = await DedaAuthRuntime.wait(() => ref.get());" in ours)
+            and "final snapshot = await ref.get();" in base
+            and "admin-session-changed-during-profile-read" in theirs
+            and "final snapshot = await ref.get(const GetOptions(source: Source.server));" in theirs):
+        return once(
+            theirs,
+            "final snapshot = await ref.get(const GetOptions(source: Source.server));",
+            "final snapshot = await DedaAuthRuntime.wait(() => "
+            "ref.get(const GetOptions(source: Source.server)));",
+            "point2 admin profile server read retains signed AuthRuntime wait")
+
+    if (("final access = await DedaAuthRuntime.wait(() => FirebaseFirestore.instance" in ours)
+            and "final access = await FirebaseFirestore.instance" in base
+            and "final access = await FirebaseFirestore.instance" in theirs
+            and ("final readerUid = FirebaseAuth.instance.currentUser?.uid;" in theirs)):
+        return once(
+            theirs, "final access = await FirebaseFirestore.instance",
+            "final access = await DedaAuthRuntime.wait(() => FirebaseFirestore.instance",
+            "point2 admin gateway UID guard preserves signed runtime wait")
+
+    # Only an exact replacement of the same awaited Firestore get is allowed.
+    # The backend admin gate already owns the opening DedaAuthRuntime.wait(().
+    if (ours.strip() == ".get());"
+            and base.strip() == ".get();"
+            and theirs.strip() == ".get(const GetOptions(source: Source.server));"):
+        return theirs.replace(
+            ".get(const GetOptions(source: Source.server));",
+            ".get(const GetOptions(source: Source.server)));", 1)
+    return None
+
+
 def _backend(ours, base, theirs):
+    point2 = _point2_backend_admin_same_session(ours, base, theirs)
+    if point2 is not None:
+        return point2
     point1 = _point1_backend_owner_sync(ours, base, theirs)
     if point1 is not None:
         return point1
