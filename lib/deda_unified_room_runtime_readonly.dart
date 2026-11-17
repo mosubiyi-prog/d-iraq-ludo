@@ -138,11 +138,49 @@ class DedaUnifiedRoomRuntimeReadOnly {
     }
   }
 
-  /// Called from the already-existing HomePage life cycle in the verified
-  /// assembled DEDA app. Gate is OFF: zero network and zero UI side effects.
-  /// Enabling requires a separate approved server-side rollout.
+  /// The same current Auth principal is required for ALL home section
+  /// reads, not merely for each request independently. No source UID, phone,
+  /// PIN or accountKey is sent to the callable. HOLD remains a missing value,
+  /// never an empty friend list, zero weekly score, or replacement ID.
+  static const List<String> homeSectionDomains = <String>[
+    'profile', 'original_id', 'premium_id', 'friends', 'league',
+  ];
+
+  static Future<Map<String, DedaUnifiedRoomReadResult>>
+      readHomeSections() async {
+    if (!dedaUnifiedRoomReadOnlyEnabled ||
+        Firebase.apps.isEmpty || !DedaAuthRuntime.enabled) {
+      return const <String, DedaUnifiedRoomReadResult>{};
+    }
+    try {
+      final before = DedaAuthRuntime.capture();
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.isAnonymous || before?.uid != user.uid) {
+        return const <String, DedaUnifiedRoomReadResult>{};
+      }
+      final replies = await Future.wait(
+        homeSectionDomains.map(readDomain),
+      );
+      // The whole batch belongs to ONE identity and epoch. A change during
+      // any concurrent read invalidates every result, including earlier ones.
+      DedaAuthRuntime.checkSnapshot(before);
+      if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+        return const <String, DedaUnifiedRoomReadResult>{};
+      }
+      return Map<String, DedaUnifiedRoomReadResult>.unmodifiable({
+        for (var i = 0; i < homeSectionDomains.length; i++)
+          homeSectionDomains[i]: replies[i],
+      });
+    } catch (_) {
+      return const <String, DedaUnifiedRoomReadResult>{};
+    }
+  }
+
+  /// Existing HomePage hook in the assembled DEDA 100447 app. A disabled
+  /// build performs ZERO network calls and never mutates visible UI state.
+  /// A future approved rollout can consume only individually verified scopes.
   static Future<void> preflightOnHome() async {
     if (!dedaUnifiedRoomReadOnlyEnabled) return;
-    await readDomain('profile');
+    await readHomeSections();
   }
 }
