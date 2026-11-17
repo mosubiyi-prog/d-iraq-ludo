@@ -104,12 +104,13 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        owner.status!=="independently_verified"||
        !VERIFIED_REVIEW_SOURCES.has(owner.independentEvidenceSource)||
        !SHA.test(owner.evidenceDigest||"")||
-       !Array.isArray(owner.reviewers)||owner.reviewers.length!==2||
-       owner.reviewers[0]===owner.reviewers[1]||
+       !Array.isArray(owner.reviewers)||
+       ![1,2].includes(owner.reviewers.length)||
+       new Set(owner.reviewers).size!==owner.reviewers.length||
        !owner.reviewers.every(x=>typeof x==="string"&&x.length>=6)||
        !validTime(owner.approvedAtMs)||owner.approvedAtMs>now||
        !validTime(owner.expiresAtMs)||owner.expiresAtMs<=now||
-       owner.expiresAtMs-owner.approvedAtMs>10*60*1000)
+       owner.expiresAtMs-owner.approvedAtMs>24*60*60*1000)
        return fail("INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
     if(session.uid!==uid||session.accountKey!==owner.accountKey||
        session.canonicalAccountId!==owner.canonicalAccountId||
