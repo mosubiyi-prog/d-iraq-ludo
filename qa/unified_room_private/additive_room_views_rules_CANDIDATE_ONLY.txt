@@ -5,7 +5,7 @@
     // to authorize cross-UID data access.
     function dedaPrivateRoomScope(readerUid, domain) {
       let grantPath = /databases/$(database)/documents/deda_unified_room_read_grants/$(readerUid)/domains/$(domain);
-      let sessionPath = /databases/$(database)/documents/deda_sessions/$(readerUid);
+      let sessionPath = /databases/$(database)/documents/deda_unified_room_sessions/$(readerUid);
       let grant = get(grantPath).data;
       let session = get(sessionPath).data;
       return request.auth != null
@@ -41,6 +41,11 @@
         && resource.data.readerUid == readerUid
         && resource.data.domain == domain
         && resource.data.scopeVersion == 1;
+    }
+
+    match /deda_unified_room_sessions/{readerUid} {
+      // Independent, server-created room epoch; never the legacy PIN session.
+      allow read, write: if false;
     }
 
     match /deda_unified_room_read_grants/{readerUid}/domains/{domain} {
