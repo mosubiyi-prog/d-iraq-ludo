@@ -150,6 +150,32 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
    });
   }catch(_){return hold("ATOMIC_ISSUER_UNAVAILABLE");}
  }
- return Object.freeze({issue});
+ async function revoke({uid,domain}={}){
+  // This is an internal emergency reduction of access, never a client API.
+  if(!enabled)return hold("ISSUER_NOT_ENABLED");
+  if(!validUid(uid)||!DOMAIN_SET.has(domain))return hold("INVALID_SCOPE");
+  const grantRef=doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain);
+  const revokeRef=doc("deda_unified_room_revocations/"+uid+"/domains/"+domain);
+  try{
+   return await db.runTransaction(async tx=>{
+    const [grantSnap,revokeSnap]=await Promise.all([
+      tx.get(grantRef),tx.get(revokeRef)]);
+    const grant=asData(grantSnap);
+    if(!grant||grant.readerUid!==uid||grant.domain!==domain||
+       !["active","revoked"].includes(grant.status))
+      return hold("TRUSTED_GRANT_NOT_FOUND");
+    if(grant.status==="revoked")
+      return Object.freeze({status:"REVOKED_READ_ONLY",grantIssued:false,
+        uidChanged:false,financialCredit:false,adminAccess:false});
+    if(asData(revokeSnap))return hold("REVOKE_AUDIT_CONFLICT");
+    tx.update(grantRef,{status:"revoked"});
+    tx.create(revokeRef,{readerUid:uid,domain,action:"REVOKE_READ_ONLY",
+      revokedAt:toTimestamp(clock()),canWrite:false,canCredit:false});
+    return Object.freeze({status:"REVOKED_READ_ONLY",grantIssued:false,
+      uidChanged:false,financialCredit:false,adminAccess:false});
+   });
+  }catch(_){return hold("ATOMIC_REVOKE_UNAVAILABLE");}
+ }
+ return Object.freeze({issue,revoke});
 }
 module.exports={makeRoomGrantIssuer};

@@ -40,9 +40,11 @@ function fixture(domain="profile"){
  const db={doc:p=>({path:p}),runTransaction:async fn=>{
   const pending=[];
   const tx={get:async ref=>({exists:docs.has(ref.path),data:()=>docs.get(ref.path)}),
-   create:(ref,record)=>pending.push([ref.path,record])};
+   create:(ref,record)=>pending.push([ref.path,record]),
+   update:(ref,patch)=>pending.push([ref.path,{...docs.get(ref.path),...patch},"update"])};
   const result=await fn(tx);
-  for(const [path,record] of pending){if(docs.has(path))throw Error("create-conflict");
+  for(const [path,record,kind] of pending){if(kind!=="update"&&docs.has(path))throw Error("create-conflict");
+   if(kind==="update"&&!docs.has(path))throw Error("missing-update");
    docs.set(path,record);stats.writes.push(path);}
   return result;
  }};
@@ -111,4 +113,30 @@ test("private issuer is not callable / exported by production index",()=>{
  const fs=require("node:fs"),path=require("node:path");
  const index=fs.readFileSync(path.join(__dirname,"../index.js"),"utf8");
  assert.equal(index.includes("deda_unified_room_grant_issuer_private_v1"),false);
+});
+
+test("revocation blocks reader immediately and never touches historic source",async()=>{
+ const f=fixture("original_id"),issuer=f.build(true);
+ const issue=await issuer.issue({uid,domain:"original_id"});
+ assert.equal(issue.grantIssued,true);
+ const before=f.docs.get("deda_share_ids/"+original);
+ const revoked=await issuer.revoke({uid,domain:"original_id"});
+ assert.equal(revoked.status,"REVOKED_READ_ONLY");
+ assert.equal(f.docs.get("deda_unified_room_read_grants/"+uid+
+    "/domains/original_id").status,"revoked");
+ assert.equal(f.docs.get("deda_share_ids/"+original),before);
+ assert.equal(f.stats.writes.length,5); // three issuance writes, two revocation writes
+ const reader=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>now,enabled:true});
+ const res=await reader({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
+   app:{appId:"QA_FIREBASE_APP_123456"},input:{domain:"original_id"}});
+ assert.equal(res.status,"HOLD");
+ assert.equal(res.reason,"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+ assert.equal((await issuer.revoke({uid,domain:"original_id"})).status,"REVOKED_READ_ONLY");
+ assert.equal(f.stats.writes.length,5);
+});
+test("unknown or disabled revocation never creates any grant",async()=>{
+ const f=fixture();
+ await no(f.build(false).revoke({uid,domain:"profile"}),"ISSUER_NOT_ENABLED");
+ await no(f.build(true).revoke({uid,domain:"profile"}),"TRUSTED_GRANT_NOT_FOUND");
+ assert.equal(f.stats.writes.length,0);
 });
