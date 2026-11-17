@@ -36,7 +36,7 @@ async function accountSeed(db){
     uid:B,canonicalAccountId:canonical,active:true,
     revision:10,sessionNonce:"QA_REUSED_EXISTING_UID_SESSION_10"
   });
-  await set(db,"deda_sessions/"+B,{
+  await set(db,"deda_unified_room_sessions/"+B,{
     uid:B,canonicalAccountId:canonical,active:true,
     revision:10,sessionNonce:"QA_REUSED_EXISTING_UID_SESSION_10"
   });
@@ -155,10 +155,10 @@ test("Admin SDK + Auth token + Firestore transaction + Rules, emulator only",asy
     assert.equal((await issueFixture({idToken:token,domain:"friends"},gateway)).status,
       "QA_FIXTURE_ISSUED");
     assert.equal(await can(()=>b.doc(view("friends")).get()),true);
-    await db.doc("deda_sessions/"+B).update({revision:11});
+    await db.doc("deda_unified_room_sessions/"+B).update({revision:11});
     assert.equal(await can(()=>b.doc(view("friends")).get()),false,
       "replayed view cannot survive a session revision");
-    await db.doc("deda_sessions/"+B).update({revision:10});
+    await db.doc("deda_unified_room_sessions/"+B).update({revision:10});
     assert.equal(await can(()=>b.doc(view("friends")).get()),true);
     const revoked=await revokeFixture({idToken:token,domain:"original_id"},gateway);
     assert.equal(revoked.status,"QA_FIXTURE_REVOKED",revoked.reason);
