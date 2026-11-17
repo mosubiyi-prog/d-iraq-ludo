@@ -57,8 +57,9 @@ function makeRoomSessionBootstrap({
       !SHA.test(proof.evidenceDigest||"")||
       !validUid(proof.uidA)||!validUid(proof.uidB)||!validUid(proof.uidC)||
       new Set([proof.uidA,proof.uidB,proof.uidC]).size!==3||
-      !Array.isArray(proof.reviewers)||proof.reviewers.length!==2||
-      new Set(proof.reviewers).size!==2||
+      !Array.isArray(proof.reviewers)||
+      ![1,2].includes(proof.reviewers.length)||
+      new Set(proof.reviewers).size!==proof.reviewers.length||
       proof.reviewers.some(x=>typeof x!=="string"||x.length<6)||
       !validTime(proof.verifiedAtMs)||proof.verifiedAtMs>now||
       now-proof.verifiedAtMs>5*60*1000)
@@ -94,7 +95,9 @@ function makeRoomSessionBootstrap({
           social.ownerUid!==proof.uidC)
           return blocked("AUTHORITATIVE_HISTORY_NOT_CONFIRMED");
         const history=[proof.uidA,proof.uidB,proof.uidC];
-        const expiresAtMs=now+10*60*1000;
+        // Independent owner approval remains bounded and revocable. A fresh
+        // authorization is not required every ten minutes just to read.
+        const expiresAtMs=now+24*60*60*1000;
         tx.create(ownerRef,{uid,readerUid:uid,
           accountKey:proof.accountKey,originalId:proof.originalId,
           canonicalAccountId:proof.canonicalAccountId,
