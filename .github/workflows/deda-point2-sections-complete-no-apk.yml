@@ -441,9 +441,10 @@ jobs:
           assert "social-session-changed" in social, 'friends UID fence lost'
           assert "admin-session-changed-during-profile-read" in backend, 'admin guard lost'
           assert "dedaLinkedOwnerCompatEnabled" in league, 'linked league compatibility lost'
-          assert "final gateUid =" in entry, 'admin button UID guard missing'
-          assert "final activePhone =" in entry, 'admin Settings phone fence missing'
-          assert "FirebaseAuth.instance.currentUser?.uid != gateUid" in entry
+          assert "currentDedaAccountCanSeeAdminEntry(" in entry, 'admin entry check lost'
+          assert "currentAdminSessionMatchesDedaEntry(" in entry, 'admin recheck lost'
+          assert "FirebaseAuth.instance.currentUser?.uid != readerUid" in backend
+          assert "FirebaseAuth.instance.currentUser?.uid != profile['uid']" in backend
           assert "DedaLeaderboardHomeCard(" in entry
           assert "DedaUnifiedActiveId100410.ensureOwner" in entry
           assert "DedaGoogleSettingsLinkCard(" not in entry
