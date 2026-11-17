@@ -118,7 +118,11 @@ def _point2_backend_admin_same_session(ours, base, theirs):
     # The backend admin gate already owns the opening DedaAuthRuntime.wait(().
     if (ours.strip() == ".get());"
             and base.strip() == ".get();"
-            and theirs.strip() == ".get(const GetOptions(source: Source.server));"):
+            and theirs.strip().startswith(
+                ".get(const GetOptions(source: Source.server));")
+            and (theirs.strip() == ".get(const GetOptions(source: Source.server));"
+                 or "FirebaseAuth.instance.currentUser?.uid != readerUid" in theirs
+                 or "FirebaseAuth.instance.currentUser?.uid != profile['uid']" in theirs)):
         return theirs.replace(
             ".get(const GetOptions(source: Source.server));",
             ".get(const GetOptions(source: Source.server)));", 1)
