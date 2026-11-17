@@ -1,0 +1,78 @@
+name: DEDA Point1 Existing Owner No Automatic UID (QA ONLY)
+on:
+  push:
+    branches:
+      - deda-point1-anonymous-session-no-split-isolated-2026-11-17
+    paths:
+      - '.github/workflows/deda-point1-anonymous-session-no-split-isolated-qa.yml'
+      - 'lib/deda_pin_auth.dart'
+      - 'lib/deda_backend.dart'
+      - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'test/deda_owner_session_compat_private_test.dart'
+      - 'qa/point1_existing_account_no_anonymous_uid_source_test.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-point1-anon-no-split-source-only
+  cancel-in-progress: false
+jobs:
+  isolated-auth-source-and-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert source-only, unchanged original app and Firebase
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=522ddf08f211c9a7b70e461c35639bcdfc76496d
+          git diff --exit-code "$base" HEAD -- \
+            lib/main.dart lib/admin_pages.dart android/ assets/ \
+            firestore.rules storage.rules functions/ firebase.json \
+            google-services.json pubspec.yaml pubspec.lock
+          python3 - <<'PY'
+          import subprocess
+          base='522ddf08f211c9a7b70e461c35639bcdfc76496d'
+          modified=set(subprocess.check_output(
+            ['git','diff','--name-only',base,'HEAD'],text=True).splitlines())
+          approved={
+            'lib/deda_pin_auth.dart',
+            'lib/deda_backend.dart',
+            'lib/deda_100431_linked_owner_session_policy.dart',
+            'test/deda_owner_session_compat_private_test.dart',
+            'qa/point1_existing_account_no_anonymous_uid_source_test.py',
+            '.github/workflows/deda-point1-anonymous-session-no-split-isolated-qa.yml',
+          }
+          assert modified and modified <= approved, 'UNREVIEWED_CHANGE'
+          assert {'lib/deda_pin_auth.dart','lib/deda_backend.dart'} <= modified
+          print('PASS_SOURCE_ONLY_NO_FIREBASE_NO_APK_NO_PROTECTED_UI_CHANGE')
+          PY
+      - name: Check source paths, all existing-owner anonymous UID gates
+        run: |
+          python3 -m py_compile qa/point1_existing_account_no_anonymous_uid_source_test.py
+          python3 qa/point1_existing_account_no_anonymous_uid_source_test.py
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Compile and test unchanged old-login vs recovery-pilot policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze --no-fatal-warnings \
+            lib/deda_pin_auth.dart lib/deda_backend.dart \
+            lib/deda_100431_linked_owner_session_policy.dart \
+            test/deda_owner_session_compat_private_test.dart
+          flutter test --no-pub -r expanded \
+            test/deda_owner_session_compat_private_test.dart
+          flutter test --no-pub -r expanded \
+            test/deda_session_missing_owner_entry_100441_test.dart
+          echo 'PASS_DART_OWNER_POLICY_NO_NEW_UID_AND_LEGACY_COMPAT_TESTS'
+      - name: Production remains untouched
+        run: echo 'NO_AUTH_UID_CREATION_NO_FIREBASE_DEPLOY_NO_APK_NO_AAB_NO_PLAY'
