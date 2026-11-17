@@ -64,6 +64,9 @@ class ExistingOwnerNoNewUid(unittest.TestCase):
         self.assertIn(": await _ensurePublicUser()", sync)  # legacy preserved
         self.assertIn("ref.get(const GetOptions(source: Source.server))", sync)
         self.assertIn("existing.data()?['accountKey'] != accountKey", sync)
+        self.assertIn("!existing.exists", sync)
+        self.assertIn("existing.metadata.isFromCache", sync)
+        self.assertIn("existing.metadata.hasPendingWrites", sync)
         self.assertIn("FirebaseAuth.instance.currentUser?.uid != user.uid", sync)
         self.assertLess(sync.index("deda-profile-owner-session-not-verified"),
                         sync.index("await ref.set("))
