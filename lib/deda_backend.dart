@@ -309,10 +309,15 @@ class DedaBackend {
         ? await ref.get(const GetOptions(source: Source.server))
         : await ref.get();
     if (dedaLinkedOwnerCompatEnabled) {
+      // A registered account must NEVER fabricate users/{newAnonymousUid}
+      // through background profile sync. New-account creation has its own
+      // explicit enrollment lane and seeds its first users/{uid} there.
       if (accountKey.isEmpty ||
           FirebaseAuth.instance.currentUser?.uid != user.uid ||
-          (existing.exists &&
-              existing.data()?['accountKey'] != accountKey)) {
+          !existing.exists ||
+          existing.metadata.isFromCache ||
+          existing.metadata.hasPendingWrites ||
+          existing.data()?['accountKey'] != accountKey) {
         throw StateError('deda-profile-owner-session-not-verified');
       }
     }
