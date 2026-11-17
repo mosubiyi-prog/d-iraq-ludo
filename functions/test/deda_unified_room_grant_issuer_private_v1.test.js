@@ -131,7 +131,7 @@ test("expired scope renews under same owner, new attestation, no legacy writes",
 });
 test("revoked and rotated sessions cannot renew after token expiry",async()=>{
   for(const kind of ["revoked","rotated"]){
-    const f=fixture(),issuer=f.build(true);
+    const f=fixture("friends"),issuer=f.build(true);
     assert.equal((await issuer.issue({uid,domain:"friends"})).grantIssued,true);
     if(kind==="revoked")assert.equal(
       (await issuer.revoke({uid,domain:"friends"})).status,"REVOKED_READ_ONLY");
