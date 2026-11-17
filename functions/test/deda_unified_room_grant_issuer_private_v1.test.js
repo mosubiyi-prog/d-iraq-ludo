@@ -98,7 +98,7 @@ test("historical UID conflict or stale canonical session denies atomically",asyn
  assert.equal(f.stats.writes.length,0);assert.equal(g.stats.writes.length,0);
 });
 test("no duplicate issue; expired or forged review; no financial or UID changes",async()=>{
- const f=fixture();const issuer=f.build(true);
+ const f=fixture("wallet");const issuer=f.build(true);
  assert.equal((await issuer.issue({uid,domain:"wallet"})).grantIssued,true);
  await no(issuer.issue({uid,domain:"wallet"}),"EXISTING_GRANT_REQUIRES_EXPLICIT_REVOCATION");
  assert.equal(f.stats.writes.length,3);
