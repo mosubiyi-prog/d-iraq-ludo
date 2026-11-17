@@ -10,6 +10,7 @@ on:
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'qa/point1_existing_account_no_anonymous_uid_source_test.py'
+      - 'qa/DEDA_POINT1_ANONYMOUS_SESSION_NO_SPLIT_CHECKPOINT_2026_11_17.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -45,6 +46,7 @@ jobs:
             'lib/deda_100431_linked_owner_session_policy.dart',
             'test/deda_owner_session_compat_private_test.dart',
             'qa/point1_existing_account_no_anonymous_uid_source_test.py',
+            'qa/DEDA_POINT1_ANONYMOUS_SESSION_NO_SPLIT_CHECKPOINT_2026_11_17.md',
             '.github/workflows/deda-point1-anonymous-session-no-split-isolated-qa.yml',
             '.github/workflows/deda-point1-assembled-complete-app-source-no-apk.yml',
           }
