@@ -129,6 +129,38 @@ jobs:
           python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
           python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project"
           python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project" --verify-only
+          # The raw repository may be correct while the 100436 three-way
+          # assembly silently loses a guard. Prove the ACTUAL assembled app
+          # retained every changed owner-login protection before QA continues.
+          python3 - <<'PY'
+          import os,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'deda-100447-complete-signed-app'/'lib'
+          pin=(root/'deda_pin_auth.dart').read_text()
+          back=(root/'deda_backend.dart').read_text()
+          policy=(root/'deda_100431_linked_owner_session_policy.dart').read_text()
+          def contains(source,*tokens):
+            return all(t in source for t in tokens)
+          assert contains(pin,
+            'mayPrepareAnonymousForAction(',
+            '_DedaAnonymousEntry.ownerHelper',
+            'deda-existing-owner-login-required-no-new-uid',
+            'mayBeginExplicitEnrollment(',
+            'deda-existing-account-must-use-login',
+            'deda-existing-firebase-uid-must-not-enroll-again',
+            'action: _DedaAnonymousEntry.newAccount',
+            'action: _DedaAnonymousEntry.recoveryRequest')
+          assert contains(back,
+            'static Future<void> syncCurrentUserProfile(',
+            'await _ensureOwnerSessionForAccountKey(accountKey)',
+            '!existing.exists',
+            'existing.metadata.isFromCache',
+            'deda-profile-owner-session-not-verified')
+          assert contains(policy,
+            'mayPrepareAnonymousForAction(',
+            'mayBeginExplicitEnrollment(')
+          assert "await _verifiedExistingPinUid(accountKey)" in pin
+          print('PASS_TRUE_ASSEMBLED_100447_NO_SPLIT_OWNER_UID_GATES')
+          PY
           python3 tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py "$project"
           echo 'PASS_PRESERVED_OWNER_LOGIN_NOT_LOGGED'
           python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
