@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_forward_healthy_account_guard.dart';
 
 enum _DedaAnonymousEntry {
   ownerHelper,
@@ -55,6 +56,14 @@ class DedaPinAuth {
     )) {
       throw StateError('deda-existing-owner-login-required-no-new-uid');
     }
+    if (dedaForwardHealthyAccountGuardEnabled &&
+        !DedaForwardHealthyAccountGuard.mayCreateAnonymousPrincipal(
+          hasCurrentPrincipal: current != null,
+          explicitNewEnrollment: action == _DedaAnonymousEntry.newAccount,
+          explicitRecoveryRequest: action == _DedaAnonymousEntry.recoveryRequest,
+        )) {
+      throw StateError('deda-forward-explicit-new-account-entry-required');
+    }
     if (current != null && current.isAnonymous) return current;
 
     if (current != null) {
@@ -62,7 +71,8 @@ class DedaPinAuth {
       // current non-anonymous UID merely to obtain an anonymous session.
       // The user must explicitly exit/switch accounts first. Do not
       // repurpose this method to perform a silent switch.
-      if (dedaLinkedOwnerCompatEnabled) {
+      if (dedaLinkedOwnerCompatEnabled ||
+          dedaForwardHealthyAccountGuardEnabled) {
         throw StateError('deda-explicit-anonymous-session-switch-required');
       }
       await auth.signOut();
@@ -352,10 +362,12 @@ class DedaPinAuth {
     }
 
     final accountKey = accountKeyForPhone(phone);
-    if (dedaLinkedOwnerCompatEnabled) {
+    if (dedaLinkedOwnerCompatEnabled ||
+        dedaForwardHealthyAccountGuardEnabled) {
       final prefs = await SharedPreferences.getInstance();
       if (!DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
-        linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+        linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled ||
+            dedaForwardHealthyAccountGuardEnabled,
         previouslyKnownAccount: prefs.getBool(_knownAccountKey(phone)) == true,
       )) {
         throw StateError('deda-existing-account-must-use-login');
@@ -663,8 +675,37 @@ class DedaPinAuth {
     final anonymousUid =
         current != null && current.isAnonymous ? current.uid : null;
 
-    // End the local Firebase session immediately. Remote housekeeping is
-    // best-effort and must never hold the logout screen open.
+    // Forward-only healthy-account rollout: an old anonymous UID may be the
+    // ONLY credential for a working DEDA account. Never discard it until a
+    // durable provider has been linked on that same UID. Every negative
+    // server response or connectivity failure is a HOLD, not an empty guest.
+    if (dedaForwardHealthyAccountGuardEnabled && anonymousUid != null) {
+      try {
+        final db = FirebaseFirestore.instance;
+        final snapshots = await Future.wait([
+          db.collection('deda_sessions').doc(anonymousUid)
+              .get(const GetOptions(source: Source.server)),
+          db.collection('users').doc(anonymousUid)
+              .get(const GetOptions(source: Source.server)),
+        ]);
+        final maySignOut =
+            DedaForwardHealthyAccountGuard.maySignOutAfterServerCheck(
+          isAnonymous: true,
+          uidUnchanged: auth.currentUser?.uid == anonymousUid,
+          serverReadFresh: snapshots.every((s) =>
+              !s.metadata.isFromCache && !s.metadata.hasPendingWrites),
+          hasOwnerSessionDocument: snapshots[0].exists,
+          hasUserDocument: snapshots[1].exists,
+        );
+        if (!maySignOut) {
+          throw StateError('deda-forward-link-durable-login-before-signout');
+        }
+      } catch (_) {
+        throw StateError('deda-forward-signout-blocked-unverified-owner');
+      }
+    }
+
+    // Legacy release behavior remains untouched while forward guard OFF.
     await auth.signOut();
 
     if (anonymousUid != null) {
