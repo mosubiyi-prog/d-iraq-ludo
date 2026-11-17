@@ -1,0 +1,62 @@
+name: DEDA Forward Healthy Accounts Spark UID Guard QA (NO APK)
+on:
+  push:
+    branches:
+      - deda-forward-healthy-accounts-spark-guard-2026-11-18
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-forward-uid-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Protect production rules, Firebase, old baseline and all user assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 62c02312c6f153b0fe0bb13f38c32ed979ecc214 HEAD -- \
+            functions/ firestore.rules storage.rules firebase.json google-services.json \
+            android/ assets/ pubspec.yaml pubspec.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          changed = subprocess.check_output(
+              ['git','diff','--name-only','62c02312c6f153b0fe0bb13f38c32ed979ecc214','HEAD'],
+              text=True).splitlines()
+          allowed={
+            'lib/deda_forward_healthy_account_guard.dart',
+            'lib/deda_pin_auth.dart',
+            'lib/deda_backend.dart',
+            'test/deda_forward_healthy_account_guard_test.dart',
+            '.github/workflows/deda-forward-healthy-accounts-spark-no-apk.yml',
+            'qa/DEDA_FORWARD_HEALTHY_ACCOUNTS_SPARK_2026_11_18.md',
+          }
+          assert set(changed)<=allowed, f'UNEXPECTED_SOURCE_CHANGE:{set(changed)-allowed}'
+          policy=Path('lib/deda_forward_healthy_account_guard.dart').read_text()
+          pin=Path('lib/deda_pin_auth.dart').read_text()
+          backend=Path('lib/deda_backend.dart').read_text()
+          assert "'DEDA_FORWARD_HEALTHY_ACCOUNT_GUARD', defaultValue: false" in policy
+          assert 'deda-forward-link-durable-login-before-signout' in pin
+          assert "get(const GetOptions(source: Source.server))" in pin
+          assert 'deda-forward-explicit-account-entry-required' in backend
+          assert 'deda-explicit-owner-account-switch-required' in backend
+          assert 'linkWithCredential' not in policy
+          print('PASS_FORWARD_HEALTHY_UID_GUARD_OFF_BY_DEFAULT_NO_CROSS_UID_GRANTS')
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Analyze forward owner safety and existing account source
+        run: |
+          flutter pub get
+          dart analyze lib/deda_forward_healthy_account_guard.dart lib/deda_pin_auth.dart lib/deda_backend.dart test/deda_forward_healthy_account_guard_test.dart
+      - name: Guard every forward-only anonymous and logout branch
+        run: flutter test --no-pub -r expanded test/deda_forward_healthy_account_guard_test.dart
+      - name: Keep Firebase production, users, packages and Play untouched
+        run: echo 'NO_APK_NO_AAB_NO_SIGNING_NO_FIREBASE_DEPLOY_NO_PLAY_NO_USER_WRITES'
