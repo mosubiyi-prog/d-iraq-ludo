@@ -63,59 +63,6 @@ def bind(project):
     patched = ENTRY + text.replace(CREATE, replacement, 1)
     if patched.count(CALL) != 1 or patched.count(ENTRY) != 1:
         raise RuntimeError('BLOCK_DUPLICATE_OR_MISSING_BIND')
-
-    # Protect the *existing* Settings admin entry without relocating a card.
-    # The visible gateway must never act on a response for a previous phone,
-    # nor open admin after Firebase Auth switches while a lookup is awaiting.
-    # 100447 app assembly may apply a State mixin to SettingsPage.
-    # Anchor on its single *existing method* rather than on its class line.
-    settings = 'Future<void> _refreshAdminEntryVisibility() async'
-    if patched.count(settings) != 1 or patched.count('_adminEntryVisible') < 2:
-        raise RuntimeError('BLOCK_AMBIGUOUS_SETTINGS_ADMIN_SECTION')
-    refresh = '    if (!mounted) return;\n    setState(() => _adminEntryVisible = allowed);'
-    guarded_refresh = ("""    final activePhone = DedaPreferences.accountPhone.trim().isNotEmpty
-        ? DedaPreferences.accountPhone
-        : DedaPreferences.phone;
-    if (!mounted ||
-        DedaBackend.accountKeyForPhone(activePhone) !=
-            DedaBackend.accountKeyForPhone(phone)) return;
-    setState(() => _adminEntryVisible = allowed);""")
-    if patched.count(refresh) != 1:
-        raise RuntimeError('BLOCK_SETTINGS_ADMIN_REFRESH_ANCHOR_CHANGED')
-    patched = patched.replace(refresh, guarded_refresh, 1)
-
-    tap_start = 'final gateAllowed = await DedaBackend'
-    tap_end = 'Navigator.push('
-    if patched.count(tap_start) != 1:
-        raise RuntimeError('BLOCK_ADMIN_TAP_GATE_AMBIGUOUS')
-    a = patched.index(tap_start)
-    b = patched.index(tap_end, a)
-    tap = patched[a:b]
-    expected_uid = """                                final gateUid =
-                                    FirebaseAuth.instance.currentUser?.uid;
-                                if (gateUid == null) return;
-
-"""
-    admin_probe = '                                final isAdmin ='
-    if tap.count(admin_probe) != 1:
-        raise RuntimeError('BLOCK_ADMIN_AUTH_PROBE_AMBIGUOUS')
-    tap = tap.replace(admin_probe, expected_uid + admin_probe, 1)
-    admin_probe_guard = '                                var adminSessionMatches = false;'
-    if tap.count(admin_probe_guard) != 1:
-        raise RuntimeError('BLOCK_ADMIN_MATCH_CHECK_AMBIGUOUS')
-    tap = tap.replace(admin_probe_guard,
-        """                                if (!context.mounted ||
-                                    FirebaseAuth.instance.currentUser?.uid != gateUid) return;
-""" + admin_probe_guard, 1)
-    last_mounted = '                                if (!context.mounted) return;'
-    if tap.count(last_mounted) != 2:
-        raise RuntimeError('BLOCK_ADMIN_FINAL_ASYNC_BOUNDARY_CHANGED')
-    # Only the final boundary after currentAdminSessionMatchesDedaEntry.
-    pos = tap.rfind(last_mounted)
-    tap = (tap[:pos] + tap[pos:].replace(last_mounted,
-        """                                if (!context.mounted ||
-                                    FirebaseAuth.instance.currentUser?.uid != gateUid) return;""", 1))
-    patched = patched[:a] + tap + patched[b:]
     main_file.write_text(patched)
     module_file.write_bytes(original)
     result = {'source': '100447-assembled',
