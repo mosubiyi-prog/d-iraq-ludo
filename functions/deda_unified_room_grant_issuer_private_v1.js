@@ -91,6 +91,12 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
   const grantRef=doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain);
   const viewRef=doc("deda_unified_room_private_views/"+uid+"/domains/"+domain);
   const auditRef=doc("deda_unified_room_grant_audit/"+uid+"/domains/"+domain);
+  // An expired short-lived scope may be renewed only under the SAME
+  // approved owner, canonical session and historical sources. Any explicit
+  // revocation remains permanent, not bypassed by routine re-entry.
+  const revokeRef=doc("deda_unified_room_revocations/"+uid+"/domains/"+domain);
+  const renewRef=doc("deda_unified_room_grant_renewals/"+uid+
+    "/domains/"+domain+"/events/"+String(clock()));
   try{
    return await db.runTransaction(async tx=>{
     const refs=[ownerRef,roomRef,sessionRef,directoryRef,credentialsRef,
@@ -100,7 +106,8 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
       rows.map(asData);
     if(!owner||!room||!session||!directory||!credential||!id||!social)
       return hold("IMMUTABLE_OWNER_SOURCE_MISSING");
-    if(grant||view||audit)return hold("EXISTING_GRANT_REQUIRES_EXPLICIT_REVOCATION");
+    if((grant||view||audit)&&!(grant&&view&&audit))
+      return hold("INCOMPLETE_GRANT_REQUIRES_REVIEW");
     if(owner.uid!==uid||owner.readerUid!==uid||
        owner.status!=="independently_verified"||
        owner.independentEvidenceSource!==evidence.independentEvidenceSource||
@@ -147,7 +154,46 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
       ownerEvidenceDigest:evidence.evidenceDigest,status:"active",
       proofKind:"independent_verified",canWrite:false,canCredit:false,
       issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs)};
-    // Audit is unique per reader and domain; never overwrite a past grant.
+    if(grant){
+      // No implicit refresh of active rights or previously revoked rights.
+      // Expired rights may be renewed atomically after a NEW independent
+      // server attestation, without changing any historic users or goods.
+      const revoked=asData(await tx.get(revokeRef));
+      const renewed=asData(await tx.get(renewRef));
+      const priorIssued=grant.issuedAt?.toMillis?.();
+      const priorExpiry=grant.expiresAt?.toMillis?.();
+      if(revoked||renewed||grant.status!=="active"||
+         grant.readerUid!==uid||grant.domain!==domain||
+         grant.scopeVersion!==1||grant.proofKind!=="independent_verified"||
+         grant.ownerEvidenceDigest!==evidence.evidenceDigest||
+         grant.canonicalAccountId!==evidence.canonicalAccountId||
+         grant.originalId!==evidence.originalId||grant.sourceUid!==sourceUid||
+         grant.sessionRevision!==session.revision||
+         grant.sessionNonce!==session.sessionNonce||
+         grant.canWrite!==false||grant.canCredit!==false||
+         !validTime(priorIssued)||priorIssued>now||
+         !validTime(priorExpiry)||priorExpiry<=priorIssued||
+         priorExpiry>now||
+         view.readerUid!==uid||view.domain!==domain||
+         view.scopeVersion!==1||view.sourceUid!==sourceUid||
+         view.originalId!==evidence.originalId||
+         view.canonicalAccountId!==evidence.canonicalAccountId||
+         view.sessionRevision!==session.revision||
+         view.sessionNonce!==session.sessionNonce)
+        return hold("EXISTING_GRANT_REQUIRES_EXPLICIT_REVOCATION");
+      tx.update(viewRef,viewRecord);
+      tx.update(grantRef,grantRecord);
+      tx.create(renewRef,{readerUid:uid,domain,sourceUid,
+        canonicalAccountId:evidence.canonicalAccountId,
+        evidenceDigest:evidence.evidenceDigest,
+        previousIssuedAt:grant.issuedAt,previousExpiresAt:grant.expiresAt,
+        issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs),
+        action:"RENEW_EXPIRED_READ_ONLY",canWrite:false,canCredit:false});
+      return Object.freeze({status:"RENEWED_READ_ONLY",domain,
+        grantIssued:true,uidChanged:false,financialCredit:false,
+        adminAccess:false});
+    }
+    // Initial issue is create-only; past audit records are never overwritten.
     tx.create(viewRef,viewRecord);
     tx.create(grantRef,grantRecord);
     tx.create(auditRef,{readerUid:uid,domain,sourceUid,
