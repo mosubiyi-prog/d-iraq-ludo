@@ -38,12 +38,14 @@ function fixture(domain="profile"){
    proofKind:"independent_verified",
    ownerEvidenceDigest:evidenceDigest,
    canonicalAccountId,originalId,
-   sourceUid:domain==="friends"?c:domain==="profile"?b:a,
+   sessionRevision:1,sessionNonce:"QA_SESSION_NONCE_1234567890",
+   sourceUid:domain==="friends"?c:["profile","league"].includes(domain)?b:a,
    issuedAt:stamp(NOW-2000),expiresAt:stamp(NOW+10000),
    canWrite:false,canCredit:false}],
   ["deda_unified_room_private_views/"+uid+"/domains/"+domain,{
-   readerUid:uid,domain,sourceUid:domain==="friends"?c:domain==="profile"?b:a,
+   readerUid:uid,domain,sourceUid:domain==="friends"?c:["profile","league"].includes(domain)?b:a,
    canonicalAccountId,originalId,scopeVersion:1,
+   sessionRevision:1,sessionNonce:"QA_SESSION_NONCE_1234567890",
    payload:payloads[domain]}]
  ]);
  let reads=0,writes=0,authCalls=0;
@@ -205,4 +207,29 @@ test("service has no issuer and never calls Firebase admin .set or creates UID",
  const body=fs.readFileSync(require.resolve("../deda_unified_room_readonly_guard_v1.js"),"utf8");
  for(const forbidden of ["createUser(", "createCustomToken(", "signInAnonymously(", "tx.set(", "tx.update(", "tx.delete(", "tx.create("])
    assert.equal(body.includes(forbidden),false,forbidden);
+});
+
+
+test("a valid historical A UID cannot be used as the B league or C friend source",async()=>{
+ for(const domain of ["friends","league"]){
+  const f=fixture(domain);
+  f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/"+domain)
+   .sourceUid=a;
+  f.docs.get("deda_unified_room_private_views/"+uid+"/domains/"+domain)
+   .sourceUid=a;
+  await hold(()=>f.guard(true)(f.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+  assert.equal(f.stats().writes,0);
+ }
+});
+test("one old room grant is invalid on a new same-UID session epoch",async()=>{
+ const f=fixture("friends");
+ f.docs.get("deda_sessions/"+uid).sessionNonce="QA_SECOND_CANONICAL_SESSION_NONCE";
+ await hold(()=>f.guard(true)(f.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+ const g=fixture("league");
+ g.docs.get("deda_sessions/"+uid).revision=2;
+ await hold(()=>g.guard(true)(g.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+ const h=fixture("original_id");
+ h.docs.get("deda_unified_room_private_views/"+uid+"/domains/original_id")
+  .sessionRevision=2;
+ await hold(()=>h.guard(true)(h.request),"SANITIZED_SERVER_VIEW_NOT_TRUSTED");
 });
