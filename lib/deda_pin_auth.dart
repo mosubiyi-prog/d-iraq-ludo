@@ -8,6 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_100431_linked_owner_session_policy.dart';
 
+enum _DedaAnonymousEntry {
+  ownerHelper,
+  newAccount,
+  recoveryRequest,
+}
+
 class DedaPinAuth {
   static const String _installIdKey = 'deda_install_id_v1';
   static const int maxLocalAttempts = 5;
@@ -32,10 +38,23 @@ class DedaPinAuth {
     }
   }
 
-  static Future<User> _ensureAnonymousSession() async {
+  static Future<User> _ensureAnonymousSession({
+    _DedaAnonymousEntry action = _DedaAnonymousEntry.ownerHelper,
+  }) async {
     await _ensureFirebaseReady();
     final auth = FirebaseAuth.instance;
     final current = auth.currentUser;
+    // A login/section/helper for an EXISTING DEDA account may not mint a
+    // different anonymous UID. Only explicit new enrollment or a recovery
+    // REQUEST may create a separate requester principal in the pilot.
+    if (!DedaLinkedOwnerSessionPolicy.mayPrepareAnonymousForAction(
+      linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+      hasCurrentPrincipal: current != null,
+      explicitNewAccount: action == _DedaAnonymousEntry.newAccount,
+      explicitRecoveryRequest: action == _DedaAnonymousEntry.recoveryRequest,
+    )) {
+      throw StateError('deda-existing-owner-login-required-no-new-uid');
+    }
     if (current != null && current.isAnonymous) return current;
 
     if (current != null) {
@@ -332,8 +351,41 @@ class DedaPinAuth {
       throw ArgumentError('invalid-pin');
     }
 
-    final user = await _ensureAnonymousSession();
     final accountKey = accountKeyForPhone(phone);
+    if (dedaLinkedOwnerCompatEnabled) {
+      final prefs = await SharedPreferences.getInstance();
+      if (!DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
+        linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+        previouslyKnownAccount: prefs.getBool(_knownAccountKey(phone)) == true,
+      )) {
+        throw StateError('deda-existing-account-must-use-login');
+      }
+      // Never reuse a guest UID that already has an old DEDA account/session
+      // to create a second account. Server reads only; no new UID here.
+      final existing = FirebaseAuth.instance.currentUser;
+      if (existing != null && existing.isAnonymous) {
+        const options = GetOptions(source: Source.server);
+        final oldSession = await FirebaseFirestore.instance
+            .collection('deda_sessions').doc(existing.uid).get(options);
+        final oldUser = await FirebaseFirestore.instance
+            .collection('users').doc(existing.uid).get(options);
+        if (oldSession.exists ||
+            (oldUser.data()?['accountKey'] ?? '').toString().trim().isNotEmpty ||
+            FirebaseAuth.instance.currentUser?.uid != existing.uid) {
+          throw StateError('deda-existing-firebase-uid-must-not-enroll-again');
+        }
+      }
+    }
+    final user = await _ensureAnonymousSession(
+      action: _DedaAnonymousEntry.newAccount,
+    );
+    void checkEnrollmentUid() {
+      if (dedaLinkedOwnerCompatEnabled &&
+          FirebaseAuth.instance.currentUser?.uid != user.uid) {
+        throw StateError('deda-new-account-firebase-principal-changed');
+      }
+    }
+    checkEnrollmentUid();
     final install = await installId();
     final firestore = FirebaseFirestore.instance;
     final directory = _directoryRef(phone);
@@ -362,8 +414,11 @@ class DedaPinAuth {
       });
     });
 
+    checkEnrollmentUid();
     await _provePin(accountKey: accountKey, pin: pin);
+    checkEnrollmentUid();
     await _openSession(accountKey);
+    checkEnrollmentUid();
 
     await _profileRef(accountKey).set(<String, dynamic>{
       'accountKey': accountKey,
@@ -376,6 +431,7 @@ class DedaPinAuth {
       'lastSeenAt': FieldValue.serverTimestamp(),
     });
 
+    checkEnrollmentUid();
     await firestore.collection('users').doc(user.uid).set(
       <String, dynamic>{
         'name': cleanName,
@@ -548,7 +604,11 @@ class DedaPinAuth {
     final cleanName = fullName.trim();
     if (cleanName.length < 2) throw ArgumentError('invalid-name');
 
-    final requester = await _ensureAnonymousSession();
+    // A recovery REQUEST can have its own temporary requester UID; it is
+    // never accepted as the historical owner's UID or a grant to A/B/C.
+    final requester = await _ensureAnonymousSession(
+      action: _DedaAnonymousEntry.recoveryRequest,
+    );
     final install = await installId();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection('recovery_requests').doc();
