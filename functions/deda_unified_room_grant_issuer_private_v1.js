@@ -96,7 +96,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
   // revocation remains permanent, not bypassed by routine re-entry.
   const revokeRef=doc("deda_unified_room_revocations/"+uid+"/domains/"+domain);
   const renewRef=doc("deda_unified_room_grant_renewals/"+uid+
-    "/domains/"+domain+"/events/"+String(clock()));
+    "/domains/"+domain+"/events/"+String(now));
   try{
    return await db.runTransaction(async tx=>{
     const refs=[ownerRef,roomRef,sessionRef,directoryRef,credentialsRef,
