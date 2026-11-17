@@ -164,7 +164,7 @@ def _backend(ours, base, theirs):
 
 def _point1_pin_anonymous_enrollment(ours, base, theirs):
     """Reconcile the six reviewed 100447 overlaps, retaining both safeguards."""
-    if (("static Future<User> _ensureAnonymousSession() async {" in ours
+    if (("static Future<User> _ensureAnonymousSession() async {" in ours)
             and "await DedaAuthRuntime.wait(() => _ensureFirebaseReady());" in ours
             and "await _ensureFirebaseReady();" in base
             and "static Future<User> _ensureAnonymousSession({" in theirs
