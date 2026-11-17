@@ -121,13 +121,20 @@ test("an asserted telephone document alone never approves owner access",async()=
   .independentEvidenceSource="phone_document_only";
  await hold(()=>f.guard(true)(f.request),"INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
 });
-test("review source must be independent, two reviewers distinct, not QA",async()=>{
+test("review source must be independent, reviewers distinct, not QA",async()=>{
  const f=fixture();const x=f.docs.get("deda_unified_room_owner_authorizations/"+uid);
  x.independentEvidenceSource="isolated-fake-only";
  await hold(()=>f.guard(true)(f.request),"INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
  const g=fixture();const r=g.docs.get("deda_unified_room_owner_authorizations/"+uid);
  r.reviewers=["qaReviewer","qaReviewer"];
  await hold(()=>g.guard(true)(g.request),"INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
+});
+test("one trusted reviewer uses same protected source and session",async()=>{
+ const f=fixture();
+ f.docs.get("deda_unified_room_owner_authorizations/"+uid).reviewers=["trustedIndependentAuthority"];
+ const response=await f.guard(true)(f.request);
+ assert.equal(response.status,"VERIFIED_READ_ONLY");
+ assert.equal(response.authorized,true);
 });
 test("revoked or expired independent review is HOLD",async()=>{
  const f=fixture();f.docs.get("deda_unified_room_owner_authorizations/"+uid).expiresAtMs=NOW-1;
