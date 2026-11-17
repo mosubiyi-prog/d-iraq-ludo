@@ -79,7 +79,7 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
    const doc=p=>db.doc(p);
    const refs={
     owner:doc("deda_unified_room_owner_authorizations/"+uid),
-    session:doc("deda_sessions/"+uid),
+    session:doc("deda_unified_room_sessions/"+uid),
     room:doc("deda_unified_room_owner_directory/"+uid),
     scope:doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain),
     view:doc("deda_unified_room_private_views/"+uid+"/domains/"+domain)
