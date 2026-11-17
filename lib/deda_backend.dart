@@ -296,13 +296,30 @@ class DedaBackend {
     required String phone,
     required String accountType,
   }) async {
-    final user = await _ensurePublicUser();
+    final accountKey = accountKeyForPhone(phone);
+    // An ordinary profile sync MUST NOT adopt a fresh anonymous UID for a
+    // locally remembered existing account. The pilot reuses a matching,
+    // server-verified DEDA session or fails without creating a principal.
+    // Public 100340 compatibility is unchanged when the pilot is OFF.
+    final user = dedaLinkedOwnerCompatEnabled
+        ? await _ensureOwnerSessionForAccountKey(accountKey)
+        : await _ensurePublicUser();
     final ref = FirebaseFirestore.instance.collection('users').doc(user.uid);
-    final existing = await ref.get();
+    final existing = dedaLinkedOwnerCompatEnabled
+        ? await ref.get(const GetOptions(source: Source.server))
+        : await ref.get();
+    if (dedaLinkedOwnerCompatEnabled) {
+      if (accountKey.isEmpty ||
+          FirebaseAuth.instance.currentUser?.uid != user.uid ||
+          (existing.exists &&
+              existing.data()?['accountKey'] != accountKey)) {
+        throw StateError('deda-profile-owner-session-not-verified');
+      }
+    }
     await ref.set({
       'name': name.trim(),
       'phone': phone.trim(),
-      'accountKey': accountKeyForPhone(phone),
+      'accountKey': accountKey,
       'accountType': accountType.trim(),
       if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
