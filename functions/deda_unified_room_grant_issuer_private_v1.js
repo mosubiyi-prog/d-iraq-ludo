@@ -82,7 +82,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
   // Do NOT write to users, Auth, balance, prizes, ID owners, admin, or PIN.
   const ownerRef=doc("deda_unified_room_owner_authorizations/"+uid);
   const roomRef=doc("deda_unified_room_owner_directory/"+uid);
-  const sessionRef=doc("deda_sessions/"+uid);
+  const sessionRef=doc("deda_unified_room_sessions/"+uid);
   const directoryRef=doc("deda_account_directory/"+evidence.accountKey);
   const credentialsRef=doc("deda_credentials/"+evidence.accountKey);
   const idRef=doc("deda_share_ids/"+evidence.originalId);
