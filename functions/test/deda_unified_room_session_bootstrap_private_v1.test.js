@@ -3,6 +3,8 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const {makeRoomSessionBootstrap}=require(
   "../deda_unified_room_session_bootstrap_private_v1.js");
+const {makeRoomGrantIssuer}=require("../deda_unified_room_grant_issuer_private_v1.js");
+const {createRoomReadonlyGuard}=require("../deda_unified_room_readonly_guard_v1.js");
 const NOW=1800000000000,uid="QA_VERIFIED_CURRENT_READER",
   A="QA_HISTORIC_A",B="QA_HISTORIC_B",C="QA_HISTORIC_C",
   key="9647712345678",original="@DEDA-ABC123",
@@ -46,7 +48,7 @@ function fixture(){
     db,auth,independentReview,clock:()=>NOW,
     nonceFactory:()=>nonce,enabled
   });
-  return {docs,proof,stats,make};
+  return {docs,proof,stats,make,db,auth};
 }
 test("disabled bootstrap makes NO auth, proof, database or UID calls",async()=>{
   const f=fixture();
@@ -137,4 +139,50 @@ test("private bootstrap is never exported by production Cloud Functions",()=>{
   const fs=require("node:fs"),path=require("node:path");
   const index=fs.readFileSync(path.join(__dirname,"../index.js"),"utf8");
   assert.equal(index.includes("deda_unified_room_session_bootstrap_private_v1"),false);
+});
+
+test("one protected session bootstraps A/B/C and READS three scopes end to end",async()=>{
+  const f=fixture();
+  const immutable=new Map([...f.docs].map(([k,v])=>[k,JSON.stringify(v)]));
+  const ready=await f.make(true).prepare({uid});
+  assert.equal(ready.status,"ROOM_SESSION_PREPARED");
+  const issuer=makeRoomGrantIssuer({
+    db:f.db,auth:f.auth,clock:()=>NOW,
+    independentReview:async({domain})=>({...f.proof,domain}),
+    projectDomain:async({domain})=>({
+      friends:{friendCount:3},
+      league:{weeklyPoints:40},
+      original_id:{publicId:original}
+    })[domain],
+    toTimestamp:ms=>({toMillis:()=>ms}),enabled:true
+  });
+  const reader=createRoomReadonlyGuard({
+    db:f.db,auth:f.auth,clock:()=>NOW,enabled:true
+  });
+  const input=domain=>({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
+    app:{appId:"QA_FIREBASE_APP_SESSION"},input:{domain}});
+  for(const [domain,sourceUid] of [
+    ["friends",C],["league",B],["original_id",A]]){
+    const issued=await issuer.issue({uid,domain});
+    assert.equal(issued.status,"ISSUED_READ_ONLY",domain);
+    const grant=f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/"+domain);
+    assert.equal(grant.sourceUid,sourceUid);
+    const viewed=await reader(input(domain));
+    assert.equal(viewed.status,"VERIFIED_READ_ONLY",domain);
+    assert.equal(viewed.authorized,true);
+  }
+  assert.equal(f.docs.has("deda_sessions/"+uid),false);
+  assert.equal(f.docs.has("deda_sessions/"+B),false);
+  for(const [path,encoded] of immutable){
+    assert.equal(JSON.stringify(f.docs.get(path)),encoded,
+      "legacy source changed: "+path);
+  }
+  // The same Firebase UID after a session rotation has NO inherited grants.
+  f.docs.get("deda_unified_room_sessions/"+uid).revision=2;
+  for(const domain of ["friends","league","original_id"]){
+    const viewed=await reader(input(domain));
+    assert.equal(viewed.status,"HOLD");
+    assert.equal(viewed.authorized,false);
+  }
+  assert.equal(f.stats.writes.length,13);
 });
