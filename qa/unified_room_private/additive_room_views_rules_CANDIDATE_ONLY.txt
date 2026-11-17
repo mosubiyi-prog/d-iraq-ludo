@@ -5,12 +5,25 @@
     // to authorize cross-UID data access.
     function dedaPrivateRoomScope(readerUid, domain) {
       let grantPath = /databases/$(database)/documents/deda_unified_room_read_grants/$(readerUid)/domains/$(domain);
+      let sessionPath = /databases/$(database)/documents/deda_sessions/$(readerUid);
       let grant = get(grantPath).data;
+      let session = get(sessionPath).data;
       return request.auth != null
         && request.auth.uid == readerUid
         && request.auth.token.firebase.sign_in_provider in ['password', 'google.com', 'phone']
         && domain in ['profile', 'original_id', 'premium_id', 'friends', 'league', 'gifts', 'wallet', 'places']
         && exists(grantPath)
+        && exists(sessionPath)
+        && session.uid == readerUid
+        && session.active == true
+        && session.revision is int
+        && session.revision > 0
+        && session.sessionNonce is string
+        && session.sessionNonce.size() >= 12
+        && grant.sessionRevision == session.revision
+        && grant.sessionNonce == session.sessionNonce
+        && resource.data.sessionRevision == session.revision
+        && resource.data.sessionNonce == session.sessionNonce
         && grant.readerUid == readerUid
         && grant.domain == domain
         && grant.status == 'active'
