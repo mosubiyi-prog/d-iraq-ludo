@@ -16,7 +16,7 @@ function fixture(domain="profile"){
   independentEvidenceSource:"verified_offline_authority",
   evidenceDigest:digest,reviewers:["reviewerOne","reviewerTwo"],
   accountKey:account,originalId:original,canonicalAccountId,
-  historicalUids:[A,B,C],approvedAtMs:now-10000,expiresAtMs:now+60000}],
+  historicalUids:[A,B,C],approvedAtMs:now-10000,expiresAtMs:now+24*60*60*1000}],
  ["deda_unified_room_owner_directory/"+uid,{
   uid,accountKey:account,originalId:original,canonicalAccountId,
   historicalUids:[A,B,C]}],
@@ -36,6 +36,7 @@ function fixture(domain="profile"){
   original_id:{publicId:original},premium_id:{displayId:"@DEDA-1234",color:"gold"},
   friends:{friendCount:1},league:{weeklyPoints:40},gifts:{giftCount:2},
   wallet:{balanceDisplay:10},places:{publishedPlaceCount:1}}[domain];
+ let clockMs=now;
  const stats={writes:[],auth:0,reviews:0,projects:0};
  const db={doc:p=>({path:p}),runTransaction:async fn=>{
   const pending=[];
@@ -53,9 +54,9 @@ function fixture(domain="profile"){
  const independentlyVerified=async()=>{stats.reviews++;return evidence};
  const projector=async()=>{stats.projects++;return projection};
  const build=(enabled=true)=>makeRoomGrantIssuer({
-  db,auth,clock:()=>now,independentReview:independentlyVerified,
+  db,auth,clock:()=>clockMs,independentReview:independentlyVerified,
   projectDomain:projector,toTimestamp:stamp,enabled});
- return {build,db,auth,evidence,docs,stats};
+ return {build,db,auth,evidence,docs,stats,setTime:t=>{clockMs=t}};
 }
 const no=async(p,reason)=>{const x=await p;assert.equal(x.status,"HOLD");if(reason)assert.equal(x.reason,reason);
  assert.equal(x.grantIssued,false)};
@@ -88,13 +89,59 @@ test("eight scoped domains are issued atomically, no historic records mutated",a
   const view=f.docs.get("deda_unified_room_private_views/"+uid+"/domains/"+domain);
   assert.equal(view.sessionRevision,1);
   assert.equal(view.sessionNonce,"QA_CANONICAL_SESSION_NONCE_2026");
-  assert.equal(grant.issuedAt.toMillis(),now);assert.ok(grant.expiresAt.toMillis()<=now+60000);
+  assert.equal(grant.issuedAt.toMillis(),now);assert.ok(grant.expiresAt.toMillis()<=now+5*60*1000);
   assert.equal(JSON.stringify([...f.docs].slice(0,7)),before);
   const reader=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>now,enabled:true});
   const response=await reader({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
    app:{appId:"QA_FIREBASE_APP_123456"},input:{domain}});
   assert.equal(response.status,"VERIFIED_READ_ONLY",response.reason);
  }
+});
+test("one independently approved reviewer may issue, but no caller-provided proof",async()=>{
+  const f=fixture();
+  f.evidence.reviewers=["trustedIndependentAuthority"];
+  f.docs.get("deda_unified_room_owner_authorizations/"+uid).reviewers=
+    ["trustedIndependentAuthority"];
+  const result=await f.build(true).issue({uid,domain:"profile"});
+  assert.equal(result.status,"ISSUED_READ_ONLY");
+  const guard=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>now,enabled:true});
+  assert.equal((await guard({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
+    app:{appId:"QA_FIREBASE_APP_123456"},input:{domain:"profile"}})).authorized,true);
+});
+test("expired scope renews under same owner, new attestation, no legacy writes",async()=>{
+  const f=fixture(),issuer=f.build(true);
+  const sourceBefore=new Map([...f.docs].filter(([path])=>!path.startsWith("deda_unified_room_")));
+  assert.equal((await issuer.issue({uid,domain:"profile"})).status,"ISSUED_READ_ONLY");
+  const later=now+5*60*1000+1000;
+  f.setTime(later);
+  await no(issuer.issue({uid,domain:"profile"}),"INDEPENDENT_ATTESTATION_REQUIRED");
+  f.evidence.verifiedAtMs=later-500;
+  const result=await issuer.issue({uid,domain:"profile"});
+  assert.equal(result.status,"RENEWED_READ_ONLY");
+  assert.equal(result.grantIssued,true);
+  const guard=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>later,enabled:true});
+  const read=await guard({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
+    app:{appId:"QA_FIREBASE_APP_123456"},input:{domain:"profile"}});
+  assert.equal(read.status,"VERIFIED_READ_ONLY");
+  assert.deepEqual([...f.docs].filter(([path])=>!path.startsWith("deda_unified_room_")),
+    [...sourceBefore]);
+  assert.ok(f.docs.has("deda_unified_room_grant_renewals/"+uid+"/domains/profile/events/"+later));
+  await no(issuer.issue({uid,domain:"profile"}),"EXISTING_GRANT_REQUIRES_EXPLICIT_REVOCATION");
+  assert.equal(f.stats.writes.length,6); // three initial, three renewal
+});
+test("revoked and rotated sessions cannot renew after token expiry",async()=>{
+  for(const kind of ["revoked","rotated"]){
+    const f=fixture(),issuer=f.build(true);
+    assert.equal((await issuer.issue({uid,domain:"friends"})).grantIssued,true);
+    if(kind==="revoked")assert.equal(
+      (await issuer.revoke({uid,domain:"friends"})).status,"REVOKED_READ_ONLY");
+    else f.docs.get("deda_unified_room_sessions/"+uid).sessionNonce="QA_REPLACED_SESSION_NONCE";
+    const writes=f.stats.writes.length;
+    const later=now+5*60*1000+1000;f.setTime(later);
+    f.evidence.verifiedAtMs=later-500;
+    await no(issuer.issue({uid,domain:"friends"}),"EXISTING_GRANT_REQUIRES_EXPLICIT_REVOCATION");
+    assert.equal(f.stats.writes.length,writes);
+  }
 });
 test("cannot issue from PIN, phone or claimed sourceUid as client inputs",async()=>{
  const f=fixture();await no(f.build(true).issue({accountKey:account,pin:"123456",domain:"profile"}),"INVALID_SCOPE");
