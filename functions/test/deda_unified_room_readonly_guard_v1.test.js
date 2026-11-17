@@ -28,7 +28,7 @@ function fixture(domain="profile"){
    independentEvidenceSource:"verified_offline_authority",
    evidenceDigest,reviewers:["realReviewer1","realReviewer2"],
    approvedAtMs:NOW-3000,expiresAtMs:NOW+60000}],
-  ["deda_sessions/"+uid,{uid,accountKey,active:true,
+  ["deda_unified_room_sessions/"+uid,{uid,accountKey,active:true,
     canonicalAccountId,revision:1,sessionNonce:"QA_SESSION_NONCE_1234567890"}],
   ["deda_unified_room_owner_directory/"+uid,{
    uid,accountKey,originalId,canonicalAccountId,
@@ -135,7 +135,7 @@ test("revoked or expired independent review is HOLD",async()=>{
 });
 test("missing historical B session is not required for authorized current reader",async()=>{
  const f=fixture("profile");
- assert.equal(f.docs.has("deda_sessions/"+b),false);
+ assert.equal(f.docs.has("deda_unified_room_sessions/"+b),false);
  assert.notEqual(uid,b);
  const result=await f.guard(true)(f.request);
  assert.equal(result.status,"VERIFIED_READ_ONLY",result.reason);
@@ -149,7 +149,7 @@ test("tampered independently reviewed historical B route fails closed",async()=>
  await hold(()=>f.guard(true)(f.request),"ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
 });
 test("session and room cannot change canonical identity or A/B/C route",async()=>{
- const f=fixture();f.docs.get("deda_sessions/"+uid).accountKey="9647999999999";
+ const f=fixture();f.docs.get("deda_unified_room_sessions/"+uid).accountKey="9647999999999";
  await hold(()=>f.guard(true)(f.request),"ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
  const g=fixture();g.docs.get("deda_unified_room_owner_directory/"+uid)
   .historicalUids=[a,c,"QA_OUTSIDER_UID_D"];
@@ -194,7 +194,7 @@ test("production reader rejects old mismatched grant path and timestamp schema",
  await hold(()=>g.guard(true)(g.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
 });
 test("production reader requires stable canonical session and scoped read-only grants",async()=>{
- const f=fixture();f.docs.get("deda_sessions/"+uid).sessionNonce="";
+ const f=fixture();f.docs.get("deda_unified_room_sessions/"+uid).sessionNonce="";
  await hold(()=>f.guard(true)(f.request),"ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
  const g=fixture();const path="deda_unified_room_read_grants/"+uid+"/domains/profile";
  delete g.docs.get(path).canWrite;
@@ -223,10 +223,10 @@ test("a valid historical A UID cannot be used as the B league or C friend source
 });
 test("one old room grant is invalid on a new same-UID session epoch",async()=>{
  const f=fixture("friends");
- f.docs.get("deda_sessions/"+uid).sessionNonce="QA_SECOND_CANONICAL_SESSION_NONCE";
+ f.docs.get("deda_unified_room_sessions/"+uid).sessionNonce="QA_SECOND_CANONICAL_SESSION_NONCE";
  await hold(()=>f.guard(true)(f.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
  const g=fixture("league");
- g.docs.get("deda_sessions/"+uid).revision=2;
+ g.docs.get("deda_unified_room_sessions/"+uid).revision=2;
  await hold(()=>g.guard(true)(g.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
  const h=fixture("original_id");
  h.docs.get("deda_unified_room_private_views/"+uid+"/domains/original_id")
