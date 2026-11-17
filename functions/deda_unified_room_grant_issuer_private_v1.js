@@ -64,8 +64,9 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
      !validUid(evidence.uidA)||!validUid(evidence.uidB)||
      !validUid(evidence.uidC)||
      new Set([evidence.uidA,evidence.uidB,evidence.uidC]).size!==3||
-     !Array.isArray(evidence.reviewers)||evidence.reviewers.length!==2||
-     new Set(evidence.reviewers).size!==2||
+     !Array.isArray(evidence.reviewers)||
+     ![1,2].includes(evidence.reviewers.length)||
+     new Set(evidence.reviewers).size!==evidence.reviewers.length||
      evidence.reviewers.some(x=>typeof x!=="string"||x.length<6)||
      !validTime(evidence.verifiedAtMs)||evidence.verifiedAtMs>now||
      now-evidence.verifiedAtMs>5*60*1000)
@@ -111,7 +112,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
        !same(owner.historicalUids,[evidence.uidA,evidence.uidB,evidence.uidC])||
        !validTime(owner.approvedAtMs)||owner.approvedAtMs>now||
        !validTime(owner.expiresAtMs)||owner.expiresAtMs<=now||
-       owner.expiresAtMs-owner.approvedAtMs>10*60*1000)
+       owner.expiresAtMs-owner.approvedAtMs>24*60*60*1000)
       return hold("INDEPENDENT_OWNER_RECORD_NOT_APPROVED");
     if(room.uid!==uid||room.accountKey!==evidence.accountKey||
        room.originalId!==evidence.originalId||
