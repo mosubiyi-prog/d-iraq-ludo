@@ -67,8 +67,10 @@ def bind(project):
     # Protect the *existing* Settings admin entry without relocating a card.
     # The visible gateway must never act on a response for a previous phone,
     # nor open admin after Firebase Auth switches while a lookup is awaiting.
-    settings = 'class _DedaSettingsPageState extends State<DedaSettingsPage> {'
-    if patched.count(settings) != 1:
+    # 100447 app assembly may apply a State mixin to SettingsPage.
+    # Anchor on its single *existing method* rather than on its class line.
+    settings = 'Future<void> _refreshAdminEntryVisibility() async'
+    if patched.count(settings) != 1 or patched.count('_adminEntryVisible') < 2:
         raise RuntimeError('BLOCK_AMBIGUOUS_SETTINGS_ADMIN_SECTION')
     refresh = '    if (!mounted) return;\n    setState(() => _adminEntryVisible = allowed);'
     guarded_refresh = ("""    final activePhone = DedaPreferences.accountPhone.trim().isNotEmpty
