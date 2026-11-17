@@ -14,6 +14,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  statuses: write
 concurrency:
   group: deda-point1-assembled-source-qa-no-build
   cancel-in-progress: false
@@ -385,3 +386,16 @@ jobs:
           echo 'FULL_APP_ROOM_SOURCE_WIRING_QA_ONLY'
           echo 'SERVER_GATE=OFF CLIENT_GATE=OFF'
           echo 'NO_APK_NO_AAB_NO_SIGNING_NO_FIREBASE_DEPLOY_NO_PLAY'
+      - name: Publish isolated point1 full-assembly result to commit status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: context.sha, state,
+              context: 'deda/point1/full-assembly',
+              description: state === 'success'
+                ? 'Isolated point1 full-assembly checks passed; no Firebase deploy'
+                : 'Isolated point1 full-assembly checks did not pass',
+            });
