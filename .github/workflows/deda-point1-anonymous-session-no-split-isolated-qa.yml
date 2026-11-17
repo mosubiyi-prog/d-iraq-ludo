@@ -46,6 +46,7 @@ jobs:
             'test/deda_owner_session_compat_private_test.dart',
             'qa/point1_existing_account_no_anonymous_uid_source_test.py',
             '.github/workflows/deda-point1-anonymous-session-no-split-isolated-qa.yml',
+            '.github/workflows/deda-point1-assembled-complete-app-source-no-apk.yml',
           }
           assert modified and modified <= approved, 'UNREVIEWED_CHANGE'
           assert {'lib/deda_pin_auth.dart','lib/deda_backend.dart'} <= modified
