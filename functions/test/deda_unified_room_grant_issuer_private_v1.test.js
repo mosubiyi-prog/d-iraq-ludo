@@ -16,7 +16,7 @@ function fixture(domain="profile"){
   independentEvidenceSource:"verified_offline_authority",
   evidenceDigest:digest,reviewers:["reviewerOne","reviewerTwo"],
   accountKey:account,originalId:original,canonicalAccountId,
-  historicalUids:[A,B,C],approvedAtMs:now-10000,expiresAtMs:now+24*60*60*1000}],
+  historicalUids:[A,B,C],approvedAtMs:now-10000,expiresAtMs:now-10000+24*60*60*1000}],
  ["deda_unified_room_owner_directory/"+uid,{
   uid,accountKey:account,originalId:original,canonicalAccountId,
   historicalUids:[A,B,C]}],
