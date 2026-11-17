@@ -89,11 +89,13 @@ async function issueFixture({idToken,domain}={},deps={}) {
     const view=Object.freeze({
       readerUid:plan.readerUid,domain,canonicalAccountId:plan.canonicalAccountId,
       sourceUid:plan.sourceUid,originalId:plan.originalId,scopeVersion:1,
+      sessionRevision:before.revision,sessionNonce:before.sessionNonce,
       payload
     });
     const grant=Object.freeze({
       readerUid:plan.readerUid,domain,canonicalAccountId:plan.canonicalAccountId,
       sourceUid:plan.sourceUid,originalId:plan.originalId,scopeVersion:1,
+      sessionRevision:before.revision,sessionNonce:before.sessionNonce,
       status:"active",proofKind:"independent_verified",
       issuedAtMs:now,expiresAtMs
     });
