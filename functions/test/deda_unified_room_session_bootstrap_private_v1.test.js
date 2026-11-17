@@ -79,8 +79,16 @@ test("verified independent owner creates 4 protected records, no legacy writes",
     .historicalUids,[A,B,C]);
   const owner=f.docs.get("deda_unified_room_owner_authorizations/"+uid);
   assert.equal(owner.status,"independently_verified");
-  assert.equal(owner.expiresAtMs,NOW+600000);
+  assert.equal(owner.expiresAtMs,NOW+24*60*60*1000);
   assert.equal(f.docs.has("deda_unified_room_read_grants/"+uid),false);
+});
+test("one externally verified reviewer is enough; same historical UID rules remain",async()=>{
+  const f=fixture();
+  f.proof.reviewers=["trustedIndependentAuthority"];
+  const result=await f.make(true).prepare({uid});
+  assert.equal(result.status,"ROOM_SESSION_PREPARED");
+  assert.deepEqual(f.docs.get("deda_unified_room_owner_authorizations/"+uid).reviewers,
+    ["trustedIndependentAuthority"]);
 });
 test("old anonymous B session not required; new reader UID must be durable",async()=>{
   const f=fixture();
