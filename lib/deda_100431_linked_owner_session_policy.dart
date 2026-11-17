@@ -71,6 +71,26 @@ class DedaLinkedOwnerSessionPolicy {
     required bool hasCurrentPrincipal,
   }) => !linkedOwnerPilotEnabled || hasCurrentPrincipal;
 
+  /// An owner login or a background section must not mint an anonymous UID.
+  /// Only explicit NEW-account enrollment or a recovery REQUEST may allocate
+  /// a temporary anonymous principal. A request UID is NEVER owner proof.
+  /// With the compatibility pilot off, preserve the existing Play behavior.
+  static bool mayPrepareAnonymousForAction({
+    required bool linkedOwnerPilotEnabled,
+    required bool hasCurrentPrincipal,
+    required bool explicitNewAccount,
+    required bool explicitRecoveryRequest,
+  }) => !linkedOwnerPilotEnabled || hasCurrentPrincipal ||
+      explicitNewAccount || explicitRecoveryRequest;
+
+  /// A previously seen account on this same installation must use its old
+  /// account entry rather than the create-account lane. This is a defensive
+  /// LOCAL check only; it does not prove ownership of a remote account.
+  static bool mayBeginExplicitEnrollment({
+    required bool linkedOwnerPilotEnabled,
+    required bool previouslyKnownAccount,
+  }) => !linkedOwnerPilotEnabled || !previouslyKnownAccount;
+
   static String ownerEmail(String accountKey) =>
       '$accountKey@deda-login.invalid';
 
