@@ -34,7 +34,8 @@ async function seed(env) {
       db.doc("users/"+A).set({accountKey:account,sharePersonalId:original}),
       db.doc("users/"+B).set({accountKey:account}),
       db.doc("deda_sessions/"+A).set({uid:A,accountKey:account}),
-      db.doc("deda_sessions/"+B).set({uid:B,accountKey:account,
+      db.doc("deda_sessions/"+B).set({uid:B,accountKey:account}),
+      db.doc("deda_unified_room_sessions/"+B).set({uid:B,accountKey:account,
         active:true,revision:9,sessionNonce}),
       db.doc("deda_share_ids/"+original).set({publicId:original,ownerUid:A,
         kind:"personal",active:true}),
@@ -84,6 +85,8 @@ test("scoped room candidate, revoked grants, and old Play paths",async()=>{
     console.log("PASS_LEGACY_PLAY_BEHAVIOR_UNCHANGED",JSON.stringify(legacy));
     const b=signed(updated,B),a=signed(updated,A),d=signed(updated,D);
     const anon=signed(updated,B,"anonymous");
+    assert.equal(await can(()=>b.doc("deda_unified_room_sessions/"+B).get()),false,
+      "room session must remain server-only");
     assert.equal(await can(()=>b.doc(doc(B,"original_id")).get()),true);
     assert.equal(await can(()=>a.doc(doc(B,"original_id")).get()),false);
     assert.equal(await can(()=>d.doc(doc(B,"original_id")).get()),false);
@@ -106,11 +109,11 @@ test("scoped room candidate, revoked grants, and old Play paths",async()=>{
     }
     console.log("PASS_EIGHT_INDEPENDENT_DOMAIN_GRANTS");
     // A new login epoch with the same UID must invalidate every old raw view.
-    await adminSet("deda_sessions/"+B,{uid:B,accountKey:account,
+    await adminSet("deda_unified_room_sessions/"+B,{uid:B,accountKey:account,
       active:true,revision:10,sessionNonce:"QA_REPLACED_B_SESSION_2026"});
     assert.equal(await can(()=>b.doc(doc(B,"friends")).get()),false);
     assert.equal(await can(()=>b.doc(doc(B,"original_id")).get()),false);
-    await adminSet("deda_sessions/"+B,{uid:B,accountKey:account,
+    await adminSet("deda_unified_room_sessions/"+B,{uid:B,accountKey:account,
       active:true,revision:9,sessionNonce});
     assert.equal(await can(()=>b.doc(doc(B,"friends")).get()),true);
     await adminSet(grant(B,"friends"),{...permit(B,"friends"),status:"revoked"});
