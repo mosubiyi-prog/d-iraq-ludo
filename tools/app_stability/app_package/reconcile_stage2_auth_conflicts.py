@@ -22,6 +22,44 @@ def once(text, old, new, description):
     return text.replace(old, new, 1)
 
 
+
+def _point1_backend_owner_sync(ours, base, theirs):
+    """Keep the signed AuthRuntime lane AND the fail-closed original UID check.
+
+    These are the two exact 100447 overlaps in syncCurrentUserProfile;
+    no generic preference for one side of an unreviewed conflict is allowed.
+    """
+    if (("final user = await DedaAuthRuntime.wait(() => _ensurePublicUser());" in ours)
+            and "final user = await _ensurePublicUser();" in base
+            and "final user = dedaLinkedOwnerCompatEnabled" in theirs
+            and "_ensureOwnerSessionForAccountKey(accountKey)" in theirs):
+        return once(
+            theirs, ": await _ensurePublicUser();",
+            ": await DedaAuthRuntime.wait(() => _ensurePublicUser());",
+            "point1 preserve legacy runtime while verifying linked UID")
+
+    if (("final existing = await DedaAuthRuntime.wait(() => ref.get());" in ours)
+            and "await DedaAuthRuntime.wait(() => ref.set({" in ours
+            and "final existing = await ref.get();" in base
+            and "final existing = dedaLinkedOwnerCompatEnabled" in theirs
+            and "existing.metadata.hasPendingWrites" in theirs
+            and "deda-profile-owner-session-not-verified" in theirs
+            and "await ref.set({" in theirs):
+        result = once(
+            theirs, "? await ref.get(const GetOptions(source: Source.server))",
+            "? await DedaAuthRuntime.wait(() => "
+            "ref.get(const GetOptions(source: Source.server)))",
+            "point1 signed runtime server-only read")
+        result = once(
+            result, ": await ref.get();",
+            ": await DedaAuthRuntime.wait(() => ref.get());",
+            "point1 signed runtime legacy read")
+        return once(
+            result, "await ref.set({",
+            "await DedaAuthRuntime.wait(() => ref.set({",
+            "point1 signed runtime profile write")
+    return None
+
 def _backend_share_prewrite_guard_100443(ours, base, theirs):
     """Review ONLY the two original-ID projection overlaps from 100443.
 
@@ -53,6 +91,9 @@ def _backend_share_prewrite_guard_100443(ours, base, theirs):
 
 
 def _backend(ours, base, theirs):
+    point1 = _point1_backend_owner_sync(ours, base, theirs)
+    if point1 is not None:
+        return point1
     reviewed_id = _backend_share_prewrite_guard_100443(ours, base, theirs)
     if reviewed_id is not None:
         return reviewed_id
@@ -119,6 +160,88 @@ def _backend(ours, base, theirs):
         return result
     return None
 
+
+
+def _point1_pin_anonymous_enrollment(ours, base, theirs):
+    """Reconcile the six reviewed 100447 overlaps, retaining both safeguards."""
+    if (("static Future<User> _ensureAnonymousSession() async {" in ours
+            and "await DedaAuthRuntime.wait(() => _ensureFirebaseReady());" in ours
+            and "await _ensureFirebaseReady();" in base
+            and "static Future<User> _ensureAnonymousSession({" in theirs
+            and "_DedaAnonymousEntry action = _DedaAnonymousEntry.ownerHelper" in theirs):
+        return once(
+            theirs, "await _ensureFirebaseReady();",
+            "await DedaAuthRuntime.wait(() => _ensureFirebaseReady());",
+            "point1 signed Firebase initialization guard")
+
+    # The old eager anonymous user is intentionally removed: the new
+    # _provePin method selects a UID through _ensurePinSessionForAccount
+    # or checks expectedOriginalUid BEFORE any PIN attempt is recorded.
+    if (("final user = await DedaAuthRuntime.wait(() => _ensureAnonymousSession());" in ours)
+            and "final user = await _ensureAnonymousSession();" in base
+            and not theirs.strip()):
+        return theirs
+
+    if (("final install = await DedaAuthRuntime.wait(() => installId());" in ours)
+            and "final install = await installId();" in base
+            and "DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(" in theirs
+            and "action: _DedaAnonymousEntry.newAccount" in theirs
+            and "checkEnrollmentUid();" in theirs):
+        result = once(
+            theirs,
+            "final user = await _ensureAnonymousSession(\n"
+            "      action: _DedaAnonymousEntry.newAccount,\n"
+            "    );",
+            "final user = await DedaAuthRuntime.wait(() => _ensureAnonymousSession(\n"
+            "      action: _DedaAnonymousEntry.newAccount,\n"
+            "    ));",
+            "point1 explicit new-account session serialized")
+        return once(
+            result, "final install = await installId();",
+            "final install = await DedaAuthRuntime.wait(() => installId());",
+            "point1 signed enrollment installation")
+
+    if (("await DedaAuthRuntime.wait(() => _provePin(accountKey: accountKey, pin: pin));" in ours)
+            and "await DedaAuthRuntime.wait(() => _openSession(accountKey));" in ours
+            and "checkEnrollmentUid();" in theirs
+            and "await _provePin(accountKey: accountKey, pin: pin);" in theirs
+            and "await _openSession(accountKey);" in theirs):
+        result = once(
+            theirs, "await _provePin(accountKey: accountKey, pin: pin);",
+            "await DedaAuthRuntime.wait(() => _provePin(accountKey: accountKey, pin: pin));",
+            "point1 signed PIN proof during enrollment")
+        return once(
+            result, "await _openSession(accountKey);",
+            "await DedaAuthRuntime.wait(() => _openSession(accountKey));",
+            "point1 signed session write during enrollment")
+
+    if (("await DedaAuthRuntime.wait(() => firestore.collection('users').doc(user.uid).set(" in ours)
+            and "await firestore.collection('users').doc(user.uid).set(" in base
+            and "checkEnrollmentUid();" in theirs
+            and "await firestore.collection('users').doc(user.uid).set(" in theirs):
+        return once(
+            theirs, "await firestore.collection('users').doc(user.uid).set(",
+            "await DedaAuthRuntime.wait(() => firestore.collection('users').doc(user.uid).set(",
+            "point1 signed users document write with owner check")
+
+    if (("final requester = await DedaAuthRuntime.wait(() => _ensureAnonymousSession());" in ours)
+            and "final install = await DedaAuthRuntime.wait(() => installId());" in ours
+            and "final requester = await _ensureAnonymousSession();" in base
+            and "action: _DedaAnonymousEntry.recoveryRequest" in theirs):
+        result = once(
+            theirs,
+            "final requester = await _ensureAnonymousSession(\n"
+            "      action: _DedaAnonymousEntry.recoveryRequest,\n"
+            "    );",
+            "final requester = await DedaAuthRuntime.wait(() => _ensureAnonymousSession(\n"
+            "      action: _DedaAnonymousEntry.recoveryRequest,\n"
+            "    ));",
+            "point1 explicit recovery requester runtime")
+        return once(
+            result, "final install = await installId();",
+            "final install = await DedaAuthRuntime.wait(() => installId());",
+            "point1 recovery installation runtime")
+    return None
 
 def _pin_guard_100441(ours, base, theirs):
     """Preserve signed 100441 AuthRuntime waits AND the new same-UID guard.
@@ -189,6 +312,9 @@ def _pin_guard_100441(ours, base, theirs):
 
 
 def _pin(ours, base, theirs):
+    point1 = _point1_pin_anonymous_enrollment(ours, base, theirs)
+    if point1 is not None:
+        return point1
     reviewed_guard = _pin_guard_100441(ours, base, theirs)
     if reviewed_guard is not None:
         return reviewed_guard
