@@ -70,7 +70,7 @@ def bind(project):
     settings = 'class _DedaSettingsPageState extends State<DedaSettingsPage> {'
     if patched.count(settings) != 1:
         raise RuntimeError('BLOCK_AMBIGUOUS_SETTINGS_ADMIN_SECTION')
-    refresh = '    if (!mounted) return;\\n    setState(() => _adminEntryVisible = allowed);'
+    refresh = '    if (!mounted) return;\n    setState(() => _adminEntryVisible = allowed);'
     guarded_refresh = ("""    final activePhone = DedaPreferences.accountPhone.trim().isNotEmpty
         ? DedaPreferences.accountPhone
         : DedaPreferences.phone;
