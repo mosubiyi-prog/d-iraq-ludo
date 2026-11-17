@@ -4,6 +4,7 @@ const assert=require("node:assert/strict");
 const {createRoomReadonlyGuard,DOMAINS}=require(
   "../deda_unified_room_readonly_guard_v1.js");
 const NOW=1800000000000;
+const stamp=ms=>Object.freeze({toMillis:()=>ms});
 const uid="QA_CANONICAL_AUTH_UID_B",a="QA_HISTORIC_UID_A",c="QA_HISTORIC_UID_C";
 const accountKey="9647712345678",originalId="@DEDA-ABC123";
 const canonicalAccountId="DEDA_QA_CANONICAL_OWNER_ROOM_01";
@@ -26,17 +27,18 @@ function fixture(domain="profile"){
    independentEvidenceSource:"verified_offline_authority",
    evidenceDigest,reviewers:["realReviewer1","realReviewer2"],
    approvedAtMs:NOW-3000,expiresAtMs:NOW+60000}],
-  ["deda_sessions/"+uid,{uid,accountKey,active:true}],
+  ["deda_sessions/"+uid,{uid,accountKey,active:true,
+    canonicalAccountId,revision:1,sessionNonce:"QA_SESSION_NONCE_1234567890"}],
   ["deda_unified_room_owner_directory/"+uid,{
    uid,accountKey,originalId,canonicalAccountId,
    historicalUids:[a,uid,c]}],
-  [base+"/domains/"+domain,{
-   readerUid:uid,domain,status:"active",
+  ["deda_unified_room_read_grants/"+uid+"/domains/"+domain,{
+   readerUid:uid,domain,status:"active",scopeVersion:1,
    proofKind:"independent_verified",
    ownerEvidenceDigest:evidenceDigest,
    canonicalAccountId,originalId,
    sourceUid:domain==="friends"?c:domain==="profile"?uid:a,
-   issuedAtMs:NOW-2000,expiresAtMs:NOW+10000,
+   issuedAt:stamp(NOW-2000),expiresAt:stamp(NOW+10000),
    canWrite:false,canCredit:false}],
   ["deda_unified_room_private_views/"+uid+"/domains/"+domain,{
    readerUid:uid,domain,sourceUid:domain==="friends"?c:domain==="profile"?uid:a,
@@ -123,7 +125,7 @@ test("session and room cannot change canonical identity or A/B/C route",async()=
  await hold(()=>g.guard(true)(g.request),"ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
 });
 test("wrong scope or source UID refuses sanitized profile",async()=>{
- const f=fixture();const path="deda_unified_room_owner_authorizations/"+uid+"/domains/profile";
+ const f=fixture();const path="deda_unified_room_read_grants/"+uid+"/domains/profile";
  f.docs.get(path).sourceUid="QA_OUTSIDER_UID_D";
  await hold(()=>f.guard(true)(f.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
  const g=fixture();g.docs.get(path).canCredit=true;
@@ -147,6 +149,27 @@ test("disabled Auth record or unavailable backend never fails open",async()=>{
  const db={doc:p=>({path:p}),runTransaction:async()=>{throw Error("unexpected transaction")}};
  await hold(()=>createRoomReadonlyGuard({db,auth:deny,clock:()=>NOW,enabled:true})(f.request),
    "AUTH_USER_MISSING_OR_DISABLED");
+});
+test("production reader rejects old mismatched grant path and timestamp schema",async()=>{
+ const f=fixture();
+ const current="deda_unified_room_read_grants/"+uid+"/domains/profile";
+ const old="deda_unified_room_owner_authorizations/"+uid+"/domains/profile";
+ const grant=f.docs.get(current);
+ f.docs.delete(current);f.docs.set(old,grant);
+ await hold(()=>f.guard(true)(f.request),"SERVER_OWNER_SCOPE_VIEW_MISSING");
+ const g=fixture();const row=g.docs.get(current);
+ row.issuedAtMs=NOW-2000;row.expiresAtMs=NOW+10000;
+ delete row.issuedAt;delete row.expiresAt;
+ await hold(()=>g.guard(true)(g.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+});
+test("production reader requires stable canonical session and scoped read-only grants",async()=>{
+ const f=fixture();f.docs.get("deda_sessions/"+uid).sessionNonce="";
+ await hold(()=>f.guard(true)(f.request),"ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
+ const g=fixture();const path="deda_unified_room_read_grants/"+uid+"/domains/profile";
+ delete g.docs.get(path).canWrite;
+ await hold(()=>g.guard(true)(g.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+ const h=fixture();h.docs.get(path).scopeVersion=2;
+ await hold(()=>h.guard(true)(h.request),"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
 });
 test("service has no issuer and never calls Firebase admin .set or creates UID",()=>{
  const fs=require("node:fs");

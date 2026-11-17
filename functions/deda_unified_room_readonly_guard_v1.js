@@ -29,6 +29,7 @@ const fail=reason=>Object.freeze({status:"HOLD",reason,authorized:false,
    accountRestored:false,financialRestore:false,uidChanged:false});
 const data=s=>s&&s.exists===true?s.data():null;
 const validTime=n=>Number.isSafeInteger(n)&&n>0;
+const serverTimeMs=t=>t&&typeof t.toMillis==="function" ? t.toMillis() : NaN;
 function allowPayload(domain,payload){
  const allow=DOMAINS[domain];
  if(!allow || !payload || typeof payload!=="object"||
@@ -76,7 +77,7 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
     owner:doc("deda_unified_room_owner_authorizations/"+uid),
     session:doc("deda_sessions/"+uid),
     room:doc("deda_unified_room_owner_directory/"+uid),
-    scope:doc("deda_unified_room_owner_authorizations/"+uid+"/domains/"+domain),
+    scope:doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain),
     view:doc("deda_unified_room_private_views/"+uid+"/domains/"+domain)
    };
    return db.runTransaction(async tx=>{
@@ -103,7 +104,9 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        owner.expiresAtMs-owner.approvedAtMs>10*60*1000)
        return fail("INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
     if(session.uid!==uid||session.accountKey!==owner.accountKey||
-       session.active===false|| // requires explicit active true below
+       session.canonicalAccountId!==owner.canonicalAccountId||
+       !Number.isSafeInteger(session.revision)||session.revision<=0||
+       typeof session.sessionNonce!=="string"||session.sessionNonce.length<12||
        session.active!==true||
        room.uid!==uid||room.accountKey!==owner.accountKey||
        room.originalId!==owner.originalId||
@@ -115,16 +118,17 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        !room.historicalUids.includes(uid))
        return fail("ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
     if(grant.readerUid!==uid||grant.domain!==domain||
+       grant.scopeVersion!==1||
        grant.status!=="active"||
        grant.proofKind!=="independent_verified"||
        grant.ownerEvidenceDigest!==owner.evidenceDigest||
        grant.canonicalAccountId!==owner.canonicalAccountId||
        grant.originalId!==owner.originalId||
        !room.historicalUids.includes(grant.sourceUid)||
-       !validTime(grant.issuedAtMs)||grant.issuedAtMs>now||
-       !validTime(grant.expiresAtMs)||grant.expiresAtMs<=now||
-       grant.expiresAtMs-grant.issuedAtMs>5*60*1000||
-       grant.expiresAtMs>owner.expiresAtMs||
+       !validTime(serverTimeMs(grant.issuedAt))||serverTimeMs(grant.issuedAt)>now||
+       !validTime(serverTimeMs(grant.expiresAt))||serverTimeMs(grant.expiresAt)<=now||
+       serverTimeMs(grant.expiresAt)-serverTimeMs(grant.issuedAt)>5*60*1000||
+       serverTimeMs(grant.expiresAt)>owner.expiresAtMs||
        grant.canWrite!==false||grant.canCredit!==false)
        return fail("SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
     if(view.readerUid!==uid||view.domain!==domain||
