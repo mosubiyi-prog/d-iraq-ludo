@@ -9,6 +9,7 @@ on:
       - 'lib/deda_weekly_firestore_direct_bridge.dart'
       - 'lib/deda_backend.dart'
       - 'tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py'
+      - 'tools/app_stability/app_package/bind_point2_section_session_guards_2026_11_17.py'
       - '.github/workflows/deda-point1-authz-simplify-source-only-qa.yml'
       - 'functions/deda_unified_room_grant_issuer_private_v1.js'
       - 'functions/deda_unified_room_session_bootstrap_private_v1.js'
@@ -57,6 +58,7 @@ jobs:
             'lib/deda_social_service.dart',
             'lib/deda_weekly_firestore_direct_bridge.dart',
             'tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py',
+            'tools/app_stability/app_package/bind_point2_section_session_guards_2026_11_17.py',
             '.github/workflows/deda-point2-sections-complete-no-apk.yml',
             'lib/deda_100431_linked_owner_session_policy.dart',
             'test/deda_owner_session_compat_private_test.dart',
@@ -380,7 +382,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py
+          python3 -m py_compile tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py tools/app_stability/app_package/bind_point2_section_session_guards_2026_11_17.py
           python3 - <<'PY'
           import pathlib
           social=pathlib.Path('lib/deda_social_service.dart').read_text()
@@ -406,6 +408,23 @@ jobs:
           node --check functions/deda_unified_room_session_bootstrap_private_v1.js
           node --test functions/test/deda_unified_room_readonly_guard_v1.test.js functions/test/deda_unified_room_grant_issuer_private_v1.test.js functions/test/deda_unified_room_session_bootstrap_private_v1.test.js
           echo 'PASS_SERVER_READ_ONLY_HOLD_AND_EIGHT_DOMAIN_SECURITY'
+      - name: Preserve exact point2 social and league changes in full protected assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/bind_point2_section_session_guards_2026_11_17.py "$DEDA_SOURCE_ONLY_PROJECT"
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['DEDA_SOURCE_ONLY_PROJECT'])
+          record=json.loads((root/'deda-point2-section-binding-proof.json').read_text())
+          assert set(record['applied'])=={
+            'lib/deda_social_service.dart',
+            'lib/deda_weekly_firestore_direct_bridge.dart'
+          }
+          assert all(item['hunksTransferred']>0 for item in record['applied'].values())
+          assert record['productionFirebaseChanged'] is False
+          print('PASS_POINT2_NO_OVERWRITE_OF_100447_SOCIAL_AND_LEAGUE_SOURCE')
+          PY
       - name: Inject exact read-only Flutter SDK hook into already assembled full 100447 app
         shell: bash
         run: |
@@ -422,7 +441,8 @@ jobs:
           cp test/deda_unified_room_runtime_readonly_test.dart "$project/test/"
           cd "$project"
           dart analyze --no-fatal-warnings lib/main.dart \
-            lib/deda_unified_room_runtime_readonly.dart \
+            lib/deda_social_service.dart lib/deda_weekly_firestore_direct_bridge.dart \
+            lib/deda_backend.dart lib/deda_unified_room_runtime_readonly.dart \
             test/deda_unified_room_runtime_readonly_test.dart
           flutter test --no-pub -r expanded test/deda_unified_room_runtime_readonly_test.dart
           echo 'PASS_REAL_ASSEMBLED_HOME_LIFECYCLE_LINKED_TO_FIREBASE_READONLY_CALLABLE'
