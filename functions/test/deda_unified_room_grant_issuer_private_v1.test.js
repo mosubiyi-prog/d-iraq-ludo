@@ -20,7 +20,7 @@ function fixture(domain="profile"){
  ["deda_unified_room_owner_directory/"+uid,{
   uid,accountKey:account,originalId:original,canonicalAccountId,
   historicalUids:[A,B,C]}],
- ["deda_sessions/"+uid,{uid,accountKey:account,canonicalAccountId,
+ ["deda_unified_room_sessions/"+uid,{uid,accountKey:account,canonicalAccountId,
   active:true,revision:1,sessionNonce:"QA_CANONICAL_SESSION_NONCE_2026"}],
  ["deda_account_directory/"+account,{active:true,createdUid:B,accountKey:account}],
  ["deda_credentials/"+account,{active:true,createdUid:B,accountKey:account}],
@@ -66,12 +66,12 @@ test("default OFF prevents any reads, proof lookup and write",async()=>{
 test("new verified reader works without historical B session",async()=>{
  const f=fixture();
  assert.notEqual(uid,B);
- assert.equal(f.docs.has("deda_sessions/"+B),false);
+ assert.equal(f.docs.has("deda_unified_room_sessions/"+B),false);
  const out=await f.build(true).issue({uid,domain:"profile"});
  assert.equal(out.status,"ISSUED_READ_ONLY");
  assert.equal(f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/profile")
   .sourceUid,B);
- assert.equal(f.docs.has("deda_sessions/"+B),false);
+ assert.equal(f.docs.has("deda_unified_room_sessions/"+B),false);
 });
 test("eight scoped domains are issued atomically, no historic records mutated",async()=>{
  for(const domain of ["profile","original_id","premium_id","friends","league","gifts","wallet","places"]){
@@ -107,7 +107,7 @@ test("trusted independent recovery authority is allowed WITHOUT telephone papers
   .independentEvidenceSource="trusted_independent_recovery_service";
  const out=await f.build(true).issue({uid,domain:"profile"});
  assert.equal(out.status,"ISSUED_READ_ONLY");
- assert.equal(f.docs.has("deda_sessions/"+B),false);
+ assert.equal(f.docs.has("deda_unified_room_sessions/"+B),false);
 });
 test("unverified client declaration of telephone ownership never issues grants",async()=>{
  const f=fixture("profile");
@@ -137,7 +137,7 @@ test("fake historical B or another reader cannot acquire grant",async()=>{
 test("historical UID conflict or stale canonical session denies atomically",async()=>{
  const f=fixture();f.docs.get("deda_share_ids/"+original).ownerUid=C;
  await no(f.build(true).issue({uid,domain:"profile"}),"AUTHORITATIVE_HISTORY_CONFLICT");
- const g=fixture();g.docs.get("deda_sessions/"+uid).active=false;
+ const g=fixture();g.docs.get("deda_unified_room_sessions/"+uid).active=false;
  await no(g.build(true).issue({uid,domain:"profile"}),"CURRENT_CANONICAL_SESSION_NOT_READY");
  assert.equal(f.stats.writes.length,0);assert.equal(g.stats.writes.length,0);
 });
@@ -191,7 +191,7 @@ test("grant issuer remains bounded to the current reader session and domain sour
   const grant=f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/"+domain);
   const expected=domain==="friends"?C:["profile","league"].includes(domain)?B:A;
   assert.equal(grant.sourceUid,expected);
-  f.docs.get("deda_sessions/"+uid).sessionNonce="QA_NEW_SESSION_NONCE_REPLAY_BLOCK";
+  f.docs.get("deda_unified_room_sessions/"+uid).sessionNonce="QA_NEW_SESSION_NONCE_REPLAY_BLOCK";
   const reader=createRoomReadonlyGuard({db:f.db,auth:f.auth,clock:()=>now,enabled:true});
   const response=await reader({auth:{uid,token:{firebase:{sign_in_provider:"password"}}},
    app:{appId:"QA_FIREBASE_APP_123456"},input:{domain}});
