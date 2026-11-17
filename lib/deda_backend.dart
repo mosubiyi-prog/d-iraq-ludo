@@ -10,6 +10,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import 'deda_pin_auth.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_forward_healthy_account_guard.dart';
 
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
@@ -80,6 +81,9 @@ class DedaBackend {
     )) {
       throw StateError('deda-explicit-auth-entry-required-no-new-uid');
     }
+    if (dedaForwardHealthyAccountGuardEnabled) {
+      throw StateError('deda-forward-explicit-account-entry-required');
+    }
     final credential = await auth.signInAnonymously();
     if (credential.user == null) throw StateError('anonymous-auth-failed');
     return credential.user!;
@@ -128,7 +132,8 @@ class DedaBackend {
       // Private recovery pilot: a section read MUST NOT log out another
       // Firebase principal. A separate, deliberate account-switch action
       // must sign out first; admin authorization remains independent.
-      if (dedaLinkedOwnerCompatEnabled) {
+      if (dedaLinkedOwnerCompatEnabled ||
+          dedaForwardHealthyAccountGuardEnabled) {
         throw StateError('deda-explicit-owner-account-switch-required');
       }
       // Preserve the existing, non-pilot compatibility path unchanged.
