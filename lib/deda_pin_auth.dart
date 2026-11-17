@@ -315,7 +315,8 @@ class DedaPinAuth {
       throw StateError('deda-original-owner-login-required');
     }
     final user = await _ensureAnonymousSession();
-    if (dedaLinkedOwnerCompatEnabled) {
+    if (dedaLinkedOwnerCompatEnabled ||
+        dedaForwardHealthyAccountGuardEnabled) {
       // An implicit trusted-session refresh may refresh ONLY the already
       // verified anonymous session's SAME account. It may not silently
       // change an existing UID's scope to another phone account, nor make
