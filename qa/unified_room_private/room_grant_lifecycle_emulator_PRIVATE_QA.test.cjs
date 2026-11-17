@@ -104,7 +104,10 @@ test("real Firestore emulator: issue/revoke fake server scopes, fail closed, zer
  };
  try {
    await env.clearFirestore();
-   await server(async db=>db.doc(session(B)).set({...current}));
+   await server(async db=>{
+     await db.doc(session(B)).set({...current});
+     await db.doc("deda_sessions/"+B).set({...current});
+   });
    const b=env.authenticatedContext(B,{
      firebase:{sign_in_provider:"google.com"}}).firestore();
    const a=env.authenticatedContext(A,{
@@ -139,6 +142,9 @@ test("real Firestore emulator: issue/revoke fake server scopes, fail closed, zer
    // Rotated session may not issue another grant, and no session write
    // touches production.
    current={...current,revision:13};
+   await server(async db=>db.doc("deda_sessions/"+B).update({revision:13}));
+   assert.equal(await can(()=>b.doc(view(B,"friends")).get()),false,
+     "a changed session must invalidate a previously issued view");
    const blocked=await issueFixture({idToken:token,domain:"wallet"},deps);
    assert.notEqual(blocked.status,"QA_FIXTURE_ISSUED");
    assert.equal(await can(()=>b.doc(view(B,"wallet")).get()),false);
