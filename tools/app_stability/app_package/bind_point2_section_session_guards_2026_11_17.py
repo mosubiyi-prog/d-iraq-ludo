@@ -80,6 +80,15 @@ def patch(project):
             if before == after:
                 continue
             if not before.strip() or value.count(before) != 1:
+                # Review only source-code context; never print user records.
+                anchor = ("final profileRef" if "social_service" in relative
+                          else "static Future<({String uid")
+                pos = value.find(anchor)
+                print("POINT2_ASSEMBLED_SOURCE_CONTEXT_" + relative)
+                print(value[max(0, pos - 110):pos + 2400] if pos >= 0
+                      else value[:1800])
+                print("POINT2_SOURCE_HUNK_EXPECTED_" + relative)
+                print(before[:1500])
                 stopped("SOURCE_HUNK_NOT_UNIQUE_OR_OVERLAID:"
                         + relative + ":" + str(changed))
             value = value.replace(before, after, 1)
