@@ -13,6 +13,11 @@ on:
       - 'functions/test/deda_unified_room_grant_issuer_private_v1.test.js'
       - 'test/deda_unified_room_runtime_readonly_test.dart'
       - 'tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py'
+      - 'qa/unified_room_private/additive_room_views_rules_CANDIDATE_ONLY.txt'
+      - 'qa/unified_room_private/room_grant_lifecycle_PRIVATE_OFFLINE_QA.cjs'
+      - 'qa/unified_room_private/room_live_additive_compat_emulator.test.cjs'
+      - 'qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs'
+      - 'qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
   workflow_dispatch:
 permissions:
   contents: read
