@@ -155,19 +155,35 @@ class DedaSocialService {
     if (user == null) throw StateError('social-session-missing');
 
     final profileRef = _db.collection('deda_social_profiles').doc(publicId);
-    final existing = await profileRef.get();
-    await profileRef.set(<String, dynamic>{
-      'publicId': publicId,
-      'ownerUid': user.uid,
-      'displayName': name.trim().isEmpty ? 'DEDA' : name.trim(),
-      'avatarStyle': avatarStyle.clamp(0, 5),
-      'frameStyle': frameStyle.clamp(0, 5),
-      'backgroundStyle': backgroundStyle.clamp(0, 5),
-      'level': level.clamp(1, 999),
-      'badges': badges.take(12).toList(),
-      if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final ownerUid = user.uid;
+    // Historical C may own the social graph even when another UID B/A
+    // currently opens DEDA. Never silently rewrite its ownerUid. A room
+    // READ-ONLY grant cannot authorize a social write or merge UIDs.
+    await _db.runTransaction((transaction) async {
+      final existing = await transaction.get(profileRef);
+      final previousOwner = (existing.data()?['ownerUid'] ?? '').toString();
+      if (existing.exists && previousOwner != ownerUid) {
+        throw StateError('social-historical-owner-preserved');
+      }
+      if (FirebaseAuth.instance.currentUser?.uid != ownerUid) {
+        throw StateError('social-session-changed');
+      }
+      transaction.set(profileRef, <String, dynamic>{
+        'publicId': publicId,
+        'ownerUid': ownerUid,
+        'displayName': name.trim().isEmpty ? 'DEDA' : name.trim(),
+        'avatarStyle': avatarStyle.clamp(0, 5),
+        'frameStyle': frameStyle.clamp(0, 5),
+        'backgroundStyle': backgroundStyle.clamp(0, 5),
+        'level': level.clamp(1, 999),
+        'badges': badges.take(12).toList(),
+        if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+    if (FirebaseAuth.instance.currentUser?.uid != ownerUid) {
+      throw StateError('social-session-changed');
+    }
 
     return DedaSocialSession(
       uid: user.uid,
@@ -235,6 +251,9 @@ class DedaSocialService {
     required DedaSocialSession sender,
     required DedaSocialProfile target,
   }) async {
+    if (FirebaseAuth.instance.currentUser?.uid != sender.uid) {
+      throw StateError('social-session-changed');
+    }
     if (target.ownerUid.isEmpty) throw StateError('social-target-missing');
     if (target.ownerUid == sender.uid || target.publicId == sender.publicId) {
       throw StateError('social-self-request');
@@ -244,15 +263,24 @@ class DedaSocialService {
     final ref = _db.collection('deda_friendships').doc(pairKey);
     final existing = await ref.get();
     final existingData = existing.data();
+    if (FirebaseAuth.instance.currentUser?.uid != sender.uid) {
+      throw StateError('social-session-changed');
+    }
     if (existingData != null) {
       final status = (existingData['status'] ?? '').toString();
       if (status == 'accepted') throw StateError('social-already-friends');
       if (status == 'pending') throw StateError('social-request-pending');
       if (status == 'rejected') {
+        if (FirebaseAuth.instance.currentUser?.uid != sender.uid) {
+          throw StateError('social-session-changed');
+        }
         await ref.delete();
       }
     }
 
+    if (FirebaseAuth.instance.currentUser?.uid != sender.uid) {
+      throw StateError('social-session-changed');
+    }
     await ref.set(<String, dynamic>{
       'pairKey': pairKey,
       'members': <String>[sender.uid, target.ownerUid],
@@ -284,6 +312,9 @@ class DedaSocialService {
     if (data['status'] != 'pending') {
       throw StateError('social-request-not-pending');
     }
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+      throw StateError('social-session-changed');
+    }
     await ref.update(<String, dynamic>{
       'status': accept ? 'accepted' : 'rejected',
       'respondedAt': FieldValue.serverTimestamp(),
@@ -300,6 +331,9 @@ class DedaSocialService {
     final members = data?['members'];
     if (members is! List || !members.contains(user.uid)) {
       throw StateError('social-relation-not-owned');
+    }
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+      throw StateError('social-session-changed');
     }
     await ref.delete();
   }
