@@ -476,3 +476,44 @@ jobs:
             'node --test --test-concurrency=1 qa/unified_room_private/room_live_additive_compat_emulator.test.cjs qa/unified_room_private/room_grant_lifecycle_emulator_PRIVATE_QA.test.cjs qa/unified_room_private/room_admin_firestore_gateway_EMULATOR_ONLY.test.cjs'
       - name: Confirm production and releases untouched
         run: echo 'NO_FIREBASE_DEPLOY_NO_USER_WRITES_NO_UID_CREATION_NO_APK_NO_PLAY'
+
+  verify-protected-apk-signing-inputs-no-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Read-only original release signer identity check; do not build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEDA_KEYSTORE_BASE64" || -z "$DEDA_KEY_ALIAS" ||
+                -z "$DEDA_STORE_PASSWORD" || -z "$DEDA_KEY_PASSWORD" ]]; then
+            echo 'HOLD_SIGNING_SECRET_MISSING'; exit 3
+          fi
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/android/app"
+          cd "$work"
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py" >/dev/null
+          cert=$(keytool -list -v -keystore android/app/deda-release.jks \
+            -alias "$DEDA_KEY_ALIAS" -storepass:env DEDA_STORE_PASSWORD 2>/dev/null)
+          digest=$(printf '%s\n' "$cert" | grep -m1 -E 'SHA256: ([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}' |
+            sed -E 's/.*SHA256: //' | tr -d ':' | tr 'A-F' 'a-f')
+          if [[ "$digest" != "a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a" ]]; then
+            echo 'HOLD_CERTIFICATE_NOT_ORIGINAL_DEDA_SIGNER'; exit 3
+          fi
+          echo 'PASS_ORIGINAL_DEDA_RELEASE_CERTIFICATE_AND_KEYSTORE_AVAILABLE_NO_APK'
+          echo 'NO_APK_NO_AAB_NO_SIGNING_OUTPUT_NO_FIREBASE_DEPLOY_NO_PLAY'
