@@ -18,6 +18,13 @@ void main() {
     final result = await DedaUnifiedRoomRuntimeReadOnly.readDomain('profile');
     expect(result.status, 'HOLD');
     expect(result.payload, isNull);
+    for (final domain in <String>['original_id', 'friends', 'league', 'premium_id']) {
+      final held = await DedaUnifiedRoomRuntimeReadOnly.readDomain(domain);
+      expect(held.status, 'HOLD', reason: domain);
+      expect(held.payload, isNull);
+    }
+    final invalid = await DedaUnifiedRoomRuntimeReadOnly.readDomain('admin');
+    expect(invalid.status, 'HOLD');
     await DedaUnifiedRoomRuntimeReadOnly.preflightOnHome();
   });
 
