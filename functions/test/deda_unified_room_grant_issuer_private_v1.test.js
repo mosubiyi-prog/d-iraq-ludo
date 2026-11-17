@@ -3,8 +3,8 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const {makeRoomGrantIssuer}=require("../deda_unified_room_grant_issuer_private_v1.js");
 const {createRoomReadonlyGuard}=require("../deda_unified_room_readonly_guard_v1.js");
-const now=1800000000000,uid="QA_CANONICAL_AUTH_UID_B";
-const A="QA_HISTORIC_UID_A", C="QA_HISTORIC_UID_C";
+const now=1800000000000,uid="QA_CURRENT_VERIFIED_READER_UID";
+const A="QA_HISTORIC_UID_A", B="QA_HISTORIC_UID_B", C="QA_HISTORIC_UID_C";
 const account="9647712345678",original="@DEDA-ABC123";
 const canonicalAccountId="DEDA_QA_CANONICAL_OWNER_ROOM_01";
 const digest="f".repeat(64);
@@ -16,21 +16,21 @@ function fixture(domain="profile"){
   independentEvidenceSource:"verified_offline_authority",
   evidenceDigest:digest,reviewers:["reviewerOne","reviewerTwo"],
   accountKey:account,originalId:original,canonicalAccountId,
-  approvedAtMs:now-10000,expiresAtMs:now+60000}],
+  historicalUids:[A,B,C],approvedAtMs:now-10000,expiresAtMs:now+60000}],
  ["deda_unified_room_owner_directory/"+uid,{
   uid,accountKey:account,originalId:original,canonicalAccountId,
-  historicalUids:[A,uid,C]}],
+  historicalUids:[A,B,C]}],
  ["deda_sessions/"+uid,{uid,accountKey:account,canonicalAccountId,
   active:true,revision:1,sessionNonce:"QA_CANONICAL_SESSION_NONCE_2026"}],
- ["deda_account_directory/"+account,{active:true,createdUid:uid,accountKey:account}],
- ["deda_credentials/"+account,{active:true,createdUid:uid,accountKey:account}],
+ ["deda_account_directory/"+account,{active:true,createdUid:B,accountKey:account}],
+ ["deda_credentials/"+account,{active:true,createdUid:B,accountKey:account}],
  ["deda_share_ids/"+original,{active:true,kind:"personal",publicId:original,ownerUid:A}],
  ["deda_social_profiles/"+original,{publicId:original,ownerUid:C}]
  ]);
  const evidence={status:"INDEPENDENTLY_ATTESTED",
   independentEvidenceSource:"verified_offline_authority",readerUid:uid,
   domain,accountKey:account,originalId:original,canonicalAccountId,
-  evidenceDigest:digest,uidA:A,uidB:uid,uidC:C,
+  evidenceDigest:digest,uidA:A,uidB:B,uidC:C,
   reviewers:["reviewerOne","reviewerTwo"],verifiedAtMs:now-1000};
  const projection={profile:{displayName:"QA owner",level:8},
   original_id:{publicId:original},premium_id:{displayId:"@DEDA-1234",color:"gold"},
@@ -63,6 +63,16 @@ test("default OFF prevents any reads, proof lookup and write",async()=>{
  const f=fixture();await no(f.build(false).issue({uid,domain:"profile"}),"ISSUER_NOT_ENABLED");
  assert.deepEqual(f.stats,{writes:[],auth:0,reviews:0,projects:0});
 });
+test("new verified reader works without historical B session",async()=>{
+ const f=fixture();
+ assert.notEqual(uid,B);
+ assert.equal(f.docs.has("deda_sessions/"+B),false);
+ const out=await f.build(true).issue({uid,domain:"profile"});
+ assert.equal(out.status,"ISSUED_READ_ONLY");
+ assert.equal(f.docs.get("deda_unified_room_read_grants/"+uid+"/domains/profile")
+  .sourceUid,B);
+ assert.equal(f.docs.has("deda_sessions/"+B),false);
+});
 test("eight scoped domains are issued atomically, no historic records mutated",async()=>{
  for(const domain of ["profile","original_id","premium_id","friends","league","gifts","wallet","places"]){
   const f=fixture(domain);
@@ -91,6 +101,16 @@ test("absent independent attestation or synthetic proof never grants",async()=>{
  assert.equal(f.stats.writes.length,0);
  const g=fixture();g.evidence.status="PENDING";
  await no(g.build(true).issue({uid,domain:"profile"}),"INDEPENDENT_ATTESTATION_REQUIRED");
+});
+test("fake historical B or another reader cannot acquire grant",async()=>{
+ const f=fixture();
+ f.docs.get("deda_credentials/"+account).createdUid="QA_UNRELATED_UID_X";
+ await no(f.build(true).issue({uid,domain:"profile"}),"AUTHORITATIVE_HISTORY_CONFLICT");
+ const g=fixture();g.evidence.uidB="QA_UNRELATED_UID_X";
+ await no(g.build(true).issue({uid,domain:"profile"}),"INDEPENDENT_OWNER_RECORD_NOT_APPROVED");
+ const h=fixture();h.evidence.readerUid=B;
+ await no(h.build(true).issue({uid,domain:"profile"}),"INDEPENDENT_ATTESTATION_REQUIRED");
+ assert.deepEqual([f.stats.writes.length,g.stats.writes.length,h.stats.writes.length],[0,0,0]);
 });
 test("historical UID conflict or stale canonical session denies atomically",async()=>{
  const f=fixture();f.docs.get("deda_share_ids/"+original).ownerUid=C;

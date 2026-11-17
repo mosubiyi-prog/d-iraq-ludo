@@ -5,7 +5,8 @@ const {createRoomReadonlyGuard,DOMAINS}=require(
   "../deda_unified_room_readonly_guard_v1.js");
 const NOW=1800000000000;
 const stamp=ms=>Object.freeze({toMillis:()=>ms});
-const uid="QA_CANONICAL_AUTH_UID_B",a="QA_HISTORIC_UID_A",c="QA_HISTORIC_UID_C";
+const uid="QA_CURRENT_VERIFIED_READER_UID",a="QA_HISTORIC_UID_A",
+ b="QA_HISTORIC_UID_B",c="QA_HISTORIC_UID_C";
 const accountKey="9647712345678",originalId="@DEDA-ABC123";
 const canonicalAccountId="DEDA_QA_CANONICAL_OWNER_ROOM_01";
 const evidenceDigest="f".repeat(64);
@@ -23,7 +24,7 @@ function fixture(domain="profile"){
  const base="deda_unified_room_owner_authorizations/"+uid;
  const docs=new Map([
   [base,{uid,readerUid:uid,accountKey,originalId,
-   canonicalAccountId,status:"independently_verified",
+   canonicalAccountId,historicalUids:[a,b,c],status:"independently_verified",
    independentEvidenceSource:"verified_offline_authority",
    evidenceDigest,reviewers:["realReviewer1","realReviewer2"],
    approvedAtMs:NOW-3000,expiresAtMs:NOW+60000}],
@@ -31,17 +32,17 @@ function fixture(domain="profile"){
     canonicalAccountId,revision:1,sessionNonce:"QA_SESSION_NONCE_1234567890"}],
   ["deda_unified_room_owner_directory/"+uid,{
    uid,accountKey,originalId,canonicalAccountId,
-   historicalUids:[a,uid,c]}],
+   historicalUids:[a,b,c]}],
   ["deda_unified_room_read_grants/"+uid+"/domains/"+domain,{
    readerUid:uid,domain,status:"active",scopeVersion:1,
    proofKind:"independent_verified",
    ownerEvidenceDigest:evidenceDigest,
    canonicalAccountId,originalId,
-   sourceUid:domain==="friends"?c:domain==="profile"?uid:a,
+   sourceUid:domain==="friends"?c:domain==="profile"?b:a,
    issuedAt:stamp(NOW-2000),expiresAt:stamp(NOW+10000),
    canWrite:false,canCredit:false}],
   ["deda_unified_room_private_views/"+uid+"/domains/"+domain,{
-   readerUid:uid,domain,sourceUid:domain==="friends"?c:domain==="profile"?uid:a,
+   readerUid:uid,domain,sourceUid:domain==="friends"?c:domain==="profile"?b:a,
    canonicalAccountId,originalId,scopeVersion:1,
    payload:payloads[domain]}]
  ]);
@@ -116,6 +117,21 @@ test("review source must be independent, two reviewers distinct, not QA",async()
 test("revoked or expired independent review is HOLD",async()=>{
  const f=fixture();f.docs.get("deda_unified_room_owner_authorizations/"+uid).expiresAtMs=NOW-1;
  await hold(()=>f.guard(true)(f.request),"INDEPENDENT_OWNER_AUTHORIZATION_NOT_VERIFIED");
+});
+test("missing historical B session is not required for authorized current reader",async()=>{
+ const f=fixture("profile");
+ assert.equal(f.docs.has("deda_sessions/"+b),false);
+ assert.notEqual(uid,b);
+ const result=await f.guard(true)(f.request);
+ assert.equal(result.status,"VERIFIED_READ_ONLY",result.reason);
+ assert.equal(result.payload.level,13);
+ assert.equal(f.stats().writes,0);
+});
+test("tampered independently reviewed historical B route fails closed",async()=>{
+ const f=fixture();
+ f.docs.get("deda_unified_room_owner_authorizations/"+uid)
+  .historicalUids=[a,"QA_UNRELATED_UID_X",c];
+ await hold(()=>f.guard(true)(f.request),"ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
 });
 test("session and room cannot change canonical identity or A/B/C route",async()=>{
  const f=fixture();f.docs.get("deda_sessions/"+uid).accountKey="9647999999999";

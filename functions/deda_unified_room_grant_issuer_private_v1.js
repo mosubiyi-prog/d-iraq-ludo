@@ -5,6 +5,8 @@
  * NEVER accepts client-written proof, account key, UID mapping or projection.
  * A trusted independent reviewer must be configured before any issue call.
  * Historical A/B/C data and live users are never updated by this module.
+ * A/B/C are the historical source UIDs; uid is an independently authorized
+ * current reader and need not equal old B. No old B session is read.
  */
 const {allowPayload, DOMAINS}=require("./deda_unified_room_readonly_guard_v1.js");
 const UID=/^[A-Za-z0-9:_-]{6,128}$/;
@@ -58,7 +60,6 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
      !validUid(evidence.uidA)||!validUid(evidence.uidB)||
      !validUid(evidence.uidC)||
      new Set([evidence.uidA,evidence.uidB,evidence.uidC]).size!==3||
-     evidence.uidB!==uid||
      !Array.isArray(evidence.reviewers)||evidence.reviewers.length!==2||
      new Set(evidence.reviewers).size!==2||
      evidence.reviewers.some(x=>typeof x!=="string"||x.length<6)||
@@ -103,6 +104,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
        owner.accountKey!==evidence.accountKey||
        owner.originalId!==evidence.originalId||
        owner.canonicalAccountId!==evidence.canonicalAccountId||
+       !same(owner.historicalUids,[evidence.uidA,evidence.uidB,evidence.uidC])||
        !validTime(owner.approvedAtMs)||owner.approvedAtMs>now||
        !validTime(owner.expiresAtMs)||owner.expiresAtMs<=now||
        owner.expiresAtMs-owner.approvedAtMs>10*60*1000)
@@ -110,7 +112,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
     if(room.uid!==uid||room.accountKey!==evidence.accountKey||
        room.originalId!==evidence.originalId||
        room.canonicalAccountId!==evidence.canonicalAccountId||
-       !same(room.historicalUids,[evidence.uidA,uid,evidence.uidC]))
+       !same(room.historicalUids,[evidence.uidA,evidence.uidB,evidence.uidC]))
       return hold("HISTORICAL_UID_ROUTE_MISMATCH");
     if(session.uid!==uid||session.accountKey!==evidence.accountKey||
        session.canonicalAccountId!==evidence.canonicalAccountId||
@@ -118,9 +120,9 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
        session.revision<=0||typeof session.sessionNonce!=="string"||
        session.sessionNonce.length<12)
       return hold("CURRENT_CANONICAL_SESSION_NOT_READY");
-    if(directory.active!==true||directory.createdUid!==uid||
+    if(directory.active!==true||directory.createdUid!==evidence.uidB||
        directory.accountKey!==evidence.accountKey||
-       credential.active!==true||credential.createdUid!==uid||
+       credential.active!==true||credential.createdUid!==evidence.uidB||
        credential.accountKey!==evidence.accountKey||
        id.active!==true||id.kind!=="personal"||
        id.publicId!==evidence.originalId||id.ownerUid!==evidence.uidA||

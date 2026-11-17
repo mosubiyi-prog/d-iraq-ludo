@@ -93,6 +93,10 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        typeof owner.canonicalAccountId!=="string"||
        owner.canonicalAccountId.length<12||
        owner.readerUid!==uid||owner.uid!==uid||
+       !Array.isArray(owner.historicalUids)||
+       owner.historicalUids.length!==3||
+       new Set(owner.historicalUids).size!==3||
+       !owner.historicalUids.every(x=>typeof x==="string"&&UID.test(x))||
        owner.status!=="independently_verified"||
        owner.independentEvidenceSource!=="verified_offline_authority"||
        !SHA.test(owner.evidenceDigest||"")||
@@ -115,7 +119,9 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        room.historicalUids.length!==3||
        new Set(room.historicalUids).size!==3||
        !room.historicalUids.every(x=>typeof x==="string"&&UID.test(x))||
-       !room.historicalUids.includes(uid))
+       !room.historicalUids.every((x,i)=>x===owner.historicalUids[i]))
+       // Historical B Auth session is not required. Only the current
+       // independently approved reader session is checked.
        return fail("ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
     if(grant.readerUid!==uid||grant.domain!==domain||
        grant.scopeVersion!==1||
