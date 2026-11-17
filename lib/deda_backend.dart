@@ -1419,10 +1419,13 @@ class DedaBackend {
         return false;
       }
 
+      final readerUid = FirebaseAuth.instance.currentUser?.uid;
+      if (readerUid == null) return false;
       final access = await FirebaseFirestore.instance
           .collection('admin_entry_access')
           .doc(accountKey)
-          .get();
+          .get(const GetOptions(source: Source.server));
+      if (FirebaseAuth.instance.currentUser?.uid != readerUid) return false;
       final data = access.data();
       if (!access.exists ||
           data == null ||
