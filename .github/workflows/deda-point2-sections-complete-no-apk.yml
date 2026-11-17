@@ -421,7 +421,8 @@ jobs:
             'lib/deda_social_service.dart',
             'lib/deda_weekly_firestore_direct_bridge.dart'
           }
-          assert all(item['hunksTransferred']>0 for item in record['applied'].values())
+          assert all(item['sourceGuardRepaired'] and item['sha256After'] != item['sha256Before'] for item in record['applied'].values())
+          assert record['historicalFriendshipKeyChanged'] is False
           assert record['productionFirebaseChanged'] is False
           print('PASS_POINT2_NO_OVERWRITE_OF_100447_SOCIAL_AND_LEAGUE_SOURCE')
           PY
