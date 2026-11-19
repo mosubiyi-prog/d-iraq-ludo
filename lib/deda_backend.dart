@@ -1176,6 +1176,17 @@ class DedaBackend {
     String displayName = '',
   }) async {
     if (!isReady) throw StateError('firebase-not-ready');
+    // signInWithEmailAndPassword switches the SHARED FirebaseAuth principal
+    // before we can check the admins/{uid} role. Refuse to displace the public
+    // owner's current UID in the linked-owner pilot, including anonymous
+    // legacy owner sessions. A temporary restriction is safer than losing
+    // the only existing device session; no new UID and no owner sign-out.
+    if (!DedaLinkedOwnerSessionPolicy.mayBeginAdminAuthenticationOnSharedAuth(
+      linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+      hasCurrentPrincipal: FirebaseAuth.instance.currentUser != null,
+    )) {
+      throw StateError('admin-login-refused-preserve-deda-owner-session');
+    }
     _clearAdminProfileCache();
     final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
       email: email.trim(),
