@@ -7,6 +7,8 @@ on:
       - 'lib/deda_backend.dart'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
+      - 'test/test_deda_100450_admin_logout_merge_guard.py'
+      - 'tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py'
       - '.github/workflows/deda-admin-logout-owner-session-guard-qa-no-deploy.yml'
   workflow_dispatch:
 permissions:
@@ -61,6 +63,13 @@ jobs:
           dart analyze --no-fatal-warnings lib/deda_backend.dart
           dart analyze --no-fatal-warnings lib/deda_100431_linked_owner_session_policy.dart
           flutter test --no-pub test/deda_owner_session_compat_private_test.dart
+      - name: Review exact merged Auth logout conflict fixtures (fail closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py
+          python3 -m unittest discover -s test -p test_deda_100450_admin_logout_merge_guard.py -v
+
       - name: Assemble the exact protected 100450 app source recipe (NO APK)
         shell: bash
         run: |
