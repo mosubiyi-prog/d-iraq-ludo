@@ -109,3 +109,16 @@
 - **الاختبار السلبي السابق:** تشغيل `44588678754` فشل بــ`InvalidArgument` لأن اسم مجموعة canary المحجوز لا يصلح في Firestore؛ أصلحنا الاسم فقط في commit `270c54f...` وأعيد فحص البوابة نفسها حتى نجحت. لا صلة للفشل بحقوق المستخدمين.
 - **الضوابط:** صفر تعديل على Firebase Auth/Firestore/Rules أو الماسات/الأصدقاء/الإدارة/الآيدي، صفر APK/AAB، صفر نشر Play، صفر تغييرات للتطبيق أو المستودع المرجعي. عدم اعتبار نجاح الاتصال إذناً بمسار Admin SDK المتلف أو مصالحة UID.
 - **الحالة:** **مكتملة** لمهمة **الربط التقني read-only عبر GitHub Actions**؛ **غير مكتملة** لمهمة استرجاع B أو توحيد A/B/C. إن استُخدمت البوابة لإصلاح حي مستقبلاً، يجب إضافة عملية مصرح بها منفصلة ومحدودة النطاق مع إثبات الملكية ونسخة قبلية ومراجعة نتائجها.
+
+
+## 2026-11-19 — أمر تنفيذ استرجاع B: تحقق حي محدود للدخول
+
+**المرجع التنفيذي:** تعليمات المدير العام رقم 01 تمت مراجعتها كاملة مع AGENTS.md؛ الأمر هو استرجاع UID التسجيل B نفسه ضمن الخطة الخماسية، دون إعادة جرد A/B/C، ودون التجاوز إلى نقل الحقوق أو تحديث Play.
+
+**المنجز التنفيذي الفعلي (isolated source + live read only):**
+- ملفات الكود المنفذة: `tools/deda_owner_b_auth_preflight_readonly.py` والفحص داخل `.github/workflows/deda-firebase-unified-gateway-readonly.yml`، على الفرع المعزول نفسه وليس فرعاً جديداً.
+- يقرأ الاستهداف من الآيدي الشخصي الأصلي الثابت والموافق عليه في `tools/deda_100439_gm_100m_live_readonly_preflight.py`؛ يتأكد من accountKey الخادمي ومن `directory.createdUid` و`credentials.createdUid`، ثم يقرأ فقط خصائص مزودي الدخول في Firebase Auth لـB وحالة `deda_sessions/B`، بدون قراءة PIN أو أي أرصدة/مشتريات أو معرفة C/إعادة جردها. لا يُطبع accountKey أو UID أو البريد.
+- `GitHub Actions 44590570650`: `SUCCESS` في commit `16a14c174d23a437b698be5f178ad7cde877bfd9`. نجحت فحوص اتصال Firestore/Auth الحية، و`PASS_B_CURRENT_AUTH_PREFLIGHT_OFFLINE_GUARDS_6`، والقراءة الحية B.
+- **نتائج حية B فقط بتاريخ 19 نوفمبر:** `B_REGISTRATION_UID_VERIFIED YES`، `B_AUTH_RECORD_ACTIVE YES`، `B_USER_ACCOUNT_KEY_MATCH YES`، `B_HAS_EXPECTED_LINKED_EMAIL NO`، `B_HAS_GOOGLE_PROVIDER NO`، `B_HAS_PHONE_PROVIDER NO`، `B_SESSION_ACCOUNT_KEY_MATCH NO`، `B_OWNS_ORIGINAL_ID_CURRENTLY NO`.
+- **المانع المؤكد:** لا وسيلة دخول دائمة مثبتة على B ولا جلسة B مطابقة متاحة في هذا الفحص؛ استمرار A كمالك الآيدي يمنع حارس الاسترجاع الحالي من قبول B كصاحب الآيدي. هذا لا يعني أن Firebase Auth B محذوف، ولا يخول الاستيلاء عليه بتغيير بريد/كلمة مرور من Admin SDK بلا مصادقة ملكية مستقلة. `PERSONAL_OWNER_PROOF_VERIFIED NO` و`CAN_AUTHORIZE_B_RECOVERY NO` مخرجات حذرة للفاحص الذي لا يجري اختبار ملكية بشري، وليست حكماً بأن إثبات الملكية مستحيل.
+- **حدود التقدم:** اكتمل الفحص الحي الضروري لوسيلة الدخول في B. استرجاع حق دخول B **لم يُنفذ ولم يُعتبر ناجحاً**. لا إصدار custom token، لا إضافة بريد/كلمة مرور، لا Firestore/Auth/Rules writes، لا حذف A/C، لا آيدي أو أصدقاء أو دوري أو ماسات أو إدارة، لا إصدار APK ولا نشر. استكمال إصلاح حساب حقيقي يحتاج إثباتاً مستقلاً أو جلسة Auth أصلية قابلة للتحقق وتفويضاً محدداً قبل الإجراء الحي.
