@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 40
     env:
       DEDA_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
-      DEDA_BACKUP_OUTPUT: ${{ runner.temp }}/deda-2026-11-19-spark-firestore-auth.dedabackup
+      DEDA_BACKUP_OUTPUT: /tmp/deda-2026-11-19-spark-firestore-auth.dedabackup
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,8 +47,8 @@ jobs:
         with:
           name: DEDA-2026-11-19-SPARK-FIRESTORE-AUTH-OWNER-ENCRYPTED-BACKUP
           path: |
-            ${{ runner.temp }}/deda-2026-11-19-spark-firestore-auth.dedabackup
-            ${{ runner.temp }}/deda-2026-11-19-spark-firestore-auth.manifest.json
+            /tmp/deda-2026-11-19-spark-firestore-auth.dedabackup
+            /tmp/deda-2026-11-19-spark-firestore-auth.manifest.json
           if-no-files-found: error
           retention-days: 21
       - name: Scope declaration
