@@ -54,7 +54,12 @@ jobs:
             'await FirebaseAuth.instance.signOut()')
           assert 'signInAnonymously' not in block
           assert 'maySignOutAdminPrincipal' in p
-          print('PASS_SOURCE_ADMIN_EXIT_CANNOT_DISPLACE_UNVERIFIED_DEDA_OWNER')
+          entry=s.split('static Future<bool> signInAdmin({',1)[1].split('static Future<',1)[0]
+          assert 'mayBeginAdminAuthenticationOnSharedAuth(' in entry
+          assert entry.index('mayBeginAdminAuthenticationOnSharedAuth(') < entry.index('signInWithEmailAndPassword(')
+          assert 'admin-login-refused-preserve-deda-owner-session' in entry
+          assert 'mayBeginAdminAuthenticationOnSharedAuth' in p
+          print('PASS_SOURCE_ADMIN_ENTRY_AND_EXIT_PRESERVE_OWNER_PRINCIPAL')
           PY
       - name: Flutter dependencies and focused session regression tests
         shell: bash
@@ -127,6 +132,11 @@ jobs:
           assert all(token in source for token in required)
           assert "get(const GetOptions(source: Source.server))" in block
           assert 'maySignOutAdminPrincipal' in policy
+          assert 'mayBeginAdminAuthenticationOnSharedAuth' in policy
+          entry = backend.split('static Future<bool> signInAdmin({',1)[1].split('static Future<',1)[0]
+          assert 'mayBeginAdminAuthenticationOnSharedAuth(' in entry
+          assert entry.index('mayBeginAdminAuthenticationOnSharedAuth(') < entry.index('signInWithEmailAndPassword(')
+          assert 'admin-login-refused-preserve-deda-owner-session' in entry
           assert 'DedaGoogleSettingsLinkCard(' not in (project/'lib/main.dart').read_text()
           assert 'deda-stage2-core-merge-proof.json' in {p.name for p in project.glob('*.json')}
           print('PASS_100450_ASSEMBLED_ADMIN_OWNER_UID_GUARD_PRESERVED')
