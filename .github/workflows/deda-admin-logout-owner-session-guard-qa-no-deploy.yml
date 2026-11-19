@@ -94,6 +94,16 @@ jobs:
           PY
           bash /tmp/deda-100450-source-assembly.sh
 
+      - name: Analyze actual full assembled 100450 backend and linked-owner policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEDA_SOURCE_ONLY_PROJECT"
+          flutter pub get
+          dart analyze --no-fatal-warnings lib/deda_backend.dart
+          dart analyze --no-fatal-warnings lib/deda_100431_linked_owner_session_policy.dart
+          echo 'PASS_ASSEMBLED_100450_ADMIN_OWNER_DART_ANALYSIS'
+
       - name: Assert guarded admin exit survived complete 100450 assembly
         shell: bash
         run: |
