@@ -1,0 +1,64 @@
+name: DEDA Admin Exit Preserves Owner UID - Isolated QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100450-admin-signout-preserve-owner-session-2026-11-19
+    paths:
+      - 'lib/deda_backend.dart'
+      - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'test/deda_owner_session_compat_private_test.dart'
+      - '.github/workflows/deda-admin-logout-owner-session-guard-qa-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  owner-session-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Verify source-level protected Admin signout order
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('lib/deda_backend.dart').read_text()
+          p=Path('lib/deda_100431_linked_owner_session_policy.dart').read_text()
+          start=s.index('static Future<void> signOutAdmin() async {')
+          end=s.index('// DEDA in-app location sharing v1.',start)
+          block=s[start:end]
+          required=[
+            'dedaLinkedOwnerCompatEnabled',
+            'principal == null || principal.isAnonymous',
+            "collection('admins')",
+            'get(const GetOptions(source: Source.server))',
+            'maySignOutAdminPrincipal(',
+            'serverVerifiedAdminDocument: proof.exists',
+            'FirebaseAuth.instance.currentUser?.uid != confirmedAdminUid',
+            "throw StateError('admin-logout-principal-changed-owner-preserved')",
+          ]
+          assert all(x in block for x in required)
+          assert block.index("collection('admins')") < block.index(
+            'await FirebaseAuth.instance.signOut()')
+          assert block.index('currentUser?.uid != confirmedAdminUid') < block.index(
+            'await FirebaseAuth.instance.signOut()')
+          assert 'signInAnonymously' not in block
+          assert 'maySignOutAdminPrincipal' in p
+          print('PASS_SOURCE_ADMIN_EXIT_CANNOT_DISPLACE_UNVERIFIED_DEDA_OWNER')
+          PY
+      - name: Flutter dependencies and focused session regression tests
+        shell: bash
+        run: |
+          flutter pub get
+          flutter test --no-pub test/deda_owner_session_compat_private_test.dart
+      - name: No deployment declaration
+        run: |
+          echo 'NO Firebase Auth write, no Firestore write, no rule deployment'
+          echo 'NO signed APK, no Google Play, no production app changed'
