@@ -241,6 +241,10 @@ function assessBCanonicalConsolidation({
        x.independentVerified!==true||x.ownerApproved!==true||
        ![serverSnapshot.route.ownerUid,uidB,
          serverSnapshot.social.ownerUid].includes(x.sourceUid)||
+       (x.domain==="original_id"&&
+        x.sourceUid!==serverSnapshot.route.ownerUid)||
+       (x.domain==="friends"&&
+        x.sourceUid!==serverSnapshot.social.ownerUid)||
        !NONCE_DIGEST.test(x.sourceReceiptSha256||""))
       return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
     scopes.set(x.domain,x);
