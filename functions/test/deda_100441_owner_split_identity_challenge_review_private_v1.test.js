@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {safeEvidenceAssessment,reviewReadiness}=
+const {safeEvidenceAssessment,reviewReadiness,assessBCanonicalConsolidation}=
     require("../deda_100441_owner_split_identity_challenge_review_private_v1.js");
 const nowMs=1800000000000;
 const incidentCutoffMs=nowMs-5000000;
@@ -181,4 +181,81 @@ test("bad/empty snapshot cannot authorize or reveal identities",()=>{
     assert.equal(result.decision,"HOLD");
     assert.equal(result.loginPermitted,false);
   }
+});
+
+/* B is the registered canonical TARGET only. These are deliberately
+   synthetic tests: passing them never grants rights over A/C or a live UID. */
+const bScopes=()=>[
+  ["original_id",A],["friends",C],["premium_id",A],
+  ["gifts",A],["wallet",A],["league",B],["places",A],
+  ["historical_progress",B],
+].map(([domain,sourceUid])=>({
+  domain,sourceUid,ownerApproved:true,independentVerified:true,
+  sourceReceiptSha256:"b".repeat(64),
+}));
+const bBackups=()=>({
+  firestoreAndAuthVerified:true,firebaseStorageVerified:true,
+  originalPhoneLocalArchiveVerified:true,
+  historicalPurchasesVerified:true,fullFinancialLedgerVerified:true,
+  rollbackReadbackVerified:true,
+});
+function bCheck(options={}){
+  return assessBCanonicalConsolidation({
+    serverSnapshot:snapshot(),pinProof:pin(),
+    independentProof:{...independent(),originalUid:B},
+    reviewRecord:{...review(),reviewedOriginalUid:B},
+    sourceScopeAttestations:{
+      source:"trusted_independent_server_review",accountKey,originalId,
+      targetRegistrationUid:B,scopes:bScopes(),
+    },
+    backupReadbacks:bBackups(),nowMs,incidentCutoffMs,...options,
+  });
+}
+test("B chosen only as registration target; no transfer even when QA proofs complete",()=>{
+  const x=bCheck();
+  assert.equal(x.decision,"REVIEW_CANDIDATE_B_REGISTRATION_ONLY");
+  assert.equal(x.bIsRegistrationUid,true);
+  assert.equal(x.readyForIndependentReview,true);
+  assert.equal(x.canMerge,false);
+  assert.equal(x.canAuthenticate,false);
+  assert.equal(x.canTransferAssets,false);
+  assert.equal(x.financialRestoreEnabled,false);
+  assert.equal(x.productionWrites,false);
+  assert.equal(Object.values(x).includes(A)||Object.values(x).includes(B),false);
+});
+test("A/C factor alone never promotes B to a verified owner",()=>{
+  assert.equal(bCheck({independentProof:independent()}).reason,
+    "INDEPENDENT_B_OWNERSHIP_NOT_ESTABLISHED");
+  assert.equal(bCheck({reviewRecord:review()}).reason,
+    "INDEPENDENT_B_OWNERSHIP_NOT_ESTABLISHED");
+});
+test("fake/duplicate/missing rights scopes refuse a B consolidation",()=>{
+  const s={source:"trusted_independent_server_review",accountKey,originalId,
+    targetRegistrationUid:B,scopes:bScopes()};
+  for(const v of [null,[],s.scopes.slice(1),
+    [...s.scopes.slice(0,-1),s.scopes[0]],
+    s.scopes.map(x=>x.domain==="friends"?{...x,independentVerified:false}:x),
+    s.scopes.map(x=>x.domain==="wallet"?{...x,sourceReceiptSha256:"x"}:x)]){
+    const x=bCheck({sourceScopeAttestations:
+      v===null?null:{...s,scopes:v}});
+    assert.equal(x.canTransferAssets,false);
+    assert.equal(x.decision,"HOLD");
+  }
+  assert.equal(bCheck({sourceScopeAttestations:{...s,source:"client"}})
+    .decision,"HOLD");
+});
+test("encrypted cloud backup alone cannot substitute original phone and purchases",()=>{
+  for(const missing of Object.keys(bBackups())){
+    const backup=bBackups();backup[missing]=false;
+    const x=bCheck({backupReadbacks:backup});
+    assert.equal(x.reason,"COMPLETE_LOSSLESS_RECOVERY_SOURCES_MISSING");
+    assert.equal(x.canMerge,false);
+  }
+  assert.equal(bCheck({backupReadbacks:null}).decision,"HOLD");
+});
+test("untrusted canonical lineage and missing independent PIN proof stay blocked",()=>{
+  const s=snapshot();s.directory.createdUid="foreign-registry";
+  assert.equal(bCheck({serverSnapshot:s}).decision,"HOLD");
+  assert.equal(bCheck({pinProof:null}).decision,"HOLD");
+  assert.equal(bCheck({independentProof:null}).decision,"HOLD");
 });
