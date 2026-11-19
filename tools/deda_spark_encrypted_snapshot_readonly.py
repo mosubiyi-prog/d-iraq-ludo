@@ -248,7 +248,13 @@ if __name__ == "__main__":
     except SafeStop as e:
         print("SAFE_STOP_" + str(e))
         raise SystemExit(2)
-    except Exception:
-        # Avoid printing any Firestore/Identity PII or raw exception details.
-        print("SAFE_STOP_BACKUP_READ_OR_FORMAT_UNVERIFIED")
+    except Exception as error:
+        # Log ONLY exception class and source-code locations, NEVER exception
+        # messages, Firebase document paths, user data, phone or UID values.
+        import traceback
+        print("SAFE_STOP_BACKUP_READ_OR_FORMAT_UNVERIFIED",
+              type(error).__module__, type(error).__name__)
+        for frame in traceback.extract_tb(error.__traceback__)[-3:]:
+            print("SAFE_STOP_SOURCE_LOCATION", Path(frame.filename).name,
+                  frame.lineno)
         raise SystemExit(2)
