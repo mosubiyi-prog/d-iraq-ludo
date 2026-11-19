@@ -14,8 +14,8 @@ import sys
 
 PROJECT = "deda-25b88"
 SENTINEL_UID = "__deda_gateway_nonexistent_auth_probe_20261119__"
-PROBE_COLLECTION = "__deda_gateway_readonly_probe__"
-PROBE_DOCUMENT = "nonexistent_20261119"
+PROBE_COLLECTION = "deda_gateway_readonly_probe"
+PROBE_DOCUMENT = "read_only_missing_20261119"
 
 
 class SafeStop(Exception):
