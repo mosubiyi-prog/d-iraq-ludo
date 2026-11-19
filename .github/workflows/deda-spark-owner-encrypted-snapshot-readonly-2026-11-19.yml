@@ -11,7 +11,7 @@ permissions:
   contents: read
 concurrency:
   group: deda-owner-encrypted-spark-snapshot-2026-11-19
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   protected-backup:
     runs-on: ubuntu-24.04
