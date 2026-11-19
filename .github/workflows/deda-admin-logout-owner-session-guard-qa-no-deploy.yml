@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.7'
@@ -60,6 +61,59 @@ jobs:
           dart analyze --no-fatal-warnings lib/deda_backend.dart
           dart analyze --no-fatal-warnings lib/deda_100431_linked_owner_session_policy.dart
           flutter test --no-pub test/deda_owner_session_compat_private_test.dart
+      - name: Assemble the exact protected 100450 app source recipe (NO APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pyyaml
+          # Reuse the existing signed-100450 source assembly recipe exactly;
+          # do not clone or rewrite dozens of protected bind/merge operations.
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+          workflow = yaml.safe_load(Path(
+            '.github/workflows/deda-100450-point2-full-signed-phone-qa-no-play.yml'
+          ).read_text())
+          steps = workflow['jobs']['build-signed-complete-owner-phone-apk']['steps']
+          source = [step['run'] for step in steps
+            if 'Reconstruct FULL protected 100439' in step.get('name','')]
+          if len(source) != 1 or 'merge_stage2_into_protected_100436.py' not in source[0]:
+            raise SystemExit('SAFE_STOP_SIGNED_100450_SOURCE_RECIPE_NOT_FOUND')
+          Path('/tmp/deda-100450-source-assembly.sh').write_text(
+            'set -euo pipefail\n' + source[0])
+          print('PASS_REUSED_EXISTING_100450_FULL_ASSEMBLY_RECIPE')
+          PY
+          bash /tmp/deda-100450-source-assembly.sh
+
+      - name: Assert guarded admin exit survived complete 100450 assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          project = Path(os.environ['DEDA_SOURCE_ONLY_PROJECT'])
+          backend = (project/'lib/deda_backend.dart').read_text()
+          policy = (project/'lib/deda_100431_linked_owner_session_policy.dart').read_text()
+          source = (Path('lib')/'deda_backend.dart').read_text()
+          required = [
+            'maySignOutAdminPrincipal(',
+            'admin-logout-refused-preserve-deda-owner',
+            'admin-logout-principal-changed-owner-preserved',
+          ]
+          before = backend.split('static Future<void> signOutAdmin() async {',1)
+          assert len(before) == 2
+          block = before[1].split('// DEDA in-app location sharing v1.',1)[0]
+          assert all(token in block for token in required)
+          assert all(token in source for token in required)
+          assert "get(const GetOptions(source: Source.server))" in block
+          assert 'maySignOutAdminPrincipal' in policy
+          assert 'DedaGoogleSettingsLinkCard(' not in (project/'lib/main.dart').read_text()
+          assert 'deda-stage2-core-merge-proof.json' in {p.name for p in project.glob('*.json')}
+          print('PASS_100450_ASSEMBLED_ADMIN_OWNER_UID_GUARD_PRESERVED')
+          print('NO_AUTH_RECOVERY_NO_FIREBASE_WRITES_NO_SIGNED_APK_NO_PLAY')
+          PY
+
       - name: No deployment declaration
         run: |
           echo 'NO Firebase Auth write, no Firestore write, no rule deployment'
