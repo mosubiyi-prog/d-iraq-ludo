@@ -1,0 +1,58 @@
+name: DEDA Spark Firestore Auth Owner-Encrypted Snapshot READ ONLY
+on:
+  push:
+    branches:
+      - deda-100451-spark-encrypted-readonly-backup-2026-11-19
+    paths:
+      - 'tools/deda_spark_encrypted_snapshot_readonly.py'
+      - '.github/workflows/deda-spark-owner-encrypted-snapshot-readonly-2026-11-19.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner-encrypted-spark-snapshot-2026-11-19
+  cancel-in-progress: false
+jobs:
+  protected-backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      DEDA_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_BACKUP_OUTPUT: ${{ runner.temp }}/deda-2026-11-19-spark-firestore-auth.dedabackup
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline encryption integrity guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet 'cryptography>=42,<47' 'firebase-admin>=6,<8'
+          python3 -m py_compile tools/deda_spark_encrypted_snapshot_readonly.py
+          python3 tools/deda_spark_encrypted_snapshot_readonly.py --self-test
+      - name: Create owner-encrypted Firebase READ ONLY snapshot without plaintext artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 tools/deda_spark_encrypted_snapshot_readonly.py
+          test -s "$DEDA_BACKUP_OUTPUT"
+          test -s "${DEDA_BACKUP_OUTPUT%.dedabackup}.manifest.json"
+          echo 'PASS_BACKUP_CIPHERTEXT_PRESENT_PLAINTEXT_NEVER_UPLOADED'
+      - name: Upload ciphertext and redacted counts only
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-2026-11-19-SPARK-FIRESTORE-AUTH-OWNER-ENCRYPTED-BACKUP
+          path: |
+            ${{ runner.temp }}/deda-2026-11-19-spark-firestore-auth.dedabackup
+            ${{ runner.temp }}/deda-2026-11-19-spark-firestore-auth.manifest.json
+          if-no-files-found: error
+          retention-days: 21
+      - name: Scope declaration
+        run: |
+          echo 'FIRESTORE DOCS AND AUTH PUBLIC METADATA ONLY'
+          echo 'NOT STORAGE OBJECTS, AUTH PASSWORDS OR DEVICE LOCAL CACHE'
+          echo 'NO FIRESTORE WRITES NO AUTH CHANGES NO MERGE NO PLAY RELEASE'
