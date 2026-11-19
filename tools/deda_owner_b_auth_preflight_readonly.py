@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from deda_firebase_unified_gateway_readonly import parse_service_account, SafeStop
@@ -74,6 +75,49 @@ def check_snapshot(route: dict | None, original_id: str,
     }
 
 
+# The date is from the owner-supplied Asiacell CONTRACT IMAGE. The image,
+# identity number, carrier serial, subscriber name and phone MUST NOT be
+# uploaded, stored in this repository, or emitted in logs.
+# This is chronology only: image authenticity and continuity are NOT verified.
+CONTRACT_ISSUE_DATE_UTC = datetime(2023, 2, 22, tzinfo=timezone.utc)
+NEAR_CREATION_MAX_MS = 48 * 60 * 60 * 1000
+SAME_TX_WINDOW_MS = 60 * 1000
+
+
+def check_registration_chronology(directory_created, credential_created,
+                                  auth_creation_ms) -> dict[str, bool]:
+    """Sanitized comparisons; neither account login nor owner proof."""
+    def utc_ms(value):
+        if not isinstance(value, datetime):
+            return None
+        if value.tzinfo is None:
+            return None  # never infer timezone for a security-relevant check
+        return int(value.timestamp() * 1000)
+
+    d = utc_ms(directory_created)
+    c = utc_ms(credential_created)
+    a = auth_creation_ms
+    valid = (d is not None and c is not None and
+             isinstance(a, int) and not isinstance(a, bool) and
+             a > 0 and d > 0 and c > 0)
+    floor = int(CONTRACT_ISSUE_DATE_UTC.timestamp() * 1000)
+    return {
+        "B_CREATION_TIMESTAMPS_FROM_SERVER_AVAILABLE": bool(valid),
+        "B_AUTH_POSTDATES_CONTRACT_ISSUE_DATE": bool(valid and a > floor),
+        "B_REGISTRATION_POSTDATES_CONTRACT_ISSUE_DATE": bool(
+            valid and min(d, c) > floor),
+        "B_DIRECTORY_CREDENTIAL_TIMES_COHERENT": bool(
+            valid and abs(d - c) <= SAME_TX_WINDOW_MS),
+        "B_AUTH_CREATION_NEAR_ACCOUNT_REGISTRATION": bool(
+            valid and 0 <= min(d, c) - a <= NEAR_CREATION_MAX_MS),
+        # The dated paper contract was not independently verified with
+        # Asiacell. Even a perfect timeline cannot grant A/C ownership.
+        "CARRIER_DOCUMENT_ISSUER_VERIFIED": False,
+        "CARRIER_CONTINUOUS_OWNERSHIP_VERIFIED": False,
+        "PERSONAL_OWNER_PROOF_FROM_TIMELINE": False,
+    }
+
+
 def self_test() -> int:
     original_id = "@DEDA-ABC123"
     key = "07700000000"
@@ -116,6 +160,32 @@ def self_test() -> int:
             cases += 1
         else:
             raise AssertionError("expected fail closed")
+    # Chronology tests never report dates, identifiers or subscriber data.
+    doc = datetime(2025, 5, 1, 12, 0, tzinfo=timezone.utc)
+    auth_created = int(datetime(2025, 5, 1, 11, 59, tzinfo=timezone.utc).timestamp() * 1000)
+    flags = check_registration_chronology(doc, doc, auth_created)
+    assert flags["B_CREATION_TIMESTAMPS_FROM_SERVER_AVAILABLE"]
+    assert flags["B_AUTH_POSTDATES_CONTRACT_ISSUE_DATE"]
+    assert flags["B_REGISTRATION_POSTDATES_CONTRACT_ISSUE_DATE"]
+    assert flags["B_DIRECTORY_CREDENTIAL_TIMES_COHERENT"]
+    assert flags["B_AUTH_CREATION_NEAR_ACCOUNT_REGISTRATION"]
+    assert flags["CARRIER_DOCUMENT_ISSUER_VERIFIED"] is False
+    assert flags["PERSONAL_OWNER_PROOF_FROM_TIMELINE"] is False
+    cases += 1
+    pre_contract = int(datetime(2022, 5, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    assert not check_registration_chronology(doc, doc, pre_contract)[
+        "B_AUTH_POSTDATES_CONTRACT_ISSUE_DATE"]
+    cases += 1
+    assert not check_registration_chronology(doc, doc, auth_created + 200000)[
+        "B_AUTH_CREATION_NEAR_ACCOUNT_REGISTRATION"]
+    cases += 1
+    assert not check_registration_chronology(doc, None, auth_created)[
+        "B_CREATION_TIMESTAMPS_FROM_SERVER_AVAILABLE"]
+    cases += 1
+    later = datetime(2025, 5, 2, 12, 0, tzinfo=timezone.utc)
+    assert not check_registration_chronology(doc, later, auth_created)[
+        "B_DIRECTORY_CREDENTIAL_TIMES_COHERENT"]
+    cases += 1
     print(f"PASS_B_CURRENT_AUTH_PREFLIGHT_OFFLINE_GUARDS_{cases}")
     return 0
 
@@ -154,9 +224,9 @@ def main() -> int:
                 owner.get("sharePersonalId") == original_id):
             raise SafeStop("ORIGINAL_OWNER_PROJECTION_NOT_VERIFIED")
         directory = read("deda_account_directory", key,
-                         ["accountKey", "createdUid", "active"])
+                         ["accountKey", "createdUid", "active", "createdAt"])
         cred = read("deda_credentials", key,
-                    ["accountKey", "createdUid", "active"])
+                    ["accountKey", "createdUid", "active", "createdAt"])
         b = (directory or {}).get("createdUid")
         if not (isinstance(b, str) and UID.fullmatch(b) and
                 (cred or {}).get("createdUid") == b and
@@ -175,9 +245,16 @@ def main() -> int:
         }
         flags = check_snapshot(route, original_id, owner, directory,
                                cred, b_user, b_auth, b_session)
+        flags.update(check_registration_chronology(
+            (directory or {}).get("createdAt"),
+            (cred or {}).get("createdAt"),
+            b_record.user_metadata.creation_timestamp
+            if b_record.user_metadata else None,
+        ))
         for label, value in flags.items():
             print(label, "YES" if value else "NO")
-        print("RESULT_B_REGISTRATION_SOURCE_CURRENT_READ_ONLY")
+        print("RESULT_B_REGISTRATION_SOURCE_AND_CONTRACT_DATE_READ_ONLY")
+        print("CONTRACT_IMAGE_NOT_UPLOADED_ISSUER_NOT_CONTACTED")
         print("NO_LOGIN_NO_TOKEN_NO_AUTH_UPDATE_NO_USER_DATA_WRITES")
         return 0
     except SafeStop as error:
