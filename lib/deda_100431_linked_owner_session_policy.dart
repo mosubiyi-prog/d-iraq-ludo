@@ -74,6 +74,20 @@ class DedaLinkedOwnerSessionPolicy {
   /// An owner login or a background section must not mint an anonymous UID.
   /// Only explicit NEW-account enrollment or a recovery REQUEST may allocate
   /// a temporary anonymous principal. A request UID is NEVER owner proof.
+  /// An admin-only exit must never clear an unrelated DEDA owner session.
+  /// In linked-owner builds, the admin principal must be independently
+  /// confirmed by a fresh server-side admins/{uid} document before logout.
+  /// This is a transition safety rule, NOT an admin authorization grant.
+  /// Existing published Play behavior remains unchanged while pilot is OFF.
+  static bool maySignOutAdminPrincipal({
+    required bool linkedOwnerPilotEnabled,
+    required bool hasCurrentPrincipal,
+    required bool currentIsAnonymous,
+    required bool serverVerifiedAdminDocument,
+  }) => !linkedOwnerPilotEnabled ||
+      (hasCurrentPrincipal && !currentIsAnonymous &&
+       serverVerifiedAdminDocument);
+
   /// With the compatibility pilot off, preserve the existing Play behavior.
   static bool mayPrepareAnonymousForAction({
     required bool linkedOwnerPilotEnabled,
