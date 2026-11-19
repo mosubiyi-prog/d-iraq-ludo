@@ -95,9 +95,13 @@ class DedaLinkedOwnerSessionPolicy {
     required bool hasCurrentPrincipal,
     required bool currentIsAnonymous,
     required bool serverVerifiedAdminDocument,
+    // A server-confirmed DEDA owner session is not an admin logout target,
+    // even if a historical admins/{uid} record happens to exist for that UID.
+    // Default false is intentionally fail-closed for older callers.
+    bool serverVerifiedNoOwnerSession = false,
   }) => !linkedOwnerPilotEnabled ||
       (hasCurrentPrincipal && !currentIsAnonymous &&
-       serverVerifiedAdminDocument);
+       serverVerifiedAdminDocument && serverVerifiedNoOwnerSession);
 
   /// With the compatibility pilot off, preserve the existing Play behavior.
   static bool mayPrepareAnonymousForAction({
