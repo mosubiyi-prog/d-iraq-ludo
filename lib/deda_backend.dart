@@ -4427,8 +4427,16 @@ class DedaBackend {
         _clearAdminProfileCache();
         return;
       }
+      // Only the real, active administrator may end an admin session.
+      // An existing public DEDA session on the very same UID is owner data,
+      // NOT an admin logout authorization. Both reads must be fresh server
+      // reads; missing permission/network errors fail closed before signOut.
       final proof = await FirebaseFirestore.instance
           .collection('admins')
+          .doc(principal.uid)
+          .get(const GetOptions(source: Source.server));
+      final ownerSessionProof = await FirebaseFirestore.instance
+          .collection('deda_sessions')
           .doc(principal.uid)
           .get(const GetOptions(source: Source.server));
       if (auth.currentUser?.uid != principal.uid ||
@@ -4437,8 +4445,13 @@ class DedaBackend {
             hasCurrentPrincipal: auth.currentUser != null,
             currentIsAnonymous: principal.isAnonymous,
             serverVerifiedAdminDocument: proof.exists &&
+                proof.data()?['active'] == true &&
+                normalizeAdminStatus(proof.data()) == 'active' &&
                 !proof.metadata.isFromCache &&
                 !proof.metadata.hasPendingWrites,
+            serverVerifiedNoOwnerSession: !ownerSessionProof.exists &&
+                !ownerSessionProof.metadata.isFromCache &&
+                !ownerSessionProof.metadata.hasPendingWrites,
           )) {
         _clearAdminProfileCache();
         throw StateError('admin-logout-refused-preserve-deda-owner');
