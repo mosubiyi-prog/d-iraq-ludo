@@ -245,7 +245,7 @@ jobs:
           entry=backend.split('static Future<bool> signInAdmin({',1)[1].split('static Future<',1)[0]
           logout=backend.split('static Future<void> signOutAdmin() async {',1)[1].split('// DEDA in-app location sharing v1.',1)[0]
           assert 'mayBeginAdminAuthenticationOnSharedAuth(' in entry
-          assert entry.index('mayBeginAdminAuthenticationOnSharedAuth(') < entry.index('signInWithEmailAndPassword(')
+          assert entry.index('mayBeginAdminAuthenticationOnSharedAuth(') < entry.index('final credential =')
           assert 'admin-login-refused-preserve-deda-owner-session' in entry
           assert 'maySignOutAdminPrincipal(' in logout
           assert 'admin-logout-principal-changed-owner-preserved' in logout
