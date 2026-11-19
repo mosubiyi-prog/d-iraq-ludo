@@ -6,6 +6,7 @@ on:
       - deda-firebase-unified-gateway-readonly-2026-11-19
     paths:
       - 'tools/deda_firebase_unified_gateway_readonly.py'
+      - 'tools/deda_owner_b_auth_preflight_readonly.py'
       - '.github/workflows/deda-firebase-unified-gateway-readonly.yml'
   workflow_dispatch:
 
@@ -46,6 +47,14 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet 'firebase-admin>=6,<8'
           python3 tools/deda_firebase_unified_gateway_readonly.py
+
+      - name: B-only bounded current sign-in readiness (no account mutation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/deda_owner_b_auth_preflight_readonly.py
+          python3 tools/deda_owner_b_auth_preflight_readonly.py --self-test
+          python3 tools/deda_owner_b_auth_preflight_readonly.py
 
       - name: Scope and safety declaration
         shell: bash
