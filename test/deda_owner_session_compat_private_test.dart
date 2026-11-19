@@ -227,6 +227,36 @@ void main() {
     expect(allowed(pilot: false, current: true), true);
   });
 
+  test('admin exit cannot silently log out an ordinary DEDA session', () {
+    bool canEnd({required bool pilot, required bool principal,
+      required bool anonymous, required bool verifiedAdmin}) =>
+        DedaLinkedOwnerSessionPolicy.maySignOutAdminPrincipal(
+          linkedOwnerPilotEnabled: pilot,
+          hasCurrentPrincipal: principal,
+          currentIsAnonymous: anonymous,
+          serverVerifiedAdminDocument: verifiedAdmin,
+        );
+
+    // Preserves pre-existing published behavior with recovery mode OFF.
+    expect(canEnd(pilot:false, principal:true,
+      anonymous:true, verifiedAdmin:false), true);
+
+    // A normal anonymous B/A account is never an admin just because the
+    // user tapped Back/Exit in the admin area.
+    expect(canEnd(pilot:true, principal:true,
+      anonymous:true, verifiedAdmin:true), false);
+    // Missing Firebase Auth is not a reason to mint a replacement UID.
+    expect(canEnd(pilot:true, principal:false,
+      anonymous:false, verifiedAdmin:true), false);
+    // Linked B must not be logged out by admin-exit without a trusted
+    // real server document under that exact UID.
+    expect(canEnd(pilot:true, principal:true,
+      anonymous:false, verifiedAdmin:false), false);
+    // A confirmed real admin remains able to log out normally.
+    expect(canEnd(pilot:true, principal:true,
+      anonymous:false, verifiedAdmin:true), true);
+  });
+
   test('known existing phone cannot enter new-account enrollment in pilot', () {
     expect(DedaLinkedOwnerSessionPolicy.mayBeginExplicitEnrollment(
       linkedOwnerPilotEnabled: true, previouslyKnownAccount: true), false);
