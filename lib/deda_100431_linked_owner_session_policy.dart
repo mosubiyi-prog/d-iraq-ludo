@@ -74,6 +74,17 @@ class DedaLinkedOwnerSessionPolicy {
   /// An owner login or a background section must not mint an anonymous UID.
   /// Only explicit NEW-account enrollment or a recovery REQUEST may allocate
   /// a temporary anonymous principal. A request UID is NEVER owner proof.
+  /// Admin sign-in on the SHARED FirebaseAuth instance changes its UID
+  /// immediately, before the admin-role lookup. Never let a manager login
+  /// displace an existing public DEDA session in protected-owner builds.
+  /// A dedicated admin Auth lane is required for simultaneous identities.
+  /// This deny rule does not authenticate a user or give admin privileges.
+  /// With the pilot OFF the published 100340 login stays unchanged.
+  static bool mayBeginAdminAuthenticationOnSharedAuth({
+    required bool linkedOwnerPilotEnabled,
+    required bool hasCurrentPrincipal,
+  }) => !linkedOwnerPilotEnabled || !hasCurrentPrincipal;
+
   /// An admin-only exit must never clear an unrelated DEDA owner session.
   /// In linked-owner builds, the admin principal must be independently
   /// confirmed by a fresh server-side admins/{uid} document before logout.
