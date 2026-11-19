@@ -4401,6 +4401,37 @@ class DedaBackend {
   }
 
   static Future<void> signOutAdmin() async {
+    // The shared FirebaseAuth lane also carries the public DEDA account.
+    // An admin-exit event must never log out an anonymous DEDA owner, nor a
+    // linked owner who is NOT an administrator. Both could otherwise lose
+    // their original session and be redirected into a new UID on older paths.
+    //
+    // Only the optional linked-owner recovery build uses this guard.
+    // The published compatibility behavior is unchanged with the flag OFF.
+    if (dedaLinkedOwnerCompatEnabled) {
+      final auth = FirebaseAuth.instance;
+      final principal = auth.currentUser;
+      if (principal == null || principal.isAnonymous) {
+        _clearAdminProfileCache();
+        return;
+      }
+      final proof = await FirebaseFirestore.instance
+          .collection('admins')
+          .doc(principal.uid)
+          .get(const GetOptions(source: Source.server));
+      if (auth.currentUser?.uid != principal.uid ||
+          !DedaLinkedOwnerSessionPolicy.maySignOutAdminPrincipal(
+            linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+            hasCurrentPrincipal: auth.currentUser != null,
+            currentIsAnonymous: principal.isAnonymous,
+            serverVerifiedAdminDocument: proof.exists &&
+                !proof.metadata.isFromCache &&
+                !proof.metadata.hasPendingWrites,
+          )) {
+        _clearAdminProfileCache();
+        throw StateError('admin-logout-refused-preserve-deda-owner');
+      }
+    }
     try {
       await _writeAdminAudit('admin_signed_out');
     } catch (_) {}
