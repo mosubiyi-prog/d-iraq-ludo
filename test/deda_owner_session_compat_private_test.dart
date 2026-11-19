@@ -248,12 +248,14 @@ void main() {
 
   test('admin exit cannot silently log out an ordinary DEDA session', () {
     bool canEnd({required bool pilot, required bool principal,
-      required bool anonymous, required bool verifiedAdmin}) =>
+      required bool anonymous, required bool verifiedAdmin,
+      bool freshNoOwnerProof = true}) =>
         DedaLinkedOwnerSessionPolicy.maySignOutAdminPrincipal(
           linkedOwnerPilotEnabled: pilot,
           hasCurrentPrincipal: principal,
           currentIsAnonymous: anonymous,
           serverVerifiedAdminDocument: verifiedAdmin,
+          serverVerifiedNoOwnerSession: freshNoOwnerProof,
         );
 
     // Preserves pre-existing published behavior with recovery mode OFF.
@@ -271,9 +273,16 @@ void main() {
     // real server document under that exact UID.
     expect(canEnd(pilot:true, principal:true,
       anonymous:false, verifiedAdmin:false), false);
-    // A confirmed real admin remains able to log out normally.
+    // A confirmed real admin WITHOUT a DEDA public owner session can exit.
     expect(canEnd(pilot:true, principal:true,
       anonymous:false, verifiedAdmin:true), true);
+    // An owner/admin dual-role UID must not lose their original DEDA session.
+    expect(canEnd(pilot:true, principal:true,
+      anonymous:false, verifiedAdmin:true, freshNoOwnerProof:false), false);
+    // Uncertain/missing fresh owner-session proof is not permission to logout.
+    expect(DedaLinkedOwnerSessionPolicy.maySignOutAdminPrincipal(
+      linkedOwnerPilotEnabled:true, hasCurrentPrincipal:true,
+      currentIsAnonymous:false, serverVerifiedAdminDocument:true), false);
   });
 
   test('known existing phone cannot enter new-account enrollment in pilot', () {
