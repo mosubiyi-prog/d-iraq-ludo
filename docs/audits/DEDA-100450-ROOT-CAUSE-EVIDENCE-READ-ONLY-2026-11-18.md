@@ -140,3 +140,20 @@
 
 
 **ختم فحص المصدر المجمّع 100450 (لا APK):** بعد معالجة تعارض المسارين، أضيف تحليل Dart للملفين داخل بيئة *المصدر الكامل بعد دمج 100450*، لا للملفات الأولية في المستودع وحدها. تشغيل GitHub Actions `44598057809` على commit `4290d023277ee68f5557abf1da8be5e5a2fe3871` انتهى **SUCCESS**؛ `PASS_100436_APP_FULL_BASELINE_WITH_STAGE2_CORE_THREE_WAY_MERGED`، `PASS_ASSEMBLED_100450_ADMIN_OWNER_DART_ANALYSIS`، `PASS_100450_ASSEMBLED_ADMIN_OWNER_UID_GUARD_PRESERVED`، **12 Flutter tests passed + 4 Python tests passed**. التحليل المجمّع بلا أخطاء Dart؛ سجّل 24 ملاحظة غير قاتلة في `lib/deda_backend.dart` وملف سياسة الجلسة بلا ملاحظات. لا اختبار تنفيذي على هاتف ولا APK ولا Firebase/Play deploy. مهمة مطابقة الدمج أصبحت **منجزة بفحوص المصدر والتحليل**؛ توحيد A/B/C واسترجاع جلسة B الحقيقي ما زال خارج نتيجة هذه الجولة.
+
+
+## 2026-11-19 — مقارنة زمنية فعلية لعقد الخط مع إنشاء B (قراءة فقط)
+
+**تنفيذ بإشراف تعليمات المدير العام 01:** قُرئت الوثيقة الأصلية كاملة وAGENTS.md، وقرارات إثبات الملكية في `qa/unified_room_private/DEDA_OWNER_HISTORICAL_SOURCE_AND_INDEPENDENT_EVIDENCE_DECISION_2026-11-17.md`، مع المراجعة الـ15 المعتادة: حماية النسخة والفروع والمصادقة وGoogle المحذوف والآيدي والملف والأصدقاء والدوري والمتجر والهدايا والمهام والإدارة وفوترة Spark وقواعد الإنتاج وعدم ادّعاء إنجاز فحص هاتف/APK.
+
+**الهدف المحدد:** مقارنة التوقيت الفعلي لتسجيل هوية B التاريخية من Firebase Authentication مع timestamps في `deda_account_directory` و`deda_credentials`، والتأكد هل تاريخ عقد المشترك الذي قُدّم داخل المحادثة يسبق تسجيل الحساب. الرقم والاسم والرقم التسلسلي والصورة والـUID وPIN جميعها غير مذكورة بالمستودع أو سجلات Actions. الصورة لم تُرفع إلى GitHub.
+
+**منع التكرار:** تم تعديل `tools/deda_owner_b_auth_preflight_readonly.py` القائم بالفعل في فرع القراءة المعزول `deda-firebase-unified-gateway-readonly-2026-11-19`؛ لا نسخة ثانية من فاحص الهوية أو تغيير في أكواد الاسترجاع.
+
+**العمل المنجز:** مقارنة server timestamp لكل من Auth B وcreatedAt لسجلي الدليل والرمز، وإظهار قيم boolean غير كاشفة للبيانات، مع حالات اختبارات فشل مغلقة إذا غابت timestamps أو اختلفت أو كانت المنطقة الزمنية غير معروفة. جميع قواعد التسجيل/ملكية الآيدي الأساسية بقيت كما هي. لا استخراج PIN أو إنشاء token.
+
+**نتيجة التشغيل الحي:** [GitHub Actions 44606307431](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44606307431) عند commit `e67d2265fea9b94e94254dd2afe3960274475c40` **SUCCESS**؛ `PASS_PRODUCTION_FIRESTORE_READ_ACCESS`، `PASS_PRODUCTION_FIREBASE_AUTH_READ_ACCESS`، `PASS_B_CURRENT_AUTH_PREFLIGHT_OFFLINE_GUARDS_11`. راجعت Flags `B_REGISTRATION_UID_VERIFIED=YES` و`B_AUTH_RECORD_ACTIVE=YES` و`B_CREATION_TIMESTAMPS_FROM_SERVER_AVAILABLE=YES` و`B_AUTH_POSTDATES_CONTRACT_ISSUE_DATE=YES` و`B_REGISTRATION_POSTDATES_CONTRACT_ISSUE_DATE=YES` و`B_DIRECTORY_CREDENTIAL_TIMES_COHERENT=YES` و`B_AUTH_CREATION_NEAR_ACCOUNT_REGISTRATION=YES`. في المقابل `B_HAS_EXPECTED_LINKED_EMAIL=NO` و`B_HAS_GOOGLE_PROVIDER=NO` و`B_HAS_PHONE_PROVIDER=NO` و`B_SESSION_ACCOUNT_KEY_MATCH=NO`.
+
+**الحد الفاصل:** `CARRIER_DOCUMENT_ISSUER_VERIFIED=NO` و`CARRIER_CONTINUOUS_OWNERSHIP_VERIFIED=NO` و`PERSONAL_OWNER_PROOF_FROM_TIMELINE=NO`. هذه قيم **لم يُتحقق منها** في هذا الفحص، لا اتهام بعدم صحة الوثيقة. العقد وتواريخ التسجيل حجة زمنية داعمة فقط؛ دليل شركة الاتصالات الرسمي المستقل وتفويض هوية B على حساب المستخدم ما زالا غير موجودين. لا يجوز نقل A/C أو إنشاء صلاحيات لمجرد نجاح المضاهاة.
+
+**حالة النقطة:** استكمال المطابقة الزمنية الحية **منجز ومختبر**. إثبات الملكية المستقل وتفعيل جلسة B ودمج حقوق A/C **غير مكتمل / SAFE HOLD**. لا مساس ببيانات المستخدمين ولا قواعد أو Auth production ولا Play ولا إصدار APK. لا تغيير لبطاقة Google المحذوفة.
