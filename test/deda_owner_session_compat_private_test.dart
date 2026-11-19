@@ -227,6 +227,25 @@ void main() {
     expect(allowed(pilot: false, current: true), true);
   });
 
+  test('admin entry cannot displace a current owner Firebase principal', () {
+    bool allow({required bool pilot, required bool principal}) =>
+        DedaLinkedOwnerSessionPolicy
+            .mayBeginAdminAuthenticationOnSharedAuth(
+          linkedOwnerPilotEnabled: pilot,
+          hasCurrentPrincipal: principal,
+        );
+
+    // Preserve the original Play behavior while compatibility pilot is off.
+    expect(allow(pilot: false, principal: false), true);
+    expect(allow(pilot: false, principal: true), true);
+    // An already signed-in public user (including a legacy anonymous UID)
+    // cannot be overwritten by an admin password before role verification.
+    expect(allow(pilot: true, principal: true), false);
+    // An explicit fresh admin sign-in may proceed if Auth has no principal.
+    // Admin role/status must still be validated server-side afterwards.
+    expect(allow(pilot: true, principal: false), true);
+  });
+
   test('admin exit cannot silently log out an ordinary DEDA session', () {
     bool canEnd({required bool pilot, required bool principal,
       required bool anonymous, required bool verifiedAdmin}) =>
