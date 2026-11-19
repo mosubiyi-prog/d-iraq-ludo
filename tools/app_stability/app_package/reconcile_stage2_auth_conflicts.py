@@ -129,7 +129,53 @@ def _point2_backend_admin_same_session(ours, base, theirs):
     return None
 
 
+def _backend_admin_logout_100450(ours, base, theirs):
+    """Resolve ONLY reviewed 100450 admin-exit overlaps with signed runtime.
+
+    Signed 100436 wraps signOutAdmin in DedaAuthRuntime.run/logout and
+    DedaAuthRuntime.wait(signOut). The newer owner-UID guard MUST remain
+    inside that original lane. Never pick the new raw signOut over the
+    already accepted runtime serialization, or bypass the new UID proof.
+    Unknown merge shapes remain blocked, unchanged.
+    """
+    if ("return DedaAuthRuntime.run<void>(" in ours and
+            "kind: DedaSessionTransitionKind.logout," in ours and
+            "action: () async {" in ours and
+            not base.strip() and
+            theirs.lstrip().startswith("String? confirmedAdminUid;") and
+            "maySignOutAdminPrincipal(" in theirs and
+            "get(const GetOptions(source: Source.server))" in theirs and
+            "admin-logout-refused-preserve-deda-owner" in theirs and
+            "admin-logout-principal-changed-owner-preserved" not in theirs):
+        # The beginning of the signed lambda remains before *all* new proof.
+        return ours + theirs
+
+    original_signout = (
+        "await DedaAuthRuntime.wait(() => "
+        "DedaAuthRuntime.signOut(FirebaseAuth.instance));"
+    )
+    legacy_signout = "await FirebaseAuth.instance.signOut();"
+    if (base.strip() == legacy_signout and
+            ours.count(original_signout) == 1 and
+            ours.split(original_signout, 1)[1].strip() == "});" and
+            "FirebaseAuth.instance.currentUser?.uid != confirmedAdminUid"
+            in theirs and
+            "admin-logout-principal-changed-owner-preserved" in theirs and
+            theirs.count(legacy_signout) == 1):
+        # Append ONLY the reviewed signed lambda closing from protected
+        # source. All new UID race checks precede SDK logout and survive.
+        closing = ours.split(original_signout, 1)[1]
+        preserved = once(theirs, legacy_signout, original_signout,
+                         "100450 preserve signed logout transition")
+        return preserved + closing
+
+    return None
+
+
 def _backend(ours, base, theirs):
+    admin_logout = _backend_admin_logout_100450(ours, base, theirs)
+    if admin_logout is not None:
+        return admin_logout
     point2 = _point2_backend_admin_same_session(ours, base, theirs)
     if point2 is not None:
         return point2
