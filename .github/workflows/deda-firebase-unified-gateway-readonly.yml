@@ -1,0 +1,55 @@
+name: DEDA Unified Firebase Access Gateway - STRICT READ ONLY
+
+on:
+  push:
+    branches:
+      - deda-firebase-unified-gateway-readonly-2026-11-19
+    paths:
+      - 'tools/deda_firebase_unified_gateway_readonly.py'
+      - '.github/workflows/deda-firebase-unified-gateway-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-unified-firebase-readonly-access
+  cancel-in-progress: true
+
+jobs:
+  check-existing-github-firebase-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - name: Checkout source without persisted GitHub credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Offline hard-stop unit tests and syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/deda_firebase_unified_gateway_readonly.py
+          python3 tools/deda_firebase_unified_gateway_readonly.py --self-test
+
+      - name: Test existing Firebase project Firestore and Auth read access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet 'firebase-admin>=6,<8'
+          python3 tools/deda_firebase_unified_gateway_readonly.py
+
+      - name: Scope and safety declaration
+        shell: bash
+        run: |
+          echo 'ACCESS CHECK ONLY - no production data changes'
+          echo 'NOT account unification, owner authorization or restoration'
+          echo 'NO Firebase deployment, billing change or Play publishing'
