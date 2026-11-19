@@ -139,24 +139,36 @@ def run() -> int:
                 "dateUtc": datetime.now(timezone.utc).isoformat(),
             }) + "\n")
 
-            def walk(collection, depth: int):
-                nonlocal total_docs
-                if depth > MAX_COLLECTION_DEPTH:
-                    raise SafeStop("FIRESTORE_DEPTH_LIMIT_EXCEEDED")
-                for docref in collection.list_documents(page_size=100):
-                    if docref.path in visited_paths:
-                        raise SafeStop("DUPLICATE_DOCUMENT_PATH")
-                    visited_paths.add(docref.path)
-                    snap = docref.get()
-                    if snap.exists:
+            # Firestore network reads are independent. Bounded parallel
+            # retrieval avoids thousands of sequential per-document RPCs.
+            # All archive writes and counters remain on this one thread.
+            from collections import deque
+            from concurrent.futures import ThreadPoolExecutor
+
+            def get_snapshot(ref):
+                return ref.get()
+
+            def get_subcollections(ref):
+                return list(ref.collections())
+
+            work = deque((collection, 0) for collection in db.collections())
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                while work:
+                    collection, depth = work.popleft()
+                    if depth > MAX_COLLECTION_DEPTH:
+                        raise SafeStop("FIRESTORE_DEPTH_LIMIT_EXCEEDED")
+                    refs = list(collection.list_documents(page_size=100))
+                    snaps = pool.map(get_snapshot, refs)
+                    for docref, snap in zip(refs, snaps):
+                        if docref.path in visited_paths:
+                            raise SafeStop("DUPLICATE_DOCUMENT_PATH")
+                        visited_paths.add(docref.path)
+                        if not snap.exists:
+                            continue
                         total_docs += 1
                         if total_docs > MAX_DOCS:
                             raise SafeStop("BACKUP_DOCUMENT_LIMIT_EXCEEDED")
-                        # encode_dict produces Firestore's typed map protobuf:
-                        # timestamps, GeoPoints, refs and binary are preserved.
                         values = encode_dict(snap.to_dict() or {})
-                        # encode_dict returns a mapping of field names to
-                        # protobuf Value objects, NOT one protobuf MapValue.
                         fields = {
                             name: MessageToDict(
                                 value._pb if hasattr(value, "_pb") else value,
@@ -175,11 +187,15 @@ def run() -> int:
                         stream.write(json.dumps(record, ensure_ascii=False,
                                                 separators=(",", ":")) + "\n")
                         count[docref.path.split("/")[0]] += 1
-                    for sub in docref.collections():
-                        walk(sub, depth + 1)
-
-            for collection in db.collections():
-                walk(collection, 0)
+                        if total_docs % 1000 == 0:
+                            # Count only: never print Firestore paths or PII.
+                            print("READONLY_FIRESTORE_DOCUMENTS_PROCESSED",
+                                  total_docs, flush=True)
+                    # list_documents, unlike stream(), covers refs whose
+                    # parent doc is absent but subcollections still exist.
+                    for subcollections in pool.map(get_subcollections, refs):
+                        for sub in subcollections:
+                            work.append((sub, depth + 1))
 
             # Firebase Auth metadata: UID, email/phone/provider info and
             # creation/last-login fields. Secure password hashes/tokens are
