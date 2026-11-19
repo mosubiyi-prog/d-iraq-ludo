@@ -243,6 +243,12 @@ test("fake/duplicate/missing rights scopes refuse a B consolidation",()=>{
   }
   assert.equal(bCheck({sourceScopeAttestations:{...s,source:"client"}})
     .decision,"HOLD");
+  assert.equal(bCheck({sourceScopeAttestations:{...s,scopes:
+    bScopes().map(x=>x.domain==="original_id"?{...x,sourceUid:B}:x)}})
+    .decision,"HOLD");
+  assert.equal(bCheck({sourceScopeAttestations:{...s,scopes:
+    bScopes().map(x=>x.domain==="friends"?{...x,sourceUid:A}:x)}})
+    .decision,"HOLD");
 });
 test("encrypted cloud backup alone cannot substitute original phone and purchases",()=>{
   for(const missing of Object.keys(bBackups())){
