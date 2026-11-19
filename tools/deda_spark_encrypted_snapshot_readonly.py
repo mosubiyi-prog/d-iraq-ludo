@@ -154,10 +154,15 @@ def run() -> int:
                             raise SafeStop("BACKUP_DOCUMENT_LIMIT_EXCEEDED")
                         # encode_dict produces Firestore's typed map protobuf:
                         # timestamps, GeoPoints, refs and binary are preserved.
-                        val = encode_dict(snap.to_dict() or {})
-                        fields = MessageToDict(
-                            val._pb if hasattr(val, "_pb") else val,
-                            preserving_proto_field_name=True)
+                        values = encode_dict(snap.to_dict() or {})
+                        # encode_dict returns a mapping of field names to
+                        # protobuf Value objects, NOT one protobuf MapValue.
+                        fields = {
+                            name: MessageToDict(
+                                value._pb if hasattr(value, "_pb") else value,
+                                preserving_proto_field_name=True)
+                            for name, value in values.items()
+                        }
                         record = {
                             "type": "firestoreDocument",
                             "path": docref.path,
