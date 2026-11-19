@@ -189,6 +189,84 @@ function reviewReadiness({
   });
 }
 
+// Director-approved canonical *target* B is the PIN registration UID. This
+// changes no Firebase identity: Auth B may still be unavailable and A/C retain
+// their original ownership. This stage is a private, source-only preflight,
+// not an automatic migration, credential grant, or server authority.
+const B_REQUIRED_SCOPE_PROOF=Object.freeze([
+  "original_id", "friends", "premium_id", "gifts", "wallet",
+  "league", "places", "historical_progress"
+]);
+function holdB(reason) {
+  return Object.freeze({
+    decision:"HOLD",reason,
+    bIsRegistrationUid:false,readyForIndependentReview:false,
+    canAuthenticate:false,canMerge:false,canTransferAssets:false,
+    financialRestoreEnabled:false,productionWrites:false
+  });
+}
+function assessBCanonicalConsolidation({
+  serverSnapshot,pinProof,independentProof,reviewRecord,
+  sourceScopeAttestations,backupReadbacks,nowMs,incidentCutoffMs
+}={}) {
+  const s=serverRecordShape(serverSnapshot);
+  if(!s||!s.originalRouteValid||!s.registrationValid||
+     !s.socialValid||!s.threeWaySplit)
+    return holdB("THREE_HISTORICAL_UIDS_NOT_SERVER_VERIFIED");
+  const uidB=serverSnapshot.directory.createdUid;
+  if(!uidB||serverSnapshot.credentials.createdUid!==uidB)
+    return holdB("REGISTRATION_UID_B_NOT_IMMUTABLY_MATCHED");
+  // A current token on A or C is not proof that B owns their assets.
+  if(independentProof?.originalUid!==uidB||
+     reviewRecord?.reviewedOriginalUid!==uidB)
+    return holdB("INDEPENDENT_B_OWNERSHIP_NOT_ESTABLISHED");
+  const assessment=reviewReadiness({serverSnapshot,pinProof,
+    independentProof,reviewRecord,nowMs,incidentCutoffMs});
+  if(assessment.decision!=="CANDIDATE_FOR_SEPARATE_OWNER_REVIEW")
+    return holdB(assessment.reason);
+  // Rights for A and C need independently source-attested scopes. B
+  // registration and PIN alone must not be treated as those rights.
+  if(!sourceScopeAttestations||
+     sourceScopeAttestations.source!=="trusted_independent_server_review"||
+     sourceScopeAttestations.accountKey!==serverSnapshot.accountKey||
+     sourceScopeAttestations.originalId!==serverSnapshot.originalId||
+     sourceScopeAttestations.targetRegistrationUid!==uidB||
+     !Array.isArray(sourceScopeAttestations.scopes)||
+     sourceScopeAttestations.scopes.length!==B_REQUIRED_SCOPE_PROOF.length)
+    return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+  const scopes=new Map();
+  for(const x of sourceScopeAttestations.scopes){
+    if(!x||typeof x.domain!=="string"||scopes.has(x.domain)||
+       !B_REQUIRED_SCOPE_PROOF.includes(x.domain)||
+       x.independentVerified!==true||x.ownerApproved!==true||
+       ![serverSnapshot.route.ownerUid,uidB,
+         serverSnapshot.social.ownerUid].includes(x.sourceUid)||
+       !NONCE_DIGEST.test(x.sourceReceiptSha256||""))
+      return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+    scopes.set(x.domain,x);
+  }
+  if(B_REQUIRED_SCOPE_PROOF.some(domain=>!scopes.has(domain)))
+    return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+  // An encrypted Firestore-only export is insufficient. Missing local
+  // purchases/progress or Storage objects are never interpreted as zero.
+  if(backupReadbacks?.firestoreAndAuthVerified!==true||
+     backupReadbacks?.firebaseStorageVerified!==true||
+     backupReadbacks?.originalPhoneLocalArchiveVerified!==true||
+     backupReadbacks?.historicalPurchasesVerified!==true||
+     backupReadbacks?.fullFinancialLedgerVerified!==true||
+     backupReadbacks?.rollbackReadbackVerified!==true)
+    return holdB("COMPLETE_LOSSLESS_RECOVERY_SOURCES_MISSING");
+  // Deliberately no authorization. An actual server-side approval, exact
+  // asset reconciliation and two-phone QA are still separately mandatory.
+  return Object.freeze({
+    decision:"REVIEW_CANDIDATE_B_REGISTRATION_ONLY",
+    reason:"NO_PRODUCTION_AUTHORIZATION_ISSUED",
+    bIsRegistrationUid:true,readyForIndependentReview:true,
+    canAuthenticate:false,canMerge:false,canTransferAssets:false,
+    financialRestoreEnabled:false,productionWrites:false
+  });
+}
+
 module.exports = {
-  safeEvidenceAssessment, reviewReadiness,
+  safeEvidenceAssessment, reviewReadiness, assessBCanonicalConsolidation,
 };
