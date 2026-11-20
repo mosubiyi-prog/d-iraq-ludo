@@ -9,9 +9,10 @@ const originalId="@DEDA-ABC123";
 const accountKey="07700000000";
 const A="example-old-owner-A",B="example-pin-creator-B",C="example-social-C";
 const challengeHash="a".repeat(64);
+const sourceSnapshotSha256="d".repeat(64);
 
 const snapshot=()=>({
-  accountKey, originalId,
+  accountKey, originalId, sourceSnapshotSha256,
   route:{ownerUid:A,publicId:originalId,kind:"personal",active:true},
   directory:{createdUid:B,accountKey,active:true},
   credentials:{createdUid:B,accountKey,active:true},
@@ -194,6 +195,7 @@ const bScopes=()=>[
   sourceReceiptSha256:(i+1).toString(16).repeat(64),
 }));
 const bBackups=()=>({
+  sourceSnapshotSha256,
   firestoreAndAuthVerified:true,firebaseStorageVerified:true,
   originalPhoneLocalArchiveVerified:true,
   historicalPurchasesVerified:true,fullFinancialLedgerVerified:true,
@@ -206,7 +208,8 @@ function bCheck(options={}){
     reviewRecord:{...review(),reviewedOriginalUid:B},
     sourceScopeAttestations:{
       source:"trusted_independent_server_review",accountKey,originalId,
-      targetRegistrationUid:B,challengeHash,scopes:bScopes(),
+      targetRegistrationUid:B,challengeHash,sourceSnapshotSha256,
+      originalOwnerUid:A,socialOwnerUid:C,scopes:bScopes(),
     },
     backupReadbacks:bBackups(),nowMs,incidentCutoffMs,...options,
   });
@@ -231,7 +234,8 @@ test("A/C factor alone never promotes B to a verified owner",()=>{
 });
 test("fake/duplicate/missing rights scopes refuse a B consolidation",()=>{
   const s={source:"trusted_independent_server_review",accountKey,originalId,
-    targetRegistrationUid:B,challengeHash,scopes:bScopes()};
+    targetRegistrationUid:B,challengeHash,sourceSnapshotSha256,
+    originalOwnerUid:A,socialOwnerUid:C,scopes:bScopes()};
   for(const v of [null,[],s.scopes.slice(1),
     [...s.scopes.slice(0,-1),s.scopes[0]],
     s.scopes.map(x=>x.domain==="friends"?{...x,independentVerified:false}:x),
@@ -278,7 +282,8 @@ test("verified B registration remains recorded during safe HOLD, not owner autho
 });
 test("historical A/C rights receipts cannot be replayed with a fresh challenge",()=>{
   const s={source:"trusted_independent_server_review",accountKey,originalId,
-    targetRegistrationUid:B,challengeHash,scopes:bScopes()};
+    targetRegistrationUid:B,challengeHash,sourceSnapshotSha256,
+    originalOwnerUid:A,socialOwnerUid:C,scopes:bScopes()};
   for(const bad of [
     {...s,challengeHash:"c".repeat(64)},
     {...s,challengeHash:undefined},
@@ -293,5 +298,30 @@ test("historical A/C rights receipts cannot be replayed with a fresh challenge",
     assert.equal(result.canMerge,false);
     assert.equal(result.canTransferAssets,false);
     assert.equal(result.productionWrites,false);
+  }
+});
+
+test("B/A/C source revisions must match independent rights and archival readback",()=>{
+  const valid={source:"trusted_independent_server_review",accountKey,originalId,
+    targetRegistrationUid:B,challengeHash,sourceSnapshotSha256,
+    originalOwnerUid:A,socialOwnerUid:C,scopes:bScopes()};
+  for(const bad of [
+    {sourceScopeAttestations:{...valid,sourceSnapshotSha256:"e".repeat(64)}},
+    {sourceScopeAttestations:{...valid,sourceSnapshotSha256:null}},
+    {sourceScopeAttestations:{...valid,originalOwnerUid:B}},
+    {sourceScopeAttestations:{...valid,socialOwnerUid:A}},
+    {backupReadbacks:{...bBackups(),sourceSnapshotSha256:"f".repeat(64)}},
+    {backupReadbacks:{...bBackups(),sourceSnapshotSha256:null}},
+    {serverSnapshot:{...snapshot(),sourceSnapshotSha256:"f".repeat(64)}},
+    {serverSnapshot:{...snapshot(),sourceSnapshotSha256:null}},
+  ]){
+    const x=bCheck(bad);
+    assert.equal(x.decision,"HOLD");
+    assert.equal(x.bIsRegistrationUid,true);
+    assert.equal(x.canAuthenticate,false);
+    assert.equal(x.canMerge,false);
+    assert.equal(x.canTransferAssets,false);
+    assert.equal(x.financialRestoreEnabled,false);
+    assert.equal(x.productionWrites,false);
   }
 });

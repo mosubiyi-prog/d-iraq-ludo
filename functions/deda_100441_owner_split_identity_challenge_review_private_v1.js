@@ -225,6 +225,15 @@ function assessBCanonicalConsolidation({
     independentProof,reviewRecord,nowMs,incidentCutoffMs});
   if(assessment.decision!=="CANDIDATE_FOR_SEPARATE_OWNER_REVIEW")
     return holdB(assessment.reason,true);
+  // Both the independently reviewed rights and the archival readback must
+  // describe the same immutable server snapshot, not competing revisions.
+  // The trusted caller MUST compute and verify this digest from server data;
+  // this pure helper never authenticates client-supplied digests.
+  const sourceDigest=serverSnapshot.sourceSnapshotSha256;
+  if(!NONCE_DIGEST.test(sourceDigest||"")||
+     sourceScopeAttestations?.sourceSnapshotSha256!==sourceDigest||
+     backupReadbacks?.sourceSnapshotSha256!==sourceDigest)
+    return holdB("SOURCE_SNAPSHOT_READBACK_MISMATCH",true);
   // Rights for A and C need independently source-attested scopes. B
   // registration and PIN alone must not be treated as those rights.
   if(!sourceScopeAttestations||
@@ -236,6 +245,10 @@ function assessBCanonicalConsolidation({
      sourceScopeAttestations.accountKey!==serverSnapshot.accountKey||
      sourceScopeAttestations.originalId!==serverSnapshot.originalId||
      sourceScopeAttestations.targetRegistrationUid!==uidB||
+     // A and C's verified source ownership cannot be overwritten by merely
+     // changing the target registration UID in a review document.
+     sourceScopeAttestations.originalOwnerUid!==serverSnapshot.route.ownerUid||
+     sourceScopeAttestations.socialOwnerUid!==serverSnapshot.social.ownerUid||
      !Array.isArray(sourceScopeAttestations.scopes)||
      sourceScopeAttestations.scopes.length!==B_REQUIRED_SCOPE_PROOF.length)
     return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING",true);
