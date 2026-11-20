@@ -6,6 +6,10 @@ on:
     paths:
       - 'functions/deda_100441_owner_split_identity_challenge_review_private_v1.js'
       - 'functions/deda_unified_room_grant_issuer_private_v1.js'
+      - 'functions/deda_unified_room_readonly_guard_v1.js'
+      - 'functions/test/deda_unified_room_readonly_guard_v1.test.js'
+      - 'lib/deda_unified_room_runtime_readonly.dart'
+      - 'test/deda_unified_room_runtime_readonly_test.dart'
       - 'functions/test/deda_unified_room_grant_issuer_private_v1.test.js'
       - 'qa/unified_room_private/deda_b_all_eight_atomic_real_firestore_EMULATOR_ONLY.test.cjs'
       - 'functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js'
@@ -38,6 +42,7 @@ jobs:
           set -euo pipefail
           node --test functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js
           node --test functions/test/deda_unified_room_grant_issuer_private_v1.test.js
+          node --test functions/test/deda_unified_room_readonly_guard_v1.test.js
           echo 'PASS_ATOMIC_ALL_EIGHT_B_SCOPES_SOURCE_ONLY'
           echo 'PASS_B_CANONICAL_REGISTRATION_REVIEW_NO_UID_TRANSFER_NO_ASSET_WRITES'
       - name: Verify source-level protected Admin signout order
@@ -84,6 +89,8 @@ jobs:
           dart analyze --no-fatal-warnings lib/deda_backend.dart
           dart analyze --no-fatal-warnings lib/deda_100431_linked_owner_session_policy.dart
           flutter test --no-pub test/deda_owner_session_compat_private_test.dart
+          flutter test --no-pub test/deda_unified_room_runtime_readonly_test.dart
+          dart analyze --no-fatal-warnings lib/deda_unified_room_runtime_readonly.dart
       - name: Review exact merged Auth logout conflict fixtures (fail closed)
         shell: bash
         run: |

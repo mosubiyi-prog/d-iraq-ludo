@@ -240,3 +240,57 @@ test("one old room grant is invalid on a new same-UID session epoch",async()=>{
   .sessionRevision=2;
  await hold(()=>h.guard(true)(h.request),"SANITIZED_SERVER_VIEW_NOT_TRUSTED");
 });
+
+test("fixed five-domain home batch shares one principal, one transaction, no UID or writes",async()=>{
+ const f=fixture("profile");
+ const domains=["profile","original_id","premium_id","friends","league"];
+ for(const domain of domains.slice(1)){
+  const g=fixture(domain);
+  for(const [path,record] of g.docs){
+   if(path.endsWith("/domains/"+domain))f.docs.set(path,record);
+  }
+ }
+ const req={...f.request,input:{domains}};
+ const result=await f.guard(true)(req);
+ assert.equal(result.status,"SCOPED_HOME_READ_ONLY");
+ assert.deepEqual(Object.keys(result.results),domains);
+ for(const d of domains){
+  assert.equal(result.results[d].status,"VERIFIED_READ_ONLY",d);
+  assert.equal(result.results[d].domain,d);
+  assert.equal(result.results[d].authorized,true);
+ }
+ assert.equal(f.stats().reads,13);
+ assert.equal(f.stats().authCalls,1);
+ assert.equal(f.stats().writes,0);
+ // A premium grant can fail without zeroing a verified profile/league.
+ f.docs.delete("deda_unified_room_read_grants/"+uid+"/domains/premium_id");
+ const partial=await f.guard(true)(req);
+ assert.equal(partial.status,"SCOPED_HOME_READ_ONLY");
+ assert.equal(partial.results.premium_id.status,"HOLD");
+ assert.equal(Object.hasOwn(partial.results.premium_id,"payload"),false);
+ assert.equal(partial.results.profile.status,"VERIFIED_READ_ONLY");
+ assert.equal(partial.results.league.status,"VERIFIED_READ_ONLY");
+ assert.equal(f.stats().writes,0);
+ // A session epoch change invalidates ALL grants, not just one.
+ f.docs.get("deda_unified_room_sessions/"+uid).revision=2;
+ const changed=await f.guard(true)(req);
+ assert.ok(domains.every(d=>changed.results[d].status==="HOLD"));
+ assert.equal(f.stats().writes,0);
+});
+test("home batch permits ONLY fixed scoped list; cannot request admin or a source UID",async()=>{
+ const f=fixture();
+ for(const input of [
+  {domains:["profile"]},
+  {domains:["friends","profile","original_id","premium_id","league"]},
+  {domains:["profile","original_id","premium_id","friends","friends"]},
+  {domains:["profile","original_id","premium_id","friends","admin"]},
+  {domains:["profile","original_id","premium_id","friends","league"],sourceUid:a},
+  {domains:["profile","original_id","premium_id","friends","league"],accountKey},
+  {domain:"friends",domains:["profile","original_id","premium_id","friends","league"]},
+ ]) {
+  const x=await f.guard(true)({...f.request,input});
+  assert.equal(x.status,"HOLD");
+  assert.equal(x.authorized,false);
+ }
+ assert.deepEqual(f.stats(),{reads:0,writes:0,authCalls:0});
+});

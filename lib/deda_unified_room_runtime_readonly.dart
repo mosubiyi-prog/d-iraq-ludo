@@ -99,6 +99,54 @@ class DedaUnifiedRoomRuntimeReadOnly {
     );
   }
 
+  /// Accept the server's fixed-size single-snapshot home read. A held
+  /// domain cannot fabricate an empty list, zero score or replacement ID.
+  /// Any malformed outer contract discards the entire batch.
+  static Map<String, DedaUnifiedRoomReadResult> acceptHomeBatchReply(
+    Object? raw,
+  ) {
+    if (raw is! Map ||
+        raw['status'] != 'SCOPED_HOME_READ_ONLY' ||
+        raw['authorized'] != true ||
+        raw['accountRestored'] != false ||
+        raw['financialRestore'] != false ||
+        raw['uidChanged'] != false ||
+        raw['results'] is! Map) {
+      return const <String, DedaUnifiedRoomReadResult>{};
+    }
+    final results = raw['results'] as Map;
+    if (results.length != homeSectionDomains.length ||
+        results.keys.any((key) => !homeSectionDomains.contains(key))) {
+      return const <String, DedaUnifiedRoomReadResult>{};
+    }
+    final parsed = <String, DedaUnifiedRoomReadResult>{};
+    for (final domain in homeSectionDomains) {
+      final reply = results[domain];
+      if (reply is! Map || reply['status'] is! String) {
+        return const <String, DedaUnifiedRoomReadResult>{};
+      }
+      if (reply['status'] == 'HOLD') {
+        if (reply['authorized'] != false ||
+            reply['accountRestored'] != false ||
+            reply['financialRestore'] != false ||
+            reply['uidChanged'] != false ||
+            reply.containsKey('payload')) {
+          return const <String, DedaUnifiedRoomReadResult>{};
+        }
+        parsed[domain] = DedaUnifiedRoomReadResult.hold;
+      } else {
+        final accepted = acceptServerReply(
+          domain, Map<String, dynamic>.from(reply),
+        );
+        if (!accepted.verifiedReadOnly) {
+          return const <String, DedaUnifiedRoomReadResult>{};
+        }
+        parsed[domain] = accepted;
+      }
+    }
+    return Map<String, DedaUnifiedRoomReadResult>.unmodifiable(parsed);
+  }
+
   /// Only reads the current Firebase user's independently approved,
   /// server-sanitized scope. A/C historical UIDs are NEVER user inputs.
   /// The held/absent result must not replace on-device progress with zero.
@@ -158,19 +206,22 @@ class DedaUnifiedRoomRuntimeReadOnly {
       if (user == null || user.isAnonymous || before?.uid != user.uid) {
         return const <String, DedaUnifiedRoomReadResult>{};
       }
-      final replies = await Future.wait(
-        homeSectionDomains.map(readDomain),
-      );
-      // The whole batch belongs to ONE identity and epoch. A change during
-      // any concurrent read invalidates every result, including earlier ones.
+      // One App Check-protected callable and one server snapshot replace
+      // five independent network calls on every HomePage entry.
+      // The HomePage hook remains unawaited: navigation never waits on it.
+      final reply = await FirebaseFunctions.instance
+          .httpsCallable(
+            'dedaUnifiedRoomReadOnlyV1',
+            options: HttpsCallableOptions(
+              timeout: const Duration(seconds: 12),
+            ),
+          )
+          .call<Map<String, dynamic>>({'domains': homeSectionDomains});
       DedaAuthRuntime.checkSnapshot(before);
       if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
         return const <String, DedaUnifiedRoomReadResult>{};
       }
-      return Map<String, DedaUnifiedRoomReadResult>.unmodifiable({
-        for (var i = 0; i < homeSectionDomains.length; i++)
-          homeSectionDomains[i]: replies[i],
-      });
+      return acceptHomeBatchReply(reply.data);
     } catch (_) {
       return const <String, DedaUnifiedRoomReadResult>{};
     }

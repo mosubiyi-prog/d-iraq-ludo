@@ -19,6 +19,9 @@ const DOMAINS=Object.freeze({
   wallet:["balanceDisplay","giftWalletBalance"],
   places:["publishedPlaceCount"]
 });
+const HOME_DOMAINS=Object.freeze([
+  "profile","original_id","premium_id","friends","league"
+]);
 const numeric=new Set(["level","friendCount","weeklyPoints","giftCount",
   "balanceDisplay","giftWalletBalance","publishedPlaceCount"]);
 const UID=/^[A-Za-z0-9:_-]{6,128}$/;
@@ -62,11 +65,19 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
   if(!principal||typeof principal.uid!=="string"||
      !UID.test(principal.uid)||!app||typeof app.appId!=="string"||
      app.appId.length<8)return fail("AUTH_AND_APPCHECK_REQUIRED");
+  // Home is a fixed five-domain batch, not an arbitrary set of historical
+  // UIDs or a general-purpose cross-account search. The original single
+  // domain contract remains byte-for-byte compatible with old clients.
+  const exactHome=Array.isArray(input?.domains)&&
+    input.domains.length===HOME_DOMAINS.length&&
+    input.domains.every((v,i)=>v===HOME_DOMAINS[i]);
+  const single=typeof input?.domain==="string"&&
+    Object.hasOwn(DOMAINS,input.domain);
   if(!input||typeof input!=="object"||Array.isArray(input)||
-     Object.keys(input).length!==1||typeof input.domain!=="string"||
-     !Object.hasOwn(DOMAINS,input.domain))
+     Object.keys(input).length!==1||!(single||exactHome))
     return fail("EXACT_SINGLE_DOMAIN_REQUIRED");
-  const uid=principal.uid,domain=input.domain;
+  const requested=exactHome?HOME_DOMAINS:[input.domain];
+  const uid=principal.uid;
   const provider=principal.token?.firebase?.sign_in_provider;
   if(!["password","google.com","phone"].includes(provider)||
      principal.token?.uid!==undefined && principal.token.uid!==uid)
@@ -80,18 +91,23 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
    const refs={
     owner:doc("deda_unified_room_owner_authorizations/"+uid),
     session:doc("deda_unified_room_sessions/"+uid),
-    room:doc("deda_unified_room_owner_directory/"+uid),
-    scope:doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain),
-    view:doc("deda_unified_room_private_views/"+uid+"/domains/"+domain)
+    room:doc("deda_unified_room_owner_directory/"+uid)
    };
+   const scoped=requested.map(domain=>({
+    domain,
+    grant:doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain),
+    view:doc("deda_unified_room_private_views/"+uid+"/domains/"+domain)
+   }));
    return db.runTransaction(async tx=>{
-    // One consistent, server-only transaction. Nothing is written.
-    const [o,s,r,g,v]=await Promise.all([
-     tx.get(refs.owner),tx.get(refs.session),tx.get(refs.room),
-     tx.get(refs.scope),tx.get(refs.view)]);
-    const owner=data(o),session=data(s),room=data(r),
-      grant=data(g),view=data(v);
-    if(!owner||!session||!room||!grant||!view)return fail("SERVER_OWNER_SCOPE_VIEW_MISSING");
+    // One consistent server snapshot; 3 shared records fetched ONCE,
+    // plus 2 records per scope. No database writes, no blocking client UI.
+    const snapshots=await Promise.all([
+      tx.get(refs.owner),tx.get(refs.session),tx.get(refs.room),
+      ...scoped.flatMap(x=>[tx.get(x.grant),tx.get(x.view)])
+    ]);
+    const [o,s,r,...scopeDocs]=snapshots;
+    const owner=data(o),session=data(s),room=data(r);
+    if(!owner||!session||!room)return fail("SERVER_OWNER_SCOPE_VIEW_MISSING");
     if(!ACCOUNT.test(owner.accountKey||"")||
        !ORIGINAL.test(owner.originalId||"")||
        typeof owner.canonicalAccountId!=="string"||
@@ -130,39 +146,56 @@ function createRoomReadonlyGuard({db,auth,clock=()=>Date.now(),
        return fail("ROOM_SESSION_HISTORY_NOT_AUTHORIZED");
     // A valid historical UID in the WRONG domain is not ownership.
     // A=original/premium/gifts/wallet/places; B=profile/league; C=friends.
-    const expectedSourceUid=domain==="friends"?room.historicalUids[2]:
-      ["profile","league"].includes(domain)?room.historicalUids[1]:
-      room.historicalUids[0];
-    if(grant.readerUid!==uid||grant.domain!==domain||
-       grant.scopeVersion!==1||
-       grant.status!=="active"||
-       grant.proofKind!=="independent_verified"||
-       grant.ownerEvidenceDigest!==owner.evidenceDigest||
-       grant.canonicalAccountId!==owner.canonicalAccountId||
-       grant.originalId!==owner.originalId||
-       grant.sourceUid!==expectedSourceUid||
-       grant.sessionRevision!==session.revision||
-       grant.sessionNonce!==session.sessionNonce||
-       !validTime(serverTimeMs(grant.issuedAt))||serverTimeMs(grant.issuedAt)>now||
-       !validTime(serverTimeMs(grant.expiresAt))||serverTimeMs(grant.expiresAt)<=now||
-       serverTimeMs(grant.expiresAt)-serverTimeMs(grant.issuedAt)>5*60*1000||
-       serverTimeMs(grant.expiresAt)>owner.expiresAtMs||
-       grant.canWrite!==false||grant.canCredit!==false)
-       return fail("SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
-    if(view.readerUid!==uid||view.domain!==domain||
-       view.sourceUid!==grant.sourceUid||
-       view.sessionRevision!==session.revision||
-       view.sessionNonce!==session.sessionNonce||
-       view.canonicalAccountId!==owner.canonicalAccountId||
-       view.originalId!==owner.originalId||
-       view.scopeVersion!==1||
-       !allowPayload(domain,view.payload))
-       return fail("SANITIZED_SERVER_VIEW_NOT_TRUSTED");
-    return Object.freeze({status:"VERIFIED_READ_ONLY",domain,
-     payload:Object.freeze({...view.payload}),authorized:true,
-     accountRestored:false,financialRestore:false,uidChanged:false});
+    function inspectDomain(domain,grant,view){
+     if(!grant||!view)return fail("SERVER_OWNER_SCOPE_VIEW_MISSING");
+     const expectedSourceUid=domain==="friends"?room.historicalUids[2]:
+       ["profile","league"].includes(domain)?room.historicalUids[1]:
+       room.historicalUids[0];
+     if(grant.readerUid!==uid||grant.domain!==domain||
+        grant.scopeVersion!==1||
+        grant.status!=="active"||
+        grant.proofKind!=="independent_verified"||
+        grant.ownerEvidenceDigest!==owner.evidenceDigest||
+        grant.canonicalAccountId!==owner.canonicalAccountId||
+        grant.originalId!==owner.originalId||
+        grant.sourceUid!==expectedSourceUid||
+        grant.sessionRevision!==session.revision||
+        grant.sessionNonce!==session.sessionNonce||
+        !validTime(serverTimeMs(grant.issuedAt))||serverTimeMs(grant.issuedAt)>now||
+        !validTime(serverTimeMs(grant.expiresAt))||serverTimeMs(grant.expiresAt)<=now||
+        serverTimeMs(grant.expiresAt)-serverTimeMs(grant.issuedAt)>5*60*1000||
+        serverTimeMs(grant.expiresAt)>owner.expiresAtMs||
+        grant.canWrite!==false||grant.canCredit!==false)
+        return fail("SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
+     if(view.readerUid!==uid||view.domain!==domain||
+        view.sourceUid!==grant.sourceUid||
+        view.sessionRevision!==session.revision||
+        view.sessionNonce!==session.sessionNonce||
+        view.canonicalAccountId!==owner.canonicalAccountId||
+        view.originalId!==owner.originalId||
+        view.scopeVersion!==1||
+        !allowPayload(domain,view.payload))
+        return fail("SANITIZED_SERVER_VIEW_NOT_TRUSTED");
+     return Object.freeze({status:"VERIFIED_READ_ONLY",domain,
+      payload:Object.freeze({...view.payload}),authorized:true,
+      accountRestored:false,financialRestore:false,uidChanged:false});
+    }
+    if(!exactHome)return inspectDomain(requested[0],
+      data(scopeDocs[0]),data(scopeDocs[1]));
+    // Failed premium ID or friends must not erase an otherwise validated
+    // profile/league. A HOLD carries no payload and never becomes a zero.
+    const results={};
+    for(let i=0;i<requested.length;i++){
+      results[requested[i]]=inspectDomain(requested[i],
+        data(scopeDocs[2*i]),data(scopeDocs[2*i+1]));
+    }
+    return Object.freeze({
+      status:"SCOPED_HOME_READ_ONLY",authorized:true,
+      accountRestored:false,financialRestore:false,uidChanged:false,
+      results:Object.freeze(results)
+    });
    });
   }catch(_){return fail("TRUSTED_BACKEND_UNAVAILABLE");}
  };
 }
-module.exports={createRoomReadonlyGuard,allowPayload,DOMAINS};
+module.exports={createRoomReadonlyGuard,allowPayload,DOMAINS,HOME_DOMAINS};

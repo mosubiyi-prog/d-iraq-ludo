@@ -12,6 +12,29 @@ Map<String, dynamic> approval(String domain, Map<String, dynamic> payload) =>
       'uidChanged': false,
     };
 
+Map<String, dynamic> homeReply() {
+  const domains = <String>[
+    'profile', 'original_id', 'premium_id', 'friends', 'league',
+  ];
+  return <String, dynamic>{
+    'status': 'SCOPED_HOME_READ_ONLY',
+    'authorized': true,
+    'accountRestored': false,
+    'financialRestore': false,
+    'uidChanged': false,
+    'results': <String, dynamic>{
+      for (final domain in domains)
+        domain: approval(domain, <String, dynamic>{
+          if (domain == 'profile') 'displayName': 'DEDA user',
+          if (domain == 'original_id') 'publicId': '@DEDA-ABC123',
+          if (domain == 'premium_id') 'displayId': '@DEDA-1234',
+          if (domain == 'friends') 'friendCount': 2,
+          if (domain == 'league') 'weeklyPoints': 50,
+        }),
+    },
+  };
+}
+
 void main() {
   test('production read-only room is OFF by default; never attempts Firebase', () async {
     expect(dedaUnifiedRoomReadOnlyEnabled, isFalse);
@@ -118,4 +141,47 @@ void main() {
     expect(DedaUnifiedRoomRuntimeReadOnly.acceptServerReply(
         'premium_id', mismatched).status, 'HOLD');
   });
+  test('home single-call response keeps each verified scope independent', () {
+    final result = DedaUnifiedRoomRuntimeReadOnly.acceptHomeBatchReply(
+      homeReply(),
+    );
+    expect(result.keys.toList(), DedaUnifiedRoomRuntimeReadOnly.homeSectionDomains);
+    expect(result['profile']!.payload!['displayName'], 'DEDA user');
+    expect(result['friends']!.payload!['friendCount'], 2);
+    expect(result['league']!.payload!['weeklyPoints'], 50);
+    final partial = homeReply();
+    final replies = partial['results'] as Map<String, dynamic>;
+    replies['premium_id'] = <String, dynamic>{
+      'status':'HOLD', 'authorized':false,
+      'accountRestored':false, 'financialRestore':false, 'uidChanged':false,
+    };
+    final held = DedaUnifiedRoomRuntimeReadOnly.acceptHomeBatchReply(partial);
+    expect(held['premium_id']!.status,'HOLD');
+    expect(held['premium_id']!.payload,isNull);
+    expect(held['profile']!.verifiedReadOnly,isTrue);
+    expect(held['league']!.verifiedReadOnly,isTrue);
+  });
+
+  test('home batch rejects hidden UID, arbitrary domain and forged restore', () {
+    for (final wrong in <String>['accountRestored','uidChanged','financialRestore']) {
+      final payload=homeReply();
+      payload[wrong] = true;
+      expect(DedaUnifiedRoomRuntimeReadOnly.acceptHomeBatchReply(payload),isEmpty);
+    }
+    final extra=homeReply();
+    (extra['results'] as Map<String,dynamic>)['admin'] =
+        approval('admin', <String,dynamic>{'displayName':'bad'});
+    expect(DedaUnifiedRoomRuntimeReadOnly.acceptHomeBatchReply(extra),isEmpty);
+    final wrongUid=homeReply();
+    (wrongUid['results'] as Map<String,dynamic>)['friends'] =
+        approval('friends', <String,dynamic>{'sourceUid':'QA_SOURCE_C'});
+    expect(DedaUnifiedRoomRuntimeReadOnly.acceptHomeBatchReply(wrongUid),isEmpty);
+    final forgedHold=homeReply();
+    (forgedHold['results'] as Map<String,dynamic>)['friends'] =
+      <String,dynamic>{'status':'HOLD','authorized':false,
+        'accountRestored':false,'uidChanged':false,'financialRestore':false,
+        'payload':<String,dynamic>{'friendCount':0}};
+    expect(DedaUnifiedRoomRuntimeReadOnly.acceptHomeBatchReply(forgedHold),isEmpty);
+  });
+
 }

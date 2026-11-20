@@ -148,6 +148,19 @@ test("POINT01: B eight-domain real Firestore atomic issue/denials on isolated em
    const after=await Promise.all(seeded.map(([p])=>db.doc(p).get().then(d=>d.data())));
    assert.deepEqual(after,original,"historical A/B/C documents unchanged");
    assert.equal((await auth.listUsers()).users.length,authCount);
+   const home=["profile","original_id","premium_id","friends","league"];
+   const batchReader=createRoomReadonlyGuard({db,auth,clock:()=>now,enabled:true});
+   const homeBatch=await batchReader({
+      auth:{uid:B,token:{firebase:{sign_in_provider:"password"}}},
+      app:{appId:"QA_ONLY_FIREBASE_APP_ID"},input:{domains:home}
+   });
+   assert.equal(homeBatch.status,"SCOPED_HOME_READ_ONLY");
+   assert.deepEqual(Object.keys(homeBatch.results),home);
+   for(const domain of home){
+      assert.equal(homeBatch.results[domain].status,"VERIFIED_READ_ONLY",domain);
+      assert.deepEqual(homeBatch.results[domain].payload,payloads[domain]);
+   }
+   console.log("PASS_ONE_CALL_SAME_SNAPSHOT_FIVE_HOME_SCOPES_B");
    assert.equal((await issuer.issueAllForB({uid:B})).status,"HOLD");
    console.log("PASS_B_ALL_EIGHT_FIRESTORE_EMULATOR_ATOMIC_VIEWS_AND_RULES");
 
