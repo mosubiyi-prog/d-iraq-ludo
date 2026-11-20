@@ -189,9 +189,9 @@ const bScopes=()=>[
   ["original_id",A],["friends",C],["premium_id",A],
   ["gifts",A],["wallet",A],["league",B],["places",A],
   ["historical_progress",B],
-].map(([domain,sourceUid])=>({
+].map(([domain,sourceUid],i)=>({
   domain,sourceUid,ownerApproved:true,independentVerified:true,
-  sourceReceiptSha256:"b".repeat(64),
+  sourceReceiptSha256:(i+1).toString(16).repeat(64),
 }));
 const bBackups=()=>({
   firestoreAndAuthVerified:true,firebaseStorageVerified:true,
@@ -206,7 +206,7 @@ function bCheck(options={}){
     reviewRecord:{...review(),reviewedOriginalUid:B},
     sourceScopeAttestations:{
       source:"trusted_independent_server_review",accountKey,originalId,
-      targetRegistrationUid:B,scopes:bScopes(),
+      targetRegistrationUid:B,challengeHash,scopes:bScopes(),
     },
     backupReadbacks:bBackups(),nowMs,incidentCutoffMs,...options,
   });
@@ -231,7 +231,7 @@ test("A/C factor alone never promotes B to a verified owner",()=>{
 });
 test("fake/duplicate/missing rights scopes refuse a B consolidation",()=>{
   const s={source:"trusted_independent_server_review",accountKey,originalId,
-    targetRegistrationUid:B,scopes:bScopes()};
+    targetRegistrationUid:B,challengeHash,scopes:bScopes()};
   for(const v of [null,[],s.scopes.slice(1),
     [...s.scopes.slice(0,-1),s.scopes[0]],
     s.scopes.map(x=>x.domain==="friends"?{...x,independentVerified:false}:x),
@@ -264,4 +264,34 @@ test("untrusted canonical lineage and missing independent PIN proof stay blocked
   assert.equal(bCheck({serverSnapshot:s}).decision,"HOLD");
   assert.equal(bCheck({pinProof:null}).decision,"HOLD");
   assert.equal(bCheck({independentProof:null}).decision,"HOLD");
+});
+
+test("verified B registration remains recorded during safe HOLD, not owner authority",()=>{
+  const x=bCheck({independentProof:null});
+  assert.equal(x.decision,"HOLD");
+  assert.equal(x.reason,"INDEPENDENT_B_OWNERSHIP_NOT_ESTABLISHED");
+  assert.equal(x.bIsRegistrationUid,true);
+  assert.equal(x.canAuthenticate,false);
+  assert.equal(x.canTransferAssets,false);
+  const s=snapshot();s.credentials.createdUid=A;
+  assert.equal(bCheck({serverSnapshot:s}).bIsRegistrationUid,false);
+});
+test("historical A/C rights receipts cannot be replayed with a fresh challenge",()=>{
+  const s={source:"trusted_independent_server_review",accountKey,originalId,
+    targetRegistrationUid:B,challengeHash,scopes:bScopes()};
+  for(const bad of [
+    {...s,challengeHash:"c".repeat(64)},
+    {...s,challengeHash:undefined},
+    {...s,scopes:s.scopes.map((v,i)=>i===1?{...v,
+      sourceReceiptSha256:s.scopes[0].sourceReceiptSha256}:v)},
+  ]){
+    const result=bCheck({sourceScopeAttestations:bad});
+    assert.equal(result.decision,"HOLD");
+    assert.equal(result.reason,"A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+    assert.equal(result.bIsRegistrationUid,true);
+    assert.equal(result.canAuthenticate,false);
+    assert.equal(result.canMerge,false);
+    assert.equal(result.canTransferAssets,false);
+    assert.equal(result.productionWrites,false);
+  }
 });

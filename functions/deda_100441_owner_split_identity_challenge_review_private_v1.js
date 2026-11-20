@@ -197,10 +197,11 @@ const B_REQUIRED_SCOPE_PROOF=Object.freeze([
   "original_id", "friends", "premium_id", "gifts", "wallet",
   "league", "places", "historical_progress"
 ]);
-function holdB(reason) {
+function holdB(reason, registrationLineageVerified=false) {
   return Object.freeze({
     decision:"HOLD",reason,
-    bIsRegistrationUid:false,readyForIndependentReview:false,
+    // Registration lineage and personal ownership are separate claims.
+    bIsRegistrationUid:registrationLineageVerified,readyForIndependentReview:false,
     canAuthenticate:false,canMerge:false,canTransferAssets:false,
     financialRestoreEnabled:false,productionWrites:false
   });
@@ -219,22 +220,27 @@ function assessBCanonicalConsolidation({
   // A current token on A or C is not proof that B owns their assets.
   if(independentProof?.originalUid!==uidB||
      reviewRecord?.reviewedOriginalUid!==uidB)
-    return holdB("INDEPENDENT_B_OWNERSHIP_NOT_ESTABLISHED");
+    return holdB("INDEPENDENT_B_OWNERSHIP_NOT_ESTABLISHED",true);
   const assessment=reviewReadiness({serverSnapshot,pinProof,
     independentProof,reviewRecord,nowMs,incidentCutoffMs});
   if(assessment.decision!=="CANDIDATE_FOR_SEPARATE_OWNER_REVIEW")
-    return holdB(assessment.reason);
+    return holdB(assessment.reason,true);
   // Rights for A and C need independently source-attested scopes. B
   // registration and PIN alone must not be treated as those rights.
   if(!sourceScopeAttestations||
      sourceScopeAttestations.source!=="trusted_independent_server_review"||
+     // An attestation for an older challenge cannot silently be replayed
+     // against a fresh B account review, even for the same account and ID.
+     !NONCE_DIGEST.test(sourceScopeAttestations.challengeHash||"")||
+     sourceScopeAttestations.challengeHash!==pinProof?.challengeHash||
      sourceScopeAttestations.accountKey!==serverSnapshot.accountKey||
      sourceScopeAttestations.originalId!==serverSnapshot.originalId||
      sourceScopeAttestations.targetRegistrationUid!==uidB||
      !Array.isArray(sourceScopeAttestations.scopes)||
      sourceScopeAttestations.scopes.length!==B_REQUIRED_SCOPE_PROOF.length)
-    return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+    return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING",true);
   const scopes=new Map();
+  const seenReceipts=new Set();
   for(const x of sourceScopeAttestations.scopes){
     if(!x||typeof x.domain!=="string"||scopes.has(x.domain)||
        !B_REQUIRED_SCOPE_PROOF.includes(x.domain)||
@@ -245,12 +251,16 @@ function assessBCanonicalConsolidation({
         x.sourceUid!==serverSnapshot.route.ownerUid)||
        (x.domain==="friends"&&
         x.sourceUid!==serverSnapshot.social.ownerUid)||
-       !NONCE_DIGEST.test(x.sourceReceiptSha256||""))
-      return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+       !NONCE_DIGEST.test(x.sourceReceiptSha256||"")||
+       // Separate rights require separate source receipts. One copied
+       // receipt must not impersonate all eight independently checked domains.
+       seenReceipts.has(x.sourceReceiptSha256))
+      return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING",true);
     scopes.set(x.domain,x);
+    seenReceipts.add(x.sourceReceiptSha256);
   }
   if(B_REQUIRED_SCOPE_PROOF.some(domain=>!scopes.has(domain)))
-    return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING");
+    return holdB("A_C_RIGHTS_SCOPE_PROVENANCE_MISSING",true);
   // An encrypted Firestore-only export is insufficient. Missing local
   // purchases/progress or Storage objects are never interpreted as zero.
   if(backupReadbacks?.firestoreAndAuthVerified!==true||
@@ -259,7 +269,7 @@ function assessBCanonicalConsolidation({
      backupReadbacks?.historicalPurchasesVerified!==true||
      backupReadbacks?.fullFinancialLedgerVerified!==true||
      backupReadbacks?.rollbackReadbackVerified!==true)
-    return holdB("COMPLETE_LOSSLESS_RECOVERY_SOURCES_MISSING");
+    return holdB("COMPLETE_LOSSLESS_RECOVERY_SOURCES_MISSING",true);
   // Deliberately no authorization. An actual server-side approval, exact
   // asset reconciliation and two-phone QA are still separately mandatory.
   return Object.freeze({

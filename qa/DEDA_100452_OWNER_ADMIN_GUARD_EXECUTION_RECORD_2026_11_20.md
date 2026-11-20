@@ -72,3 +72,14 @@ This is **not** a claim that the user's requested complete APK has been delivere
 **سجل التعليمات 01–15:** (01) الفرع والنسخ محمية؛ (02) أُعيد استعمال كود المراجعة الموجود ولم يُنسخ؛ (03) B/A/C/D بقيت دون تغيير؛ (04) لا استرجاع أو Google أو جلسة حقيقية جديدة؛ (05) الآيدي والملف لم يُعدّلا؛ (06) الأصدقاء والدوري لم يُغيَّرا؛ (07) لا أرصدة/هدايا/إطارات/مشتريات نقلت؛ (08) المهام/الأسئلة والتقدم المحلي لم يُمسا؛ (09) لا تغيير في الإدارة؛ (10) لا ملفات واجهات أو وظائف تغيرت؛ (11) لا ادعاء اختبار أداء هاتف؛ (12) لا كتابة Firebase أو قواعد أو فوترة؛ (13) لا APK/AAB أو توقيع؛ (14) هذه مراجعة مصادر محفوظة فقط، فحوص `44631324519` السابقة ليست نتيجة فحص حي جديد؛ (15) روجعت 01 والشروط وقرارات التوقف، والحارس الأحمر مطبق.
 
 **الملف المعدل:** هذه الإضافة الرقابية لهذا السجل وحدها؛ **لا كود تطبيق ولا قواعد ولا هويات أو بيانات إنتاجية**. **الحالة:** نقطة 1 مستأنفة ومحقَّقة تاريخياً إلى حد الأدلة، لكنها **جزئية / SAFE HOLD بانتظار تحقق مستقل حقيقي**؛ هذا ليس إعلان إكمالها.
+
+
+---
+
+## 2026-11-21 — B registration / A-C rights challenge replay guard (source-only)
+**Scope:** continue original five-point plan, point 1 only. Verified registration lineage B must not be confused with independently authenticated ownership of B, A or C.
+**Actual source fix:** existing `assessBCanonicalConsolidation` now preserves `bIsRegistrationUid=true` after validating immutable B registration, even while refusing any rights/auth grant; accepts A/C historical scope review only when its challenge digest matches the current trusted PIN challenge; rejects re-use of a single source receipt across distinct rights domains. Existing reviewer, not a new migration system.
+**Regression:** add negative tests for old/wrong/missing challenge, duplicate per-domain receipt, and correct separation between B lineage and B ownership. Workflow already tests both files on push. No Firebase rules or production Auth/Firestore data altered; no APK, Google, balance, ID or administrative privilege changes.
+**Protection:** `canAuthenticate=false`, `canMerge=false`, `canTransferAssets=false`, `productionWrites=false` on all paths; evidence source validity remains dependent on an actual independent verifier/reviewer, which is not simulated as production.
+**01–15:** branch and protected source unchanged apart from existing private review module/test and this log (01/02); UIDs and sessions never modified (03); no recovery or Google (04); no UI/profile/friends/league/store/tasks/admin/performance alterations (05–11); no Firebase production writes/billing (12); no APK (13); existing source QA to run on push and no phone test claimed (14); mandatory directives reread and safety HOLD preserved (15).
+**Status:** point 1 partial; code hardening is not evidence of ownership and does not complete B/A/C unification.
