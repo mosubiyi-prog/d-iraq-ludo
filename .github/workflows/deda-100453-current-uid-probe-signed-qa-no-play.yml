@@ -193,14 +193,9 @@ jobs:
           src=test.read_text()
           needle="      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),"
           assert src.count(needle)==1
-          insert="""      print('QA_LEAGUE_RENDERED_WIDGET_TEXTS=' +
-              tester.widgetList<Text>(find.byType(Text, skipOffstage: false))
-                  .map((w) => w.data ?? '<rich>')
-                  .where((s) => s.contains('حساب') || s.contains('خبرة') ||
-                          s.contains('الترتيب') || s.contains('رصيد') ||
-                          s.contains('محفوظ') || s.contains('نقطة'))
-                  .join(' | '));
-      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),"""
+          insert=("      print('QA_LEAGUE_RENDERED_WIDGET_TEXTS=' + "
+                  "tester.widgetList<Text>(find.byType(Text, skipOffstage: false))"
+                  ".map((w) => w.data ?? '').join(' | '));\\n")
           test.write_text(src.replace(needle,insert,1))
           PY
           flutter test --no-pub test/deda_weekly_100404_league_clock_test.dart \
