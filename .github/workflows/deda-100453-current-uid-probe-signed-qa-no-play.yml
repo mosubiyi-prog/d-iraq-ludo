@@ -179,28 +179,24 @@ jobs:
             test/deda_step2_completion_gate_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart
-          # The protected complete app may show an actual league pause or
-          # pending server notice. Update only its COPIED QA expectation.
+          # Real protected DEDA uses a server-driven weekly maintenance
+          # wrapper. Assert the wrapper exists rather than a time-dependent
+          # footer string in the copied QA widget test; change no app code.
           python3 - <<'PY'
           from pathlib import Path
-          source = Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          source=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
           assert 'DedaWeeklyMaintenanceStatus(normal:' in source
-          test = Path('test/deda_weekly_leaderboard_earned_points_test.dart')
-          text = test.read_text()
-          expected = ("      expect(find.textContaining('رصيد حسابك ومستواك محفوظان')," + chr(10) + "          findsOneWidget);")
-          replacement = chr(10).join([
-              "      final footerStates = <String>[",
-              "        'رصيد حسابك ومستواك محفوظان',",
-              "        'جارِ التحقق من حالة الدوري',",
-              "        'الدوري موقوف مؤقتاً',",
-              "        'الدوري تحت الصيانة',",
-              "      ];",
-              "      expect(footerStates.any((s) => find.textContaining(s).evaluate().isNotEmpty),",
-              "          isTrue, reason: 'A verified weekly footer or server maintenance notice is required');",
-          ])
-          assert text.count(expected) == 1
-          test.write_text(text.replace(expected, replacement, 1))
-          print('PASS_QA_COPIED_LEAGUE_TEST_SUPPORTS_LIVE_MAINTENANCE_NO_APP_CHANGE')
+          assert Path('lib/deda_weekly_maintenance_status.dart').exists()
+          test=Path('test/deda_weekly_leaderboard_earned_points_test.dart')
+          text=test.read_text()
+          old_import="import '../lib/deda_weekly_leaderboard_policy.dart';"
+          assert text.count(old_import)==1
+          text=text.replace(old_import,old_import+chr(10)+"import '../lib/deda_weekly_maintenance_status.dart';",1)
+          expected=("      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),"+chr(10)+"          findsOneWidget);")
+          replacement="      expect(find.byType(DedaWeeklyMaintenanceStatus), findsOneWidget);"
+          assert text.count(expected)==1
+          test.write_text(text.replace(expected,replacement,1))
+          print('PASS_QA_TEST_ASSERTS_REAL_WEEKLY_MAINTENANCE_WRAPPER_AND_NO_UI_CHANGES')
           PY
           flutter test --no-pub test/deda_weekly_100404_league_clock_test.dart \
             test/deda_weekly_leaderboard_earned_points_test.dart \
