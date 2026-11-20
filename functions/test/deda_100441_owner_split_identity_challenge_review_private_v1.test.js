@@ -255,7 +255,10 @@ test("fake/duplicate/missing rights scopes refuse a B consolidation",()=>{
     .decision,"HOLD");
 });
 test("encrypted cloud backup alone cannot substitute original phone and purchases",()=>{
-  for(const missing of Object.keys(bBackups())){
+  // Snapshot SHA mismatch is a distinct earlier HOLD gate; only absence of
+  // actual protected archive categories belongs to this lossless-backup test.
+  for(const missing of Object.keys(bBackups())
+      .filter(key=>key!=="sourceSnapshotSha256")){
     const backup=bBackups();backup[missing]=false;
     const x=bCheck({backupReadbacks:backup});
     assert.equal(x.reason,"COMPLETE_LOSSLESS_RECOVERY_SOURCES_MISSING");
