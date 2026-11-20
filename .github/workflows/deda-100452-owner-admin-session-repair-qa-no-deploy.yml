@@ -5,6 +5,8 @@ on:
       - deda-100451-owner-admin-session-safe-repair-2026-11-20
     paths:
       - 'functions/deda_100441_owner_split_identity_challenge_review_private_v1.js'
+      - 'functions/deda_unified_room_grant_issuer_private_v1.js'
+      - 'functions/test/deda_unified_room_grant_issuer_private_v1.test.js'
       - 'functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js'
       - 'lib/deda_backend.dart'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
@@ -34,6 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           node --test functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js
+          node --test functions/test/deda_unified_room_grant_issuer_private_v1.test.js
+          echo 'PASS_ATOMIC_ALL_EIGHT_B_SCOPES_SOURCE_ONLY'
           echo 'PASS_B_CANONICAL_REGISTRATION_REVIEW_NO_UID_TRANSFER_NO_ASSET_WRITES'
       - name: Verify source-level protected Admin signout order
         shell: bash

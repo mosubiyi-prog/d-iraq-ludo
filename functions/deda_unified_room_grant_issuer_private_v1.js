@@ -205,6 +205,151 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
    });
   }catch(_){return hold("ATOMIC_ISSUER_UNAVAILABLE");}
  }
+
+ // All eight domains for authenticated historical B, atomically.
+ // Source-only private function: no deployed callable, no Auth UID transfer.
+ async function issueAllForB({uid}={}){
+  if(!enabled)return hold("ISSUER_NOT_ENABLED");
+  if(!validUid(uid))return hold("INVALID_SCOPE");
+  const now=clock(),domains=[...DOMAIN_SET];
+  if(!validTime(now))return hold("INVALID_CLOCK");
+  let principal,proofs;
+  try{
+   principal=await auth.getUser(uid);
+   proofs=await Promise.all(domains.map(domain=>
+     independentReview({uid,domain,now})));
+  }catch(_){return hold("TRUSTED_AUTHORITY_UNAVAILABLE");}
+  if(principal?.uid!==uid||principal.disabled===true||
+     !Array.isArray(principal.providerData)||
+     !principal.providerData.some(x=>["google.com","password","phone"]
+       .includes(x?.providerId)))
+    return hold("CURRENT_DURABLE_AUTH_REQUIRED");
+  const first=proofs[0];
+  if(first?.uidB!==uid)return hold("B_DURABLE_UID_REQUIRED");
+  for(let i=0;i<domains.length;i++){
+   const p=proofs[i];
+   if(p?.status!=="INDEPENDENTLY_ATTESTED"||
+      !VERIFIED_REVIEW_SOURCES.has(p.independentEvidenceSource)||
+      p.syntheticQaOnly===true||p.readerUid!==uid||
+      p.domain!==domains[i]||!ACCOUNT.test(p.accountKey||"")||
+      !ORIGINAL.test(p.originalId||"")||
+      !SHA.test(p.evidenceDigest||"")||
+      typeof p.canonicalAccountId!=="string"||
+      p.canonicalAccountId.length<12||
+      ![p.uidA,p.uidB,p.uidC].every(validUid)||
+      new Set([p.uidA,p.uidB,p.uidC]).size!==3||
+      !Array.isArray(p.reviewers)||![1,2].includes(p.reviewers.length)||
+      new Set(p.reviewers).size!==p.reviewers.length||
+      p.reviewers.some(x=>typeof x!=="string"||x.length<6)||
+      !validTime(p.verifiedAtMs)||p.verifiedAtMs>now||
+      now-p.verifiedAtMs>300000||
+      p.accountKey!==first.accountKey||
+      p.originalId!==first.originalId||
+      p.canonicalAccountId!==first.canonicalAccountId||
+      p.evidenceDigest!==first.evidenceDigest||
+      p.independentEvidenceSource!==first.independentEvidenceSource||
+      p.uidA!==first.uidA||p.uidB!==uid||p.uidC!==first.uidC||
+      !same(p.reviewers,first.reviewers))
+      return hold("EIGHT_INDEPENDENT_SCOPES_NOT_ATTESTED");
+  }
+  const historicalSource=domain=>domain==="friends"?first.uidC:
+    ["profile","league"].includes(domain)?uid:first.uidA;
+  let payloads;
+  try{
+   payloads=await Promise.all(domains.map(domain=>projectDomain({
+    uid,domain,sourceUid:historicalSource(domain),
+    accountKey:first.accountKey,originalId:first.originalId,
+    canonicalAccountId:first.canonicalAccountId
+   })));
+  }catch(_){return hold("TRUSTED_PROJECTION_UNAVAILABLE");}
+  if(payloads.some((p,i)=>!allowPayload(domains[i],p)))
+    return hold("UNTRUSTED_PROJECTION");
+  const roots=[
+    doc("deda_unified_room_owner_authorizations/"+uid),
+    doc("deda_unified_room_owner_directory/"+uid),
+    doc("deda_unified_room_sessions/"+uid),
+    doc("deda_account_directory/"+first.accountKey),
+    doc("deda_credentials/"+first.accountKey),
+    doc("deda_share_ids/"+first.originalId),
+    doc("deda_social_profiles/"+first.originalId)
+  ];
+  const scopes=domains.map(domain=>({
+    domain,
+    view:doc("deda_unified_room_private_views/"+uid+"/domains/"+domain),
+    grant:doc("deda_unified_room_read_grants/"+uid+"/domains/"+domain),
+    audit:doc("deda_unified_room_grant_audit/"+uid+"/domains/"+domain),
+    revoke:doc("deda_unified_room_revocations/"+uid+"/domains/"+domain)
+  }));
+  try{
+   return await db.runTransaction(async tx=>{
+    // Fetch every server revision before performing any writes.
+    const refs=[...roots,...scopes.flatMap(s=>[
+      s.view,s.grant,s.audit,s.revoke])];
+    const rows=(await Promise.all(refs.map(ref=>tx.get(ref)))).map(asData);
+    const [owner,room,session,directory,cred,id,social]=rows;
+    if(!owner||!room||!session||!directory||!cred||!id||!social)
+      return hold("IMMUTABLE_OWNER_SOURCE_MISSING");
+    if(owner.uid!==uid||owner.readerUid!==uid||
+       owner.status!=="independently_verified"||
+       owner.independentEvidenceSource!==first.independentEvidenceSource||
+       owner.evidenceDigest!==first.evidenceDigest||
+       !same(owner.reviewers,first.reviewers)||
+       owner.accountKey!==first.accountKey||
+       owner.originalId!==first.originalId||
+       owner.canonicalAccountId!==first.canonicalAccountId||
+       !same(owner.historicalUids,[first.uidA,uid,first.uidC])||
+       !validTime(owner.approvedAtMs)||owner.approvedAtMs>now||
+       !validTime(owner.expiresAtMs)||owner.expiresAtMs<=now||
+       owner.expiresAtMs-owner.approvedAtMs>86400000)
+      return hold("INDEPENDENT_OWNER_RECORD_NOT_APPROVED");
+    if(room.uid!==uid||room.accountKey!==first.accountKey||
+       room.originalId!==first.originalId||
+       room.canonicalAccountId!==first.canonicalAccountId||
+       !same(room.historicalUids,[first.uidA,uid,first.uidC])||
+       session.uid!==uid||session.accountKey!==first.accountKey||
+       session.canonicalAccountId!==first.canonicalAccountId||
+       session.active!==true||
+       !Number.isSafeInteger(session.revision)||session.revision<=0||
+       typeof session.sessionNonce!=="string"||
+       session.sessionNonce.length<12)
+      return hold("CURRENT_B_SESSION_OR_ROOM_NOT_READY");
+    if(directory.active!==true||directory.accountKey!==first.accountKey||
+       directory.createdUid!==uid||cred.active!==true||
+       cred.accountKey!==first.accountKey||cred.createdUid!==uid||
+       id.active!==true||id.kind!=="personal"||
+       id.publicId!==first.originalId||id.ownerUid!==first.uidA||
+       social.publicId!==first.originalId||social.ownerUid!==first.uidC)
+      return hold("AUTHORITATIVE_HISTORY_CONFLICT");
+    if(rows.slice(7).some(row=>row!==null))
+      return hold("BUNDLE_ALREADY_ISSUED_OR_REVOKED");
+    const expiresAtMs=Math.min(now+300000,owner.expiresAtMs);
+    if(expiresAtMs<=now)return hold("PROOF_EXPIRED");
+    for(let i=0;i<scopes.length;i++){
+     const {domain,view,grant,audit}=scopes[i];
+     const src=historicalSource(domain);
+     const scope={readerUid:uid,domain,
+       canonicalAccountId:first.canonicalAccountId,
+       originalId:first.originalId,sourceUid:src,
+       scopeVersion:1,sessionRevision:session.revision,
+       sessionNonce:session.sessionNonce};
+     tx.create(view,{...scope,payload:payloads[i]});
+     tx.create(grant,{...scope,status:"active",
+       proofKind:"independent_verified",
+       ownerEvidenceDigest:first.evidenceDigest,
+       canWrite:false,canCredit:false,
+       issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs)});
+     tx.create(audit,{readerUid:uid,domain,sourceUid:src,
+       accountKey:first.accountKey,evidenceDigest:first.evidenceDigest,
+       action:"ISSUE_ALL_B_READ_ONLY",authorizationVersion:1,
+       issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs)});
+    }
+    return Object.freeze({status:"ISSUED_ALL_EIGHT_READ_ONLY",
+      grantIssued:true,domains:Object.freeze([...domains]),
+      uidChanged:false,financialCredit:false,adminAccess:false});
+   });
+  }catch(_){return hold("ATOMIC_BUNDLE_UNAVAILABLE");}
+ }
+
  async function revoke({uid,domain}={}){
   // This is an internal emergency reduction of access, never a client API.
   if(!enabled)return hold("ISSUER_NOT_ENABLED");
@@ -231,6 +376,6 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
    });
   }catch(_){return hold("ATOMIC_REVOKE_UNAVAILABLE");}
  }
- return Object.freeze({issue,revoke});
+ return Object.freeze({issue,issueAllForB,revoke});
 }
 module.exports={makeRoomGrantIssuer};

@@ -246,3 +246,100 @@ test("grant issuer remains bounded to the current reader session and domain sour
   assert.equal(response.reason,"SPECIFIC_DOMAIN_PROOF_NOT_VERIFIED");
  }
 });
+
+test("B atomic 8-domain bundle: all 24 reads scoped records or zero records",async()=>{
+ const account="9647712345678",original="@DEDA-ABC123";
+ const a="QA_HISTORIC_UID_A",b="QA_HISTORIC_UID_B",c="QA_HISTORIC_UID_C";
+ const canonicalAccountId="DEDA_QA_CANONICAL_OWNER_ROOM_01",digest="f".repeat(64);
+ const now=1800000000000;
+ const owner={uid:b,readerUid:b,status:"independently_verified",
+  independentEvidenceSource:"verified_offline_authority",evidenceDigest:digest,
+  reviewers:["reviewerOne","reviewerTwo"],accountKey:account,
+  originalId:original,canonicalAccountId,historicalUids:[a,b,c],
+  approvedAtMs:now-10000,expiresAtMs:now+300000};
+ const initial=[
+  ["deda_unified_room_owner_authorizations/"+b,owner],
+  ["deda_unified_room_owner_directory/"+b,{uid:b,accountKey:account,
+    originalId:original,canonicalAccountId,historicalUids:[a,b,c]}],
+  ["deda_unified_room_sessions/"+b,{uid:b,accountKey:account,
+    canonicalAccountId,active:true,revision:1,
+    sessionNonce:"QA_LONG_SESSION_NONCE_123456"}],
+  ["deda_account_directory/"+account,{active:true,accountKey:account,createdUid:b}],
+  ["deda_credentials/"+account,{active:true,accountKey:account,createdUid:b}],
+  ["deda_share_ids/"+original,{active:true,kind:"personal",
+    publicId:original,ownerUid:a}],
+  ["deda_social_profiles/"+original,{publicId:original,ownerUid:c}]
+ ];
+ const payloads={profile:{displayName:"DEDA user",level:12},
+  original_id:{publicId:original},premium_id:{displayId:"@DEDA-1234",color:"gold"},
+  friends:{friendCount:4},league:{weeklyPoints:40},gifts:{giftCount:3},
+  wallet:{balanceDisplay:80,giftWalletBalance:10},
+  places:{publishedPlaceCount:2}};
+ const create=(fault)=> {
+  const docs=new Map(structuredClone(initial)),writes=[];
+  const db={doc:path=>({path}),runTransaction:async fn=>{
+   const pending=[],tx={get:async ref=>({exists:docs.has(ref.path),
+     data:()=>docs.get(ref.path)}),create:(ref,record)=>pending.push([ref.path,record])};
+   const result=await fn(tx);
+   for(const [path,record] of pending){
+    if(docs.has(path))throw Error("duplicate");
+    docs.set(path,record);writes.push(path);
+   }
+   return result;
+  }};
+  const auth={getUser:async uid=>({uid,disabled:false,
+   providerData:[{providerId:"password"}]})};
+  const independentReview=async({uid,domain})=>({
+   status:fault==="one-review"&&domain==="friends"?"PENDING":"INDEPENDENTLY_ATTESTED",
+   independentEvidenceSource:"verified_offline_authority",
+   readerUid:uid,domain,accountKey:account,originalId:original,
+   canonicalAccountId,evidenceDigest:digest,uidA:a,uidB:b,uidC:c,
+   reviewers:["reviewerOne","reviewerTwo"],verifiedAtMs:now-500
+  });
+  const projectDomain=async({domain})=>payloads[domain];
+  if(fault==="wrong-owner")docs.get("deda_social_profiles/"+original).ownerUid=a;
+  if(fault==="one-existing")docs.set("deda_unified_room_read_grants/"+b+
+     "/domains/friends",{status:"active"});
+  if(fault==="one-revoked")docs.set("deda_unified_room_revocations/"+b+
+     "/domains/places",{status:"revoked"});
+  if(fault==="bad-session")docs.get("deda_unified_room_sessions/"+b).active=false;
+  if(fault==="wrong-B")docs.get("deda_account_directory/"+account).createdUid=a;
+  const issuer=makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
+   toTimestamp:t=>({toMillis:()=>t}),clock:()=>now,enabled:true});
+  return {issuer,docs,writes,db,auth};
+ };
+ const success=create();
+ const out=await success.issuer.issueAllForB({uid:b});
+ assert.equal(out.status,"ISSUED_ALL_EIGHT_READ_ONLY",out.reason);
+ assert.equal(out.domains.length,8);
+ assert.equal(success.writes.length,24);
+ for(const domain of out.domains){
+  const expected=domain==="friends"?c:["profile","league"].includes(domain)?b:a;
+  const key="deda_unified_room_read_grants/"+b+"/domains/"+domain;
+  const row=success.docs.get(key);
+  assert.equal(row.sourceUid,expected);
+  assert.equal(row.canWrite,false);assert.equal(row.canCredit,false);
+  const guard=createRoomReadonlyGuard({db:success.db,auth:success.auth,
+    clock:()=>now,enabled:true});
+  const response=await guard({auth:{uid:b,
+    token:{firebase:{sign_in_provider:"password"}}},
+    app:{appId:"QA_FIREBASE_APP_123456"},input:{domain}});
+  assert.equal(response.status,"VERIFIED_READ_ONLY",domain+":"+response.reason);
+ }
+ assert.equal(success.docs.get("deda_share_ids/"+original).ownerUid,a);
+ assert.equal(success.docs.get("deda_social_profiles/"+original).ownerUid,c);
+ assert.equal(success.docs.get("deda_account_directory/"+account).createdUid,b);
+ const retry=await success.issuer.issueAllForB({uid:b});
+ assert.equal(retry.status,"HOLD");
+ assert.equal(success.writes.length,24);
+ for(const fault of ["one-review","wrong-owner","one-existing",
+     "one-revoked","bad-session","wrong-B"]){
+  const f=create(fault);
+  const result=await f.issuer.issueAllForB({uid:b});
+  assert.equal(result.status,"HOLD",fault);
+  assert.equal(f.writes.length,0,fault);
+ }
+ const old=create();
+ assert.equal((await old.issuer.issueAllForB({uid:a})).status,"HOLD");
+ assert.equal(old.writes.length,0);
+});
