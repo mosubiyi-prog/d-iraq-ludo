@@ -179,29 +179,28 @@ jobs:
             test/deda_step2_completion_gate_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart
-          # The protected complete app can show the live administrative
-          # maintenance notice or a pending server status, not only the older
-          # static footer. Keep the original app untouched; in this COPIED
-          # QA test, require one of the legitimate read-only footer states.
+          # The protected complete app may show an actual league pause or
+          # pending server notice. Update only its COPIED QA expectation.
           python3 - <<'PY'
           from pathlib import Path
-          source=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          source = Path('lib/deda_weekly_leaderboard_page.dart').read_text()
           assert 'DedaWeeklyMaintenanceStatus(normal:' in source
-          test=Path('test/deda_weekly_leaderboard_earned_points_test.dart')
-          text=test.read_text()
-          expected="""      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),
-          findsOneWidget);"""
-          replacement="""      final footerStates = <String>[
-        'رصيد حسابك ومستواك محفوظان',
-        'جارِ التحقق من حالة الدوري',
-        'الدوري موقوف مؤقتاً',
-        'الدوري تحت الصيانة',
-      ];
-      expect(footerStates.any((s) => find.textContaining(s).evaluate().isNotEmpty),
-          isTrue, reason: 'A verified weekly footer or server maintenance notice is required');"""
-          assert text.count(expected)==1
-          test.write_text(text.replace(expected,replacement,1))
-          print('PASS_QA_COPIED_LEAGUE_TEST_ALLOW_LIVE_MAINTENANCE_NO_APP_CHANGE')
+          test = Path('test/deda_weekly_leaderboard_earned_points_test.dart')
+          text = test.read_text()
+          expected = ("      expect(find.textContaining('رصيد حسابك ومستواك محفوظان')," + chr(10) + "          findsOneWidget);")
+          replacement = chr(10).join([
+              "      final footerStates = <String>[",
+              "        'رصيد حسابك ومستواك محفوظان',",
+              "        'جارِ التحقق من حالة الدوري',",
+              "        'الدوري موقوف مؤقتاً',",
+              "        'الدوري تحت الصيانة',",
+              "      ];",
+              "      expect(footerStates.any((s) => find.textContaining(s).evaluate().isNotEmpty),",
+              "          isTrue, reason: 'A verified weekly footer or server maintenance notice is required');",
+          ])
+          assert text.count(expected) == 1
+          test.write_text(text.replace(expected, replacement, 1))
+          print('PASS_QA_COPIED_LEAGUE_TEST_SUPPORTS_LIVE_MAINTENANCE_NO_APP_CHANGE')
           PY
           flutter test --no-pub test/deda_weekly_100404_league_clock_test.dart \
             test/deda_weekly_leaderboard_earned_points_test.dart \
