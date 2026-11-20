@@ -179,6 +179,30 @@ jobs:
             test/deda_step2_completion_gate_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          # Diagnose only: the original 100451 league widget source and test
+          # have not changed; record which synthetic UI text is actually built.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/deda_weekly_leaderboard_page.dart')
+          source=p.read_text()
+          print('QA_ASSEMBLED_LEAGUE_HAS_EXPECTED_FOOTER',
+                'رصيد حسابك ومستواك محفوظان' in source)
+          idx=source.find('Widget statusPanel(double scale)')
+          print('QA_ASSEMBLED_LEAGUE_STATUS',repr(source[idx:idx+450]))
+          test=Path('test/deda_weekly_leaderboard_earned_points_test.dart')
+          src=test.read_text()
+          needle="      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),"
+          assert src.count(needle)==1
+          insert="""      print('QA_LEAGUE_RENDERED_WIDGET_TEXTS=' +
+              tester.widgetList<Text>(find.byType(Text, skipOffstage: false))
+                  .map((w) => w.data ?? '<rich>')
+                  .where((s) => s.contains('حساب') || s.contains('خبرة') ||
+                          s.contains('الترتيب') || s.contains('رصيد') ||
+                          s.contains('محفوظ') || s.contains('نقطة'))
+                  .join(' | '));
+      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),"""
+          test.write_text(src.replace(needle,insert,1))
+          PY
           flutter test --no-pub test/deda_weekly_100404_league_clock_test.dart \
             test/deda_weekly_leaderboard_earned_points_test.dart \
             test/deda_100410_unified_active_id_test.dart \
