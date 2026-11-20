@@ -105,3 +105,10 @@ This is **not** a claim that the user's requested complete APK has been delivere
 **Tests:** add a full synthetic B integration through existing readonly guard, assert no UID/financial/admin effects, original A/C rows untouched and no re-issuance; fault-inject one failure among eight and verify no partial issuance. Reuse the existing 100452 source/Flutter merge CI; no APK.
 **Instructions 01–15:** source branch and baseline protected; only private issuer, test, CI and this log changed; no UID creation; no Google/recovery; no profile/social/daily task/league/store mutation, no UI moves, no admin access; no device QA; no Firebase production write/rules/billing; no Play. This does not claim to prove historical B ownership.
 **Status:** staged atomic all-eight integration test pending CI. Live consolidation remains independently authorized only, as no trusted B ownership/durable Auth proof was provided by this code.
+
+
+### B eight-scope atomic issue — CI verified 2026-11-21 (Iraq)
+- [Actions run 44825650600](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44825650600) = **SUCCESS**, SHA `c47e35a781e764d6fa07334f0df634599996da13`.
+- 24/24 B historical proof/review gate Node tests PASS and 18/18 private grant issuer tests PASS, including atomic all-eight issued versus zero write on wrong historical owner/absent scope/existing grant, followed by independent readonly-guard reads for each synthetic domain. Focused Flutter 13/13 PASS, protected admin guard and assembled 100450 source analysis PASS.
+- No existing production Firebase user or DEDA historical account was modified. No UID migration, wallet credit, Google link, full real-data merge, APK or Play deployment. `issueAllForB` remains private, disabled by default, not exported in `functions/index.js`. Cannot be enabled as a real owner grant without durable B Auth and independent source authorization.
+- **Point 1 remains PARTIAL on the actual owner account**. This is an implemented, tested atomic staging path only; successful QA is not real historical rights transfer.
