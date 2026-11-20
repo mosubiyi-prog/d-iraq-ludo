@@ -206,9 +206,13 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
   }catch(_){return hold("ATOMIC_ISSUER_UNAVAILABLE");}
  }
 
- // All eight domains for authenticated historical B, atomically.
- // Source-only private function: no deployed callable, no Auth UID transfer.
- async function issueAllForB({uid}={}){
+ // The same atomic eight-scope transaction serves an independently verified
+ // CURRENT reader, while B stays the historical registration/source UID.
+ // A/B/C historical Firebase Auth principals are never silently switched.
+ // requireReaderB preserves the old exact-B-only method for regression.
+ // This is source-only, not deployed, and does not grant any ownership by
+ // itself. The separate real reviewer is mandatory for A/C provenance.
+ async function issueAllVerifiedScopes({uid}={},requireReaderB=false){
   if(!enabled)return hold("ISSUER_NOT_ENABLED");
   if(!validUid(uid))return hold("INVALID_SCOPE");
   const now=clock(),domains=[...DOMAIN_SET];
@@ -225,7 +229,8 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
        .includes(x?.providerId)))
     return hold("CURRENT_DURABLE_AUTH_REQUIRED");
   const first=proofs[0];
-  if(first?.uidB!==uid)return hold("B_DURABLE_UID_REQUIRED");
+  if(!validUid(first?.uidB)||requireReaderB && first.uidB!==uid)
+    return hold("B_HISTORICAL_REGISTRATION_REQUIRED");
   for(let i=0;i<domains.length;i++){
    const p=proofs[i];
    if(p?.status!=="INDEPENDENTLY_ATTESTED"||
@@ -248,12 +253,12 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
       p.canonicalAccountId!==first.canonicalAccountId||
       p.evidenceDigest!==first.evidenceDigest||
       p.independentEvidenceSource!==first.independentEvidenceSource||
-      p.uidA!==first.uidA||p.uidB!==uid||p.uidC!==first.uidC||
+      p.uidA!==first.uidA||p.uidB!==first.uidB||p.uidC!==first.uidC||
       !same(p.reviewers,first.reviewers))
       return hold("EIGHT_INDEPENDENT_SCOPES_NOT_ATTESTED");
   }
   const historicalSource=domain=>domain==="friends"?first.uidC:
-    ["profile","league"].includes(domain)?uid:first.uidA;
+    ["profile","league"].includes(domain)?first.uidB:first.uidA;
   let payloads;
   try{
    payloads=await Promise.all(domains.map(domain=>projectDomain({
@@ -297,7 +302,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
        owner.accountKey!==first.accountKey||
        owner.originalId!==first.originalId||
        owner.canonicalAccountId!==first.canonicalAccountId||
-       !same(owner.historicalUids,[first.uidA,uid,first.uidC])||
+       !same(owner.historicalUids,[first.uidA,first.uidB,first.uidC])||
        !validTime(owner.approvedAtMs)||owner.approvedAtMs>now||
        !validTime(owner.expiresAtMs)||owner.expiresAtMs<=now||
        owner.expiresAtMs-owner.approvedAtMs>86400000)
@@ -305,17 +310,17 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
     if(room.uid!==uid||room.accountKey!==first.accountKey||
        room.originalId!==first.originalId||
        room.canonicalAccountId!==first.canonicalAccountId||
-       !same(room.historicalUids,[first.uidA,uid,first.uidC])||
+       !same(room.historicalUids,[first.uidA,first.uidB,first.uidC])||
        session.uid!==uid||session.accountKey!==first.accountKey||
        session.canonicalAccountId!==first.canonicalAccountId||
        session.active!==true||
        !Number.isSafeInteger(session.revision)||session.revision<=0||
        typeof session.sessionNonce!=="string"||
        session.sessionNonce.length<12)
-      return hold("CURRENT_B_SESSION_OR_ROOM_NOT_READY");
+      return hold("CURRENT_READER_SESSION_OR_ROOM_NOT_READY");
     if(directory.active!==true||directory.accountKey!==first.accountKey||
-       directory.createdUid!==uid||cred.active!==true||
-       cred.accountKey!==first.accountKey||cred.createdUid!==uid||
+       directory.createdUid!==first.uidB||cred.active!==true||
+       cred.accountKey!==first.accountKey||cred.createdUid!==first.uidB||
        id.active!==true||id.kind!=="personal"||
        id.publicId!==first.originalId||id.ownerUid!==first.uidA||
        social.publicId!==first.originalId||social.ownerUid!==first.uidC)
@@ -340,7 +345,7 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
        issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs)});
      tx.create(audit,{readerUid:uid,domain,sourceUid:src,
        accountKey:first.accountKey,evidenceDigest:first.evidenceDigest,
-       action:"ISSUE_ALL_B_READ_ONLY",authorizationVersion:1,
+       action:"ISSUE_ALL_VERIFIED_READ_ONLY",authorizationVersion:1,
        issuedAt:toTimestamp(now),expiresAt:toTimestamp(expiresAtMs)});
     }
     return Object.freeze({status:"ISSUED_ALL_EIGHT_READ_ONLY",
@@ -348,6 +353,13 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
       uidChanged:false,financialCredit:false,adminAccess:false});
    });
   }catch(_){return hold("ATOMIC_BUNDLE_UNAVAILABLE");}
+ }
+
+ async function issueAllForB(request={}) {
+   return issueAllVerifiedScopes(request,true);
+ }
+ async function issueAllForCurrentReader(request={}) {
+   return issueAllVerifiedScopes(request,false);
  }
 
  async function revoke({uid,domain}={}){
@@ -376,6 +388,6 @@ function makeRoomGrantIssuer({db,auth,independentReview,projectDomain,
    });
   }catch(_){return hold("ATOMIC_REVOKE_UNAVAILABLE");}
  }
- return Object.freeze({issue,issueAllForB,revoke});
+ return Object.freeze({issue,issueAllForB,issueAllForCurrentReader,revoke});
 }
 module.exports={makeRoomGrantIssuer};

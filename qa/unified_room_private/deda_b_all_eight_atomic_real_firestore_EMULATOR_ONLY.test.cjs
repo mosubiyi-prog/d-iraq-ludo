@@ -195,6 +195,60 @@ test("POINT01: B eight-domain real Firestore atomic issue/denials on isolated em
      }
    }
    console.log("PASS_ONE_SCOPE_FAILURE_ZERO_PARTIAL_WRITES_ON_FIRESTORE_EMULATOR");
+
+   // Source B is allowed to stay a historic, unlinked Auth principal.
+   // A separate EXISTING authenticated reader can consume independently
+   // authorized B/A/C views without ever signing into historical B.
+   const current="QA_EXISTING_SIGNED_READER_R1";
+   const existsCurrent=await auth.getUser(current).catch(()=>null);
+   if(!existsCurrent)await auth.createUser({
+     uid:current,email:"qa-reader-r@example.test",
+     password:"QA_EMULATOR_ONLY_STRONG_TEST_PASSWORD_2!",emailVerified:true});
+   await env.clearFirestore();
+   const newNow=Date.now();
+   await seed(db,newNow);
+   const legacyDocs=[
+     "deda_account_directory/"+account,
+     "deda_credentials/"+account,
+     "deda_share_ids/"+originalId,
+     "deda_social_profiles/"+originalId,
+     "users/"+A,"users/"+B,"users/"+C
+   ];
+   const legacyBefore=await Promise.all(legacyDocs.map(p=>db.doc(p).get().then(s=>s.data())));
+   for(const group of ["deda_unified_room_owner_authorizations",
+      "deda_unified_room_owner_directory","deda_unified_room_sessions"]){
+     const old=(await db.doc(group+"/"+B).get()).data();
+     const row={...old,uid:current};
+     if("readerUid" in row)row.readerUid=current;
+     await db.doc(group+"/"+current).set(row);
+   }
+   const currentIssuer=makeIssuer(db,auth,newNow);
+   const done=await currentIssuer.issueAllForCurrentReader({uid:current});
+   assert.equal(done.status,"ISSUED_ALL_EIGHT_READ_ONLY",done.reason);
+   const reader=createRoomReadonlyGuard({db,auth,clock:()=>newNow,enabled:true});
+   const currentClient=env.authenticatedContext(current,{
+     firebase:{sign_in_provider:"password"}}).firestore();
+   const oldClient=env.authenticatedContext(B,{
+     firebase:{sign_in_provider:"password"}}).firestore();
+   for(const domain of domains){
+     assert.equal(await can(()=>currentClient.doc(
+       "deda_unified_room_private_views/"+current+"/domains/"+domain).get()),true);
+     assert.equal(await can(()=>oldClient.doc(
+       "deda_unified_room_private_views/"+current+"/domains/"+domain).get()),false);
+     const grant=(await db.doc("deda_unified_room_read_grants/"+current+
+       "/domains/"+domain).get()).data();
+     const expected=domain==="friends"?C:
+       ["profile","league"].includes(domain)?B:A;
+     assert.equal(grant.sourceUid,expected);
+     const response=await reader({
+       auth:{uid:current,token:{firebase:{sign_in_provider:"password"}}},
+       app:{appId:"QA_ONLY_FIREBASE_APP_ID"},input:{domain}});
+     assert.equal(response.status,"VERIFIED_READ_ONLY",domain+":"+response.reason);
+   }
+   const legacyAfter=await Promise.all(legacyDocs.map(p=>db.doc(p).get().then(s=>s.data())));
+   assert.deepEqual(legacyAfter,legacyBefore,"historical source A/B/C must not change");
+   assert.equal((await currentIssuer.issueAllForB({uid:current})).status,"HOLD");
+   console.log("PASS_EXISTING_READER_CAN_ACCESS_B_A_C_WITHOUT_B_AUTH_SIGN_IN");
  }finally{
    await env.cleanup();
    await deleteApp(app);

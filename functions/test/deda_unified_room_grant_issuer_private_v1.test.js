@@ -343,3 +343,93 @@ test("B atomic 8-domain bundle: all 24 reads scoped records or zero records",asy
  assert.equal((await old.issuer.issueAllForB({uid:a})).status,"HOLD");
  assert.equal(old.writes.length,0);
 });
+
+test("non-B verified current UID reads all eight under historical B without B Auth login",async()=>{
+ const current="QA_EXISTING_SIGNED_READER_1";
+ const a="QA_HISTORIC_UID_A",b="QA_HISTORIC_UID_B",c="QA_HISTORIC_UID_C";
+ const key="9647712345678",original="@DEDA-ABC123";
+ const cid="DEDA_QA_CANONICAL_OWNER_ROOM_01",proof="f".repeat(64);
+ const domains=["profile","original_id","premium_id","friends","league",
+   "gifts","wallet","places"];
+ const payload={profile:{displayName:"QA Owner",level:13},
+   original_id:{publicId:original},premium_id:{displayId:"@DEDA-1234"},
+   friends:{friendCount:2},league:{weeklyPoints:50},gifts:{giftCount:3},
+   wallet:{balanceDisplay:10},places:{publishedPlaceCount:3}};
+ const owner={uid:current,readerUid:current,status:"independently_verified",
+   independentEvidenceSource:"verified_offline_authority",
+   evidenceDigest:proof,reviewers:["reviewerOne","reviewerTwo"],
+   accountKey:key,originalId:original,canonicalAccountId:cid,
+   historicalUids:[a,b,c],approvedAtMs:now-1000,expiresAtMs:now+300000};
+ const entries=[
+  ["deda_unified_room_owner_authorizations/"+current,owner],
+  ["deda_unified_room_owner_directory/"+current,{
+    uid:current,accountKey:key,originalId:original,
+    canonicalAccountId:cid,historicalUids:[a,b,c]}],
+  ["deda_unified_room_sessions/"+current,{
+    uid:current,accountKey:key,canonicalAccountId:cid,active:true,
+    revision:1,sessionNonce:"QA_EXISTING_VERIFIED_CURRENT_SESSION"}],
+  ["deda_account_directory/"+key,{active:true,accountKey:key,createdUid:b}],
+  ["deda_credentials/"+key,{active:true,accountKey:key,createdUid:b}],
+  ["deda_share_ids/"+original,{publicId:original,kind:"personal",active:true,ownerUid:a}],
+  ["deda_social_profiles/"+original,{publicId:original,ownerUid:c}]
+ ];
+ const docs=new Map(structuredClone(entries)),writes=[];
+ const db={doc:path=>({path}),runTransaction:async callback=>{
+   const pending=[],tx={get:async ref=>({
+     exists:docs.has(ref.path),data:()=>docs.get(ref.path)}),
+     create:(ref,data)=>pending.push([ref.path,data])};
+   const output=await callback(tx);
+   for(const [path,data] of pending){
+     if(docs.has(path))throw Error("duplicate");
+     docs.set(path,data);writes.push(path);
+   }
+   return output;
+ }};
+ let authCount=0,legacyBAuthLookups=0;
+ const auth={getUser:async candidate=>{
+   authCount++;if(candidate===b){legacyBAuthLookups++;return {
+     uid:b,disabled:false,providerData:[]};}
+   return {uid:candidate,disabled:false,providerData:[{providerId:"password"}]};
+ }};
+ let reviewCalls=0;
+ const independentReview=async({uid,domain})=>{
+   reviewCalls++;return {
+     status:"INDEPENDENTLY_ATTESTED",readerUid:uid,domain,
+     independentEvidenceSource:"verified_offline_authority",
+     accountKey:key,originalId:original,canonicalAccountId:cid,
+     evidenceDigest:proof,uidA:a,uidB:b,uidC:c,
+     reviewers:["reviewerOne","reviewerTwo"],verifiedAtMs:now-500
+   };
+ };
+ const make=()=>makeRoomGrantIssuer({db,auth,independentReview,
+   projectDomain:async({domain})=>payload[domain],
+   toTimestamp:t=>({toMillis:()=>t}),clock:()=>now,enabled:true});
+ const sourceBefore=JSON.stringify([...docs]);
+ const issued=await make().issueAllForCurrentReader({uid:current});
+ assert.equal(issued.status,"ISSUED_ALL_EIGHT_READ_ONLY",issued.reason);
+ assert.equal(issued.domains.length,8);
+ assert.equal(writes.length,24);
+ assert.equal(authCount,1);
+ assert.equal(legacyBAuthLookups,0);
+ assert.equal(reviewCalls,8);
+ assert.equal(JSON.stringify([...docs].slice(0,7)),sourceBefore);
+ const reader=createRoomReadonlyGuard({db,auth,clock:()=>now,enabled:true});
+ for(const domain of domains){
+   const expected=domain==="friends"?c:
+     ["profile","league"].includes(domain)?b:a;
+   const grant=docs.get("deda_unified_room_read_grants/"+current+"/domains/"+domain);
+   assert.equal(grant.sourceUid,expected,domain);
+   assert.equal(grant.readerUid,current,domain);
+   assert.equal(grant.canWrite,false);
+   const result=await reader({auth:{uid:current,
+     token:{firebase:{sign_in_provider:"password"}}},
+     app:{appId:"QA_EXISTING_APP_ID"},input:{domain}});
+   assert.equal(result.status,"VERIFIED_READ_ONLY",domain+":"+result.reason);
+ }
+ assert.equal((await make().issueAllForCurrentReader({uid:current})).status,"HOLD");
+ assert.equal(writes.length,24);
+ // The historical B-only API stays exact-B-only, even if an R session is
+ // otherwise valid. This avoids changing previously reviewed behavior.
+ assert.equal((await make().issueAllForB({uid:current})).status,"HOLD");
+ assert.equal(writes.length,24);
+});
