@@ -47,6 +47,25 @@ def prepare(project: Path, verify_only: bool = False):
             ],
 """
     expected_import = "import 'deda_backend.dart';\n"
+    isolated_main_import = "import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';"
+    settings_admin_anchor = ("                                final isAdmin =\n"
+                             "                                    await DedaBackend.currentUserIsAdmin();")
+    ISOLATED_SETTINGS_GATE = """                                // The public user session must never enter the
+                                // legacy admin Dashboard with isolated admin ON.
+                                if (dedaIsolatedAdminIdentityEnabled) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => DedaAdminLoginPage(
+                                        isArabic: DedaLanguageState.isArabic,
+                                        dedaPhone: phone,
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+"""
     guarded_boot = """String? _dedaStage2PendingGoogleUid;
 
 Future<void> _dedaStage2LoadPreferencesWithGoogleFence() async {
@@ -104,7 +123,8 @@ Future<void> main() async {"""
         if import_statement in main or 'DedaStage2GoogleAccessCard(' in main:
             raise ValueError('STAGE2_ALREADY_APPLIED_VERIFY_ONLY')
         main = one(main, expected_import,
-                   expected_import + import_statement + '\n', 'main-import')
+                   expected_import + import_statement + '\n' +
+                   isolated_main_import + '\n', 'main-import')
         main = one(main, 'Future<void> main() async {',
                    guarded_boot, 'pending-google-global-state')
         # Measured-startup source intentionally loads preferences a second
@@ -140,6 +160,9 @@ Future<void> main() async {"""
 """, 'pending-boot-home-gate')
         main = one(main, expected_logout, pilot_insert + expected_logout,
                    'existing-signout-location')
+        main = one(main, settings_admin_anchor,
+                   ISOLATED_SETTINGS_GATE + settings_admin_anchor,
+                   'settings-isolated-route-before-legacy-auth')
         if 'google_sign_in:' in pubspec:
             raise ValueError('STAGE2_EXISTING_GOOGLE_DEPENDENCY_REVIEW_REQUIRED')
         pubspec = one(pubspec, '  firebase_auth: ^5.3.3\n',
@@ -180,6 +203,50 @@ Future<void> main() async {"""
             'isolated-admin-safe-login-route',
         )
         admin_source = before_login + login_start + login_body + login_end + after_login
+        # Fail closed when the isolated mode is explicitly enabled: the old
+        # invitation flow uses public Auth and the old Dashboard uses DedaBackend.
+        # Neither may run against the secondary administrative principal.
+        invite_start = '  Future<void> _activate() async {\n'
+        invite_block = """  Future<void> _activate() async {
+    if (dedaIsolatedAdminIdentityEnabled) {
+      setState(() => _error = t(
+        'تفعيل الدعوات متوقف لحين إكمال عزل الإدارة.',
+        'Invitation activation is unavailable during isolated admin migration.',
+      ));
+      return;
+    }
+"""
+        admin_source = one(admin_source, invite_start, invite_block,
+                           'legacy-invitation-auth-must-be-blocked')
+        dashboard_start = ('class _DedaAdminDashboardPageState '
+                           'extends State<DedaAdminDashboardPage> {')
+        dashboard_end = 'class _AdminRequestsPage extends StatelessWidget {'
+        if (admin_source.count(dashboard_start) != 1 or
+                admin_source.count(dashboard_end) != 1):
+            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:legacy-dashboard-boundaries')
+        before_dashboard, remainder = admin_source.split(dashboard_start, 1)
+        dashboard_body, after_dashboard = remainder.split(dashboard_end, 1)
+        dashboard_body = one(
+            dashboard_body,
+            '    super.initState();\n    _load();\n',
+            '    super.initState();\n'
+            '    if (!dedaIsolatedAdminIdentityEnabled) _load();\n',
+            'legacy-dashboard-init-no-public-auth',
+        )
+        dashboard_body = one(
+            dashboard_body,
+            '  Widget build(BuildContext context) {\n    final profile = _profile;',
+            """  Widget build(BuildContext context) {
+    if (dedaIsolatedAdminIdentityEnabled) {
+      return const Scaffold(
+        body: Center(child: Text('Use isolated administrator sign-in.')),
+      );
+    }
+    final profile = _profile;""",
+            'legacy-dashboard-build-fail-closed',
+        )
+        admin_source = (before_dashboard + dashboard_start + dashboard_body +
+                        dashboard_end + after_dashboard)
         # Validate all proposed anchor edits BEFORE writing anything.
         for name in MODULES:
             if (project/'lib'/name).exists():
@@ -198,7 +265,12 @@ Future<void> main() async {"""
         (project/'test').mkdir(exist_ok=True)
         if not existing_test.exists():
             existing_test.write_bytes((REPO/'test'/GOOGLE_TEST).read_bytes())
-    if main.count(import_statement) != 1 or (
+    if (main.count(import_statement) != 1 or
+        main.count(isolated_main_import) != 1 or
+        main.count(ISOLATED_SETTINGS_GATE) != 1 or
+        not main.index(ISOLATED_SETTINGS_GATE) <
+            main.index(settings_admin_anchor) or
+        (
         main.count('DedaStage2GoogleAccessCard(') != 1 or
         not main.index('DedaStage2GoogleAccessCard(') <
             main.index(expected_logout) or
@@ -212,7 +284,7 @@ Future<void> main() async {"""
             main.index('await DedaTaskEngine.initializeForCurrentAccount();') or
         main.count(expected_logout) != 1 or
         pubspec.count(GOOGLE_DEPENDENCY) != 1
-    ):
+        )):
         raise ValueError('STAGE2_VERIFY_UI_DEPENDENCY_GATE_FAILED')
     # Both paths are compiled. The legacy route stays intact while Stage2
     # stays OFF; privileged secondary sessions never enter that old route.
@@ -224,7 +296,10 @@ Future<void> main() async {"""
         not admin_source.index('if (dedaIsolatedAdminIdentityEnabled) {') <
             admin_source.index('DedaBackend.signInAdmin(') or
         'deda-isolated-admin-password-change-pending' not in admin_source or
-        'await isolated.signOutSecondaryAdmin();' not in admin_source):
+        'await isolated.signOutSecondaryAdmin();' not in admin_source or
+        admin_source.count('if (!dedaIsolatedAdminIdentityEnabled) _load();') != 1 or
+        admin_source.count('Use isolated administrator sign-in.') != 1 or
+        admin_source.count('Invitation activation is unavailable during isolated admin migration.') != 1):
         raise ValueError('STAGE2_ADMIN_DASHBOARD_BRIDGE_GATE_FAILED')
     for name in MODULES:
         if (project/'lib'/name).read_bytes() != (REPO/'lib'/name).read_bytes():
