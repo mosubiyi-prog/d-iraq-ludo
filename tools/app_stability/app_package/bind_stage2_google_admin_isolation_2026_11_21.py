@@ -96,8 +96,10 @@ def prepare(project: Path, verify_only: bool = False):
         main = one(main, 'Future<void> main() async {',
                    'String? _dedaStage2PendingGoogleUid;\n\nFuture<void> main() async {',
                    'pending-google-global-state')
-        main = one(main, '  await DedaPreferences.load();\n  await DedaTaskEngine.initializeForCurrentAccount();',
-                   pending_boot, 'pending-before-task-startup')
+        main = one(main, '  await DedaPreferences.load();\n',
+                   pending_boot.replace('  await DedaPreferences.load();\n', '', 1).replace(
+                       '  await DedaTaskEngine.initializeForCurrentAccount();', ''),
+                   'pending-before-task-startup')
         main = one(main, '  static bool _liveVerifiedOriginalOwner(',
                    in_memory_fence + '  static bool _liveVerifiedOriginalOwner(',
                    'legacy-live-profile-fence')

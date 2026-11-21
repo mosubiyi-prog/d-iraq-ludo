@@ -58,6 +58,20 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                      'lib/admin_place_map.dart'):
             self.assertEqual((self.dst/name).read_bytes(),(REPO/name).read_bytes(),name)
 
+    def test_assembled_extra_startup_guard_keeps_google_quarantine_before_tasks(self):
+        main=self.dst/'lib/main.dart'
+        original=main.read_text()
+        anchor='  await DedaPreferences.load();\n'
+        self.assertEqual(original.count(anchor),1)
+        main.write_text(original.replace(
+            anchor,anchor + '  // Existing stage boot guard preserved.\n',1))
+        binder.prepare(self.dst)
+        binder.prepare(self.dst,verify_only=True)
+        ui=main.read_text()
+        self.assertLess(ui.index('await DedaStableGoogleLogin.pendingGoogleUid();'),
+                        ui.index('await DedaTaskEngine.initializeForCurrentAccount();'))
+        self.assertIn('// Existing stage boot guard preserved.',ui)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
