@@ -464,6 +464,75 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         for forbidden in ('FirebaseFirestore.instance.collection(','.set(','.update(','.delete('):
             self.assertNotIn(forbidden,method,forbidden)
 
+    def test_isolated_place_review_atomic_writes_and_no_approval_shortcut(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        method=code.split('Future<void> updateScopedPlaceReview(',1)[1].split(
+            '/// First isolated support write transport.',1)[0]
+        policy=code.split('static bool placeReviewMutationAllowed(',1)[1].split(
+            '/// Apply the same server role',1)[0]
+        for text in (
+            "if (!dedaIsolatedAdminIdentityEnabled)",
+            "'reviewing', 'needs_changes', 'rejected'",
+            "requiredPermission: permission",
+            "GetOptions(source: Source.server)",
+            "placeReviewMutationAllowed(",
+            "sameScopedFilters(",
+            "await _firestore.runTransaction(",
+            "final fresh = await transaction.get(requestRef)",
+            "transaction.update(requestRef, patch)",
+            "transaction.set(auditRef,",
+            "'decisionNote': cleanNote",
+            "'createdAt': FieldValue.serverTimestamp()",
+            "'owner_place_notifications'",
+            "transaction.set(notificationRef,",
+            "'type': 'needs_changes'",
+            "_auth.currentUser?.uid != uid",
+            "_mainAuth.currentUser?.uid != publicUid",
+        ):
+            self.assertIn(text,method)
+        self.assertEqual(method.count('!await proof()'),2)
+        self.assertIn("targetStatus == 'rejected'",policy)
+        self.assertIn("targetStatus == 'needs_changes'",policy)
+        self.assertIn("expectedStatus != 'pending'",policy)
+        self.assertIn("createdAt.compareTo(activation) < 0",policy)
+        self.assertIn("role != 'general_manager'",policy)
+        self.assertIn("scopedDocumentMatches(",policy)
+        for forbidden in ("FirebaseAuth.instance", "FirebaseFirestore.instance",
+                          "DedaBackend.updateRequestStatus(",
+                          ".collection('published_places')",
+                          ".collection('system_counters')",
+                          "'status': 'approved'",
+                          ".delete("):
+            self.assertNotIn(forbidden,method,forbidden)
+        self.assertIn("widget.admin.updateScopedPlaceReview(",ui)
+        self.assertIn("_askPlaceReason(",ui)
+        self.assertIn("canReview('rejected')",ui)
+        self.assertIn("canReview('needs_changes')",ui)
+        self.assertIn("canReview('reviewing')",ui)
+        self.assertNotIn("DedaBackend.updateRequestStatus(",ui)
+
+    def test_place_review_write_fields_agree_with_existing_firestore_rules(self):
+        rules=(REPO/'firestore.rules').read_text()
+        place=rules.split('match /place_requests/{requestId} {',1)[1].split(
+            'match /published_places/{placeId} {',1)[0]
+        notice=rules.split('match /owner_place_notifications/{notificationId} {',1)[1].split(
+            'match /place_deletion_requests/{requestId} {',1)[0]
+        audit=rules.split('match /admin_audit/{auditId} {',1)[1].split(
+            'match /admin_history/{uid} {',1)[0]
+        for item in ("adminProvinceMatches(resource.data)",
+                     "adminCanReadCreatedAfterActivation(resource.data)",
+                     "hasAdminPermission('reviewPlaceRequests')",
+                     "hasAdminPermission('rejectPlaces')",
+                     "'decisionAction'", "'decisionNote'", "'reviewedByRole'"):
+            self.assertIn(item,place)
+        for item in ("'needs_changes'", "'ownerUid'", "'placeId'",
+                     "'createdByUid'", "'createdAt'", "'sourceType'"):
+            self.assertIn(item,notice)
+        self.assertIn("request.resource.data.adminUid == request.auth.uid",audit)
+        # Source-only: never alter the deployed rules as an implementation shortcut.
+        self.assertIn("allow delete: if false;",notice)
+
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn('return PopScope(',source)
