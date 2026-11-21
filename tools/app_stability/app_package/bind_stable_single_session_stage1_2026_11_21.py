@@ -18,37 +18,62 @@ def change_once(text: str, before: str, after: str, path: str) -> str:
         raise ValueError(f"STAGE1_SOURCE_ANCHOR_CHANGED:{path}:found={count}")
     return text.replace(before, after, 1)
 
+def change_variant(text: str, variants: list[tuple[str, str]], path: str) -> str:
+    """Accept ONLY one of the two reviewed exact source shapes."""
+    matches = [(before, after) for before, after in variants if text.count(before) == 1]
+    if len(matches) != 1 or any(text.count(before) > 1 for before, _ in variants):
+        raise ValueError(f"STAGE1_SOURCE_ANCHOR_CHANGED:{path}:variant_matches={len(matches)}")
+    before, after = matches[0]
+    return text.replace(before, after, 1)
+
 def patch_backend(text: str) -> str:
     path = BACKEND
     # Public section retries can never create a Firebase identity.
-    text = change_once(text,
-        """    final credential = await auth.signInAnonymously();
-    if (credential.user == null) throw StateError('anonymous-auth-failed');
-    return credential.user!;""",
-        """    // Phase 1: signed-out public sections remain signed-out. A new account
+    public_error = """    // Phase 1: signed-out public sections remain signed-out. A new account
     // has its own EXPLICIT enrollment path; never mint another UID on a read.
-    throw StateError('deda-stability-explicit-auth-entry-no-new-uid');""", path)
+    throw StateError('deda-stability-explicit-auth-entry-no-new-uid');"""
+    text = change_variant(text, [
+        ("""    final credential = await auth.signInAnonymously();
+    if (credential.user == null) throw StateError('anonymous-auth-failed');
+    return credential.user!;""", public_error),
+        ("""    final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.anonymous(auth));
+    if (credential.user == null) throw StateError('anonymous-auth-failed');
+    return credential.user!;""", public_error),
+    ], path)
     # The legacy owner resolver must not sign out a different authenticated
     # user merely because it could not find that owner's old PIN session.
-    text = change_once(text,
-        """      // Preserve the existing, non-pilot compatibility path unchanged.
-      await signOutAdmin();""",
-        """      // No section/owner read may log out a live administrator or user.
+    owner_error = """      // No section/owner read may log out a live administrator or user.
       // A verified account switch is a separate explicit user action.
-      throw StateError('deda-stability-owner-read-cannot-switch-auth');""", path)
+      throw StateError('deda-stability-owner-read-cannot-switch-auth');"""
+    text = change_variant(text, [
+        ("""      // Preserve the existing, non-pilot compatibility path unchanged.
+      await signOutAdmin();""", owner_error),
+        ("""      // Preserve the existing, non-pilot compatibility path unchanged.
+      await DedaAuthRuntime.wait(() => signOutAdmin());""", owner_error),
+    ], path)
     # A shared FirebaseAuth admin password call changes the DEFAULT user
     # before the role is checked. Until phase 2 supplies separate Admin Auth,
     # fail closed instead of destroying an existing public session.
-    text = change_once(text,
-        """    _clearAdminProfileCache();
+    text = change_variant(text, [
+        ("""    _clearAdminProfileCache();
     final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
       email: email.trim(),""",
-        """    if (FirebaseAuth.instance.currentUser != null) {
+         """    if (FirebaseAuth.instance.currentUser != null) {
       throw StateError('deda-stability-admin-isolated-auth-required');
     }
     _clearAdminProfileCache();
     final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: email.trim(),""", path)
+      email: email.trim(),"""),
+        ("""    _clearAdminProfileCache();
+    final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.email(FirebaseAuth.instance,
+      email: email.trim(),""",
+         """    if (FirebaseAuth.instance.currentUser != null) {
+      throw StateError('deda-stability-admin-isolated-auth-required');
+    }
+    _clearAdminProfileCache();
+    final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.email(FirebaseAuth.instance,
+      email: email.trim(),"""),
+    ], path)
     text = change_once(text,
         """    final uid = credential.user?.uid;
     if (uid == null) return false;
@@ -96,8 +121,13 @@ def patch_pin(text: str) -> str:
       throw StateError('deda-stability-original-login-no-anonymous-uid');
     }
     // A login/section/helper for an EXISTING DEDA account may not mint a""", path)
-    text = change_once(text,
-        """    if (current != null) {
+    replacement = """    if (current != null) {
+      // No PIN helper, recovery request or enrollment can silently replace
+      // a signed-in non-anonymous identity on the shared FirebaseAuth.
+      throw StateError('deda-stability-explicit-session-switch-required');
+    }"""
+    text = change_variant(text, [
+        ("""    if (current != null) {
       // In the optional linked-owner pilot a helper may not discard the
       // current non-anonymous UID merely to obtain an anonymous session.
       // The user must explicitly exit/switch accounts first. Do not
@@ -106,13 +136,21 @@ def patch_pin(text: str) -> str:
         throw StateError('deda-explicit-anonymous-session-switch-required');
       }
       await auth.signOut();
-    }""",
-        """    if (current != null) {
-      // No PIN helper, recovery request or enrollment can silently replace
-      // a signed-in non-anonymous identity on the shared FirebaseAuth.
-      throw StateError('deda-stability-explicit-session-switch-required');
-    }""", path)
+    }""", replacement),
+        ("""    if (current != null) {
+      // In the optional linked-owner pilot a helper may not discard the
+      // current non-anonymous UID merely to obtain an anonymous session.
+      // The user must explicitly exit/switch accounts first. Do not
+      // repurpose this method to perform a silent switch.
+      if (dedaLinkedOwnerCompatEnabled) {
+        throw StateError('deda-explicit-anonymous-session-switch-required');
+      }
+      await DedaAuthRuntime.wait(() => DedaAuthRuntime.signOut(auth));
+    }""", replacement),
+    ], path)
     return text
+
+def bind    return text
 
 def bind(project: Path, *, verify_only: bool = False) -> dict:
     project = project.resolve()
@@ -151,7 +189,8 @@ def bind(project: Path, *, verify_only: bool = False) -> dict:
                 part = original[start:stop]
                 if ("deda-stability-original-login-no-anonymous-uid" not in part
                     or "deda-stability-explicit-session-switch-required" not in part
-                    or "await auth.signOut();" in part):
+                    or "await auth.signOut();" in part
+                    or "DedaAuthRuntime.signOut(auth)" in part):
                     raise ValueError("STAGE1_VERIFY_PIN_FAILED")
             continue
         proposed[relative] = patch(original)
