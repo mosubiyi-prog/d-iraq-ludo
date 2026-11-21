@@ -87,6 +87,29 @@ class DedaIsolatedAdminProofPolicy {
     final liveEmail = (authEmail ?? '').trim().toLowerCase();
     return allowedEmail.isNotEmpty && allowedEmail == liveEmail;
   }
+
+  // Strict permission gate for the isolated transport, separate from the
+  // compatibility role normalization used by old deployed administration.
+  static const Set<String> _knownPermissions = <String>{
+    'supportRead', 'supportReply', 'viewPlaceRequests',
+    'reviewPlaceRequests', 'approvePlaces', 'rejectPlaces',
+    'viewUsers', 'viewReports', 'manageReports',
+    'viewGovernorates', 'viewAudit',
+  };
+  static bool allowsPermission({
+    required Map<String, dynamic>? admin,
+    required String permission,
+  }) {
+    if (!_knownPermissions.contains(permission) || admin == null ||
+        admin['active'] != true ||
+        DedaBackend.normalizeAdminStatus(admin) != 'active') return false;
+    final role = (admin['role'] ?? admin['jobTitle'] ?? '')
+        .toString().trim().toLowerCase();
+    if (role.isEmpty) return false;
+    if (DedaBackend.normalizeAdminRole(role) == 'general_manager') return true;
+    final permissions = admin['permissions'];
+    return permissions is Map && permissions[permission] == true;
+  }
 }
 
 class DedaIsolatedAdminIdentity {
@@ -96,6 +119,15 @@ class DedaIsolatedAdminIdentity {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final FirebaseAuth _mainAuth;
+
+  // Only these read-only collections can use the isolated transport.
+  // This does NOT grant entry to the old admin Dashboard.
+  static const Map<String, String> _scopedReadPermissions = {
+    'support_requests': 'supportRead',
+    'place_requests': 'viewPlaceRequests',
+    'users': 'viewUsers',
+    'admin_audit': 'viewAudit',
+  };
 
   /// SECONDARY named FirebaseApp, separate Auth persistence and Firestore
   /// credentials from the public DEDA app. Never signs out the public user.
@@ -130,6 +162,7 @@ class DedaIsolatedAdminIdentity {
     required String uid,
     required String dedaPhone,
     required String? expectedPublicUid,
+    String? requiredPermission,
   }) async {
     final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone);
     if (phone.isEmpty || uid.isEmpty ||
@@ -147,7 +180,7 @@ class DedaIsolatedAdminIdentity {
         _mainAuth.currentUser?.uid != expectedPublicUid) return false;
     final entry = entryProof.data();
     final expires = entry?['expiresAt'];
-    return DedaIsolatedAdminProofPolicy.authorized(
+    final allowed = DedaIsolatedAdminProofPolicy.authorized(
       authUid: uid,
       authEmail: _auth.currentUser?.email,
       accountKey: phone,
@@ -160,6 +193,10 @@ class DedaIsolatedAdminIdentity {
       now: DateTime.now(),
       inviteExpiresAt: expires is Timestamp ? expires.toDate() : null,
     );
+    return allowed && (requiredPermission == null ||
+        DedaIsolatedAdminProofPolicy.allowsPermission(
+          admin: adminProof.data(), permission: requiredPermission,
+        ));
   }
 
   /// After an app restart the secondary FirebaseAuth SDK may still own a
@@ -226,6 +263,43 @@ class DedaIsolatedAdminIdentity {
       await _auth.signOut();
       rethrow;
     }
+  }
+
+  /// Read-only scoped data path, with fresh server permissions before and
+  /// after fetch. No write operation or raw Firestore handle is exposed.
+  Future<List<Map<String, dynamic>>> readScopedAdminList({
+    required String dedaPhone,
+    required String collection,
+    int maxItems = 25,
+  }) async {
+    final permission = _scopedReadPermissions[collection];
+    if (permission == null || maxItems < 1 || maxItems > 50) {
+      throw StateError('deda-admin-isolated-read-scope-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: permission,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-read-permission-denied');
+    }
+    final rows = await _firestore.collection(collection)
+        .limit(maxItems).get(const GetOptions(source: Source.server));
+    if (rows.metadata.isFromCache || rows.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof()) {
+      throw StateError('deda-admin-isolated-read-session-or-proof-changed');
+    }
+    return rows.docs.map(
+      (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
+    ).toList(growable: false);
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();
