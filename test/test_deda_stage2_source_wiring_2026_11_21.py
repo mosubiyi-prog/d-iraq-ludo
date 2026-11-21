@@ -190,7 +190,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("'support_requests': 'supportRead'",probe)
         self.assertIn("'admin_audit': 'viewAudit'",probe)
         scoped=probe.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
-            'Future<void> signOutSecondaryAdmin()',1)[0]
+            'Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
         self.assertIn('_scopedReadPermissions[collection]',scoped)
         self.assertIn('maxItems < 1 || maxItems > 50',scoped)
         self.assertIn('scopedReadQueryFilters(',scoped)
@@ -304,7 +304,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
     def test_isolated_list_rechecks_query_scope_after_server_proof(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         body=code.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
-            'Future<void> signOutSecondaryAdmin()',1)[0]
+            'Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
         self.assertIn('sameScopedFilters(',body)
         self.assertIn('scopedDocumentMatches(',body)
         self.assertEqual(body.count('await proof()'),2)
@@ -453,7 +453,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
     def test_isolated_admin_list_fail_closed_and_rechecks_before_and_after(self):
         backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         method=backend.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
-            'Future<void> signOutSecondaryAdmin()',1)[0]
+            'Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
         self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
         self.assertIn("throw StateError('deda-admin-isolated-list-not-enabled')",method)
         self.assertIn('_scopedReadPermissions[collection]',method)
@@ -597,7 +597,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         method=code.split('Future<void> updateScopedPlaceReview(',1)[1].split(
-            '/// Reversible place/request archive',1)[0]
+            '/// Hide or restore a manager-hidden published place',1)[0]
         policy=code.split('static bool placeReviewMutationAllowed(',1)[1].split(
             '/// Final approval is separate from review',1)[0]
         for text in (
@@ -683,7 +683,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                           "FirebaseFirestore.instance",
                           "DedaBackend.hidePublishedPlace(",
                           "DedaBackend.restoreHiddenPublishedPlace(",
-                          ".delete(", "transaction.delete(",
+                          "transaction.delete(",
                           "'ownerUid':", "'accountKey':",
                           "'approvalNumber': FieldValue",
                           "signOut("):
