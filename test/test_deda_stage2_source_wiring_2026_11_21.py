@@ -419,6 +419,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             ('viewPlaceRequests','place_requests'),
             ('viewUsers','users'),
             ('viewAudit','admin_audit'),
+            ('viewTeam','admins'),
         ):
             self.assertIn("if (can('"+permission+"')) {",ui)
             self.assertIn("collection: '"+collection+"'",ui)
@@ -433,6 +434,19 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                           'FirebaseFirestore.instance', 'signInAnonymously',
                           '.collection(', '.set(', '.update(', '.delete('):
             self.assertNotIn(forbidden,ui,forbidden)
+
+    def test_team_enumeration_is_general_manager_only(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        self.assertIn("if (permission == 'viewTeam' && normalizedRole != 'general_manager')",src)
+        self.assertIn("if (collection == 'admins' && role != 'general_manager') return null;",src)
+        self.assertIn("'admins': 'viewTeam'",src)
+        self.assertIn("if (can('viewTeam')) {",ui)
+        self.assertIn("collection: 'admins'",ui)
+        self.assertIn("final team = widget.collection == 'admins';",ui)
+        self.assertIn("data['email']",ui)
+        self.assertNotIn('DedaBackend.',ui)
+        self.assertNotIn('FirebaseAuth.instance',ui)
 
     def test_isolated_admin_list_fail_closed_and_rechecks_before_and_after(self):
         backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
