@@ -4,7 +4,7 @@
 **التاريخ:** 2026-11-21  
 **المرجع:** تعليمات 01، `docs/DEDA_OFFICIAL_STABILITY_SINGLE_LOGIN_ADMIN_MAP_PLAN_2026-11-21.md`، ونقطة المرحلة الأولى.  
 **فرع العمل الوحيد:** `deda-100451-owner-admin-session-safe-repair-2026-11-20`  
-**الحالة:** `STAGE2_SOURCE_QA_PASSED / 11_DART_POLICY_TESTS_PASSED / FULL_ASSEMBLY_ANALYZE_EXIT_ZERO / NO_APK / NO_FIREBASE_PRODUCTION_CHANGE / RELEASE_HOLD`. لا يُعلن اكتمال المرحلة الثانية أو نجاح الإدارة على الهاتف.
+**الحالة:** `STAGE2_SOURCE_QA_PASSED / 12_DART_POLICY_TESTS_PASSED / FULL_ASSEMBLY_ANALYZE_EXIT_ZERO / NO_APK / NO_FIREBASE_PRODUCTION_CHANGE / RELEASE_HOLD`. لا يُعلن اكتمال المرحلة الثانية أو نجاح الإدارة على الهاتف.
 
 ### قرار المالك الذي يحدد النطاق
 ليس شرطاً استرجاع نفس A/B/C أو الماسات/المستوى/المشتريات الشخصية قبل إصلاح التطبيق. يقبل صاحب المشروع UID جديداً **لحسابه الشخصي** ودخول Google ثابتاً، لكنه يتمسك بالخارطة والإدارة وسلامة جميع الأقسام وعدم مسّ حسابات المستخدمين الحاليين. A/B/C لا تُحذف ولا تُنقل منها بيانات دون تفويض. Google لا يمنح الإدارة أو حق الآيدي القديم تلقائياً.
@@ -46,3 +46,13 @@
 - **الملفات المعدلة:** `lib/deda_stable_google_login_2026_11_21.dart`، `lib/deda_stage2_google_access_card_2026_11_21.dart`، `test/deda_stage2_google_and_admin_isolation_policy_test.dart`، `test/test_deda_stage2_source_wiring_2026_11_21.py`.
 - **الفحص:** تشغيل [44857295055](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44857295055) — نجح فحصا `actual-source-safety` و`assembled-full-app-source` بالكامل. سجل تجميع Flutter يُظهر `00:00 +12: All tests passed!` (12 اختبار Dart)، إلى جانب 7 اختبارات Python للمرحلة الأولى و5 اختبارات Python لوصل المرحلة الثانية. اختبار الهاتف لم يحدث.
 - **الحدود:** الميزتان مطفأتان افتراضياً؛ لم يصدر APK؛ لم يُنفذ Firebase deploy أو Play. صلاحية Dashboard المعزولة، إعداد OAuth/SHA، وإكمال تسجيل DEDA المرتبط بـGoogle والاختبار العملي لا تزال غير منجزة. حالة المرحلة الثانية: `PARTIAL / RELEASE_HOLD`.
+
+
+### متابعة منفذة ومختبرة — منع عرض ملف DEDA القديم تحت UID Google الجديد (2026-11-21)
+- **المراجعة الإلزامية:** قورنت الخطة الرسمية وتعليمات المدير العام 01 وحالة الفرع `deda-100451-owner-admin-session-safe-repair-2026-11-20` قبل تعديل الأكواد. لم تُفتح فروع جديدة ولم تُمس النسختان المحميتان 100342 و100436.
+- **الخلل:** في الانتقال المقصود إلى Google كان إلغاء اعتماد `deda_logged_in_v1` في التخزين لا يكفي لإزالة الاسم والهاتف والملف القديم من ذاكرة التطبيق والمسارات المفتوحة؛ كما يحتوي مصدر التجميع على مسارين لبدء التشغيل (العادي ومسار قياس البدء).
+- **المعالجة ضمن مصدر QA المعزول:** إضافة `DedaStableGoogleLogin.pendingGoogleUid()` للتحقق من تطابق Google UID الحقيقي مع علامة الجلسة، وتسليم انتقال صريح من بطاقة Google إلى صفحة تهيئة مقيدة تمنع عرض الملف/الآيدي/الرصيد/الإدارة القديمة. ربط مساري تحميل التفضيلات العادي والمقاس بحارس واحد ينفذ تحميل التفضيلات القديم ويعزل الهوية الحية الجديدة دون حذف المخزون التاريخي. تسجيل الخروج من Google لا يحدث إلا بزر صريح من الصفحة المقيدة. `lib/main.dart` المرجعي لم يُعدَّل؛ الربط يطبق على المصدر الكامل المجمّع المؤقت فقط.
+- **الملفات المعدلة:** `lib/deda_stable_google_login_2026_11_21.dart`، `lib/deda_stage2_google_access_card_2026_11_21.dart`، `tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py`، `test/test_deda_stage2_source_wiring_2026_11_21.py`، وملف Workflow لنفس فحص المرحلة.
+- **دليل النتيجة:** آخر تعديل كود/QA معتمد `6558407f5f1a3cbb23f733ebca6edca6180776c4`؛ تشغيل [44858934159](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44858934159) نجح في وظيفتي `actual-source-safety` و`assembled-full-app-source`: 7 اختبارات Python للمرحلة الأولى و8 للمرحلة الثانية، و12 اختبار Flutter/Dart ناجحاً. تحليل Flutter انتهى برمز صفر دون أخطاء حرجة، لكنه سجّل **404** رسائل info/warning؛ هذا ليس فحصاً خالياً من الملاحظات. محاولات QA وسيطة فشلت بسبب مراجع نصية وتجميعية قديمة، وصُححت قبل التشغيل الناجح.
+- **الحماية والحالة:** رايتا Google والإدارة المعزولة افتراضياً OFF؛ لم يُجر اختبار هاتف أو تابلت، ولا تفعيل لمهام لوحة الإدارة المنفصلة، ولا إنشاء ملف DEDA Google مُعتمد، ولا APK أو Play أو أي تغيير في Firebase الإنتاجي. لا نقل لسجلات A/B/C. الحالة `STAGE2_SOURCE_QA_PASSED / STAGE2_RELEASE_HOLD / NO_APK / NOT_PHONE_TESTED`.
+- **المتبقي ضمن نفس المرحلة الثانية:** تهيئة Google OAuth/SHA للحزمة والتوقيع الصحيحين بإذن مستقل، إتمام تسجيل DEDA الموثوق لهوية Google المقصودة دون وراثة بيانات الآخرين، وصل كامل العمليات والصلاحيات الفعلية للوحة الإدارة بالـ Auth المعزول وفحص بوابة المخولين خادمياً، ثم اختبار الجهازين والخارطة والإدارة قبل التسليم.
