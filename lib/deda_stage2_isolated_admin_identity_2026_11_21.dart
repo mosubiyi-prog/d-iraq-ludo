@@ -406,6 +406,9 @@ class DedaIsolatedAdminIdentity {
     required String collection,
     int maxItems = 25,
   }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-list-not-enabled');
+    }
     final permission = _scopedReadPermissions[collection];
     if (permission == null || maxItems < 1 || maxItems > 50) {
       throw StateError('deda-admin-isolated-read-scope-denied');
