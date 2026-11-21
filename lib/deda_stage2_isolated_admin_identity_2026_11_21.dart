@@ -177,16 +177,24 @@ class DedaIsolatedAdminProofPolicy {
     Map<String, dynamic>? latest,
   ) {
     if (initial == null || latest == null ||
-        initial.length != latest.length) return false;
+        initial.length != latest.length) {
+      return false;
+    }
     for (final entry in initial.entries) {
-      if (!latest.containsKey(entry.key)) return false;
+      if (!latest.containsKey(entry.key)) {
+        return false;
+      }
       final value = latest[entry.key];
       if (entry.key == 'createdAtMin') {
         if (entry.value is! Timestamp || value is! Timestamp ||
-            (entry.value as Timestamp).compareTo(value) != 0) return false;
+            (entry.value as Timestamp).compareTo(value) != 0) {
+          return false;
+        }
       } else if (entry.key == 'governorate') {
         if (entry.value is! String || value is! String ||
-            entry.value != value) return false;
+            entry.value != value) {
+          return false;
+        }
       } else {
         return false;
       }
