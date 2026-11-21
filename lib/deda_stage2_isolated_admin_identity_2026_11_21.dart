@@ -97,7 +97,7 @@ class DedaIsolatedAdminProofPolicy {
     'supportRead', 'supportReply', 'viewPlaceRequests',
     'reviewPlaceRequests', 'approvePlaces', 'rejectPlaces',
     'viewUsers', 'viewReports', 'manageReports',
-    'viewGovernorates', 'viewAudit',
+    'viewGovernorates', 'viewAudit', 'viewTeam',
   };
   static bool allowsPermission({
     required Map<String, dynamic>? admin,
@@ -113,6 +113,10 @@ class DedaIsolatedAdminProofPolicy {
     if (!const <String>{
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(normalizedRole)) return false;
+    // Only the server-recognized general manager may enumerate admin staff.
+    if (permission == 'viewTeam' && normalizedRole != 'general_manager') {
+      return false;
+    }
     if (normalizedRole == 'general_manager') { return true; }
     // Firestore rules deny these four actions to province agents even if
     // a legacy permissions map accidentally contains a true value.
@@ -214,6 +218,7 @@ class DedaIsolatedAdminProofPolicy {
         DedaBackend.normalizeAdminStatus(admin) != 'active') return null;
     const collections = <String>{
       'support_requests', 'place_requests', 'users', 'admin_audit',
+      'admins',
     };
     if (!collections.contains(collection)) return null;
     final rawRole = (admin['role'] ?? admin['jobTitle'] ?? '')
@@ -223,6 +228,7 @@ class DedaIsolatedAdminProofPolicy {
     if (!const <String>{
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(role)) return null;
+    if (collection == 'admins' && role != 'general_manager') return null;
     if (role == 'province_agent') {
       if (collection != 'place_requests') return null;
       final province = (admin['governorate'] ?? '').toString().trim();
@@ -255,6 +261,7 @@ class DedaIsolatedAdminIdentity {
     'place_requests': 'viewPlaceRequests',
     'users': 'viewUsers',
     'admin_audit': 'viewAudit',
+    'admins': 'viewTeam',
   };
 
   /// SECONDARY named FirebaseApp, separate Auth persistence and Firestore
