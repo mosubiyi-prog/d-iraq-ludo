@@ -257,6 +257,72 @@ void main() {
         'place_001', managerHidden, false), false);
     });
 
+    test('live request page cursors need fresh matching role and scope', () {
+      final createdAt = Timestamp.fromDate(DateTime.utc(2026, 11, 22));
+      final data = <String, dynamic>{
+        'createdAt': createdAt,
+        'governorate': 'كركوك',
+        'status': 'pending',
+      };
+      bool can({
+        Map<String, dynamic>? admin,
+        String collection = 'place_requests',
+        String documentId = 'request_123',
+        String parentPath = 'place_requests',
+        Map<String, dynamic>? record,
+        bool isFromCache = false,
+        bool hasPendingWrites = false,
+      }) => DedaIsolatedAdminProofPolicy.scopedRequestPageCursorAllowed(
+        admin: admin ?? <String, dynamic>{
+          'active': true, 'status': 'active', 'role': 'general_manager',
+        },
+        collection: collection,
+        documentId: documentId,
+        parentPath: parentPath,
+        data: record ?? data,
+        isFromCache: isFromCache,
+        hasPendingWrites: hasPendingWrites,
+      );
+      expect(can(), true);
+      expect(can(isFromCache: true), false);
+      expect(can(hasPendingWrites: true), false);
+      expect(can(documentId: '../admins'), false);
+      expect(can(parentPath: 'support_requests'), false);
+      expect(can(parentPath: 'users'), false);
+      expect(can(collection: 'users', parentPath: 'users'), false);
+      expect(can(collection: 'support_requests',
+        parentPath: 'support_requests'), true);
+      final employee = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'employee',
+        'firstLoginCompletedAt':
+            Timestamp.fromDate(DateTime.utc(2026, 11, 20)),
+        'permissions': <String, dynamic>{
+          'viewPlaceRequests': true, 'supportRead': true,
+        },
+      };
+      expect(can(admin: employee), true);
+      expect(can(admin: {...employee, 'firstLoginCompletedAt':
+        Timestamp.fromDate(DateTime.utc(2026, 11, 23))}), false);
+      expect(can(admin: {...employee, 'permissions': <String, dynamic>{
+        'supportRead': true,
+      }}), false);
+      expect(can(admin: {...employee, 'permissions': <String, dynamic>{
+        'viewPlaceRequests': true,
+      }}, collection: 'support_requests',
+        parentPath: 'support_requests'), false);
+      final provinceAgent = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'province_agent',
+        'governorate': 'كركوك',
+        'permissions': {'viewPlaceRequests': true, 'supportRead': true},
+      };
+      expect(can(admin: provinceAgent), true);
+      expect(can(admin: {...provinceAgent, 'governorate': 'بغداد'}), false);
+      expect(can(admin: provinceAgent, collection: 'support_requests',
+        parentPath: 'support_requests'), false);
+      expect(can(admin: {...provinceAgent, 'active': false}), false);
+      expect(can(admin: {...provinceAgent, 'role': ''}), false);
+    });
+
     test('only active verified GM may mutate reversible place archives', () {
       final archive = <String, dynamic>{
         'originalId': 'place_25',
