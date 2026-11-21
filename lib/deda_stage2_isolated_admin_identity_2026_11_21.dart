@@ -260,6 +260,43 @@ class DedaIsolatedAdminProofPolicy {
     return true;
   }
 
+  /// Update submissions keep the published place's original owner and
+  /// immutable approval identity. Do not merge an edit into another account.
+  static bool approvalOriginalMatches({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic>? original,
+  }) {
+    if (request['requestType'] != 'update' || original == null ||
+        original['published'] != true ||
+        (original['approvalNumber'] ?? '').toString().trim().isEmpty ||
+        (original['approvalDate'] ?? '').toString().trim().isEmpty) {
+      return false;
+    }
+    for (final field in const <String>['ownerUid', 'accountKey']) {
+      final fromRequest = (request[field] ?? '').toString().trim();
+      final fromOriginal = (original[field] ?? '').toString().trim();
+      if (fromRequest.isNotEmpty && fromOriginal.isNotEmpty &&
+          fromRequest != fromOriginal) {
+        return false;
+      }
+    }
+    return request['governorate'] == original['governorate'];
+  }
+
+  static String formatApprovalDate(DateTime date) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(date.day)}/${two(date.month)}/${date.year}';
+  }
+
+  static String placeApprovalMessage({
+    required String placeName,
+    required String approvalNumber,
+    required String approvalDate,
+  }) => 'تم اعتماد: ${placeName}\\n'
+      'رقم الاعتماد: ${approvalNumber}\\n'
+      'تاريخ الاعتماد: ${approvalDate}\\n'
+      'DEDA - الدليل الدقيق';
+
   /// Apply the same server role's activation/province scope to one record.
   static bool scopedDocumentMatches({
     required Map<String, dynamic>? admin,
