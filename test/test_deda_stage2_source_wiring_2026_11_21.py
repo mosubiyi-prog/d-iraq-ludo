@@ -486,6 +486,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             "'createdAt': FieldValue.serverTimestamp()",
             "'owner_place_notifications'",
             "transaction.set(notificationRef,",
+            "'action': 'owner_notification_sent'",
+            "transaction.set(_firestore.collection('admin_audit').doc(),",
             "'type': 'needs_changes'",
             "_auth.currentUser?.uid != uid",
             "_mainAuth.currentUser?.uid != publicUid",
@@ -511,6 +513,24 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("canReview('needs_changes')",ui)
         self.assertIn("canReview('reviewing')",ui)
         self.assertNotIn("DedaBackend.updateRequestStatus(",ui)
+
+    def test_isolated_listener_never_exposes_local_write_or_offline_cache(self):
+        source=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        watch=source.split('Stream<QuerySnapshot<Map<String, dynamic>>> watchScopedAdminRequests(',1)[1].split(
+            '/// This profile can be shown',1)[0]
+        cached=watch.index('if (snapshot.metadata.isFromCache) {')
+        pending=watch.index('if (snapshot.metadata.hasPendingWrites) {')
+        server=watch.index('if (!await proof()) {')
+        self.assertLess(cached,pending)
+        self.assertLess(pending,server)
+        cacheGuard=watch[cached:pending]
+        self.assertIn('if (deliveredFreshServerSnapshot)',cacheGuard)
+        self.assertIn('deda-admin-isolated-watch-server-lost',cacheGuard)
+        self.assertIn('continue;',cacheGuard)
+        pendingGuard=watch[pending:server]
+        self.assertIn('continue;',pendingGuard)
+        self.assertNotIn('throw StateError(',pendingGuard)
+        self.assertIn('deliveredFreshServerSnapshot = true;',watch)
 
     def test_place_review_write_fields_agree_with_existing_firestore_rules(self):
         rules=(REPO/'firestore.rules').read_text()
