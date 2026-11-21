@@ -7,6 +7,7 @@ onboarding + privileged admin dashboard auth-scoping + on-device QA.
 Do not modify original protected source, project configuration or UI locations.
 """
 import argparse
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -221,12 +222,19 @@ Future<void> main() async {"""
                            'legacy-invitation-auth-must-be-blocked')
         dashboard_start = ('class _DedaAdminDashboardPageState '
                            'extends State<DedaAdminDashboardPage> {')
-        dashboard_end = 'class _AdminRequestsPage extends StatelessWidget {'
-        if (admin_source.count(dashboard_start) != 1 or
-                admin_source.count(dashboard_end) != 1):
-            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:legacy-dashboard-boundaries')
+        if admin_source.count(dashboard_start) != 1:
+            raise ValueError(
+                'STAGE2_STOP_SOURCE_DRIFT:legacy-dashboard-state:found=' +
+                str(admin_source.count(dashboard_start)))
         before_dashboard, remainder = admin_source.split(dashboard_start, 1)
-        dashboard_body, after_dashboard = remainder.split(dashboard_end, 1)
+        # The protected assembled app may place a different top-level page
+        # after this state. Find its actual next class, never assume its name
+        # or edit through to another administrative state.
+        next_class = re.search(r'(?m)^class [A-Za-z_]', remainder)
+        if next_class is None:
+            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:legacy-dashboard-next-class')
+        dashboard_body = remainder[:next_class.start()]
+        after_dashboard = remainder[next_class.start():]
         dashboard_body = one(
             dashboard_body,
             '    super.initState();\n    _load();\n',
@@ -247,7 +255,7 @@ Future<void> main() async {"""
             'legacy-dashboard-build-fail-closed',
         )
         admin_source = (before_dashboard + dashboard_start + dashboard_body +
-                        dashboard_end + after_dashboard)
+                        after_dashboard)
         # Validate all proposed anchor edits BEFORE writing anything.
         for name in MODULES:
             if (project/'lib'/name).exists():
