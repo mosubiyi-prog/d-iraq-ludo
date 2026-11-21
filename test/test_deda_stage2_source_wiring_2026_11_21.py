@@ -710,7 +710,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertIn("'"+archive+"': 'managePlaceArchives'",src)
         self.assertIn("'published_places': 'managePlaceArchives'",src)
         self.assertIn("'managePlaceArchives'}.contains(permission)",src)
-        self.assertIn("&& role != 'general_manager') return null",src)
+        self.assertIn("&& role != 'general_manager') {",src)
         self.assertIn("allow read, create, update, delete: if isGeneralManager();",rules)
         self.assertIn("allow delete: if isGeneralManager();",rules)
         self.assertIn("request.resource.data.adminUid == request.auth.uid",rules)
