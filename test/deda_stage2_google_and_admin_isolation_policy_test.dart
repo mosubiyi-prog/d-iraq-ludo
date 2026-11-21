@@ -224,7 +224,7 @@ void main() {
       expect(valid(''), false);
       expect(valid('../admins/owner'), false);
       expect(valid('a/b'), false);
-      expect(valid('a' * 129), false);
+      expect(valid(List.filled(129, 'a').join()), false);
       final cutoff = Timestamp.fromDate(DateTime.utc(2026, 11, 15));
       final older = Timestamp.fromDate(DateTime.utc(2026, 11, 1));
       final staff = <String, dynamic>{
