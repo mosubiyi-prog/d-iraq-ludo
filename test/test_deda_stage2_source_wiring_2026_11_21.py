@@ -643,6 +643,102 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("canReview('reviewing')",ui)
         self.assertNotIn("DedaBackend.updateRequestStatus(",ui)
 
+    def test_manager_visibility_txn_is_atomic_and_never_changes_ownership(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        policy=src.split('static bool managerVisibilityChangeAllowed(',1)[1].split(
+            '/// Apply the same server role',1)[0]
+        method=src.split('Future<void> setScopedPublishedVisibility(',1)[1].split(
+            '/// Reversible place/request archive',1)[0]
+        for guard in ("permission: 'managePlaceArchives'",
+                      "place['published'] == true",
+                      "place['published'] == false",
+                      "place['hiddenByManager'] == true",
+                      "place['hiddenAt'] is Timestamp",
+                      "place['hiddenByUid']"):
+            self.assertIn(guard,policy,guard)
+        for guard in ("if (!dedaIsolatedAdminIdentityEnabled",
+                      "requiredPermission: 'managePlaceArchives'",
+                      "GetOptions(source: Source.server)",
+                      "managerVisibilityChangeAllowed(",
+                      "!await proof()",
+                      "_auth.currentUser?.uid != uid",
+                      "_mainAuth.currentUser?.uid != publicUid",
+                      "await _firestore.runTransaction(",
+                      "transaction.get(placeRef)",
+                      "transaction.update(placeRef, changes)",
+                      "'published': false",
+                      "'published': true",
+                      "'hiddenByManager': true",
+                      "'hiddenAt': FieldValue.serverTimestamp()",
+                      "'hiddenByUid': uid",
+                      "'hiddenByManager': FieldValue.delete()",
+                      "'hiddenAt': FieldValue.delete()",
+                      "'hiddenByUid': FieldValue.delete()",
+                      "'published_place_hidden'",
+                      "'published_place_restored'",
+                      "transaction.set(auditRef,"):
+            self.assertIn(guard,method,guard)
+        for forbidden in ("FirebaseAuth.instance",
+                          "FirebaseFirestore.instance",
+                          "DedaBackend.hidePublishedPlace(",
+                          "DedaBackend.restoreHiddenPublishedPlace(",
+                          ".delete(", "transaction.delete(",
+                          "'ownerUid':", "'accountKey':",
+                          "'approvalNumber': FieldValue",
+                          "signOut("):
+            self.assertNotIn(forbidden,method,forbidden)
+        self.assertIn("widget.admin.setScopedPublishedVisibility(",ui)
+        self.assertIn("_mutate(id, 'hide')",ui)
+        self.assertIn("_mutate(id, 'show')",ui)
+        self.assertIn("canRestoreHidden",ui)
+        self.assertNotIn("DedaBackend.hidePublishedPlace(",ui)
+
+    def test_manager_pages_are_server_proved_keyset_and_ui_can_go_back(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        body=src.split('Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[1].split(
+            'Future<void> signOutSecondaryAdmin()',1)[0]
+        for guard in ("if (!dedaIsolatedAdminIdentityEnabled",
+                      "'published_places'",
+                      "'admin_trash_place_requests'",
+                      "'admin_trash_places'",
+                      "pageSize < 1 || pageSize > 50",
+                      "requiredPermission: 'managePlaceArchives'",
+                      "GetOptions(source: Source.server)",
+                      "FieldPath.documentId",
+                      "startAfterDocument(startAfter)",
+                      "startAfter.reference.parent.path != collection",
+                      "query.limit(pageSize + 1)",
+                      "snapshot.metadata.isFromCache",
+                      "snapshot.metadata.hasPendingWrites",
+                      "!await proof()",
+                      "scopedReadQueryFilters(",
+                      "snapshot.docs.take(pageSize)",
+                      "snapshot.docs.length > pageSize ? visible.last : null"):
+            self.assertIn(guard,body,guard)
+        self.assertNotIn("FirebaseAuth.instance",body)
+        self.assertNotIn("FirebaseFirestore.instance",body)
+        self.assertNotIn(".set(",body)
+        self.assertNotIn(".delete(",body)
+        widget=ui.split("class _DedaIsolatedManagerPlacesTabState",1)[1].split(
+            "class _DedaIsolatedRequestTab",1)[0]
+        for guard in ("readScopedManagerPage(",
+                      "startAfter: _pageStart",
+                      "pageSize: 50",
+                      "_back.add(_pageStart)",
+                      "_back.removeLast()",
+                      "page.nextCursor",
+                      "_pageStart = null",
+                      "_back.clear()",
+                      "FutureBuilder<DedaIsolatedManagerPage>",
+                      "_previous", "_next"):
+            self.assertIn(guard,widget,guard)
+        self.assertNotIn("readScopedAdminList(",widget)
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertIn("allow read: if isGeneralManager()",rules)
+        self.assertIn("allow read, create, update, delete: if isGeneralManager();",rules)
+
     def test_manager_only_place_archive_recovery_is_atomic(self):
         src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
