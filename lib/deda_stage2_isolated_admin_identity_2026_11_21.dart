@@ -97,7 +97,7 @@ class DedaIsolatedAdminProofPolicy {
     'supportRead', 'supportReply', 'viewPlaceRequests',
     'reviewPlaceRequests', 'approvePlaces', 'rejectPlaces',
     'viewUsers', 'viewReports', 'manageReports',
-    'viewGovernorates', 'viewAudit', 'viewTeam',
+    'viewGovernorates', 'viewAudit', 'viewTeam', 'managePlaceArchives',
   };
   static bool allowsPermission({
     required Map<String, dynamic>? admin,
@@ -114,7 +114,8 @@ class DedaIsolatedAdminProofPolicy {
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(normalizedRole)) return false;
     // Only the server-recognized general manager may enumerate admin staff.
-    if (permission == 'viewTeam' && normalizedRole != 'general_manager') {
+    if (const <String>{'viewTeam', 'managePlaceArchives'}.contains(permission) &&
+        normalizedRole != 'general_manager') {
       return false;
     }
     if (normalizedRole == 'general_manager') { return true; }
@@ -307,6 +308,42 @@ class DedaIsolatedAdminProofPolicy {
       'تاريخ الاعتماد: $approvalDate\n'
       'DEDA - الدليل الدقيق';
 
+  /// Strict metadata and action validation for the general-manager-only
+  /// reversible archive. Requests and published places never share a trash
+  /// collection; an archive must have the exact original source identity.
+  static bool placeArchiveActionAllowed({
+    required Map<String, dynamic>? admin,
+    required String sourceCollection,
+    required String id,
+    required String action,
+    required Map<String, dynamic>? source,
+    required Map<String, dynamic>? archive,
+  }) {
+    if (!validScopedDocumentId(id) ||
+        !const <String>{'place_requests', 'published_places'}
+            .contains(sourceCollection) ||
+        !const <String>{'trash', 'restore', 'permanent'}
+            .contains(action) ||
+        !allowsPermission(admin: admin, permission: 'managePlaceArchives')) {
+      return false;
+    }
+    if (action == 'trash') {
+      // Archive collisions are always fatal: never overwrite a prior backup.
+      return source != null && archive == null;
+    }
+    if (archive == null || archive['originalId'] != id ||
+        archive['deletedFromCollection'] != sourceCollection ||
+        archive['trashKind'] != (sourceCollection == 'place_requests'
+            ? 'place_request' : 'published_place') ||
+        (archive['deletedByUid'] ?? '').toString().trim().isEmpty ||
+        archive['deletedAt'] is! Timestamp) {
+      return false;
+    }
+    // An archived document may be deleted permanently regardless of a new
+    // live row. Restore, however, MUST NOT overwrite any live record.
+    return action == 'permanent' || source == null;
+  }
+
   /// Apply the same server role's activation/province scope to one record.
   static bool scopedDocumentMatches({
     required Map<String, dynamic>? admin,
@@ -373,7 +410,8 @@ class DedaIsolatedAdminProofPolicy {
         DedaBackend.normalizeAdminStatus(admin) != 'active') return null;
     const collections = <String>{
       'support_requests', 'place_requests', 'users', 'admin_audit',
-      'admins',
+      'admins', 'published_places', 'admin_trash_place_requests',
+      'admin_trash_places',
     };
     if (!collections.contains(collection)) return null;
     final rawRole = (admin['role'] ?? admin['jobTitle'] ?? '')
@@ -383,7 +421,10 @@ class DedaIsolatedAdminProofPolicy {
     if (!const <String>{
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(role)) return null;
-    if (collection == 'admins' && role != 'general_manager') return null;
+    if (const <String>{
+      'admins', 'published_places', 'admin_trash_place_requests',
+      'admin_trash_places',
+    }.contains(collection) && role != 'general_manager') return null;
     if (role == 'province_agent') {
       if (collection != 'place_requests') return null;
       final province = (admin['governorate'] ?? '').toString().trim();
@@ -417,6 +458,9 @@ class DedaIsolatedAdminIdentity {
     'users': 'viewUsers',
     'admin_audit': 'viewAudit',
     'admins': 'viewTeam',
+    'published_places': 'managePlaceArchives',
+    'admin_trash_place_requests': 'managePlaceArchives',
+    'admin_trash_places': 'managePlaceArchives',
   };
 
   /// SECONDARY named FirebaseApp, separate Auth persistence and Firestore
