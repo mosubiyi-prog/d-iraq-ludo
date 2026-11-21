@@ -1,0 +1,504 @@
+name: DEDA 100454 Verified Existing-UID Session Repair QA NO PLAY
+on:
+  push:
+    branches:
+      - deda-100451-owner-admin-session-safe-repair-2026-11-20
+    paths:
+      - '.github/workflows/deda-100454-existing-owner-session-activation-qa-no-play.yml'
+      - 'lib/deda_current_uid_probe_100453.dart'
+      - 'test/deda_current_uid_probe_100453_test.dart'
+      - 'tools/app_stability/app_package/bind_current_uid_probe_100453.py'
+      - 'test/test_deda_current_uid_probe_100453_bind.py'
+      - 'tools/app_stability/app_package/bind_owner_session_only_100454.py'
+      - 'lib/deda_step2_existing_account_signin_page.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deda-100453-admin-session-owner-qa-signed-no-play
+  cancel-in-progress: false
+jobs:
+  build-signed-complete-owner-phone-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Reconstruct FULL protected 100439 + smart second account + verified 100m admin wallet in isolated workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-100454-complete-signed-app"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$project"
+          python3 tools/app_stability/app_package/prepare.py "$project" --variant candidate
+          for script in \
+            bind_weekly_stage13.py \
+            bind_active_id_boot_prewarm_stage14.py \
+            bind_active_id_measured_startup_stage16.py \
+            bind_weekly_private_trial_stage17.py \
+            bind_weekly_full_qa_stage18.py \
+            verify_rank_card_tap_stage19.py \
+            bind_weekly_admin_league_stage27.py \
+            bind_weekly_tasks_cta_stage28.py \
+            bind_weekly_100397_owner_real_scores.py \
+            bind_weekly_100398_after_level_xp.py \
+            bind_weekly_100399_community_bridge.py \
+            bind_weekly_100400_safe_score_retry.py \
+            bind_weekly_100402_firestore_direct.py \
+            bind_weekly_100403_first_open_gate.py \
+            bind_weekly_100404_inline_clock_and_freeze.py \
+            bind_weekly_100405_admin_live_read_only.py \
+            bind_weekly_100406_league_display_fixes.py \
+            bind_weekly_100407_full_avatar_shared_identity.py \
+            bind_weekly_100408_seven_owner_points.py \
+            bind_weekly_100409_single_verified_identity.py \
+            bind_weekly_100410_unified_active_id.py \
+            bind_weekly_100411_friend_copy_share.py \
+            bind_weekly_100413_owner_id_admin_response.py \
+            bind_weekly_100414_last_three.py \
+            bind_weekly_100418_legacy340_friend_active_compat.py; do
+            python3 "tools/app_stability/app_package/$script" "$project"
+          done
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project"
+          shopt -s nullglob
+          count=0
+          for source in "$GITHUB_WORKSPACE"/lib/deda_step2_*.dart "$GITHUB_WORKSPACE"/lib/deda_100429*.dart "$GITHUB_WORKSPACE"/lib/deda_100430*.dart "$GITHUB_WORKSPACE"/lib/deda_100431*.dart "$GITHUB_WORKSPACE"/lib/deda_100432*.dart "$GITHUB_WORKSPACE"/lib/deda_100433*.dart; do
+            target="$project/lib/$(basename "$source")"
+            test ! -e "$target" || { echo "BLOCK_SOURCE_OVERWRITE:$target"; exit 1; }
+            cp "$source" "$target"
+            count=$((count+1))
+          done
+          test "$count" -ge 30
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
+          python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project"
+          python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project" --verify-only
+          python3 tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py "$project"
+          echo 'PASS_PRESERVED_OWNER_LOGIN_NOT_LOGGED'
+          python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
+          echo 'PASS_ORIGINAL_WALLET_SOURCE_UNMODIFIED'
+          python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
+          python3 tools/app_stability/app_package/bind_session_rescue_stage3_100441.py "$project"
+          test ! -e "$project/lib/deda_step1_google_settings_link_100439.dart"
+          python3 tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py "$project"
+          python3 tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py "$project"
+          python3 qa/point1_existing_account_no_anonymous_uid_source_test.py
+          python3 tools/app_stability/app_package/bind_point2_section_session_guards_2026_11_17.py "$project"
+          python3 tools/app_stability/app_package/bind_unified_room_runtime_readonly_2026_11_17.py "$project"
+          python3 tools/app_stability/app_package/bind_current_uid_probe_100453.py "$project"
+          python3 tools/app_stability/app_package/bind_owner_session_only_100454.py "$project"
+          echo "DEDA_SOURCE_ONLY_PROJECT=$project" >> "$GITHUB_ENV"
+          echo 'PASS_FULL_100439_SMART_ACCOUNT_AND_ADMIN_SOURCE_ASSEMBLED'
+      - name: Analyze entire assembled entry, guardian, and admin backend without building APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEDA_SOURCE_ONLY_PROJECT"
+          flutter pub get
+          dart analyze --no-fatal-warnings \
+            lib/main.dart lib/deda_backend.dart lib/admin_pages.dart \
+            lib/deda_admin_league_page.dart \
+            lib/deda_step2_smart_second_stage_account_page_100439.dart \
+            lib/deda_session_recovery_coordinator.dart \
+            lib/deda_session_rescue_stage3_core.dart \
+            lib/deda_session_rescue_stage3_bridge.dart \
+            lib/deda_session_missing_owner_entry_100441.dart \
+            lib/deda_social_service.dart \
+            lib/deda_weekly_firestore_direct_bridge.dart \
+            lib/deda_unified_room_runtime_readonly.dart \
+            lib/deda_current_uid_probe_100453.dart
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("internal-build-inputs.json").read_text())
+          assert d["financialRestoreEnabled"] is False
+          assert d["generalManagerCompensation100m"]["targetAdminPoolDiamonds"]==100000000
+          assert d["generalManagerCompensation100m"]["defaultNotFunded"]
+          assert d["generalManagerCompensation100m"]["personalManagerWalletUnchanged"]
+          assert d["smartSecondStageAccount"]["defaultOff"]
+          print("PASS_FULL_SOURCE_100M_ADMIN_WITHOUT_LIVE_CREDIT")
+          PY
+
+      - name: Google-removed owner parity, PIN and admin wallet QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 522ddf08f211c9a7b70e461c35639bcdfc76496d HEAD -- \
+            lib/main.dart lib/admin_pages.dart android/ assets/ firestore.rules \
+            firebase.json storage.rules google-services.json pubspec.yaml pubspec.lock
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['DEDA_SOURCE_ONLY_PROJECT'])
+          a=json.loads((root/'deda-point2-section-binding-proof.json').read_text())
+          b=json.loads((root/'deda-room-runtime-wiring-proof.json').read_text())
+          assert set(a['applied'])=={'lib/deda_social_service.dart','lib/deda_weekly_firestore_direct_bridge.dart'}
+          assert not a['uidChanged'] and not a['historicalFriendshipKeyChanged']
+          assert not a['productionFirebaseChanged']
+          assert b['featureDefaultOff'] and not b['firebaseProductionDeployed']
+          home=(root/'lib/main.dart').read_text()
+          assert home.count('DedaUnifiedRoomRuntimeReadOnly.preflightOnHome()')==1
+          assert 'DedaGoogleSettingsLinkCard(' not in home
+          assert 'DedaSessionDiagnosticReadOnlyTile(' not in home
+          print('PASS_POINT2_ASSEMBLED_FULL_APP_GUARDS_NO_DELETED_CARDS')
+          PY
+          node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
+          python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
+          cd "$DEDA_SOURCE_ONLY_PROJECT"
+          mkdir -p test
+          for filename in \
+            deda_owner_login_commit_guard_private_test.dart \
+            deda_owner_session_compat_private_test.dart \
+            deda_step2_existing_account_signin_page_private_test.dart \
+            deda_step2_completion_gate_private_test.dart \
+            deda_step2_recovery_guardian_private_test.dart \
+            deda_step2_linked_owner_guardian_bridge_private_test.dart \
+            deda_weekly_100404_league_clock_test.dart \
+            deda_weekly_leaderboard_earned_points_test.dart \
+            deda_100410_unified_active_id_test.dart \
+            deda_100411_friend_copy_test.dart \
+            deda_admin_league_live_widgets_test.dart \
+            deda_daily_task_slots_test.dart \
+            deda_admin_winners_prizes_100439_test.dart \
+            deda_smart_second_stage_account_private_test.dart; do
+            test -s "$GITHUB_WORKSPACE/test/$filename"
+            cp "$GITHUB_WORKSPACE/test/$filename" "test/$filename"
+          done
+          flutter test --no-pub test/deda_owner_login_commit_guard_private_test.dart \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_step2_existing_account_signin_page_private_test.dart \
+            test/deda_step2_completion_gate_private_test.dart \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          # Real protected DEDA uses a server-driven weekly maintenance
+          # wrapper. Assert the wrapper exists rather than a time-dependent
+          # footer string in the copied QA widget test; change no app code.
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert 'DedaWeeklyMaintenanceStatus(normal:' in source
+          assert Path('lib/deda_weekly_maintenance_status.dart').exists()
+          test=Path('test/deda_weekly_leaderboard_earned_points_test.dart')
+          text=test.read_text()
+          old_import="import '../lib/deda_weekly_leaderboard_policy.dart';"
+          assert text.count(old_import)==1
+          text=text.replace(old_import,old_import+chr(10)+"import '../lib/deda_weekly_maintenance_status.dart';",1)
+          expected=("      expect(find.textContaining('رصيد حسابك ومستواك محفوظان'),"+chr(10)+"          findsOneWidget);")
+          replacement="      expect(find.byType(DedaWeeklyMaintenanceStatus), findsOneWidget);"
+          assert text.count(expected)==1
+          test.write_text(text.replace(expected,replacement,1))
+          print('PASS_QA_TEST_ASSERTS_REAL_WEEKLY_MAINTENANCE_WRAPPER_AND_NO_UI_CHANGES')
+          PY
+          flutter test --no-pub test/deda_weekly_100404_league_clock_test.dart \
+            test/deda_weekly_leaderboard_earned_points_test.dart \
+            test/deda_100410_unified_active_id_test.dart \
+            test/deda_100411_friend_copy_test.dart \
+            test/deda_admin_league_live_widgets_test.dart \
+            test/deda_daily_task_slots_test.dart \
+            test/deda_admin_winners_prizes_100439_test.dart
+          flutter test --no-pub test/deda_smart_second_stage_account_private_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_unified_room_runtime_readonly_test.dart" "test/"
+          flutter test --no-pub test/deda_unified_room_runtime_readonly_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_current_uid_probe_100453_test.dart" test/
+          flutter test --no-pub test/deda_current_uid_probe_100453_test.dart
+          (cd "$GITHUB_WORKSPACE" && python3 -m unittest discover -s test -p test_deda_current_uid_probe_100453_bind.py -v)
+          # Stage3 candidate has unassembled source contracts; test those
+          # untouched, not against a different 100418 assembled search adapter.
+          (
+            cd "$GITHUB_WORKSPACE"
+            flutter pub get
+            flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true \
+              test/deda_session_recovery_coordinator_private_test.dart \
+              test/deda_session_rescue_stage3_4char_private_test.dart \
+              test/deda_session_missing_owner_entry_100441_test.dart
+          )
+          # Full 100440 assembly intentionally accepts four-char premium IDs
+          # as SEARCH INPUT; it never treats them as account/UID ownership.
+          for t in deda_session_recovery_coordinator_private_test.dart deda_session_missing_owner_entry_100441_test.dart deda_100441_assembled_friend_alias_search_test.dart; do
+            cp "$GITHUB_WORKSPACE/test/$t" "test/$t"
+          done
+          flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true \
+            test/deda_session_recovery_coordinator_private_test.dart \
+            test/deda_session_missing_owner_entry_100441_test.dart \
+            test/deda_100441_assembled_friend_alias_search_test.dart
+          echo 'PASS_100441_34_SOURCE_RESCUE_TESTS_AND_23_ASSEMBLED_SEARCH_SECURITY_TESTS'
+      - name: Prove Google card absent and record exact signed inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,hashlib
+          from pathlib import Path
+          root=Path(os.environ['DEDA_SOURCE_ONLY_PROJECT'])
+          meta=root/'internal-build-inputs.json'
+          d=json.loads(meta.read_text())
+          page=(root/'lib/main.dart').read_text()
+          assert 'DedaGoogleSettingsLinkCard(' not in page
+          assert 'deda_step1_google_settings_link_100439.dart' not in page
+          for removed in ('deda_step1_google_settings_link_100439.dart',
+            'deda_step2_google_replacement_login_100439.dart',
+            'deda_google_recovery_progress_100439.dart'):
+            assert not (root/'lib'/removed).exists()
+          assert page.count('DedaSmartSecondStageAccountPage(')==1
+          lookup='final exists = await DedaPinAuth.accountExists(normalizedPhone);'
+          assert page.count(lookup)==1
+          assert page.index('needsExplicitChoiceWithoutLookup(') < page.index(lookup)
+          assert 'accountExists: false, unresolvedWithoutSession: true' in page
+          assert 'DedaSmartSecondEntryRouting.mayPreflightExplicitCreation(' in page
+          assert 'DedaPinAuth.createAccount(' in page
+          # The first-page lookup MUST be non-mutating when Auth is absent.
+          # The selected existing-account option cannot create a DEDA UID.
+          assert 'auth.signInAnonymously()' not in page
+          league=(root/'lib/deda_admin_league_page.dart').read_text()
+          assert league.count('DedaAdminLeagueWinnersPrizes(isArabic: isArabic)')==1
+          assert (root/'lib/deda_step2_completion_gate.dart').is_file()
+          # No fake completion of historical restored finances or lost assets.
+          assert 'bool get canPrepareFullRecoveryApk => false;' in (
+            root/'lib/deda_step2_completion_gate.dart').read_text()
+          assert d['financialRestoreEnabled'] is False
+          assert d['generalManagerCompensation100m']['targetAdminPoolDiamonds']==100000000
+          assert d['smartSecondStageAccount']['originalFirstScreenVisibleFieldsUnchanged']
+          assert 'DedaSessionDiagnosticReadOnlyTile(' not in page
+          assert page.count('DedaCurrentUidProbe100453.open(context)')==1
+          assert page.count("import 'deda_current_uid_probe_100453.dart';")==1
+          assert 'DedaCurrentUidProbe100453.open(context)' not in (root/'lib/deda_session_diagnostic_readonly_100441.dart').read_text()
+          assert (root/'lib/deda_current_uid_probe_100453.dart').exists()
+          backend=(root/'lib/deda_backend.dart').read_text()
+          policy=(root/'lib/deda_100431_linked_owner_session_policy.dart').read_text()
+          entry=backend.split('static Future<bool> signInAdmin({',1)[1].split('static Future<',1)[0]
+          logout=backend.split('static Future<void> signOutAdmin() async {',1)[1].split('// DEDA in-app location sharing v1.',1)[0]
+          assert 'mayBeginAdminAuthenticationOnSharedAuth(' in entry
+          assert entry.index('mayBeginAdminAuthenticationOnSharedAuth(') < entry.index('final credential =')
+          assert 'admin-login-refused-preserve-deda-owner-session' in entry
+          assert 'maySignOutAdminPrincipal(' in logout
+          assert 'admin-logout-principal-changed-owner-preserved' in logout
+          assert 'mayBeginAdminAuthenticationOnSharedAuth' in policy
+          assert 'maySignOutAdminPrincipal' in policy
+          print('PASS_ASSEMBLED_100453_OWNER_ADMIN_ENTRY_EXIT_GUARDS')
+          assert "import 'deda_session_diagnostic_readonly_100441.dart';" not in page
+          assert "تشخيص الجلسة" not in page
+          # These are built together in the signed app, not independently
+          # succeeding in a detached unit-test workspace.
+          assert 'DedaUnifiedActiveId100410.ensureOwner' in page
+          assembled_id=(root/'lib/deda_unified_active_id_100410.dart').read_text()
+          assert assembled_id.count('DedaOwnerLegacyPublicProof100414.ensureAndPublish(')==1
+          assert 'DedaActiveIdPublicSync100409.publishAfterVerifiedRead(' not in assembled_id
+          assert 'DedaActiveIdPublicSync100409.publishAfterVerifiedRead(' in (
+            root/'lib/deda_owner_legacy_public_proof_100414.dart').read_text()
+          assert '_completed' not in (
+            root/'lib/deda_owner_legacy_public_proof_100414.dart').read_text()
+          assert 'needsPublication(' in (
+            root/'lib/deda_active_id_public_sync_100409.dart').read_text()
+          assert '_success' not in (
+            root/'lib/deda_active_id_public_sync_100409.dart').read_text()
+          assert 'DedaUnifiedActiveIdLabel100410(' in (
+            root/'lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert 'DedaUnifiedActiveIdLabel100410(' in (
+            root/'lib/deda_admin_league_active_id.dart').read_text()
+          assert 'DEDA_100441_FRIENDS_RETRY_FIX' in page
+          assert page.count('DedaUnifiedRoomRuntimeReadOnly.preflightOnHome()')==1
+          assert (root/'deda-point2-section-binding-proof.json').is_file()
+          assert (root/'deda-room-runtime-wiring-proof.json').is_file()
+          assert 'DedaMissingOwnerEntryPolicy.canOffer' in page
+          assert 'DedaLoginHandoff(port).login(' in page
+          assert 'sessionOnly: true' in page
+          assert page.count('DedaLinkedOwnerGuardianAssembly.prepare();') == 0
+          assert 'DedaStep2SparkLinkedUidReadOnlyProof.verify(' in (root/'lib/deda_step2_linked_owner_firebase_port.dart').read_text()
+          d['versionCode']=100454
+          d['completeOwnerDelivery']=False
+          d['financialRestoreEnabled']=False
+          d['recoveryUserEntryEnabled']=True
+          d['ownerApprovedLastSignedReferenceVersion']=100440
+          d['sourceOfTruthFeatureBaselineVersion']=100440
+          d['purpose']='PRIVATE 100454 verified original UID existing-Firebase-provider login QA; original full app; NO Play/Firebase deploy, no recovery, no owner transfer.'
+          d['ownerPhoneVerificationPending']=True
+          d['featureDefines']={
+            'DEDA_CURRENT_UID_PROBE_100453_QA':'true',
+            'DEDA_STEP2_EXISTING_ACCOUNT_ENTRY':'true',
+            'DEDA_SMART_SECOND_STAGE_ACCOUNT':'true',
+            'DEDA_STABILITY_AUTH_RUNTIME':'true',
+            'DEDA_STEP2_LINKED_OWNER_COMPAT':'true',
+            'DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT':'true',
+            'DEDA_SESSION_RESCUE_STAGE3':'true',
+            'DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY':'true',
+            'DEDA_LINKED_OWNER_HANDOFF':'true',
+          }
+          d['ownerUidProbeQa100453']={
+            'fingerprintReadOnly':True,
+            'existingCurrentUserOnly':True,
+            'noRemovedCardRestored':True,
+            'noUidChangeOrAuthentication':True,
+            'onlyQaBuild':True,
+          }
+          d['ownerSessionCardRemoval']={
+            'settingsCardAbsent':True,
+            'ownerUidSplitUnresolved':True,
+            'noNewIdentityOrOwnerTransfer':True,
+            'friendsRetryIncluded':True,
+            'noFirebaseDeployment':True,
+          }
+          d['sourceHashes']={
+            str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in (list((root/'lib').glob('*.dart'))+
+              [root/'pubspec.yaml',root/'pubspec.lock'])
+          }
+          meta.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          assert d['featureDefines']['DEDA_STABILITY_AUTH_RUNTIME']=='true'
+          assert d['featureDefines']['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
+          assert d['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='true'
+          print('PASS_PRIVATE_OWNER_PIN_ONLY_NO_GOOGLE_NO_USER_MUTATIONS')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-100440-original-reference
+      - name: Restore and verify EXACT original signed DEDA Android keystore identity
+        shell: bash
+        working-directory: ${{ runner.temp }}/deda-100454-complete-signed-app
+        run: |
+          set -euo pipefail
+          test -n "$DEDA_KEYSTORE_BASE64"
+          test -n "$DEDA_KEY_ALIAS"
+          test -n "$DEDA_STORE_PASSWORD"
+          test -n "$DEDA_KEY_PASSWORD"
+          dart run flutter_launcher_icons
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks \
+            -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+          echo 'PASS_ORIGINAL_DEDA_RELEASE_SIGNER_RESTORED_ONLY_EPHEMERALLY'
+      - name: Build ONE signed 100454 owner-session guarded QA (NO PLAY)
+        shell: bash
+        working-directory: ${{ runner.temp }}/deda-100454-complete-signed-app
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          d=json.loads(Path('internal-build-inputs.json').read_text())
+          assert d['versionCode']==100454
+          assert d['financialRestoreEnabled'] is False
+          flags=dict(d['flags'])
+          flags.update(d['featureDefines'])
+          assert flags['DEDA_STEP2_EXISTING_ACCOUNT_ENTRY']=='true'
+          assert flags['DEDA_SMART_SECOND_STAGE_ACCOUNT']=='true'
+          assert flags['DEDA_SESSION_RESCUE_STAGE3']=='true'
+          assert flags['DEDA_STABILITY_AUTH_RUNTIME']=='true'
+          assert flags['DEDA_STEP2_LINKED_OWNER_COMPAT']=='true'
+          assert flags['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
+          assert flags['DEDA_CURRENT_UID_PROBE_100453_QA']=='true'
+          assert flags['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='true'
+          assert flags['DEDA_LINKED_OWNER_HANDOFF']=='true'
+          cmd=['flutter','build','apk','--release','--no-pub',
+               '--build-number=100454',
+               '--dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true',
+               '--dart-define=DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED=true']
+          for key,value in sorted(flags.items()):
+              txt=str(value).lower()
+              if txt not in ('true','false'):
+                  raise ValueError('Unexpected compile-time feature flag: '+key)
+              cmd.append('--dart-define='+key+'='+txt)
+          print('BUILD_APPROVED_FULL_FEATURE_FLAGS',','.join(sorted(flags)))
+          subprocess.run(cmd,check=True)
+          PY
+      - name: Verify APK identity, signer, version, complete source hashes and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_SOURCE_ONLY_PROJECT"
+          apk="$project/build/app/outputs/flutter-apk/app-release.apk"
+          ref="$RUNNER_TEMP/deda-100440-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk"
+          test -s "$ref"
+          test -s "$apk"
+          output="$RUNNER_TEMP/deda-100454-owner-delivery"
+          mkdir -p "$output"
+          python3 tools/app_stability/app_package/verify.py "$project" "$ref" \
+            --output "$output/verification.json"
+          python3 - "$output/verification.json" <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          assert m['packageVerification']['package']=='com.diraq.ludo.d_iraq_ludo'
+          assert m['packageVerification']['versionCode']==100454
+          assert m['certificateSha256']=='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
+          assert m['originalPortraitsVerified']==3
+          assert m['featureDefines']['DEDA_SMART_SECOND_STAGE_ACCOUNT']=='true'
+          assert m['financialRestoreEnabled'] is False
+          assert m['featureDefines']['DEDA_SESSION_RESCUE_STAGE3']=='true'
+          assert m['featureDefines']['DEDA_STABILITY_AUTH_RUNTIME']=='true'
+          assert m['featureDefines']['DEDA_STEP2_LINKED_OWNER_COMPAT']=='true'
+          assert m['featureDefines']['DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT']=='true'
+          assert m['featureDefines']['DEDA_CURRENT_UID_PROBE_100453_QA']=='true'
+          assert m['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='true'
+          assert m['featureDefines']['DEDA_LINKED_OWNER_HANDOFF']=='true'
+          assert m['ownerSessionCardRemoval']['settingsCardAbsent'] is True
+          assert m['ownerUidProbeQa100453']['existingCurrentUserOnly'] is True
+          assert m['ownerUidProbeQa100453']['noRemovedCardRestored'] is True
+          assert m['ownerSessionCardRemoval']['ownerUidSplitUnresolved'] is True
+          print('PASS_SIGNED_100447_NO_GOOGLE_OWNER_PIN_GUARD')
+          PY
+          cp "$apk" "$output/DEDA-100454-VERIFIED-OWNER-SESSION-QA-SIGNED.apk"
+          cp "$project/deda-point2-section-binding-proof.json" "$output/point2-section-proof.json"
+          cp "$project/deda-room-runtime-wiring-proof.json" "$output/room-wiring-proof.json"
+          (cd "$output" && sha256sum *.apk > SHA256.txt)
+          printf '%s\n' \
+            'DEDA 100454 isolated QA only. Explicit phone + PIN action may sign into an EXISTING linked Firebase UID after server proof; never creates new UID, makes Firestore writes, links Google or runs recovery. FULL app, NO Play/Firebase deploy.' \
+            'DO NOT INSTALL on a conflicted A/B/C/D account, any production administrator phone, or any device with the only copy of user purchases, diamonds, places or progress.' \
+            'Confirm account still requires server ownership, PIN and local progress/purchase archive proof. Google link and Google replacement login have been removed.' \
+            'First-install no-session phone lookup now displays explicit account options, choosing existing account initially. It creates NO Firebase UID merely to check a number. Explicit NEW account creation still needs user confirmation and server atomic duplicate check.' \
+            'SESSION ONLY: verifies existing password provider and same UID against server directory, user, original ID and session. No recovery, A/B/C merge or data transfer. Accounts without an existing linked provider cannot be activated by this client.' \
+            'Admin login is temporarily refused when a DEDA owner principal is active; this is not complete admin isolation. NEVER install on original account device without verified backup and explicit approval. Do not uninstall, sign out or clear storage.' \
+            'CI tests use synthetic Firebase UIDs and cannot prove A/B/C ownership. Real owner needs independent session checks. Fingerprints never authorize asset transfer.' \
+            'If any unexpected UID, archive error, or provider conflict is observed: STOP. Do not retry blindly. All A/B/C/D accounts and production Firebase remain unchanged by CI.' \
+            > "$output/README-OWNER-INSTALL.txt"
+          echo 'PASS_SIGNED_100454_OWNER_SESSION_QA_NOT_PRODUCTION_READY'
+      - name: Independently verify APK release signature and versionCode
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$RUNNER_TEMP/deda-100454-complete-signed-app/build/app/outputs/flutter-apk/app-release.apk"
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk"
+          signer="$(find "$sdk/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)"
+          aapt="$(find "$sdk/build-tools" -mindepth 2 -maxdepth 2 -name aapt -type f | sort -V | tail -1)"
+          test -x "$signer"
+          test -x "$aapt"
+          "$signer" verify --verbose --print-certs "$apk"
+          "$aapt" dump badging "$apk" | grep -E "^package: name='com.diraq.ludo.d_iraq_ludo' versionCode='100454' "
+          python3 - "$apk" <<'PY'
+          import hashlib,os,sys,zipfile
+          apk=sys.argv[1]
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None
+              assert all(item in z.namelist() for item in ('AndroidManifest.xml','classes.dex',
+                  'lib/arm64-v8a/libapp.so','lib/armeabi-v7a/libapp.so','lib/x86_64/libapp.so'))
+          assert os.path.getsize(apk)>40000000
+          print('PASS_COMPLETE_SINGLE_APK_100454',hashlib.sha256(open(apk,'rb').read()).hexdigest())
+          PY
+      - name: Upload one verified installer, SHA and evidence for direct owner download
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100454-VERIFIED-OWNER-SESSION-QA-SIGNED-APK
+          path: |
+            ${{ runner.temp }}/deda-100454-owner-delivery/*.apk
+            ${{ runner.temp }}/deda-100454-owner-delivery/*.json
+            ${{ runner.temp }}/deda-100454-owner-delivery/*.txt
+          if-no-files-found: error
+          retention-days: 21
+      - name: Remove release key from ephemeral CI runner
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/deda-100454-complete-signed-app/android/app/deda-release.jks"
