@@ -209,6 +209,51 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         isolated = (REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('defaultValue: false', isolated)
 
+    def test_isolated_dashboard_watch_and_profile_never_share_public_auth(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        policy=code.split('static bool sameScopedFilters(',1)[1].split(
+            'static Map<String, dynamic>? scopedReadQueryFilters(',1)[0]
+        self.assertIn("entry.key == 'createdAtMin'", policy)
+        self.assertIn("entry.key == 'governorate'", policy)
+        watch=code.split('Stream<QuerySnapshot<Map<String, dynamic>>> watchScopedAdminRequests(',1)[1].split(
+            'Future<Map<String, dynamic>> readVerifiedAdminProfile(',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',watch)
+        self.assertIn("'support_requests', 'place_requests'",watch)
+        self.assertIn('_scopedReadPermissions[collection]',watch)
+        self.assertIn('requiredPermission: permission',watch)
+        self.assertIn('_firestore.collection(collection)',watch)
+        self.assertIn('includeMetadataChanges: true',watch)
+        self.assertIn('snapshot.metadata.isFromCache',watch)
+        self.assertIn('snapshot.metadata.hasPendingWrites',watch)
+        self.assertEqual(watch.count('await proof()'),2)
+        self.assertIn('sameScopedFilters(',watch)
+        self.assertIn('scopedDocumentMatches(',watch)
+        self.assertIn('_mainAuth.currentUser?.uid != publicUid',watch)
+        self.assertNotIn('FirebaseFirestore.instance.collection(',watch)
+        self.assertNotIn('.set(',watch)
+        self.assertNotIn('.update(',watch)
+        self.assertNotIn('.delete(',watch)
+        self.assertNotIn('signOut()',watch)
+        profile=code.split('Future<Map<String, dynamic>> readVerifiedAdminProfile(',1)[1].split(
+            'Future<void> updateScopedSupportStatus(',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',profile)
+        self.assertIn('await _serverAuthorizedAdmin(',profile)
+        self.assertIn('onAuthorizedAdmin:',profile)
+        self.assertIn("'roleNormalized': role",profile)
+        self.assertIn('_mainAuth.currentUser?.uid != publicUid',profile)
+        self.assertNotIn('FirebaseAuth.instance.signInWithEmailAndPassword',profile)
+        self.assertNotIn('FirebaseFirestore.instance',profile)
+        self.assertNotIn('.signOut()',profile)
+
+    def test_isolated_list_rechecks_query_scope_after_server_proof(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        body=code.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
+            'Future<void> signOutSecondaryAdmin()',1)[0]
+        self.assertIn('sameScopedFilters(',body)
+        self.assertIn('scopedDocumentMatches(',body)
+        self.assertEqual(body.count('await proof()'),2)
+        self.assertNotIn('FirebaseFirestore.instance.collection(',body)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',

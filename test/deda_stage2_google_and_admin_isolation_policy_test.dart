@@ -253,6 +253,24 @@ void main() {
       expect(matches(gm, 'unknown_collection', {}), false);
     });
 
+    test('fresh isolated query scope cannot expand during stream or list', () {
+      bool equal(Map<String,dynamic>? a, Map<String,dynamic>? b) =>
+          DedaIsolatedAdminProofPolicy.sameScopedFilters(a,b);
+      final day = Timestamp.fromDate(DateTime.utc(2026, 11, 1));
+      final newer = Timestamp.fromDate(DateTime.utc(2026, 11, 2));
+      expect(equal(<String,dynamic>{},<String,dynamic>{}), true);
+      expect(equal({'createdAtMin':day},{'createdAtMin':day}), true);
+      expect(equal({'createdAtMin':day},{'createdAtMin':newer}), false);
+      expect(equal({'createdAtMin':day},<String,dynamic>{}), false);
+      expect(equal(<String,dynamic>{},{'createdAtMin':day}), false);
+      expect(equal({'governorate':'كركوك'},{'governorate':'كركوك'}), true);
+      expect(equal({'governorate':'كركوك'},{'governorate':'بغداد'}), false);
+      expect(equal({'governorate':'كركوك'},{'governorate':null}), false);
+      expect(equal(null,<String,dynamic>{}), false);
+      expect(equal(<String,dynamic>{},null), false);
+      expect(equal({'unexpected':'scope'},{'unexpected':'scope'}), false);
+    });
+
     test('unknown server role never authorizes even matching gateway', () {
       final unrecognized = <String,dynamic>{
         'active':true,'status':'active','role':'mystery',

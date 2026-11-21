@@ -169,6 +169,31 @@ class DedaIsolatedAdminProofPolicy {
     return true;
   }
 
+
+  /// A listener may not reuse an old scoped query after its server-side
+  /// activation date or province changes. Unknown filters deny access.
+  static bool sameScopedFilters(
+    Map<String, dynamic>? initial,
+    Map<String, dynamic>? latest,
+  ) {
+    if (initial == null || latest == null ||
+        initial.length != latest.length) return false;
+    for (final entry in initial.entries) {
+      if (!latest.containsKey(entry.key)) return false;
+      final value = latest[entry.key];
+      if (entry.key == 'createdAtMin') {
+        if (entry.value is! Timestamp || value is! Timestamp ||
+            (entry.value as Timestamp).compareTo(value) != 0) return false;
+      } else if (entry.key == 'governorate') {
+        if (entry.value is! String || value is! String ||
+            entry.value != value) return false;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Derive query constraints from a freshly verified admin document.
   /// Firestore security rules are authoritative; this merely shapes a
   /// client query to the exact historical access windows and province.
@@ -415,6 +440,19 @@ class DedaIsolatedAdminIdentity {
         !await proof()) {
       throw StateError('deda-admin-isolated-read-session-or-proof-changed');
     }
+    // The second proof must not authorize a different query scope. Never
+    // return documents outside the final fresh server role.
+    if (!DedaIsolatedAdminProofPolicy.sameScopedFilters(
+          filters,
+          DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+            admin: verifiedAdmin, collection: collection,
+          ),
+        ) ||
+        rows.docs.any((doc) => !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+          admin: verifiedAdmin, collection: collection, data: doc.data(),
+        ))) {
+      throw StateError('deda-admin-isolated-list-scope-changed');
+    }
     return rows.docs.map(
       (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
     ).toList(growable: false);
@@ -471,6 +509,133 @@ class DedaIsolatedAdminIdentity {
     return <String, dynamic>{...data, 'id': snapshot.id};
   }
 
+
+
+  /// Live request subscription for the existing admin request-list widget.
+  /// Does not hand a raw database to the UI. Each event is verified with
+  /// fresh server authorization, while cache and scope drift fail closed.
+  /// Not yet connected to the legacy Dashboard (feature flag remains OFF).
+  Stream<QuerySnapshot<Map<String, dynamic>>> watchScopedAdminRequests({
+    required String dedaPhone,
+    required String collection,
+    int maxItems = 50,
+  }) async* {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-watch-not-enabled');
+    }
+    if (!const <String>{'support_requests', 'place_requests'}
+            .contains(collection) ||
+        maxItems < 1 || maxItems > 100) {
+      throw StateError('deda-admin-isolated-watch-scope-denied');
+    }
+    final permission = _scopedReadPermissions[collection]!;
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: permission,
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-watch-permission-denied');
+    }
+    final initialFilters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: verifiedAdmin, collection: collection,
+    );
+    if (initialFilters == null) {
+      throw StateError('deda-admin-isolated-watch-query-denied');
+    }
+    Query<Map<String, dynamic>> query = _firestore.collection(collection);
+    final since = initialFilters['createdAtMin'];
+    final province = initialFilters['governorate'];
+    if (since is Timestamp) {
+      query = query.where('createdAt', isGreaterThanOrEqualTo: since);
+    }
+    if (province is String) {
+      query = query.where('governorate', isEqualTo: province);
+    } else {
+      // Same descending ordering as the legacy support/place inbox.
+      // Province-only queries avoid a new composite index requirement.
+      query = query.orderBy('createdAt', descending: true);
+    }
+
+    await for (final snapshot in query.limit(maxItems).snapshots(
+      includeMetadataChanges: true,
+    )) {
+      if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-watch-session-or-cache-denied');
+      }
+      if (!await proof()) {
+        throw StateError('deda-admin-isolated-watch-permission-revoked');
+      }
+      final latestFilters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+        admin: verifiedAdmin, collection: collection,
+      );
+      if (!DedaIsolatedAdminProofPolicy.sameScopedFilters(
+            initialFilters, latestFilters,
+          ) ||
+          snapshot.docs.any(
+            (doc) => !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+              admin: verifiedAdmin, collection: collection, data: doc.data(),
+            ),
+          ) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-watch-scope-changed');
+      }
+      yield snapshot;
+    }
+  }
+
+  /// This profile can be shown by a future isolated Dashboard only after
+  /// the corresponding server-side gateway and admin record are both valid.
+  Future<Map<String, dynamic>> readVerifiedAdminProfile({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-profile-not-enabled');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verified;
+    final granted = await _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      onAuthorizedAdmin: (admin) => verified = admin,
+    );
+    if (!granted || verified == null ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-profile-permission-denied');
+    }
+    final data = verified!;
+    final rawRole = (data['role'] ?? data['jobTitle'] ?? '')
+        .toString().trim().toLowerCase();
+    if (rawRole.isEmpty) {
+      throw StateError('deda-admin-isolated-profile-role-required');
+    }
+    final role = DedaBackend.normalizeAdminRole(rawRole);
+    return <String, dynamic>{
+      ...data,
+      'uid': uid,
+      'role': role,
+      'roleNormalized': role,
+      'status': DedaBackend.normalizeAdminStatus(data),
+      'email': current.email ?? data['email'] ?? '',
+      'displayName': (data['displayName'] ?? data['name'] ??
+          current.email ?? 'DEDA Admin').toString(),
+    };
+  }
 
   /// First isolated support write transport. The old Dashboard is not wired
   /// yet, so the isolated feature remains disabled by default.
