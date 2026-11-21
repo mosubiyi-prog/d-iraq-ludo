@@ -43,7 +43,12 @@ def prepare(project: Path, verify_only: bool = False):
             ],
 """
     expected_import = "import 'deda_backend.dart';\n"
-    pending_boot = """  await DedaPreferences.load();
+    guarded_boot = """String? _dedaStage2PendingGoogleUid;
+
+Future<void> _dedaStage2LoadPreferencesWithGoogleFence() async {
+  // Both the normal boot and measured-startup callback use this one gate.
+  // Legacy preferences still load unmodified, even with the pilot disabled.
+  await DedaPreferences.load();
   if (dedaStableGoogleLoginEnabled) {
     _dedaStage2PendingGoogleUid =
         await DedaStableGoogleLogin.pendingGoogleUid();
@@ -51,7 +56,9 @@ def prepare(project: Path, verify_only: bool = False):
       DedaPreferences.suspendLegacyLiveSessionForGoogle();
     }
   }
-  await DedaTaskEngine.initializeForCurrentAccount();"""
+}
+
+Future<void> main() async {"""
     in_memory_fence = """  /// Clear ONLY the active in-memory old account after verified Google
   /// switching. Old stored details and Firestore records are never deleted.
   static void suspendLegacyLiveSessionForGoogle() {
@@ -94,20 +101,22 @@ def prepare(project: Path, verify_only: bool = False):
         main = one(main, expected_import,
                    expected_import + import_statement + '\n', 'main-import')
         main = one(main, 'Future<void> main() async {',
-                   'String? _dedaStage2PendingGoogleUid;\n\nFuture<void> main() async {',
-                   'pending-google-global-state')
-        # The complete assembly can have another preferences reload helper.
-        # Patch ONLY the app's main() startup, never a second account routine.
+                   guarded_boot, 'pending-google-global-state')
+        # Measured-startup source intentionally loads preferences a second
+        # time via its callback. Guard BOTH boot paths, never a different
+        # legacy-account routine outside main(), and preserve DEDA load.
         start_marker = 'Future<void> main() async {'
         end_marker = 'class _DedaCleanPageTransitionsBuilder'
         if main.count(start_marker) != 1 or main.count(end_marker) != 1:
             raise ValueError('STAGE2_MAIN_STARTUP_BOUNDARY_CHANGED')
         prefix, after_start = main.split(start_marker, 1)
         startup, suffix = after_start.split(end_marker, 1)
-        startup = one(startup, '  await DedaPreferences.load();\n',
-                      pending_boot.replace(
-                          '  await DedaTaskEngine.initializeForCurrentAccount();', ''),
-                      'pending-before-task-startup')
+        load_call = 'await DedaPreferences.load();'
+        load_count = startup.count(load_call)
+        if load_count not in (1, 2):
+            raise ValueError(f'STAGE2_BOOT_LOAD_PATHS_CHANGED:found={load_count}')
+        startup = startup.replace(
+            load_call, 'await _dedaStage2LoadPreferencesWithGoogleFence();')
         main = prefix + start_marker + startup + end_marker + suffix
         main = one(main, '  static bool _liveVerifiedOriginalOwner(',
                    in_memory_fence + '  static bool _liveVerifiedOriginalOwner(',
@@ -155,6 +164,9 @@ def prepare(project: Path, verify_only: bool = False):
         main.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();') != 2 or
         main.count('DedaStage2GooglePendingPage(') != 2 or
         main.count('String? _dedaStage2PendingGoogleUid;') != 1 or
+        main.count('Future<void> _dedaStage2LoadPreferencesWithGoogleFence() async {') != 1 or
+        main.count('await DedaPreferences.load();') < 1 or
+        main.count('await _dedaStage2LoadPreferencesWithGoogleFence();') not in (1, 2) or
         not main.index('await DedaStableGoogleLogin.pendingGoogleUid();') <
             main.index('await DedaTaskEngine.initializeForCurrentAccount();') or
         main.count(expected_logout) != 1 or

@@ -42,6 +42,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(ui.count('DedaStage2GooglePendingPage('),2)
         self.assertEqual(ui.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
         self.assertIn('String? _dedaStage2PendingGoogleUid;',ui)
+        self.assertEqual(ui.count('await DedaPreferences.load();'),1)
+        self.assertEqual(ui.count('await _dedaStage2LoadPreferencesWithGoogleFence();'),1)
         self.assertIn('onFreshGoogleIdentity: _onStage2FreshGoogleIdentity',ui)
         self.assertLess(
             ui.index('await DedaStableGoogleLogin.pendingGoogleUid();'),
@@ -88,6 +90,22 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         binder.prepare(self.dst,verify_only=True)
         assembled=main.read_text()
         self.assertEqual(assembled.count('await DedaPreferences.load();'),2)
+        self.assertEqual(
+            assembled.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
+
+    def test_measured_second_load_inside_main_is_guarded_too(self):
+        main=self.dst/'lib/main.dart'
+        original=main.read_text()
+        anchor='  await DedaTaskEngine.initializeForCurrentAccount();'
+        self.assertEqual(original.count(anchor),1)
+        main.write_text(original.replace(
+            anchor,'  await DedaPreferences.load();\n' + anchor,1))
+        binder.prepare(self.dst)
+        binder.prepare(self.dst,verify_only=True)
+        assembled=main.read_text()
+        self.assertEqual(assembled.count('await DedaPreferences.load();'),1)
+        self.assertEqual(
+            assembled.count('await _dedaStage2LoadPreferencesWithGoogleFence();'),2)
         self.assertEqual(
             assembled.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
 
