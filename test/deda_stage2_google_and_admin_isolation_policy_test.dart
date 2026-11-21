@@ -208,6 +208,126 @@ void main() {
       expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
       expect(scope({'active':false,'role':'general_manager'},'users'),isNull);
     });
+    test('only active verified GM may mutate reversible place archives', () {
+      final archive = <String, dynamic>{
+        'originalId': 'place_25',
+        'trashKind': 'place_request',
+        'deletedFromCollection': 'place_requests',
+        'deletedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 22)),
+        'deletedByUid': 'admin-approved',
+        'placeName': 'Archived place',
+      };
+      final live = <String, dynamic>{
+        'status': 'approved',
+        'placeName': 'Archived place',
+      };
+      bool allowed(
+        Map<String, dynamic>? admin,
+        String kind,
+        String id,
+        String action,
+        Map<String, dynamic>? source,
+        Map<String, dynamic>? saved,
+      ) => DedaIsolatedAdminProofPolicy.placeArchiveActionAllowed(
+        admin: admin,
+        sourceCollection: kind,
+        id: id,
+        action: action,
+        source: source,
+        archive: saved,
+      );
+      expect(allowed(record, 'place_requests', 'place_25',
+        'trash', live, null), true);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'trash', live, archive), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'trash', null, null), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'restore', null, archive), true);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'restore', live, archive), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'permanent', live, archive), true);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'permanent', null, null), false);
+      expect(allowed(record, 'place_requests', '../admins',
+        'restore', null, archive), false);
+      expect(allowed(record, 'users', 'place_25',
+        'trash', live, null), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'grant_role', live, null), false);
+      expect(allowed(record, 'place_requests', 'other_id',
+        'restore', null, archive), false);
+      expect(allowed(record, 'published_places', 'place_25',
+        'restore', null, archive), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'restore', null, {...archive, 'trashKind': 'published_place'}), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'restore', null, {...archive, 'deletedFromCollection':
+          'published_places'}), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'restore', null, {...archive, 'deletedAt': null}), false);
+      expect(allowed(record, 'place_requests', 'place_25',
+        'restore', null, {...archive, 'deletedByUid': ''}), false);
+      expect(allowed({...record, 'active': false},
+        'place_requests', 'place_25', 'restore', null, archive), false);
+      expect(allowed({...record, 'role': ''},
+        'place_requests', 'place_25', 'restore', null, archive), false);
+      final employee = <String, dynamic>{
+        'active': true,
+        'status': 'active',
+        'role': 'employee',
+        'permissions': <String, dynamic>{'managePlaceArchives': true},
+      };
+      expect(allowed(employee, 'place_requests', 'place_25',
+        'restore', null, archive), false);
+      expect(allowed({...employee, 'role': 'deputy_manager'},
+        'place_requests', 'place_25', 'restore', null, archive), false);
+      expect(allowed({...employee, 'role': 'province_agent'},
+        'place_requests', 'place_25', 'restore', null, archive), false);
+    });
+
+    test('archived published place preserves exact archive type and GM scope', () {
+      final date = Timestamp.fromDate(DateTime.utc(2026, 11, 22));
+      final archivedPlace = <String, dynamic>{
+        'originalId': 'pub_17',
+        'trashKind': 'published_place',
+        'deletedFromCollection': 'published_places',
+        'deletedAt': date,
+        'deletedByUid': 'general-manager',
+      };
+      bool can(String action, Map<String,dynamic>? live,
+          Map<String,dynamic>? archive) =>
+        DedaIsolatedAdminProofPolicy.placeArchiveActionAllowed(
+          admin: record, sourceCollection: 'published_places',
+          id: 'pub_17', action: action, source: live, archive: archive,
+        );
+      expect(can('trash', {'published': true}, null), true);
+      expect(can('trash', {'published': false}, null), true);
+      expect(can('restore', null, archivedPlace), true);
+      expect(can('restore', {'published': true}, archivedPlace), false);
+      expect(can('permanent', null, archivedPlace), true);
+      expect(can('restore', null, {...archivedPlace,
+        'deletedFromCollection': 'place_requests'}), false);
+      expect(DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+        admin: record, collection: 'admin_trash_places'), isEmpty);
+      expect(DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+        admin: record, collection: 'admin_trash_place_requests'), isEmpty);
+      expect(DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+        admin: record, collection: 'published_places'), isEmpty);
+      final staff = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'employee',
+        'permissions': {'managePlaceArchives': true},
+      };
+      for (final collection in <String>[
+        'admin_trash_places', 'admin_trash_place_requests',
+        'published_places',
+      ]) {
+        expect(DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+          admin: staff, collection: collection), isNull);
+      }
+    });
+
     test('isolated place approval preserves published identity and scope', () {
       final when = Timestamp.fromDate(DateTime.utc(2026, 11, 15));
       final data = <String, dynamic>{
