@@ -200,6 +200,23 @@ void main() {
       expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
       expect(scope({'active':false,'role':'general_manager'},'users'),isNull);
     });
+    test('isolated support rejects unknown states and arbitrary document paths', () {
+      bool allowed(String id, String status, {String? reply}) =>
+          DedaIsolatedAdminProofPolicy.supportMutationInputAllowed(
+            requestId: id, status: status, reply: reply);
+      expect(allowed('ticket_123', 'in_progress'), true);
+      expect(allowed('ticket_123', 'closed'), true);
+      expect(allowed('ticket_123', 'replied', reply: 'تمت المراجعة'), true);
+      expect(allowed('ticket_123', 'replied', reply: ' '), false);
+      expect(allowed('ticket_123', 'closed', reply: 'cannot attach'), false);
+      expect(allowed('ticket_123', 'delete'), false);
+      expect(allowed('../admins/owner', 'new'), false);
+      expect(allowed('support/id', 'new'), false);
+      expect(allowed('', 'new'), false);
+      expect(allowed('ticket_123', 'replied',
+          reply: List.filled(4001, 'x').join()), false);
+    });
+
     test('unknown server role never authorizes even matching gateway', () {
       final unrecognized = <String,dynamic>{
         'active':true,'status':'active','role':'mystery',
