@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_stable_google_login_2026_11_21.dart';
+export 'deda_stable_google_login_2026_11_21.dart'
+    show dedaStableGoogleLoginEnabled;
 
 /// Place above the EXISTING Settings sign-out control only in explicit QA.
 /// No management role or legacy A/B/C property is ever assigned here.
