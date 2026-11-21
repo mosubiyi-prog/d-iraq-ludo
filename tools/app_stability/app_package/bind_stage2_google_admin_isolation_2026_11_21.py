@@ -60,15 +60,17 @@ def prepare(project: Path, verify_only: bool = False):
                 raise ValueError('STAGE2_SOURCE_OVERWRITE_FORBIDDEN:'+name)
             if not (REPO/'lib'/name).exists():
                 raise ValueError('STAGE2_REQUIRED_MODULE_MISSING:'+name)
-        if (project/'test'/GOOGLE_TEST).exists():
-            raise ValueError('STAGE2_EXISTING_TEST_OVERWRITE_FORBIDDEN')
+        existing_test = project/'test'/GOOGLE_TEST
+        if existing_test.exists() and existing_test.read_bytes() != (
+                REPO/'test'/GOOGLE_TEST).read_bytes():
+            raise ValueError('STAGE2_EXISTING_TEST_MISMATCH_REFUSE_OVERWRITE')
         main_path.write_text(main)
         pubspec_path.write_text(pubspec)
         for name in MODULES:
             (project/'lib'/name).write_bytes((REPO/'lib'/name).read_bytes())
         (project/'test').mkdir(exist_ok=True)
-        (project/'test'/GOOGLE_TEST).write_bytes(
-            (REPO/'test'/GOOGLE_TEST).read_bytes())
+        if not existing_test.exists():
+            existing_test.write_bytes((REPO/'test'/GOOGLE_TEST).read_bytes())
     if main.count(import_statement) != 1 or (
         main.count('const DedaStage2GoogleAccessCard()') != 1 or
         not main.index('const DedaStage2GoogleAccessCard()') <
