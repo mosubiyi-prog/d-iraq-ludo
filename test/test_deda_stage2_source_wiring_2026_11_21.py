@@ -811,6 +811,101 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("allow delete: if isGeneralManager();",rules)
         self.assertIn("request.resource.data.adminUid == request.auth.uid",rules)
 
+    def test_live_support_and_places_inboxes_are_scoped_and_paginated(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        policy=code.split('static bool scopedRequestPageCursorAllowed(',1)[1].split(
+            '/// A listener may not reuse an old scoped query',1)[0]
+        watch=code.split('Stream<QuerySnapshot<Map<String, dynamic>>> watchScopedAdminRequests(',1)[1].split(
+            '/// This profile can be shown',1)[0]
+        for token in (
+            "collection == 'place_requests'", "'viewPlaceRequests'",
+            "collection == 'support_requests'", "'supportRead'",
+            "allowsPermission(", "validScopedDocumentId(documentId)",
+            "parentPath == collection",
+            "!isFromCache", "!hasPendingWrites",
+            "scopedDocumentMatches(",
+        ):
+            self.assertIn(token,policy,token)
+        for token in (
+            "QueryDocumentSnapshot<Map<String, dynamic>>? startAfter",
+            "'support_requests', 'place_requests'",
+            "maxItems < 1 || maxItems > 100",
+            "requiredPermission: permission",
+            "scopedRequestPageCursorAllowed(",
+            "startAfter.reference.parent.path",
+            "startAfter.metadata.isFromCache",
+            "startAfter.metadata.hasPendingWrites",
+            "deda-admin-isolated-watch-page-cursor-denied",
+            "query.where('governorate', isEqualTo: province)",
+            "query.orderBy('createdAt', descending: true)",
+            "query.startAfterDocument(startAfter)",
+            "query.limit(maxItems).snapshots(",
+            "includeMetadataChanges: true",
+            "if (snapshot.metadata.isFromCache) {",
+            "if (snapshot.metadata.hasPendingWrites) {",
+            "if (!await proof()) {",
+            "sameScopedFilters(", "scopedDocumentMatches(",
+            "deliveredFreshServerSnapshot = true;",
+        ):
+            self.assertIn(token,watch,token)
+        # Cursor is installed only after source permission + server scope
+        # proof, and before the watch starts. There is no public auth write.
+        self.assertLess(watch.index("scopedRequestPageCursorAllowed("),
+                        watch.index("query.startAfterDocument(startAfter)"))
+        self.assertLess(watch.index("query.startAfterDocument(startAfter)"),
+                        watch.index("await for (final snapshot"))
+        self.assertEqual(watch.count('!await proof()'),1)
+        self.assertNotIn("FirebaseAuth.instance",watch)
+        self.assertNotIn("FirebaseFirestore.instance",watch)
+        self.assertNotIn(".delete(",watch)
+        self.assertNotIn(".set(",watch)
+        state=ui.split("class _DedaIsolatedRequestTabState",1)[1]
+        for token in (
+            "late Stream<QuerySnapshot<Map<String, dynamic>>> _stream",
+            "QueryDocumentSnapshot<Map<String, dynamic>>? _pageStart",
+            "final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back",
+            "maxItems: 51",
+            "startAfter: _pageStart",
+            "snapshot.docs.length <= 50",
+            "snapshot.docs[49]",
+            "cursor.metadata.isFromCache",
+            "cursor.metadata.hasPendingWrites",
+            "_back.add(_pageStart)",
+            "_back.removeLast()",
+            "key: ValueKey(_pageEpoch)",
+            "serverPage.docs.take(50)",
+            "serverPage.docs.length > 50",
+            "_previousPage", "_nextPage",
+        ):
+            self.assertIn(token,state,token)
+        self.assertNotIn("DedaBackend.",state)
+        self.assertNotIn("FirebaseAuth.instance",state)
+
+    def test_live_paged_inbox_keeps_all_existing_admin_actions(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        state=ui.split("class _DedaIsolatedRequestTabState",1)[1]
+        for token in (
+            "widget.admin.prepareScopedPlaceApproval(",
+            "widget.admin.finalizeScopedPlaceApproval(",
+            "widget.admin.updateScopedPlaceReview(",
+            "widget.admin.mutateScopedPlaceArchive(",
+            "widget.admin.updateScopedSupportStatus(",
+            "widget.admin.replyToScopedSupport(",
+            "canReview('reviewing')",
+            "canReview('needs_changes')",
+            "canReview('rejected')",
+            "if (canApprove)",
+            "if (!support && _canArchivePlace)",
+            "if (support && _canReply)",
+            "StreamBuilder<QuerySnapshot<Map<String, dynamic>>>",
+            "key: ValueKey(_pageEpoch)",
+        ):
+            self.assertIn(token,state,token)
+        self.assertIn("if (!dedaIsolatedAdminIdentityEnabled)",state)
+        self.assertNotIn("readScopedAdminList(",state)
+        self.assertNotIn("DedaBackend.",state)
+
     def test_isolated_listener_never_exposes_local_write_or_offline_cache(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         watch=source.split('Stream<QuerySnapshot<Map<String, dynamic>>> watchScopedAdminRequests(',1)[1].split(
