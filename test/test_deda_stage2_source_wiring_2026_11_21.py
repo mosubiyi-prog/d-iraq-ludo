@@ -310,6 +310,33 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(body.count('await proof()'),2)
         self.assertNotIn('FirebaseFirestore.instance.collection(',body)
 
+    def test_dashboard_boundary_uses_next_actual_class_without_guessing_name(self):
+        admin=self.dst/'lib/admin_pages.dart'
+        original=admin.read_text()
+        self.assertIn('class _AdminRequestsPage extends StatelessWidget {',original)
+        admin.write_text(original.replace('_AdminRequestsPage',
+                                          '_RenamedAdminRequestsPage'))
+        binder.prepare(self.dst)
+        binder.prepare(self.dst,verify_only=True)
+        compiled=admin.read_text()
+        self.assertIn('class _RenamedAdminRequestsPage extends StatelessWidget {',
+                      compiled)
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled) _load();',compiled)
+        self.assertIn('Use isolated administrator sign-in.',compiled)
+
+    def test_renamed_legacy_dashboard_state_blocks_before_any_file_mutation(self):
+        admin=self.dst/'lib/admin_pages.dart'
+        original=admin.read_text()
+        target='class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {'
+        self.assertEqual(original.count(target),1)
+        admin.write_text(original.replace(
+            target,'class _UnreviewedDashboardState extends State<DedaAdminDashboardPage> {',1))
+        before=(self.dst/'pubspec.yaml').read_bytes()
+        with self.assertRaisesRegex(ValueError,'STAGE2_STOP_SOURCE_DRIFT:legacy-dashboard-state'):
+            binder.prepare(self.dst)
+        self.assertEqual((self.dst/'pubspec.yaml').read_bytes(),before)
+        self.assertFalse((self.dst/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').exists())
+
     def test_isolated_admin_routes_fail_closed_even_with_legacy_session(self):
         # The settings card must route to isolated login BEFORE any public
         # currentUserIsAdmin/old Dashboard lookup when the stage flag is ON.
