@@ -340,6 +340,18 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseAuth.instance.signOut()',scoped)
         self.assertNotIn('DedaBackend.signInAdmin(',scoped)
 
+    def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
+        source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        self.assertIn('return PopScope(',source)
+        self.assertIn('canPop: false,',source)
+        self.assertIn('onPopInvokedWithResult: (didPop, _) async {',source)
+        self.assertIn('if (!didPop) await _exit();',source)
+        self.assertIn('if (_exiting) return;',source)
+        self.assertIn('await widget.admin.signOutSecondaryAdmin();',source)
+        self.assertNotIn('FirebaseAuth.instance',source)
+        self.assertNotIn('FirebaseFirestore.instance',source)
+        self.assertNotIn('DedaBackend.signOutAdmin(',source)
+
     def test_settings_legacy_admin_anchor_drift_refuses_partial_write(self):
         main=self.dst/'lib/main.dart'
         original=main.read_text()
