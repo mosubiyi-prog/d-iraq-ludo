@@ -152,6 +152,54 @@ class DedaIsolatedAdminProofPolicy {
         message.length <= 4000;
   }
 
+  /// A bounded review action; never approves, publishes, deletes or mints
+  /// an approval number. Server Firestore Rules remain authoritative.
+  static bool placeReviewMutationAllowed({
+    required Map<String, dynamic>? admin,
+    required Map<String, dynamic>? request,
+    required String requestId,
+    required String expectedStatus,
+    required String targetStatus,
+    String? note,
+  }) {
+    if (!validScopedDocumentId(requestId) || admin == null ||
+        request == null || request['status'] != expectedStatus) {
+      return false;
+    }
+    const sourceStatuses = <String>{
+      'pending', 'reviewing', 'needs_changes', 'rejected',
+    };
+    if (!sourceStatuses.contains(expectedStatus)) return false;
+    if (!const <String>{'reviewing', 'needs_changes', 'rejected'}
+        .contains(targetStatus)) return false;
+    final permission = targetStatus == 'rejected'
+        ? 'rejectPlaces' : 'reviewPlaceRequests';
+    if (!allowsPermission(admin: admin, permission: permission) ||
+        !scopedDocumentMatches(
+          admin: admin, collection: 'place_requests', data: request,
+        )) {
+      return false;
+    }
+    // Firestore place-request UPDATE checks activation even for province
+    // agents, whose existing LIST permission is province-only.
+    final role = DedaBackend.normalizeAdminRole(admin['role'] ?? admin['jobTitle']);
+    if (role != 'general_manager') {
+      final activation = admin['firstLoginCompletedAt'];
+      final createdAt = request['createdAt'];
+      if (activation is! Timestamp || createdAt is! Timestamp ||
+          createdAt.compareTo(activation) < 0) return false;
+    }
+    final cleanNote = (note ?? '').trim();
+    if (targetStatus == 'reviewing') {
+      return expectedStatus != 'reviewing' && cleanNote.isEmpty;
+    }
+    if (targetStatus == 'needs_changes' &&
+        expectedStatus != 'pending' && expectedStatus != 'reviewing') {
+      return false;
+    }
+    return cleanNote.isNotEmpty && cleanNote.length <= 1000;
+  }
+
   /// Apply the same server role's activation/province scope to one record.
   static bool scopedDocumentMatches({
     required Map<String, dynamic>? admin,
