@@ -206,6 +206,60 @@ class DedaIsolatedAdminProofPolicy {
     return cleanNote.isNotEmpty && cleanNote.length <= 1000;
   }
 
+  /// Final approval is separate from review and always requires the
+  /// freshly verified approval AND inbox-view permissions. A stale row,
+  /// incomplete location or unactivated provincial employee cannot approve.
+  static bool placeApprovalAllowed({
+    required Map<String, dynamic>? admin,
+    required Map<String, dynamic>? request,
+    required String requestId,
+    required String expectedStatus,
+  }) {
+    if (!validScopedDocumentId(requestId) ||
+        !const <String>{'pending', 'reviewing'}.contains(expectedStatus) ||
+        admin == null || request == null ||
+        request['status'] != expectedStatus ||
+        !allowsPermission(admin: admin, permission: 'approvePlaces') ||
+        !allowsPermission(admin: admin, permission: 'viewPlaceRequests') ||
+        !scopedDocumentMatches(
+          admin: admin, collection: 'place_requests', data: request,
+        )) {
+      return false;
+    }
+    const requiredText = <String>[
+      'placeName', 'phone', 'governorate', 'address',
+      'openingHours', 'description',
+    ];
+    if (requiredText.any(
+          (key) => (request[key] ?? '').toString().trim().isEmpty,
+        ) ||
+        request['latitude'] is! num ||
+        request['longitude'] is! num ||
+        (request['category'] ?? '').toString().trim().isEmpty ||
+        (request['category'] == 'other' &&
+         (request['otherCategoryText'] ?? '').toString().trim().isEmpty)) {
+      return false;
+    }
+    final role = DedaBackend.normalizeAdminRole(
+      admin['role'] ?? admin['jobTitle'],
+    );
+    if (role != 'general_manager') {
+      final activated = admin['firstLoginCompletedAt'];
+      final created = request['createdAt'];
+      if (activated is! Timestamp || created is! Timestamp ||
+          created.compareTo(activated) < 0) {
+        return false;
+      }
+    }
+    if (request['requestType'] == 'update' &&
+        !validScopedDocumentId(
+          (request['originalPlaceId'] ?? '').toString(),
+        )) {
+      return false;
+    }
+    return true;
+  }
+
   /// Apply the same server role's activation/province scope to one record.
   static bool scopedDocumentMatches({
     required Map<String, dynamic>? admin,
