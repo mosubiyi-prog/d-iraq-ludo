@@ -346,7 +346,7 @@ class _DedaIsolatedManagerPlacesTabState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(t('المعرّف', 'Record ID') + ': $id'),
+              Text("${t('المعرّف', 'Record ID')}: $id"),
               if (permanent) ...[
                 const SizedBox(height: 12),
                 Text(t(
@@ -701,8 +701,8 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
       builder: (dialogContext) => AlertDialog(
         title: Text(t('نقل الطلب إلى محذوفات المدير العام',
             'Move request to general-manager trash')),
-        content: Text(t('تأكيد نقل الطلب إلى المحذوفات؟',
-            'Move this request to recoverable trash?') + '\n$id'),
+        content: Text("${t('تأكيد نقل الطلب إلى المحذوفات؟',
+            'Move this request to recoverable trash?')}\n$id"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
