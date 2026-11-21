@@ -96,10 +96,19 @@ def prepare(project: Path, verify_only: bool = False):
         main = one(main, 'Future<void> main() async {',
                    'String? _dedaStage2PendingGoogleUid;\n\nFuture<void> main() async {',
                    'pending-google-global-state')
-        main = one(main, '  await DedaPreferences.load();\n',
-                   pending_boot.replace('  await DedaPreferences.load();\n', '', 1).replace(
-                       '  await DedaTaskEngine.initializeForCurrentAccount();', ''),
-                   'pending-before-task-startup')
+        # The complete assembly can have another preferences reload helper.
+        # Patch ONLY the app's main() startup, never a second account routine.
+        start_marker = 'Future<void> main() async {'
+        end_marker = 'class _DedaCleanPageTransitionsBuilder'
+        if main.count(start_marker) != 1 or main.count(end_marker) != 1:
+            raise ValueError('STAGE2_MAIN_STARTUP_BOUNDARY_CHANGED')
+        prefix, after_start = main.split(start_marker, 1)
+        startup, suffix = after_start.split(end_marker, 1)
+        startup = one(startup, '  await DedaPreferences.load();\n',
+                      pending_boot.replace('  await DedaPreferences.load();\n', '', 1).replace(
+                          '  await DedaTaskEngine.initializeForCurrentAccount();', ''),
+                      'pending-before-task-startup')
+        main = prefix + start_marker + startup + end_marker + suffix
         main = one(main, '  static bool _liveVerifiedOriginalOwner(',
                    in_memory_fence + '  static bool _liveVerifiedOriginalOwner(',
                    'legacy-live-profile-fence')

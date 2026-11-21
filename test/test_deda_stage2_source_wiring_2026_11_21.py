@@ -72,6 +72,25 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                         ui.index('await DedaTaskEngine.initializeForCurrentAccount();'))
         self.assertIn('// Existing stage boot guard preserved.',ui)
 
+    def test_two_preferences_load_sites_only_main_startup_is_patched(self):
+        main=self.dst/'lib/main.dart'
+        original=main.read_text()
+        self.assertEqual(original.count('await DedaPreferences.load();'),1)
+        other=(
+            '  Future<void> reloadLocalPreferencesForQa() async {\n'
+            '    await DedaPreferences.load();\n'
+            '  }\n'
+        )
+        marker='class LoginPage extends StatefulWidget {'
+        self.assertEqual(original.count(marker),1)
+        main.write_text(original.replace(marker,other + marker,1))
+        binder.prepare(self.dst)
+        binder.prepare(self.dst,verify_only=True)
+        assembled=main.read_text()
+        self.assertEqual(assembled.count('await DedaPreferences.load();'),2)
+        self.assertEqual(
+            assembled.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
