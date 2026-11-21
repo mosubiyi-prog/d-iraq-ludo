@@ -155,6 +155,17 @@ Future<void> main() async {"""
             "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';\n",
             'isolated-admin-ui-imports',
         )
+        if '      final allowed = await DedaBackend.signInAdmin(\n' not in admin_source:
+            lines = admin_source.splitlines()
+            anchors = [i for i, line in enumerate(lines) if
+                       'signInAdmin(' in line or 'class DedaAdminLoginPage' in line or
+                       'Future<void> _login(' in line or 'signInWithEmailAndPassword(' in line]
+            context = '\n'.join(
+                ('LINE_' + str(i + 1) + ': ' +
+                 '\\n'.join(lines[max(0, i - 8):min(len(lines), i + 12)]))
+                for i in anchors[:5]
+            )
+            raise ValueError('STAGE2_ASSEMBLED_ADMIN_LOGIN_DRIFT_REVIEW:' + context[:4200])
         admin_source = one(
             admin_source,
             '      final allowed = await DedaBackend.signInAdmin(\n',
