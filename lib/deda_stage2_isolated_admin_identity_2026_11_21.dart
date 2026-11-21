@@ -126,6 +126,23 @@ class DedaIsolatedAdminProofPolicy {
     return permissions is Map && permissions[permission] == true;
   }
 
+  /// Explicitly scoped to existing support-ticket status/reply fields.
+  static bool supportMutationInputAllowed({
+    required String requestId,
+    required String status,
+    String? reply,
+  }) {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(requestId)) {
+      return false;
+    }
+    if (!const <String>{'new', 'in_progress', 'replied', 'closed'}
+        .contains(status)) return false;
+    if (reply == null) return true;
+    final message = reply.trim();
+    return status == 'replied' && message.isNotEmpty &&
+        message.length <= 4000;
+  }
+
   /// Derive query constraints from a freshly verified admin document.
   /// Firestore security rules are authoritative; this merely shapes a
   /// client query to the exact historical access windows and province.
@@ -378,4 +395,115 @@ class DedaIsolatedAdminIdentity {
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();
+  /// First isolated support write transport. The old Dashboard is not wired
+  /// yet, so the isolated feature remains disabled by default.
+  Future<void> updateScopedSupportStatus({
+    required String dedaPhone,
+    required String requestId,
+    required String status,
+  }) => _writeScopedSupport(
+        dedaPhone: dedaPhone, requestId: requestId, status: status,
+      );
+
+  Future<void> replyToScopedSupport({
+    required String dedaPhone,
+    required String requestId,
+    required String message,
+  }) => _writeScopedSupport(
+        dedaPhone: dedaPhone, requestId: requestId,
+        status: 'replied', reply: message,
+      );
+
+  Future<void> _writeScopedSupport({
+    required String dedaPhone,
+    required String requestId,
+    required String status,
+    String? reply,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-write-not-enabled');
+    }
+    final id = requestId.trim();
+    if (!DedaIsolatedAdminProofPolicy.supportMutationInputAllowed(
+      requestId: id, status: status, reply: reply,
+    )) {
+      throw StateError('deda-admin-isolated-support-input-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'supportReply',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-support-permission-denied');
+    }
+    final request = _firestore.collection('support_requests').doc(id);
+    final snapshot = await request.get(const GetOptions(source: Source.server));
+    if (!snapshot.exists || snapshot.data() == null ||
+        snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites) {
+      throw StateError('deda-admin-isolated-support-server-read-required');
+    }
+    final createdAt = snapshot.data()!['createdAt'];
+    bool inScope() {
+      final filters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+        admin: verifiedAdmin, collection: 'support_requests',
+      );
+      if (filters == null || filters.containsKey('governorate')) return false;
+      final since = filters['createdAtMin'];
+      return since == null ||
+          (since is Timestamp && createdAt is Timestamp &&
+              createdAt.compareTo(since) >= 0);
+    }
+    // Verify live rights again, after reading the ticket. The server's
+    // Firestore rules also authorize the actual atomic commit.
+    if (!inScope() || !await proof() || !inScope() ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-support-proof-changed');
+    }
+    final admin = verifiedAdmin!;
+    final role = DedaBackend.normalizeAdminRole(
+      admin['role'] ?? admin['jobTitle'],
+    );
+    final name = (admin['displayName'] ?? admin['name'] ??
+        current.email ?? 'DEDA Admin').toString();
+    final isReply = reply != null;
+    final patch = <String, dynamic>{
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (isReply) ...<String, dynamic>{
+        'adminReply': reply!.trim(),
+        'adminReplyAt': FieldValue.serverTimestamp(),
+        'adminReplyByUid': uid,
+        'adminReplyByName': name,
+        'adminReplyByRole': role,
+      } else ...<String, dynamic>{
+        'reviewedBy': uid,
+        'reviewedByName': name,
+        'reviewedByRole': role,
+        if (status == 'closed') 'closedAt': FieldValue.serverTimestamp(),
+      },
+    };
+    final batch = _firestore.batch();
+    batch.update(request, patch);
+    batch.set(_firestore.collection('admin_audit').doc(), <String, dynamic>{
+      'action': isReply ? 'support_replied' : 'support_status_changed',
+      'adminUid': uid,
+      'adminName': name,
+      'adminRole': role,
+      'sourceCollection': 'support_requests',
+      'sourceId': id,
+      if (!isReply) 'newStatus': status,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
+
 }
