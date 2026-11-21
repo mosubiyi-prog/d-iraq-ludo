@@ -351,7 +351,9 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
           FilledButton(
             onPressed: () {
               final reason = controller.text.trim();
-              if (reason.isNotEmpty) Navigator.pop(dialogContext, reason);
+              if (reason.isNotEmpty) {
+                Navigator.pop(dialogContext, reason);
+              }
             },
             child: Text(t('تأكيد', 'Confirm')),
           ),
@@ -379,10 +381,16 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
       expectedStatus: expectedStatus,
       targetStatus: targetStatus,
       note: noteRequired ? 'required' : null,
-    )) return;
+    )) {
+      return;
+    }
     final note = noteRequired ? await _askPlaceReason(targetStatus) : null;
-    if (noteRequired && (note == null || note.isEmpty)) return;
-    if (!mounted || _sending) return;
+    if (noteRequired && (note == null || note.isEmpty)) {
+      return;
+    }
+    if (!mounted || _sending) {
+      return;
+    }
     setState(() => _sending = true);
     try {
       await widget.admin.updateScopedPlaceReview(
