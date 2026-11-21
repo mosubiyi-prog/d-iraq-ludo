@@ -855,7 +855,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                         watch.index("query.startAfterDocument(startAfter)"))
         self.assertLess(watch.index("query.startAfterDocument(startAfter)"),
                         watch.index("await for (final snapshot"))
-        self.assertEqual(watch.count('!await proof()'),1)
+        self.assertEqual(watch.count('!await proof()'),2)
+        self.assertLess(watch.index('!await proof()'),
+                        watch.index('await for (final snapshot'))
+        self.assertGreater(watch.rindex('!await proof()'),
+                           watch.index('await for (final snapshot'))
         self.assertNotIn("FirebaseAuth.instance",watch)
         self.assertNotIn("FirebaseFirestore.instance",watch)
         self.assertNotIn(".delete(",watch)
