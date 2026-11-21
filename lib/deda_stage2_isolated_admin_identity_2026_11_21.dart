@@ -1443,6 +1443,105 @@ class DedaIsolatedAdminIdentity {
     });
   }
 
+  /// Hide or restore a manager-hidden published place without deleting or
+  /// changing its ownership or approval identity. The audit is atomic.
+  Future<void> setScopedPublishedVisibility({
+    required String dedaPhone,
+    required String placeId,
+    required bool hide,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(placeId)) {
+      throw StateError('deda-admin-isolated-visibility-input-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-visibility-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'managePlaceArchives',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-visibility-role-denied');
+    }
+    final placeRef = _firestore.collection('published_places').doc(placeId);
+    final existing = await placeRef.get(
+      const GetOptions(source: Source.server),
+    );
+    if (existing.metadata.isFromCache ||
+        existing.metadata.hasPendingWrites ||
+        !DedaIsolatedAdminProofPolicy.managerVisibilityChangeAllowed(
+          admin: verifiedAdmin, placeId: placeId,
+          place: existing.data(), hide: hide,
+        )) {
+      throw StateError('deda-admin-isolated-visibility-record-denied');
+    }
+    if (!await proof() ||
+        !DedaIsolatedAdminProofPolicy.managerVisibilityChangeAllowed(
+          admin: verifiedAdmin, placeId: placeId,
+          place: existing.data(), hide: hide,
+        ) ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-visibility-proof-changed');
+    }
+    final admin = verifiedAdmin!;
+    final name = (admin['displayName'] ?? admin['name'] ??
+        current.email ?? 'DEDA Admin').toString();
+    final role = DedaBackend.normalizeAdminRole(
+      admin['role'] ?? admin['jobTitle'],
+    );
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((transaction) async {
+      final fresh = await transaction.get(placeRef);
+      final place = fresh.data();
+      if (_auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !DedaIsolatedAdminProofPolicy.managerVisibilityChangeAllowed(
+            admin: admin, placeId: placeId, place: place, hide: hide,
+          )) {
+        throw StateError('deda-admin-isolated-visibility-conflict');
+      }
+      final changes = hide
+          ? <String, dynamic>{
+              'published': false,
+              'hiddenByManager': true,
+              'hiddenAt': FieldValue.serverTimestamp(),
+              'hiddenByUid': uid,
+              'hiddenByName': name,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }
+          : <String, dynamic>{
+              'published': true,
+              'hiddenByManager': FieldValue.delete(),
+              'hiddenAt': FieldValue.delete(),
+              'hiddenByUid': FieldValue.delete(),
+              'hiddenByName': FieldValue.delete(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            };
+      transaction.update(placeRef, changes);
+      transaction.set(auditRef, <String, dynamic>{
+        'action': hide ? 'published_place_hidden' : 'published_place_restored',
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': role,
+        'sourceCollection': 'published_places',
+        'sourceId': placeId,
+        'placeName': place?['placeName'] ?? '',
+        'approvalNumber': place?['approvalNumber'] ?? '',
+        if (!hide) 'restoredByUid': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// Reversible place/request archive, restore and explicit irreversible
   /// archive cleanup. Server GM proof is required before and after fresh reads;
   /// the actual atomic transaction re-checks both document destinations.
