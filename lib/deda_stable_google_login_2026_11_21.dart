@@ -56,6 +56,21 @@ class DedaStableGoogleLoginPolicy {
       actualUid == expectedUid &&
       !actualIsAnonymous &&
       providerIds.contains('google.com');
+
+  /// The app has NO authorized DEDA enrollment for a fresh Google UID yet.
+  /// A missing/stale local marker is never permission to display the old DEDA
+  /// profile while Google Auth is already the live Firebase principal.
+  static bool mustQuarantineGooglePrincipal({
+    required String? currentUid,
+    required bool currentIsAnonymous,
+    required Iterable<String> providerIds,
+  }) => currentUid != null &&
+      isSameAuthenticatedGooglePrincipal(
+        expectedUid: currentUid,
+        actualUid: currentUid,
+        actualIsAnonymous: currentIsAnonymous,
+        providerIds: providerIds,
+      );
 }
 
 abstract class DedaGoogleCredentialProvider {
@@ -115,23 +130,21 @@ class DedaStableGoogleLogin {
   static const String verifiedUidKey = 'deda_stable_google_verified_uid_v1';
 
   /// An authenticated Google UID is not yet an enrolled DEDA phone/profile.
-  /// Restore the restricted pending state only for the same live principal.
+  /// This is ONLY a quarantine decision: it does not grant any profile,
+  /// admin or legacy A/B/C ownership. Check the LIVE Firebase principal
+  /// even if the local marker was never committed (process kill/storage error).
   static Future<String?> pendingGoogleUid() async {
     if (Firebase.apps.isEmpty) return null;
-    final prefs = await SharedPreferences.getInstance();
-    final expectedUid = prefs.getString(verifiedUidKey)?.trim();
-    if (expectedUid == null || expectedUid.isEmpty) return null;
     final live = FirebaseAuth.instance.currentUser;
-    if (live == null ||
-        !DedaStableGoogleLoginPolicy.isSameAuthenticatedGooglePrincipal(
-          expectedUid: expectedUid,
-          actualUid: live.uid,
-          actualIsAnonymous: live.isAnonymous,
-          providerIds: live.providerData.map((p) => p.providerId),
-        )) {
+    if (!DedaStableGoogleLoginPolicy.mustQuarantineGooglePrincipal(
+      currentUid: live?.uid,
+      currentIsAnonymous: live?.isAnonymous ?? true,
+      providerIds: live?.providerData.map((p) => p.providerId) ??
+          const <String>[],
+    )) {
       return null;
     }
-    return expectedUid;
+    return live!.uid;
   }
 
   Future<DedaGoogleIdentityResult> signIn({

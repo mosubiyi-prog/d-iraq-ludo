@@ -35,7 +35,9 @@ class _DedaStage2GoogleAccessCardState extends State<DedaStage2GoogleAccessCard>
       final result = await DedaStableGoogleLogin().signIn(
         explicitAnonymousReplacement: _consentToNewUid,
       );
-      if (!result.cancelled && !result.reused && result.uid != null) {
+      // A reused Google UID still needs the restricted onboarding screen.
+      // Otherwise an old phone/profile could remain visible in memory.
+      if (!result.cancelled && result.uid != null) {
         await widget.onFreshGoogleIdentity(result.uid!);
         return;
       }
@@ -48,6 +50,18 @@ class _DedaStage2GoogleAccessCardState extends State<DedaStage2GoogleAccessCard>
                 'حساب DEDA القديم وممتلكاته والإدارة لم تُربط تلقائياً. '
                 'يلزم إكمال تهيئة حساب DEDA الجديد.');
     } catch (_) {
+      // A network/storage failure can occur AFTER Firebase switches to
+      // Google but BEFORE the local marker is written. Never leave the old
+      // DEDA widgets visible under that new UID. Quarantine immediately.
+      try {
+        final pendingUid = await DedaStableGoogleLogin.pendingGoogleUid();
+        if (pendingUid != null) {
+          await widget.onFreshGoogleIdentity(pendingUid);
+          return;
+        }
+      } catch (_) {
+        // Navigation failure must not grant a profile or admin privilege.
+      }
       if (mounted) {
         setState(() => _result =
             'تعذّر توثيق Google بأمان. لم يُسمح بمنح صلاحيات أو نقل بيانات.');

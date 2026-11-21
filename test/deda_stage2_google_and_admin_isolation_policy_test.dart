@@ -61,6 +61,20 @@ void main() {
         actualIsAnonymous:false, providerIds:['google.com'],
       ), true);
     });
+    test('Google principal quarantined even if local verified marker is absent', () {
+      bool hold(String? uid, bool anonymous, List<String> providers) =>
+          DedaStableGoogleLoginPolicy.mustQuarantineGooglePrincipal(
+            currentUid: uid,
+            currentIsAnonymous: anonymous,
+            providerIds: providers,
+          );
+      expect(hold('google-v1', false, ['google.com']), true);
+      expect(hold('google-v2', false, ['password','google.com']), true);
+      expect(hold('legacy-password', false, ['password']), false);
+      expect(hold('old-anonymous', true, ['google.com']), false);
+      expect(hold(null, false, ['google.com']), false);
+      expect(hold('', false, ['google.com']), false);
+    });
     test('pilot disabled in normal Play-compatible app by default', () {
       expect(dedaStableGoogleLoginEnabled, false);
       expect(dedaIsolatedAdminIdentityEnabled, false);
