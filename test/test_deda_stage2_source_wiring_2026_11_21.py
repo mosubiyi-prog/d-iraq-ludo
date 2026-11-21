@@ -145,6 +145,10 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             'Future<void> signOutSecondaryAdmin()',1)[0]
         self.assertIn('_scopedReadPermissions[collection]',scoped)
         self.assertIn('maxItems < 1 || maxItems > 50',scoped)
+        self.assertIn('scopedReadQueryFilters(',scoped)
+        self.assertIn("query.where('createdAt', isGreaterThanOrEqualTo: since)",scoped)
+        self.assertIn("query.where('governorate', isEqualTo: province)",scoped)
+        self.assertIn('onAuthorizedAdmin:',scoped)
         self.assertEqual(scoped.count('await proof()'),2)
         self.assertIn('GetOptions(source: Source.server)',scoped)
         self.assertIn('_mainAuth.currentUser?.uid != publicUid',scoped)

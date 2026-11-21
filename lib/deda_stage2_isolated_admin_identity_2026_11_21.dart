@@ -58,6 +58,9 @@ class DedaIsolatedAdminProofPolicy {
         .toString().trim().toLowerCase();
     if (rawRole.isEmpty) return false;
     final adminRole = DedaBackend.normalizeAdminRole(rawRole);
+    if (!const <String>{
+      'general_manager', 'deputy_manager', 'employee', 'province_agent',
+    }.contains(adminRole)) return false;
     final accessType = (entry['accessType'] ?? '')
         .toString().trim().toLowerCase();
     if (accessType == 'general_manager_gateway') {
@@ -107,6 +110,9 @@ class DedaIsolatedAdminProofPolicy {
         .toString().trim().toLowerCase();
     if (role.isEmpty) { return false; }
     final normalizedRole = DedaBackend.normalizeAdminRole(role);
+    if (!const <String>{
+      'general_manager', 'deputy_manager', 'employee', 'province_agent',
+    }.contains(normalizedRole)) return false;
     if (normalizedRole == 'general_manager') { return true; }
     // Firestore rules deny these four actions to province agents even if
     // a legacy permissions map accidentally contains a true value.
@@ -118,6 +124,43 @@ class DedaIsolatedAdminProofPolicy {
     }
     final permissions = admin['permissions'];
     return permissions is Map && permissions[permission] == true;
+  }
+
+  /// Derive query constraints from a freshly verified admin document.
+  /// Firestore security rules are authoritative; this merely shapes a
+  /// client query to the exact historical access windows and province.
+  /// A null result is DENIED, never an unrestricted fallback query.
+  static Map<String, dynamic>? scopedReadQueryFilters({
+    required Map<String, dynamic>? admin,
+    required String collection,
+  }) {
+    if (admin == null || admin['active'] != true ||
+        DedaBackend.normalizeAdminStatus(admin) != 'active') return null;
+    const collections = <String>{
+      'support_requests', 'place_requests', 'users', 'admin_audit',
+    };
+    if (!collections.contains(collection)) return null;
+    final rawRole = (admin['role'] ?? admin['jobTitle'] ?? '')
+        .toString().trim().toLowerCase();
+    if (rawRole.isEmpty) return null;
+    final role = DedaBackend.normalizeAdminRole(rawRole);
+    if (!const <String>{
+      'general_manager', 'deputy_manager', 'employee', 'province_agent',
+    }.contains(role)) return null;
+    if (role == 'province_agent') {
+      if (collection != 'place_requests') return null;
+      final province = (admin['governorate'] ?? '').toString().trim();
+      if (province.isEmpty) return null;
+      return <String, dynamic>{'governorate': province};
+    }
+    if (role != 'general_manager' &&
+        (collection == 'support_requests' ||
+         collection == 'place_requests')) {
+      final since = admin['firstLoginCompletedAt'];
+      if (since is! Timestamp) return null;
+      return <String, dynamic>{'createdAtMin': since};
+    }
+    return <String, dynamic>{};
   }
 }
 
@@ -172,6 +215,7 @@ class DedaIsolatedAdminIdentity {
     required String dedaPhone,
     required String? expectedPublicUid,
     String? requiredPermission,
+    void Function(Map<String, dynamic>)? onAuthorizedAdmin,
   }) async {
     final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone);
     if (phone.isEmpty || uid.isEmpty ||
@@ -202,10 +246,15 @@ class DedaIsolatedAdminIdentity {
       now: DateTime.now(),
       inviteExpiresAt: expires is Timestamp ? expires.toDate() : null,
     );
-    return allowed && (requiredPermission == null ||
+    final verifiedAdmin = adminProof.data();
+    final granted = allowed && (requiredPermission == null ||
         DedaIsolatedAdminProofPolicy.allowsPermission(
-          admin: adminProof.data(), permission: requiredPermission,
+          admin: verifiedAdmin, permission: requiredPermission,
         ));
+    if (granted && verifiedAdmin != null) {
+      onAuthorizedAdmin?.call(Map<String, dynamic>.from(verifiedAdmin));
+    }
+    return granted;
   }
 
   /// After an app restart the secondary FirebaseAuth SDK may still own a
@@ -291,14 +340,31 @@ class DedaIsolatedAdminIdentity {
     }
     final uid = current.uid;
     final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
     Future<bool> proof() => _serverAuthorizedAdmin(
       uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
       requiredPermission: permission,
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
     );
     if (!await proof()) {
       throw StateError('deda-admin-isolated-read-permission-denied');
     }
-    final rows = await _firestore.collection(collection)
+    final filters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: verifiedAdmin, collection: collection,
+    );
+    if (filters == null) {
+      throw StateError('deda-admin-isolated-query-scope-unverified');
+    }
+    Query<Map<String, dynamic>> query = _firestore.collection(collection);
+    final since = filters['createdAtMin'];
+    final province = filters['governorate'];
+    if (since is Timestamp) {
+      query = query.where('createdAt', isGreaterThanOrEqualTo: since);
+    }
+    if (province is String) {
+      query = query.where('governorate', isEqualTo: province);
+    }
+    final rows = await query
         .limit(maxItems).get(const GetOptions(source: Source.server));
     if (rows.metadata.isFromCache || rows.metadata.hasPendingWrites ||
         _auth.currentUser?.uid != uid ||

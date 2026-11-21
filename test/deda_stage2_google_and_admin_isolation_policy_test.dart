@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_stable_google_login_2026_11_21.dart';
 import 'package:d_iraq_ludo/deda_stage2_isolated_admin_identity_2026_11_21.dart';
@@ -165,6 +166,50 @@ void main() {
       expect(can(province,'viewUsers'), false);
       expect(can(province,'viewAudit'), false);
       expect(can(province,'viewPlaceRequests'), true);
+    });
+    test('scoped admin read matches Firestore activation and province rules', () {
+      Map<String, dynamic>? scope(Map<String, dynamic>? admin, String collection) =>
+          DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+            admin: admin, collection: collection,
+          );
+      expect(scope(record,'support_requests'), isEmpty);
+      expect(scope(record,'place_requests'), isEmpty);
+      final activation = Timestamp.fromDate(DateTime.utc(2026, 11, 1));
+      final staff = <String,dynamic>{
+        'active':true,'status':'active','role':'employee',
+        'firstLoginCompletedAt':activation,
+      };
+      expect(scope(staff,'support_requests')?['createdAtMin'],activation);
+      expect(scope(staff,'place_requests')?['createdAtMin'],activation);
+      expect(scope(staff,'users'), isEmpty);
+      expect(scope(staff,'admin_audit'), isEmpty);
+      expect(scope({...staff}..remove('firstLoginCompletedAt'),
+          'support_requests'),isNull);
+      expect(scope({...staff,'firstLoginCompletedAt':'2026-11-01'},
+          'place_requests'),isNull);
+      final province = <String,dynamic>{
+        'active':true,'status':'active','role':'province_agent',
+        'governorate':'كركوك',
+      };
+      expect(scope(province,'place_requests')?['governorate'],'كركوك');
+      expect(scope(province,'support_requests'),isNull);
+      expect(scope(province,'users'),isNull);
+      expect(scope(province,'admin_audit'),isNull);
+      expect(scope({...province,'governorate':''},'place_requests'),isNull);
+      expect(scope(record,'not_in_allowlist'),isNull);
+      expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
+      expect(scope({'active':false,'role':'general_manager'},'users'),isNull);
+    });
+    test('unknown server role never authorizes even matching gateway', () {
+      final unrecognized = <String,dynamic>{
+        'active':true,'status':'active','role':'mystery',
+        'permissions':<String,bool>{'viewUsers':true},
+      };
+      final unrecognizedGateway = {...gateway,
+        'accessType':'member', 'allowedRole':'mystery', 'adminUid':adminUid};
+      expect(verify(admin:unrecognized,entry:unrecognizedGateway),false);
+      expect(DedaIsolatedAdminProofPolicy.allowsPermission(
+          admin:unrecognized, permission:'viewUsers'),false);
     });
     test('Google email by itself never grants admin', () {
       expect(verify(uid:'new-google-uid',admin:{
