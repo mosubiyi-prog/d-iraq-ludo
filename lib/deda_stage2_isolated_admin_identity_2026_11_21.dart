@@ -387,6 +387,31 @@ class DedaIsolatedAdminProofPolicy {
   }
 
 
+  /// Reused by live paging: never accept cache, local changes, a foreign
+  /// document path, or a cursor outside the admin's freshly verified scope.
+  static bool scopedRequestPageCursorAllowed({
+    required Map<String, dynamic>? admin,
+    required String collection,
+    required String documentId,
+    required String parentPath,
+    required Map<String, dynamic>? data,
+    required bool isFromCache,
+    required bool hasPendingWrites,
+  }) {
+    final permission = collection == 'place_requests'
+        ? 'viewPlaceRequests'
+        : collection == 'support_requests' ? 'supportRead' : '';
+    return permission.isNotEmpty &&
+        allowsPermission(admin: admin, permission: permission) &&
+        validScopedDocumentId(documentId) &&
+        parentPath == collection &&
+        !isFromCache &&
+        !hasPendingWrites &&
+        scopedDocumentMatches(
+          admin: admin, collection: collection, data: data,
+        );
+  }
+
   /// A listener may not reuse an old scoped query after its server-side
   /// activation date or province changes. Unknown filters deny access.
   static bool sameScopedFilters(
@@ -869,14 +894,15 @@ class DedaIsolatedAdminIdentity {
     // collection and role scope. Never allow a cached row from another
     // account, province or request list to become a pagination token.
     if (startAfter != null &&
-        (startAfter.reference.parent.path != collection ||
-         startAfter.metadata.isFromCache ||
-         startAfter.metadata.hasPendingWrites ||
-         !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfter.id) ||
-         !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
-           admin: verifiedAdmin, collection: collection,
-           data: startAfter.data(),
-         ))) {
+        !DedaIsolatedAdminProofPolicy.scopedRequestPageCursorAllowed(
+          admin: verifiedAdmin,
+          collection: collection,
+          documentId: startAfter.id,
+          parentPath: startAfter.reference.parent.path,
+          data: startAfter.data(),
+          isFromCache: startAfter.metadata.isFromCache,
+          hasPendingWrites: startAfter.metadata.hasPendingWrites,
+        )) {
       throw StateError('deda-admin-isolated-watch-page-cursor-denied');
     }
     Query<Map<String, dynamic>> query = _firestore.collection(collection);
