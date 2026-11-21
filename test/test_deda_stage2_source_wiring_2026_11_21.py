@@ -509,6 +509,13 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                      "transaction.set(counterRef", "SetOptions(merge: true)"):
             self.assertIn(part,prepare,part)
         self.assertIn("newSerial = 0;",prepare)
+        # The published location is an authority for updates; for new places
+        # the source request may contain client-forged approval fields.
+        self.assertIn("forged",prepare)
+        self.assertIn("final counter = await transaction.get(counterRef);",prepare)
+        self.assertNotIn("else if (number.isEmpty)",prepare)
+        self.assertNotIn("else if (date.isEmpty)",prepare)
+        self.assertIn("rawValue is! int",prepare)
         self.assertIn("original.data()!['approvalNumber']",prepare)
         self.assertIn("original.data()!['approvalDate']",prepare)
         self.assertIn("deda-admin-isolated-approval-counter-invalid",prepare)
