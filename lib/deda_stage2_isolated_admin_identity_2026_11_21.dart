@@ -424,7 +424,9 @@ class DedaIsolatedAdminProofPolicy {
     if (const <String>{
       'admins', 'published_places', 'admin_trash_place_requests',
       'admin_trash_places',
-    }.contains(collection) && role != 'general_manager') return null;
+    }.contains(collection) && role != 'general_manager') {
+      return null;
+    }
     if (role == 'province_agent') {
       if (collection != 'place_requests') return null;
       final province = (admin['governorate'] ?? '').toString().trim();
