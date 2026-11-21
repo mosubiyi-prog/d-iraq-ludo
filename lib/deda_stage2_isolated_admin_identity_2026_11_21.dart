@@ -1420,6 +1420,169 @@ class DedaIsolatedAdminIdentity {
     });
   }
 
+  /// Reversible place/request archive, restore and explicit irreversible
+  /// archive cleanup. Server GM proof is required before and after fresh reads;
+  /// the actual atomic transaction re-checks both document destinations.
+  /// This NEVER signs out or writes as the public DEDA Firebase user.
+  Future<void> mutateScopedPlaceArchive({
+    required String dedaPhone,
+    required String sourceCollection,
+    required String recordId,
+    required String action,
+    String? permanentConfirmation,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !const <String>{'place_requests', 'published_places'}
+            .contains(sourceCollection) ||
+        !const <String>{'trash', 'restore', 'permanent'}.contains(action) ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(recordId) ||
+        (action == 'permanent' && permanentConfirmation != recordId) ||
+        (action != 'permanent' && permanentConfirmation != null)) {
+      throw StateError('deda-admin-isolated-place-archive-input-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-place-archive-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'managePlaceArchives',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-place-archive-role-denied');
+    }
+    final trashCollection = sourceCollection == 'place_requests'
+        ? 'admin_trash_place_requests' : 'admin_trash_places';
+    final sourceRef = _firestore.collection(sourceCollection).doc(recordId);
+    final trashRef = _firestore.collection(trashCollection).doc(recordId);
+    // Both existing server records must be observed before attempting writes,
+    // not a cached UI snapshot. In particular, deny archive overwrites.
+    final sourceBefore = await sourceRef.get(
+      const GetOptions(source: Source.server),
+    );
+    final trashBefore = await trashRef.get(
+      const GetOptions(source: Source.server),
+    );
+    if (sourceBefore.metadata.isFromCache ||
+        sourceBefore.metadata.hasPendingWrites ||
+        trashBefore.metadata.isFromCache ||
+        trashBefore.metadata.hasPendingWrites ||
+        !DedaIsolatedAdminProofPolicy.placeArchiveActionAllowed(
+          admin: verifiedAdmin,
+          sourceCollection: sourceCollection,
+          id: recordId,
+          action: action,
+          source: sourceBefore.data(),
+          archive: trashBefore.data(),
+        )) {
+      throw StateError('deda-admin-isolated-place-archive-record-denied');
+    }
+    if (!await proof() ||
+        !DedaIsolatedAdminProofPolicy.placeArchiveActionAllowed(
+          admin: verifiedAdmin,
+          sourceCollection: sourceCollection,
+          id: recordId,
+          action: action,
+          source: sourceBefore.data(),
+          archive: trashBefore.data(),
+        ) ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-place-archive-proof-changed');
+    }
+    final admin = verifiedAdmin!;
+    final name = (admin['displayName'] ?? admin['name'] ??
+        current.email ?? 'DEDA Admin').toString();
+    final role = DedaBackend.normalizeAdminRole(
+      admin['role'] ?? admin['jobTitle'],
+    );
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((transaction) async {
+      final currentSource = await transaction.get(sourceRef);
+      final currentTrash = await transaction.get(trashRef);
+      final live = currentSource.data();
+      final archived = currentTrash.data();
+      if (_auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !DedaIsolatedAdminProofPolicy.placeArchiveActionAllowed(
+            admin: admin,
+            sourceCollection: sourceCollection,
+            id: recordId,
+            action: action,
+            source: live,
+            archive: archived,
+          )) {
+        throw StateError('deda-admin-isolated-place-archive-conflict');
+      }
+      if (action == 'trash') {
+        // Backup + delete are inseparable; do not destroy live data if the
+        // archive cannot be created or the Firestore rules revoke GM access.
+        transaction.set(trashRef, <String, dynamic>{
+          ...live!,
+          'originalId': recordId,
+          'trashKind': sourceCollection == 'place_requests'
+              ? 'place_request' : 'published_place',
+          'deletedFromCollection': sourceCollection,
+          'deletedAt': FieldValue.serverTimestamp(),
+          'deletedByUid': uid,
+          'deletedByName': name,
+          'deletedByRole': role,
+        });
+        transaction.delete(sourceRef);
+      } else if (action == 'restore') {
+        final restored = Map<String, dynamic>.from(archived!);
+        for (final key in <String>[
+          'originalId', 'trashKind', 'deletedFromCollection', 'deletedAt',
+          'deletedByUid', 'deletedByName', 'deletedByRole',
+        ]) {
+          restored.remove(key);
+        }
+        if (sourceCollection == 'published_places') {
+          for (final key in <String>[
+            'hiddenByManager', 'hiddenAt', 'hiddenByUid', 'hiddenByName',
+          ]) {
+            restored.remove(key);
+          }
+          restored['published'] = true;
+        }
+        restored['updatedAt'] = FieldValue.serverTimestamp();
+        transaction.set(sourceRef, restored);
+        transaction.delete(trashRef);
+      } else {
+        // Permanent delete is ONLY of the already archived document.
+        // It cannot delete a different live place/request with the same ID.
+        transaction.delete(trashRef);
+      }
+      final evidence = action == 'trash' ? live! : archived!;
+      final actionName = sourceCollection == 'place_requests'
+          ? (action == 'trash' ? 'place_request_deleted'
+              : action == 'restore' ? 'place_request_restored'
+                  : 'place_request_permanently_deleted')
+          : (action == 'trash' ? 'published_place_deleted'
+              : action == 'restore' ? 'published_place_restored_from_trash'
+                  : 'published_place_permanently_deleted');
+      transaction.set(auditRef, <String, dynamic>{
+        'action': actionName,
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': role,
+        'sourceCollection': sourceCollection,
+        'sourceId': recordId,
+        'placeName': evidence['placeName'] ?? evidence['name'] ?? '',
+        'approvalNumber': evidence['approvalNumber'] ?? '',
+        if (action == 'restore') 'restoredByUid': uid,
+        if (action == 'permanent') 'deletedByUid': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// First isolated support write transport. The old Dashboard is not wired
   /// yet, so the isolated feature remains disabled by default.
   Future<void> updateScopedSupportStatus({
