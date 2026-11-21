@@ -520,7 +520,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             '/// This profile can be shown',1)[0]
         cached=watch.index('if (snapshot.metadata.isFromCache) {')
         pending=watch.index('if (snapshot.metadata.hasPendingWrites) {')
-        server=watch.index('if (!await proof()) {')
+        server=watch.index('if (!await proof()) {',pending)
         self.assertLess(cached,pending)
         self.assertLess(pending,server)
         cacheGuard=watch[cached:pending]
