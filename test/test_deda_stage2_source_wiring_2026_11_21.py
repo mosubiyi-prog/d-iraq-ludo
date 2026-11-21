@@ -225,6 +225,14 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('includeMetadataChanges: true',watch)
         self.assertIn('snapshot.metadata.isFromCache',watch)
         self.assertIn('snapshot.metadata.hasPendingWrites',watch)
+        self.assertIn('var deliveredFreshServerSnapshot = false;',watch)
+        self.assertIn('if (deliveredFreshServerSnapshot)',watch)
+        self.assertIn('continue;',watch)
+        self.assertIn('deliveredFreshServerSnapshot = true;',watch)
+        self.assertLess(watch.index('continue;'),
+                        watch.index('deliveredFreshServerSnapshot = true;'))
+        self.assertLess(watch.index('deliveredFreshServerSnapshot = true;'),
+                        watch.index('yield snapshot;'))
         self.assertEqual(watch.count('await proof()'),2)
         self.assertIn('sameScopedFilters(',watch)
         self.assertIn('scopedDocumentMatches(',watch)
