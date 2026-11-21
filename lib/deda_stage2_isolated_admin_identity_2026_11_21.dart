@@ -420,6 +420,8 @@ class DedaIsolatedAdminIdentity {
     ).toList(growable: false);
   }
 
+  Future<void> signOutSecondaryAdmin() => _auth.signOut();
+
   /// Authorised single-record read for future administrative detail pages.
   /// Does not reuse the public FirebaseAuth or FirebaseFirestore client.
   Future<Map<String, dynamic>?> readScopedAdminRecord({
@@ -469,7 +471,7 @@ class DedaIsolatedAdminIdentity {
     return <String, dynamic>{...data, 'id': snapshot.id};
   }
 
-  Future<void> signOutSecondaryAdmin() => _auth.signOut();
+
   /// First isolated support write transport. The old Dashboard is not wired
   /// yet, so the isolated feature remains disabled by default.
   Future<void> updateScopedSupportStatus({
