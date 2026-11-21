@@ -309,9 +309,9 @@ void main() {
       expect(DedaIsolatedAdminProofPolicy.placeApprovalMessage(
         placeName: 'Test', approvalNumber: 'DEDA-2026-0000012',
         approvalDate: '22/11/2026',
-      ), 'تم اعتماد: Test\\n'
-          'رقم الاعتماد: DEDA-2026-0000012\\n'
-          'تاريخ الاعتماد: 22/11/2026\\n'
+      ), 'تم اعتماد: Test\n'
+          'رقم الاعتماد: DEDA-2026-0000012\n'
+          'تاريخ الاعتماد: 22/11/2026\n'
           'DEDA - الدليل الدقيق');
     });
     test('place review status and activation are fail closed', () {
