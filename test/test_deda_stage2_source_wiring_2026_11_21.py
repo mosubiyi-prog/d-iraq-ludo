@@ -411,6 +411,45 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseAuth.instance.signOut()',scoped)
         self.assertNotIn('DedaBackend.signInAdmin(',scoped)
 
+    def test_isolated_users_and_audit_read_only_tabs_require_role_and_server(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        for permission,collection in (
+            ('supportRead','support_requests'),
+            ('viewPlaceRequests','place_requests'),
+            ('viewUsers','users'),
+            ('viewAudit','admin_audit'),
+        ):
+            self.assertIn("if (can('"+permission+"')) {",ui)
+            self.assertIn("collection: '"+collection+"'",ui)
+            self.assertIn("'"+collection+"': '"+permission+"'",backend)
+        self.assertIn('DedaIsolatedAdminProofPolicy.allowsPermission(',ui)
+        self.assertIn('widget.admin.readScopedAdminList(',ui)
+        self.assertIn('maxItems: 25,',ui)
+        self.assertIn('ConnectionState.done',ui)
+        self.assertIn('snapshot.hasError || !snapshot.hasData',ui)
+        self.assertIn('readScopedAdminList(',backend)
+        for forbidden in ('DedaBackend.', 'FirebaseAuth.instance',
+                          'FirebaseFirestore.instance', 'signInAnonymously',
+                          '.collection(', '.set(', '.update(', '.delete('):
+            self.assertNotIn(forbidden,ui,forbidden)
+
+    def test_isolated_admin_list_fail_closed_and_rechecks_before_and_after(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        method=backend.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
+            'Future<void> signOutSecondaryAdmin()',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
+        self.assertIn("throw StateError('deda-admin-isolated-list-not-enabled')",method)
+        self.assertIn('_scopedReadPermissions[collection]',method)
+        self.assertIn('maxItems < 1 || maxItems > 50',method)
+        self.assertEqual(method.count('await proof()'),2)
+        self.assertIn('GetOptions(source: Source.server)',method)
+        self.assertIn('_mainAuth.currentUser?.uid != publicUid',method)
+        self.assertIn('sameScopedFilters(',method)
+        self.assertIn('scopedDocumentMatches(',method)
+        for forbidden in ('FirebaseFirestore.instance.collection(','.set(','.update(','.delete('):
+            self.assertNotIn(forbidden,method,forbidden)
+
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn('return PopScope(',source)
