@@ -319,7 +319,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';", main)
         button=main.split('final gateAllowed = await DedaBackend',1)[1]
         isolated=button.index('if (dedaIsolatedAdminIdentityEnabled) {')
-        legacy=button.index('await DedaBackend.currentUserIsAdmin();')
+        legacy=button.index('final isAdmin =')
         self.assertLess(isolated,legacy)
         scoped=button[isolated:legacy]
         self.assertIn('DedaAdminLoginPage(',scoped)
@@ -355,9 +355,9 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
     def test_settings_legacy_admin_anchor_drift_refuses_partial_write(self):
         main=self.dst/'lib/main.dart'
         original=main.read_text()
-        anchor='await DedaBackend.currentUserIsAdmin();'
+        anchor='                                final isAdmin ='
         self.assertEqual(original.count(anchor),1)
-        main.write_text(original.replace(anchor,'await alteredCurrentAdminStatus();',1))
+        main.write_text(original.replace(anchor,'                                final alteredAdmin =',1))
         before=(self.dst/'pubspec.yaml').read_bytes()
         with self.assertRaisesRegex(ValueError,'STAGE2_STOP_SOURCE_DRIFT'):
             binder.prepare(self.dst)
