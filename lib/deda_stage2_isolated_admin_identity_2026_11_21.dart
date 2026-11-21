@@ -63,8 +63,10 @@ class DedaIsolatedAdminProofPolicy {
     if (accessType == 'general_manager_gateway') {
       final gatewayRole = (entry['allowedRole'] ?? '')
           .toString().trim().toLowerCase();
+      final boundUid = (entry['adminUid'] ?? '').toString().trim();
       return adminRole == 'general_manager' &&
-          gatewayRole == 'general_manager';
+          gatewayRole == 'general_manager' &&
+          (boundUid.isEmpty || boundUid == authUid);
     }
     // Unknown gateway types never inherit generic member rights.
     if (accessType != 'member') return false;
