@@ -264,8 +264,8 @@ void main() {
       expect(allowed(employee, request, 'pending', 'reviewing'), true);
       expect(allowed(employee, request, 'pending', 'rejected',
         note: 'Invalid'), false);
-      expect(allowed({...employee, 'firstLoginCompletedAt': created.toDate().add(
-          const Duration(days: 1))}, request, 'pending', 'reviewing'), false);
+      expect(allowed({...employee, 'firstLoginCompletedAt': Timestamp.fromDate(created.toDate().add(
+          const Duration(days: 1)))}, request, 'pending', 'reviewing'), false);
       expect(allowed({...employee}..remove('firstLoginCompletedAt'),
         request, 'pending', 'reviewing'), false);
       final province = <String, dynamic>{
