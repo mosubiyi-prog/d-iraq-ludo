@@ -713,6 +713,181 @@ class DedaIsolatedAdminIdentity {
     };
   }
 
+  /// Stage2: review/reject/needs-changes ONLY, using secondary admin Auth.
+  /// Approval is deliberately excluded: it requires a separate atomic
+  /// counter + published-place + owner-notification migration.
+  Future<void> updateScopedPlaceReview({
+    required String dedaPhone,
+    required String requestId,
+    required String expectedStatus,
+    required String targetStatus,
+    String? note,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-place-review-not-enabled');
+    }
+    final id = requestId.trim();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !const <String>{'reviewing', 'needs_changes', 'rejected'}
+            .contains(targetStatus)) {
+      throw StateError('deda-admin-isolated-place-review-input-denied');
+    }
+    final cleanNote = (note ?? '').trim();
+    if (cleanNote.length > 1000) {
+      throw StateError('deda-admin-isolated-place-review-reason-too-long');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    final permission = targetStatus == 'rejected'
+        ? 'rejectPlaces' : 'reviewPlaceRequests';
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: permission,
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-place-review-role-denied');
+    }
+    final initialFilters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: verifiedAdmin, collection: 'place_requests',
+    );
+    if (initialFilters == null) {
+      throw StateError('deda-admin-isolated-place-review-scope-denied');
+    }
+    final requestRef = _firestore.collection('place_requests').doc(id);
+    final snapshot = await requestRef.get(
+      const GetOptions(source: Source.server),
+    );
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null ||
+        snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites ||
+        !DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
+          admin: verifiedAdmin,
+          request: data,
+          requestId: id,
+          expectedStatus: expectedStatus,
+          targetStatus: targetStatus,
+          note: cleanNote,
+        )) {
+      throw StateError('deda-admin-isolated-place-review-record-denied');
+    }
+    // Re-verify after reading the request. A role, scope, or public/secondary
+    // session change during the operation always aborts before writing.
+    if (!await proof() ||
+        !DedaIsolatedAdminProofPolicy.sameScopedFilters(
+          initialFilters,
+          DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+            admin: verifiedAdmin, collection: 'place_requests',
+          ),
+        ) ||
+        !DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
+          admin: verifiedAdmin,
+          request: data,
+          requestId: id,
+          expectedStatus: expectedStatus,
+          targetStatus: targetStatus,
+          note: cleanNote,
+        ) ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-place-review-proof-changed');
+    }
+    final admin = verifiedAdmin!;
+    final name = (admin['displayName'] ?? admin['name'] ??
+        current.email ?? 'DEDA Admin').toString();
+    final role = DedaBackend.normalizeAdminRole(
+      admin['role'] ?? admin['jobTitle'],
+    );
+    final auditRef = _firestore.collection('admin_audit').doc();
+    // A transaction checks the CURRENT record status, so a stale screen
+    // cannot overwrite a decision made by a different administrator.
+    // The Firestore rules re-evaluate admin rights at commit time.
+    await _firestore.runTransaction((transaction) async {
+      final fresh = await transaction.get(requestRef);
+      final latest = fresh.data();
+      if (!fresh.exists || latest == null ||
+          !DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
+            admin: admin,
+            request: latest,
+            requestId: id,
+            expectedStatus: expectedStatus,
+            targetStatus: targetStatus,
+            note: cleanNote,
+          )) {
+        throw StateError('deda-admin-isolated-place-review-conflict');
+      }
+      final patch = <String, dynamic>{
+        'status': targetStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': uid,
+        'reviewedByName': name,
+        'reviewedByRole': role,
+        if (targetStatus != 'reviewing') ...<String, dynamic>{
+          'decisionAction': targetStatus,
+          'decisionAt': FieldValue.serverTimestamp(),
+          'decisionByUid': uid,
+          'decisionByName': name,
+          'decisionByRole': role,
+          'decisionNote': cleanNote,
+        },
+      };
+      transaction.update(requestRef, patch);
+      if (targetStatus == 'needs_changes') {
+        final accountKey = (latest['accountKey'] ?? '').toString().trim();
+        if (accountKey.isNotEmpty) {
+          final ownerUid = (latest['ownerUid'] ?? '').toString().trim();
+          final placeName = (latest['placeName'] ?? '').toString().trim();
+          final originalId = (latest['originalPlaceId'] ?? '').toString().trim();
+          final placeId = originalId.isEmpty ? id : originalId;
+          final approvalNumber =
+              (latest['approvalNumber'] ?? '').toString().trim();
+          final governorate = (latest['governorate'] ?? '').toString().trim();
+          final notificationRef =
+              _firestore.collection('owner_place_notifications').doc();
+          transaction.set(notificationRef, <String, dynamic>{
+            'type': 'needs_changes',
+            'accountKey': accountKey,
+            'ownerUid': ownerUid,
+            'placeId': placeId,
+            'placeName': placeName,
+            'approvalNumber': approvalNumber,
+            'governorate': governorate,
+            'titleAr': 'يحتاج طلبك تعديل',
+            'titleEn': 'Your request needs changes',
+            'bodyAr': 'طلب المكان «$placeName» يحتاج إلى تعديل قبل اعتماده. '
+                'ملاحظة الإدارة: $cleanNote',
+            'bodyEn': 'The request for "$placeName" needs changes before '
+                'approval. Administration note: $cleanNote',
+            'sourceType': 'place_requests',
+            'sourceId': id,
+            'createdByUid': uid,
+            'createdByName': name,
+            'createdByRole': role,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+      transaction.set(auditRef, <String, dynamic>{
+        'action': 'place_status_changed',
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': role,
+        'sourceCollection': 'place_requests',
+        'sourceId': id,
+        'newStatus': targetStatus,
+        if (cleanNote.isNotEmpty) 'reason': cleanNote,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// First isolated support write transport. The old Dashboard is not wired
   /// yet, so the isolated feature remains disabled by default.
   Future<void> updateScopedSupportStatus({
