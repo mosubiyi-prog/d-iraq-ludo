@@ -290,7 +290,7 @@ Future<void> main() async {"""
     # stays OFF; privileged secondary sessions never enter that old route.
     if (admin_source.count(isolated_admin_import) != 1 or
         admin_source.count("import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';") != 1 or
-        admin_source.count('if (dedaIsolatedAdminIdentityEnabled) {') != 1 or
+        admin_source.count('if (dedaIsolatedAdminIdentityEnabled) {') != 3 or
         admin_source.count('DedaStage2IsolatedDashboardPage(') != 1 or
         admin_source.count('DedaBackend.signInAdmin(') != 1 or
         not admin_source.index('if (dedaIsolatedAdminIdentityEnabled) {') <
