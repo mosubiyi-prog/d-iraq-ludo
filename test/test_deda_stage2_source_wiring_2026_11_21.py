@@ -595,9 +595,9 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         method=code.split('Future<void> updateScopedPlaceReview(',1)[1].split(
-            '/// First isolated support write transport.',1)[0]
+            '/// Reversible place/request archive',1)[0]
         policy=code.split('static bool placeReviewMutationAllowed(',1)[1].split(
-            '/// Apply the same server role',1)[0]
+            '/// Final approval is separate from review',1)[0]
         for text in (
             "if (!dedaIsolatedAdminIdentityEnabled)",
             "'reviewing', 'needs_changes', 'rejected'",
@@ -640,6 +640,78 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("canReview('needs_changes')",ui)
         self.assertIn("canReview('reviewing')",ui)
         self.assertNotIn("DedaBackend.updateRequestStatus(",ui)
+
+    def test_manager_only_place_archive_recovery_is_atomic(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        policy=src.split('static bool placeArchiveActionAllowed(',1)[1].split(
+            '/// Apply the same server role',1)[0]
+        method=src.split('Future<void> mutateScopedPlaceArchive(',1)[1].split(
+            '/// First isolated support write transport.',1)[0]
+        for guard in (
+            "'place_requests', 'published_places'",
+            "'trash', 'restore', 'permanent'",
+            "permission: 'managePlaceArchives'",
+            "'originalId'", "'deletedFromCollection'", "'trashKind'",
+            "archive['deletedAt'] is! Timestamp",
+            "return source != null && archive == null",
+            "return action == 'permanent' || source == null",
+        ):
+            self.assertIn(guard,policy)
+        for guard in (
+            "if (!dedaIsolatedAdminIdentityEnabled",
+            "permanentConfirmation != recordId",
+            "requiredPermission: 'managePlaceArchives'",
+            "sourceRef.get(",
+            "trashRef.get(",
+            "GetOptions(source: Source.server)",
+            "await proof()",
+            "_mainAuth.currentUser?.uid != publicUid",
+            "await _firestore.runTransaction(",
+            "transaction.get(sourceRef)",
+            "transaction.get(trashRef)",
+            "placeArchiveActionAllowed(",
+            "transaction.set(trashRef,",
+            "transaction.delete(sourceRef)",
+            "transaction.set(sourceRef, restored)",
+            "transaction.delete(trashRef)",
+            "'published'] = true",
+            "'hiddenByManager'",
+            "transaction.set(auditRef,",
+            "'createdAt': FieldValue.serverTimestamp()",
+            "'place_request_restored'",
+            "'published_place_restored_from_trash'",
+            "'published_place_permanently_deleted'",
+        ):
+            self.assertIn(guard,method)
+        self.assertLess(method.index("transaction.get(trashRef)"),
+                        method.index("transaction.set(trashRef,"))
+        self.assertLess(method.index("transaction.get(sourceRef)"),
+                        method.index("transaction.delete(sourceRef)"))
+        self.assertEqual(method.count("transaction.delete(sourceRef)"),1)
+        self.assertNotIn("FirebaseAuth.instance",method)
+        self.assertNotIn("FirebaseFirestore.instance",method)
+        self.assertNotIn("DedaBackend.trashPlaceRequest",method)
+        self.assertNotIn("DedaBackend.restoreDeletedPublishedPlace",method)
+        self.assertIn("if (can('managePlaceArchives'))",ui)
+        self.assertIn("_DedaIsolatedManagerPlacesTab(",ui)
+        self.assertIn("widget.admin.mutateScopedPlaceArchive(",ui)
+        self.assertIn("controller.text.trim() != id",ui)
+        self.assertIn("permanentConfirmation:",ui)
+        self.assertIn("_archivePlaceRequest(",ui)
+
+    def test_archive_collection_permissions_match_existing_production_rules(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        for archive in ('admin_trash_place_requests','admin_trash_places'):
+            self.assertIn("match /"+archive+"/{trashId} {",rules)
+            self.assertIn("'"+archive+"': 'managePlaceArchives'",src)
+        self.assertIn("'published_places': 'managePlaceArchives'",src)
+        self.assertIn("'managePlaceArchives'}.contains(permission)",src)
+        self.assertIn("&& role != 'general_manager') return null",src)
+        self.assertIn("allow read, create, update, delete: if isGeneralManager();",rules)
+        self.assertIn("allow delete: if isGeneralManager();",rules)
+        self.assertIn("request.resource.data.adminUid == request.auth.uid",rules)
 
     def test_isolated_listener_never_exposes_local_write_or_offline_cache(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
