@@ -36,17 +36,83 @@ def prepare(project: Path, verify_only: bool = False):
     pubspec = pubspec_path.read_text()
     import_statement = "import 'deda_stage2_google_access_card_2026_11_21.dart';"
     pilot_insert = """            if (dedaStableGoogleLoginEnabled) ...[
-              const DedaStage2GoogleAccessCard(),
+              DedaStage2GoogleAccessCard(
+                onFreshGoogleIdentity: _onStage2FreshGoogleIdentity,
+              ),
               const SizedBox(height: 12),
             ],
 """
     expected_import = "import 'deda_backend.dart';\n"
+    pending_boot = """  await DedaPreferences.load();
+  if (dedaStableGoogleLoginEnabled) {
+    _dedaStage2PendingGoogleUid =
+        await DedaStableGoogleLogin.pendingGoogleUid();
+    if (_dedaStage2PendingGoogleUid != null) {
+      DedaPreferences.suspendLegacyLiveSessionForGoogle();
+    }
+  }
+  await DedaTaskEngine.initializeForCurrentAccount();"""
+    in_memory_fence = """  /// Clear ONLY the active in-memory old account after verified Google
+  /// switching. Old stored details and Firestore records are never deleted.
+  static void suspendLegacyLiveSessionForGoogle() {
+    isLoggedIn = false;
+    userName = '';
+    phone = '';
+    accountPhone = '';
+    accountType = null;
+    profileAvatarStyle = 0;
+    profileFrameStyle = 0;
+    profileBackgroundStyle = 0;
+  }
+
+"""
+    handoff_method = """  Future<void> _onStage2FreshGoogleIdentity(String uid) async {
+    if (await DedaStableGoogleLogin.pendingGoogleUid() != uid) {
+      throw StateError('deda-stage2-google-handoff-principal-invalid');
+    }
+    // Prevent any old DEDA page/route from seeing this fresh Google UID.
+    DedaPreferences.suspendLegacyLiveSessionForGoogle();
+    _dedaStage2PendingGoogleUid = uid;
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => DedaStage2GooglePendingPage(
+          expectedUid: uid,
+          loginPageBuilder: (_) => const LoginPage(),
+          onSignedOut: () => _dedaStage2PendingGoogleUid = null,
+        ),
+      ),
+      (_) => false,
+    );
+  }
+
+"""
     expected_logout = "            OutlinedButton.icon(\n              onPressed: _logout,"
     if not verify_only:
-        if import_statement in main or 'DedaStage2GoogleAccessCard()' in main:
+        if import_statement in main or 'DedaStage2GoogleAccessCard(' in main:
             raise ValueError('STAGE2_ALREADY_APPLIED_VERIFY_ONLY')
         main = one(main, expected_import,
                    expected_import + import_statement + '\n', 'main-import')
+        main = one(main, 'Future<void> main() async {',
+                   'String? _dedaStage2PendingGoogleUid;\n\nFuture<void> main() async {',
+                   'pending-google-global-state')
+        main = one(main, '  await DedaPreferences.load();\n  await DedaTaskEngine.initializeForCurrentAccount();',
+                   pending_boot, 'pending-before-task-startup')
+        main = one(main, '  static bool _liveVerifiedOriginalOwner(',
+                   in_memory_fence + '  static bool _liveVerifiedOriginalOwner(',
+                   'legacy-live-profile-fence')
+        main = one(main, '  Future<void> _logout() async {',
+                   handoff_method + '  Future<void> _logout() async {',
+                   'google-auth-handoff-route')
+        main = one(main, '          home: DedaPreferences.isLoggedIn\n',
+                   """          home: _dedaStage2PendingGoogleUid != null
+              ? DedaStage2GooglePendingPage(
+                  expectedUid: _dedaStage2PendingGoogleUid!,
+                  loginPageBuilder: (_) => const LoginPage(),
+                  onSignedOut: () => _dedaStage2PendingGoogleUid = null,
+                )
+              : DedaPreferences.isLoggedIn
+""", 'pending-boot-home-gate')
         main = one(main, expected_logout, pilot_insert + expected_logout,
                    'existing-signout-location')
         if 'google_sign_in:' in pubspec:
@@ -72,9 +138,14 @@ def prepare(project: Path, verify_only: bool = False):
         if not existing_test.exists():
             existing_test.write_bytes((REPO/'test'/GOOGLE_TEST).read_bytes())
     if main.count(import_statement) != 1 or (
-        main.count('const DedaStage2GoogleAccessCard()') != 1 or
-        not main.index('const DedaStage2GoogleAccessCard()') <
+        main.count('DedaStage2GoogleAccessCard(') != 1 or
+        not main.index('DedaStage2GoogleAccessCard(') <
             main.index(expected_logout) or
+        main.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();') != 2 or
+        main.count('DedaStage2GooglePendingPage(') != 2 or
+        main.count('String? _dedaStage2PendingGoogleUid;') != 1 or
+        not main.index('await DedaStableGoogleLogin.pendingGoogleUid();') <
+            main.index('await DedaTaskEngine.initializeForCurrentAccount();') or
         main.count(expected_logout) != 1 or
         pubspec.count(GOOGLE_DEPENDENCY) != 1
     ):

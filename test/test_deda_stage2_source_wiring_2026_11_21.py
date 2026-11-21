@@ -36,9 +36,19 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         binder.prepare(self.dst,verify_only=True)
         ui=(self.dst/'lib/main.dart').read_text()
         self.assertIn("import 'deda_stage2_google_access_card_2026_11_21.dart';",ui)
-        self.assertLess(ui.index("const DedaStage2GoogleAccessCard()"),
+        self.assertLess(ui.index("DedaStage2GoogleAccessCard("),
             ui.index('            OutlinedButton.icon(\n              onPressed: _logout,'))
-        self.assertEqual(ui.count('DedaStage2GoogleAccessCard()'),1)
+        self.assertEqual(ui.count('DedaStage2GoogleAccessCard('),1)
+        self.assertEqual(ui.count('DedaStage2GooglePendingPage('),2)
+        self.assertEqual(ui.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
+        self.assertIn('String? _dedaStage2PendingGoogleUid;',ui)
+        self.assertIn('onFreshGoogleIdentity: _onStage2FreshGoogleIdentity',ui)
+        self.assertLess(
+            ui.index('await DedaStableGoogleLogin.pendingGoogleUid();'),
+            ui.index('await DedaTaskEngine.initializeForCurrentAccount();'))
+        self.assertIn('static void suspendLegacyLiveSessionForGoogle()',ui)
+        self.assertIn("userName = '';",ui)
+        self.assertIn("accountPhone = '';",ui)
         self.assertIn('google_sign_in: ^6.2.2',(self.dst/'pubspec.yaml').read_text())
         for name in self.untouched:
             self.assertEqual(hashlib.sha256((REPO/name).read_bytes()).hexdigest(),
@@ -71,6 +81,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         probe=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         login=(REPO/'lib/deda_stable_google_login_2026_11_21.dart').read_text()
         card=(REPO/'lib/deda_stage2_google_access_card_2026_11_21.dart').read_text()
+        self.assertIn('Future<String?> pendingGoogleUid()',login)
+        self.assertIn('await widget.onFreshGoogleIdentity(result.uid!)',card)
+        self.assertIn('DedaStage2GooglePendingPage',card)
+        self.assertIn('await FirebaseAuth.instance.signOut();',card)
+        self.assertNotIn("collection('users').doc",card)
         self.assertIn('explicitLocalDedaReplacementRequired',login)
         self.assertIn("prefs.getBool('deda_logged_in_v1') == true",login)
         self.assertIn("if (isAnonymous || user == null)",card)

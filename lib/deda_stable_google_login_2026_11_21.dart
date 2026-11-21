@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -112,6 +113,26 @@ class DedaStableGoogleLogin {
   bool _busy = false;
 
   static const String verifiedUidKey = 'deda_stable_google_verified_uid_v1';
+
+  /// An authenticated Google UID is not yet an enrolled DEDA phone/profile.
+  /// Restore the restricted pending state only for the same live principal.
+  static Future<String?> pendingGoogleUid() async {
+    if (Firebase.apps.isEmpty) return null;
+    final prefs = await SharedPreferences.getInstance();
+    final expectedUid = prefs.getString(verifiedUidKey)?.trim();
+    if (expectedUid == null || expectedUid.isEmpty) return null;
+    final live = FirebaseAuth.instance.currentUser;
+    if (live == null ||
+        !DedaStableGoogleLoginPolicy.isSameAuthenticatedGooglePrincipal(
+          expectedUid: expectedUid,
+          actualUid: live.uid,
+          actualIsAnonymous: live.isAnonymous,
+          providerIds: live.providerData.map((p) => p.providerId),
+        )) {
+      return null;
+    }
+    return expectedUid;
+  }
 
   Future<DedaGoogleIdentityResult> signIn({
     required bool explicitAnonymousReplacement,
