@@ -327,3 +327,8 @@
 - **دليل النجاح:** آخر commit برمجي `a46473dc8f9a23558e88f493a4c16cdf3479028c`، [GitHub Actions 44960959891](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44960959891)، انتهى `actual-source-safety = SUCCESS` و`assembled-full-app-source = SUCCESS`: 7 اختبارات Python Stage1 + 39 Python Stage2 + 28 Flutter/Dart = **74 اختباراً ناجحاً**، وتحليل المصدر الكامل **0 أخطاء مانعة / 406 info/warning** مطابق للخط الأساس السابق. اختُبر إعداد الربط البرمجي للخارطة والإدارة والمسارات المحمية؛ **هذا ليس اختبار Firebase Emulator أو جلسة إنتاجية أو هاتف حقيقي**.
 - **الحالة الرسمية:** `STAGE2_PARTIAL / SUPPORT_AND_PLACE_LIVE_INBOX_CURSOR_PAGING_SOURCE_QA_PASSED / 74_TESTS / ANALYZER_406_BASELINE / ADMIN_FLAG_OFF / NO_PRODUCTION_TOUCH / FIRESTORE_RUNTIME_NOT_PROVEN / DEVICE_QA_PENDING / GOOGLE_OAUTH_PENDING / REMAINING_ADMIN_PENDING / NO_APK / RELEASE_HOLD`.
 - **التالي في نفس الخطة:** إكمال عمليات فريق الإدارة والصلاحيات الحساسة تدريجياً، بالرجوع للكود الأصلي وقواعد Firestore والصلاحيات ومعاملات التدقيق، دون فتح دور إداري أو إرسال ملف APK ناقص. يلزم اختبار الصلاحيات والاستعلامات والمعاملات عملياً في بيئة Firebase آمنة مأذونة، ثم Google OAuth/SHA والاختبار الحقيقي على الهاتف والتابلت ومراجعة الخارطة وسلامة كل الأقسام قبل أي تفعيل أو توقيع/تسليم رسمي.
+
+
+### نقطة توقف رسمية للاستراحة — 22-11-2026
+
+**مرجع الاستئناف المعتمد:** [`docs/DEDA_DUST_REMOVAL_OFFICIAL_REST_CHECKPOINT_2026-11-22.md`](DEDA_DUST_REMOVAL_OFFICIAL_REST_CHECKPOINT_2026-11-22.md). يضم المنجز والمراجعة والمخاطر والمتبقي وخطوة العودة، مع توثيق GitHub Actions 44960959891 (74 اختباراً ناجحاً) ورايتين مغلقتين وغياب اختبار الأجهزة. **العمل متوقف للاستراحة فقط، بلا تعديل برمجي أو تغيير Firebase/Play؛ أول عودة تكون لنقل عمليات فريق الإدارة الحساسة ضمن المرحلة الثانية على الفرع نفسه.**
