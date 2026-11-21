@@ -512,6 +512,14 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("original.data()!['approvalNumber']",prepare)
         self.assertIn("original.data()!['approvalDate']",prepare)
         self.assertIn("deda-admin-isolated-approval-counter-invalid",prepare)
+        self.assertIn("allowGovernorateChange:",prepare)
+        original=source.split("static bool approvalOriginalMatches(",1)[1].split(
+            "static String formatApprovalDate(",1)[0]
+        self.assertIn("newAccount != oldAccount",original)
+        self.assertIn("final sameAccount =",original)
+        self.assertIn("final sameUid =",original)
+        self.assertIn("!sameAccount && !sameUid",original)
+        self.assertIn("allowGovernorateChange ||",original)
         for part in ("_requireScopedPlaceApproval(",
                      "await _firestore.runTransaction(",
                      "transaction.get(requestRef)",
@@ -532,6 +540,10 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                         finish.index("transaction.update(requestRef"))
         self.assertLess(finish.index("transaction.get(publishedRef)"),
                         finish.index("transaction.set(publishedRef"))
+        self.assertIn("if (update && originalData?['ownerUid'] is String)",finish)
+        self.assertIn("'ownerUid': originalData!['ownerUid']",finish)
+        self.assertIn("'accountKey': originalData!['accountKey']",finish)
+        self.assertIn("allowGovernorateChange: role != 'province_agent'",finish)
         self.assertIn("_auth.currentUser?.uid != actor.uid",finish)
         self.assertIn("_mainAuth.currentUser?.uid != actor.publicUid",finish)
 
