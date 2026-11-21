@@ -833,6 +833,7 @@ class DedaIsolatedAdminIdentity {
     required String dedaPhone,
     required String collection,
     int maxItems = 50,
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async* {
     if (!dedaIsolatedAdminIdentityEnabled) {
       throw StateError('deda-admin-isolated-watch-not-enabled');
@@ -864,6 +865,20 @@ class DedaIsolatedAdminIdentity {
     if (initialFilters == null) {
       throw StateError('deda-admin-isolated-watch-query-denied');
     }
+    // A cursor must come from a freshly confirmed page in the SAME
+    // collection and role scope. Never allow a cached row from another
+    // account, province or request list to become a pagination token.
+    if (startAfter != null &&
+        (startAfter.reference.parent.path != collection ||
+         startAfter.metadata.isFromCache ||
+         startAfter.metadata.hasPendingWrites ||
+         !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfter.id) ||
+         !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+           admin: verifiedAdmin, collection: collection,
+           data: startAfter.data(),
+         ))) {
+      throw StateError('deda-admin-isolated-watch-page-cursor-denied');
+    }
     Query<Map<String, dynamic>> query = _firestore.collection(collection);
     final since = initialFilters['createdAtMin'];
     final province = initialFilters['governorate'];
@@ -878,6 +893,9 @@ class DedaIsolatedAdminIdentity {
       query = query.orderBy('createdAt', descending: true);
     }
 
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
     var deliveredFreshServerSnapshot = false;
     await for (final snapshot in query.limit(maxItems).snapshots(
       includeMetadataChanges: true,
