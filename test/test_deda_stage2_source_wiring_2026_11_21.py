@@ -157,6 +157,26 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('.update(',scoped)
         self.assertNotIn('.delete(',scoped)
 
+    def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn('static bool supportMutationInputAllowed({',code)
+        self.assertIn('Future<void> updateScopedSupportStatus({',code)
+        self.assertIn('Future<void> replyToScopedSupport({',code)
+        method=code.split('Future<void> _writeScopedSupport(',1)[1].split('\n  }\n',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
+        self.assertIn("requiredPermission: 'supportReply'",method)
+        self.assertIn("collection('support_requests').doc(id)",method)
+        self.assertIn('GetOptions(source: Source.server)',method)
+        self.assertIn('scopedReadQueryFilters(',method)
+        self.assertEqual(method.count('await proof()'),2)
+        self.assertIn('_mainAuth.currentUser?.uid != publicUid',method)
+        self.assertIn("collection('admin_audit').doc()",method)
+        self.assertIn('batch.update(request, patch);',method)
+        self.assertIn('await batch.commit();',method)
+        self.assertNotIn('FirebaseFirestore.instance.collection(',method)
+        self.assertNotIn('.delete(',method)
+        self.assertNotIn('signOut()',method)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
