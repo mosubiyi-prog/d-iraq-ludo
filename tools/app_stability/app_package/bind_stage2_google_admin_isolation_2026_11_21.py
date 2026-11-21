@@ -222,7 +222,8 @@ Future<void> main() async {"""
                            'legacy-invitation-auth-must-be-blocked')
         dashboard_pattern = re.compile(
             r'class\s+_DedaAdminDashboardPageState\s+extends\s+'
-            r'State\s*<\s*DedaAdminDashboardPage\s*>\s*\{'
+            r'State\s*<\s*DedaAdminDashboardPage\s*>\s*'
+            r'(?:with\s+DedaSectionState\s*<\s*DedaAdminDashboardPage\s*>\s*)?\{'
         )
         dashboard_matches = list(dashboard_pattern.finditer(admin_source))
         if len(dashboard_matches) != 1:
