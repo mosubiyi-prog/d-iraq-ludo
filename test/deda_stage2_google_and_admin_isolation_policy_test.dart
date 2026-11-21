@@ -287,9 +287,18 @@ void main() {
             request: request, original: published,
           );
       expect(matches(req, original), true);
-      expect(matches({...req, 'ownerUid': 'different'}, original), false);
+      // A stable phone account may still have a historical alternate UID.
+      expect(matches({...req, 'ownerUid': 'different'}, original), true);
       expect(matches({...req, 'accountKey': 'different'}, original), false);
       expect(matches({...req, 'governorate': 'بغداد'}, original), false);
+      expect(DedaIsolatedAdminProofPolicy.approvalOriginalMatches(
+        request: {...req, 'governorate': 'بغداد'},
+        original: original, allowGovernorateChange: true,
+      ), true);
+      expect(matches({...req, 'accountKey': '', 'ownerUid': ''},
+        original), false);
+      expect(matches({...req, 'accountKey': '', 'ownerUid': 'owner-1'},
+        original), true);
       expect(matches(req, {...original, 'published': false}), false);
       expect(matches(req, {...original, 'approvalNumber': ''}), false);
       expect(matches(req, {...original, 'approvalDate': ''}), false);
