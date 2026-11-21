@@ -133,6 +133,24 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('.signOut()',restored)
         self.assertNotIn('FirebaseAuth.instance.signOut()',probe)
 
+    def test_secondary_admin_data_reads_recheck_server_and_never_write(self):
+        probe=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn('(boundUid.isEmpty || boundUid == authUid)',probe)
+        self.assertIn('static bool allowsPermission({',probe)
+        self.assertIn("'support_requests': 'supportRead'",probe)
+        self.assertIn("'admin_audit': 'viewAudit'",probe)
+        scoped=probe.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
+            'Future<void> signOutSecondaryAdmin()',1)[0]
+        self.assertIn('_scopedReadPermissions[collection]',scoped)
+        self.assertIn('maxItems < 1 || maxItems > 50',scoped)
+        self.assertEqual(scoped.count('await proof()'),2)
+        self.assertIn('GetOptions(source: Source.server)',scoped)
+        self.assertIn('_mainAuth.currentUser?.uid != publicUid',scoped)
+        self.assertNotIn('FirebaseFirestore.instance.collection(',scoped)
+        self.assertNotIn('.set(',scoped)
+        self.assertNotIn('.update(',scoped)
+        self.assertNotIn('.delete(',scoped)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
