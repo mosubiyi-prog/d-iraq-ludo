@@ -968,6 +968,168 @@ class DedaIsolatedAdminIdentity {
     );
   }
 
+  /// Phase 2 of the legacy approval workflow: publish and mark approved
+  /// in ONE transaction, with edit-owner notice and immutable audit rows.
+  /// The final decision uses only the secondary administrator principal.
+  Future<void> finalizeScopedPlaceApproval({
+    required String dedaPhone,
+    required String requestId,
+    required String expectedStatus,
+    required String expectedApprovalNumber,
+    required String expectedApprovalDate,
+    required String message,
+  }) async {
+    if (expectedApprovalNumber.trim().isEmpty ||
+        expectedApprovalDate.trim().isEmpty || message.length > 4000) {
+      throw StateError('deda-admin-isolated-final-approval-input-invalid');
+    }
+    final actor = await _requireScopedPlaceApproval(
+      dedaPhone: dedaPhone, requestId: requestId,
+      expectedStatus: expectedStatus,
+    );
+    final requestRef = _firestore.collection('place_requests').doc(requestId);
+    final name = (actor.admin['displayName'] ?? actor.admin['name'] ??
+        _auth.currentUser?.email ?? 'DEDA Admin').toString();
+    final role = DedaBackend.normalizeAdminRole(
+      actor.admin['role'] ?? actor.admin['jobTitle'],
+    );
+    final approvalAudit = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(requestRef);
+      final data = snapshot.data();
+      if (_auth.currentUser?.uid != actor.uid ||
+          _mainAuth.currentUser?.uid != actor.publicUid ||
+          !snapshot.exists || data == null ||
+          !DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+            admin: actor.admin, request: data,
+            requestId: requestId, expectedStatus: expectedStatus,
+          ) ||
+          data['approvalNumber'] != expectedApprovalNumber ||
+          data['approvalDate'] != expectedApprovalDate ||
+          data['approvalPreparedByUid'] != actor.uid ||
+          data['approvalPreparedAt'] is! Timestamp) {
+        throw StateError('deda-admin-isolated-final-approval-stale');
+      }
+      final requestType = (data['requestType'] ?? '').toString().trim();
+      final originalId = (data['originalPlaceId'] ?? '').toString().trim();
+      final update = requestType == 'update';
+      final publishedId = update ? originalId : requestId;
+      final publishedRef =
+          _firestore.collection('published_places').doc(publishedId);
+      if (update) {
+        // Read original BEFORE any transaction writes. Never let a modified
+        // edit request change the original place's approval number or owner.
+        final published = await transaction.get(publishedRef);
+        if (!DedaIsolatedAdminProofPolicy.approvalOriginalMatches(
+          request: data, original: published.data(),
+        ) ||
+            published.data()!['approvalNumber'] != expectedApprovalNumber ||
+            published.data()!['approvalDate'] != expectedApprovalDate) {
+          throw StateError('deda-admin-isolated-final-original-changed');
+        }
+      }
+      final placeName = (data['placeName'] ?? '').toString().trim();
+      final generated = DedaIsolatedAdminProofPolicy.placeApprovalMessage(
+        placeName: placeName,
+        approvalNumber: expectedApprovalNumber,
+        approvalDate: expectedApprovalDate,
+      );
+      // Legacy DEDA ignores custom text for edits, preserving the approved
+      // identity. New-place approval retains the editable reply.
+      final finalMessage = update || message.trim().isEmpty
+          ? generated : message.trim();
+      transaction.update(requestRef, <String, dynamic>{
+        'status': 'approved',
+        'approvalNumber': expectedApprovalNumber,
+        'approvalDate': expectedApprovalDate,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': actor.uid,
+        'reviewedByName': name,
+        'reviewedByRole': role,
+        'decisionAction': 'approved',
+        'decisionAt': FieldValue.serverTimestamp(),
+        'decisionByUid': actor.uid,
+        'decisionByName': name,
+        'decisionByRole': role,
+        'decisionNote': '',
+        'approvalMessage': finalMessage,
+      });
+      transaction.set(publishedRef, <String, dynamic>{
+        ...data,
+        'requestId': publishedId,
+        'sourceRequestId': requestId,
+        'lastSourceRequestId': requestId,
+        'published': true,
+        'status': 'approved',
+        'approvalNumber': expectedApprovalNumber,
+        'approvalDate': expectedApprovalDate,
+        'approvalMessage': finalMessage,
+        'approvedByUid': actor.uid,
+        'approvedByName': name,
+        'approvedByRole': role,
+        'publishedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final accountKey = (data['accountKey'] ?? '').toString().trim();
+      if (update && accountKey.isNotEmpty) {
+        final ownerUid = (data['ownerUid'] ?? '').toString().trim();
+        final governorate = (data['governorate'] ?? '').toString().trim();
+        const titleAr = 'تم اعتماد تعديل المكان';
+        const titleEn = 'Place changes approved';
+        final bodyAr = 'تم اعتماد التعديلات الخاصة بمكان «$placeName» '
+            'وتحديث بياناته في DEDA.';
+        final bodyEn = 'The changes for "$placeName" were approved '
+            'and the place information was updated in DEDA.';
+        transaction.set(_firestore.collection('owner_place_notifications')
+            .doc('edit_approved_$requestId'), <String, dynamic>{
+          'type': 'edit_approved',
+          'accountKey': accountKey,
+          'ownerUid': ownerUid,
+          'placeId': publishedId,
+          'placeName': placeName,
+          'approvalNumber': expectedApprovalNumber,
+          'governorate': governorate,
+          'titleAr': titleAr,
+          'titleEn': titleEn,
+          'bodyAr': bodyAr,
+          'bodyEn': bodyEn,
+          'sourceType': 'place_requests',
+          'sourceId': requestId,
+          'createdByUid': actor.uid,
+          'createdByName': name,
+          'createdByRole': role,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        transaction.set(_firestore.collection('admin_audit').doc(),
+            <String, dynamic>{
+          'action': 'owner_notification_sent',
+          'adminUid': actor.uid,
+          'adminName': name,
+          'adminRole': role,
+          'notificationType': 'edit_approved',
+          'sourceType': 'place_requests',
+          'sourceId': requestId,
+          'placeId': publishedId,
+          'placeName': placeName,
+          'accountKey': accountKey,
+          'title': titleAr,
+          'message': bodyAr,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      transaction.set(approvalAudit, <String, dynamic>{
+        'action': 'place_approved',
+        'adminUid': actor.uid,
+        'adminName': name,
+        'adminRole': role,
+        'sourceCollection': 'place_requests',
+        'sourceId': requestId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// Stage2: review/reject/needs-changes ONLY, using secondary admin Auth.
   /// Approval is deliberately excluded: it requires a separate atomic
   /// counter + published-place + owner-notification migration.
