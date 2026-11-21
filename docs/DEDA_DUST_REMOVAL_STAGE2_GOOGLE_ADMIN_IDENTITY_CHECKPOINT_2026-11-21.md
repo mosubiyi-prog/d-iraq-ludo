@@ -144,3 +144,13 @@
 **الحالة الرسمية عند التوقف:** `PAUSED_BY_OWNER / STAGE1_SOURCE_QA_PASSED / STAGE2_PARTIAL_SOURCE_QA_PASSED / DASHBOARD_NOT_WIRED / GOOGLE_OAUTH_INCOMPLETE / NOT_PHONE_TESTED / NO_APK / NO_PRODUCTION_CHANGE / RELEASE_HOLD`.
 
 **ملاحظة منفصلة لتجنب الالتباس:** أثناء الاستراحة المؤقتة جرى تنظيف مكتبة ChatGPT من APKات قديمة (1–100) وحفظ ملفّات AAB التاريخية، وحماية 100340 و100342 و100436. هذا موضوع مكتبة ملفات وليس تغييراً بمستودع الكود أو نسخة DEDA الجارية، ولا يدخل ضمن تقدم المرحلة الثانية.
+
+
+### الاستئناف المتحفظ — تجهيز كتابة دعم معزولة وتدقيق ذري (21-11-2026)
+- مراجعة تعليمات 01 ونقطة التوقف e5df90f3f26e08b1372ccf78b47d053ae72b4aca، والاستمرار على نفس الفرع فقط.
+- تغييرات المصدر: lib/deda_stage2_isolated_admin_identity_2026_11_21.dart أضيفت وظيفتا تحديث حالة الدعم والرد عبر FirebaseAuth/Firestore الثانوي فقط؛ قيد الحالات والمعرّفات، وخادم يثبت دور الإدارة وصلاحية supportReply، والمطابقة مع نطاق firstLoginCompletedAt، وثبات UID العام والإداري، وتحديث التذكرة وسجل admin_audit في batch ذرّي.
+- الاختبارات المضافة: test/deda_stage2_google_and_admin_isolation_policy_test.dart وtest/test_deda_stage2_source_wiring_2026_11_21.py.
+- ملاحظة رقابية: محاولة أولى في commit 1f7d85d نتج عنها ملف مشوه لأسباب استبدال نصي؛ تم التراجع الفوري عن رأس الفرع إلى e5df90f، ثم إعادة التغيير مضبوطاً في debb46bf مع الاختبارين e24d47e و5eed5377. مقارنة HEAD مع الأصل أثبتت ثلاثة ملفات معدلة فقط وإضافات دون حذف؛ لا تعديل لأي مرجع محمي.
+- GitHub Actions للفحص الجديد: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44944372306 ؛ نتيجته قيد التحقق حين كتابة هذا السجل، وليست معتمدة بعد.
+- الحالة: SOURCE_ADAPTER_PARTIAL / FLAG_OFF / DASHBOARD_NOT_WIRED / CI_PENDING / NO_APK / NO_PHONE / NO_FIREBASE_PRODUCTION / NO_PLAY / RELEASE_HOLD.
+- المتبقي: توصيل بقية قراءات وكتابات واشتراكات Dashboard والصفحات الفرعية بعد ضبط صلاحياتها خادمياً؛ ثم OAuth/SHA وحساب Google الموثوق؛ بعدها اختبار الهاتف والتابلت وجميع الأقسام قبل تسليم APK كامل وموقع.
