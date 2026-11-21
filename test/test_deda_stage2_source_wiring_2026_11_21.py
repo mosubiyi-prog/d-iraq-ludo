@@ -438,8 +438,10 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
     def test_team_enumeration_is_general_manager_only(self):
         src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
-        self.assertIn("if (permission == 'viewTeam' && normalizedRole != 'general_manager')",src)
-        self.assertIn("if (collection == 'admins' && role != 'general_manager') return null;",src)
+        self.assertIn("'viewTeam', 'managePlaceArchives'}.contains(permission)",src)
+        self.assertIn("normalizedRole != 'general_manager'",src)
+        self.assertIn("'admins', 'published_places', 'admin_trash_place_requests'",src)
+        self.assertIn("}.contains(collection) && role != 'general_manager') return null;",src)
         self.assertIn("'admins': 'viewTeam'",src)
         self.assertIn("if (can('viewTeam')) {",ui)
         self.assertIn("collection: 'admins'",ui)
