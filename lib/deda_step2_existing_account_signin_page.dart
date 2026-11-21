@@ -18,6 +18,7 @@ class DedaExistingAccountSignInPage extends StatefulWidget {
     this.verifiedLogin,
     this.embedded = false,
     this.initialPhone,
+    this.sessionOnly = false,
     this.enabled = dedaStep2ExistingAccountEntryEnabled,
   });
 
@@ -27,6 +28,8 @@ class DedaExistingAccountSignInPage extends StatefulWidget {
   final DedaVerifiedExistingAccountLogin? verifiedLogin;
   final bool embedded;
   final String? initialPhone;
+  // The 100454 original-phone flow repairs Firebase Auth, NOT user data.
+  final bool sessionOnly;
   final bool enabled;
 
   @override
@@ -92,7 +95,9 @@ class _DedaExistingAccountSignInPageState
             physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
             padding: widget.embedded ? EdgeInsets.zero : const EdgeInsets.all(20),
             children: [
-              const Text('تسجيل الدخول بحسابك السابق',
+              Text(widget.sessionOnly
+                  ? 'تفعيل جلسة حسابي الأصلي'
+                  : 'تسجيل الدخول بحسابك السابق',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
               const SizedBox(height: 18),
@@ -133,17 +138,22 @@ class _DedaExistingAccountSignInPageState
                     ? null
                     : (value) => setState(
                         () => _explicitRecoveryConsent = value == true),
-                title: const Text('أطلب استرجاع حسابي السابق وبياناته'),
-                subtitle: const Text(
-                  'لا يتم نقل أو تصفير أي بيانات قبل التحقق من مصدرها '
-                  'على الخادم. احتفظ بالهاتف القديم لحين نجاح الفحص.'),
+                title: Text(widget.sessionOnly
+                    ? 'أوافق على التحقق من هوية حسابي الأصلي'
+                    : 'أطلب استرجاع حسابي السابق وبياناته'),
+                subtitle: Text(widget.sessionOnly
+                    ? 'تفعيل جلسة Firebase الأصلية فقط بعد إثبات UID على الخادم. '
+                      'لا ننشئ حساباً جديداً ولا نسترجع أو ننقل أي بيانات.'
+                    : 'لا يتم نقل أو تصفير أي بيانات قبل التحقق من مصدرها '
+                      'على الخادم. احتفظ بالهاتف القديم لحين نجاح الفحص.'),
                 controlAffinity: ListTileControlAffinity.leading,
               ),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: _valid ? _submit : null,
-                child: Text(_busy ? 'جارٍ فحص الاسترجاع...' :
-                    'التحقق واسترجاع حسابي'),
+                child: Text(_busy
+                    ? (widget.sessionOnly ? 'جارٍ التحقق من الجلسة...' : 'جارٍ فحص الاسترجاع...')
+                    : (widget.sessionOnly ? 'تحقق وفعّل الجلسة الأصلية' : 'التحقق واسترجاع حسابي')),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
