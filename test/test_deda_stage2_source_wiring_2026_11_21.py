@@ -310,6 +310,48 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(body.count('await proof()'),2)
         self.assertNotIn('FirebaseFirestore.instance.collection(',body)
 
+    def test_isolated_admin_routes_fail_closed_even_with_legacy_session(self):
+        # The settings card must route to isolated login BEFORE any public
+        # currentUserIsAdmin/old Dashboard lookup when the stage flag is ON.
+        binder.prepare(self.dst)
+        binder.prepare(self.dst,verify_only=True)
+        main=(self.dst/'lib/main.dart').read_text()
+        self.assertIn("import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';", main)
+        button=main.split('final gateAllowed = await DedaBackend',1)[1]
+        isolated=button.index('if (dedaIsolatedAdminIdentityEnabled) {')
+        legacy=button.index('await DedaBackend.currentUserIsAdmin();')
+        self.assertLess(isolated,legacy)
+        scoped=button[isolated:legacy]
+        self.assertIn('DedaAdminLoginPage(',scoped)
+        self.assertIn('dedaPhone: phone,',scoped)
+        self.assertNotIn('DedaAdminDashboardPage(',scoped)
+        self.assertIn('return;',scoped)
+        compiled=(self.dst/'lib/admin_pages.dart').read_text()
+        dashboard=compiled.split(
+            'class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {',
+            1)[1].split('class _AdminRequestsPage extends StatelessWidget {',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled) _load();',dashboard)
+        self.assertIn('if (dedaIsolatedAdminIdentityEnabled) {',dashboard)
+        self.assertIn('Use isolated administrator sign-in.',dashboard)
+        invitation=compiled.split('  Future<void> _activate() async {',1)[1].split(
+            '      await DedaBackend.activateAdminInvitation(',1)[0]
+        self.assertIn('if (dedaIsolatedAdminIdentityEnabled) {',invitation)
+        self.assertIn('return;',invitation)
+        self.assertNotIn('FirebaseAuth.instance.signOut()',scoped)
+        self.assertNotIn('DedaBackend.signInAdmin(',scoped)
+
+    def test_settings_legacy_admin_anchor_drift_refuses_partial_write(self):
+        main=self.dst/'lib/main.dart'
+        original=main.read_text()
+        anchor='await DedaBackend.currentUserIsAdmin();'
+        self.assertEqual(original.count(anchor),1)
+        main.write_text(original.replace(anchor,'await alteredCurrentAdminStatus();',1))
+        before=(self.dst/'pubspec.yaml').read_bytes()
+        with self.assertRaisesRegex(ValueError,'STAGE2_STOP_SOURCE_DRIFT'):
+            binder.prepare(self.dst)
+        self.assertEqual((self.dst/'pubspec.yaml').read_bytes(),before)
+        self.assertFalse((self.dst/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').exists())
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
