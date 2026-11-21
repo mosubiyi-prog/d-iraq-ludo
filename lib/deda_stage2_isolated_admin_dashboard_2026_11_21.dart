@@ -92,6 +92,15 @@ class _DedaStage2IsolatedDashboardPageState
         collection: 'admin_audit',
       ));
     }
+    if (can('viewTeam')) {
+      tabs.add(Tab(text: t('فريق الإدارة', 'Admin team')));
+      pages.add(_DedaIsolatedReadOnlyTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        collection: 'admins',
+      ));
+    }
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -174,15 +183,22 @@ class _DedaIsolatedReadOnlyTabState
     // Show only existing human-readable fields, not raw Firestore records,
     // internal tokens, private maps or free-form audit metadata.
     final user = widget.collection == 'users';
-    final title = user
-        ? (data['name'] ?? '').toString()
-        : (data['action'] ?? '').toString();
-    final subtitle = user
-        ? (data['phone'] ?? '').toString()
-        : (data['adminName'] ?? '').toString();
-    final detail = user
-        ? (data['accountType'] ?? '').toString()
-        : _timestamp(data['createdAt']);
+    final team = widget.collection == 'admins';
+    final title = team
+        ? (data['displayName'] ?? data['name'] ?? '').toString()
+        : user
+            ? (data['name'] ?? '').toString()
+            : (data['action'] ?? '').toString();
+    final subtitle = team
+        ? (data['email'] ?? '').toString()
+        : user
+            ? (data['phone'] ?? '').toString()
+            : (data['adminName'] ?? '').toString();
+    final detail = team
+        ? (data['role'] ?? '').toString()
+        : user
+            ? (data['accountType'] ?? '').toString()
+            : _timestamp(data['createdAt']);
     return Card(
       child: ListTile(
         title: Text(title.isEmpty ? '—' : title),
