@@ -101,6 +101,22 @@ class _DedaStage2IsolatedDashboardPageState
         collection: 'admins',
       ));
     }
+    // Only the server-proved GM may access reversible place archives.
+    if (can('managePlaceArchives')) {
+      for (final config in <(String, String, String)>[
+        ('published_places', 'أماكن منشورة', 'Published places'),
+        ('admin_trash_place_requests', 'محذوفات الطلبات', 'Request trash'),
+        ('admin_trash_places', 'محذوفات الأماكن', 'Place trash'),
+      ]) {
+        tabs.add(Tab(text: t(config.$2, config.$3)));
+        pages.add(_DedaIsolatedManagerPlacesTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          sourceCollection: config.$1,
+        ));
+      }
+    }
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -257,6 +273,243 @@ class _DedaIsolatedReadOnlyTabState
             ),
           ],
         );
+      },
+    );
+  }
+}
+
+/// General-manager-only list for published places and both protected
+/// archives. All records are re-fetched from server after each mutation.
+class _DedaIsolatedManagerPlacesTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final String sourceCollection;
+  final bool isArabic;
+
+  const _DedaIsolatedManagerPlacesTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.sourceCollection,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedManagerPlacesTab> createState() =>
+      _DedaIsolatedManagerPlacesTabState();
+}
+
+class _DedaIsolatedManagerPlacesTabState
+    extends State<_DedaIsolatedManagerPlacesTab> {
+  late Future<List<Map<String, dynamic>>> _rows;
+  bool _mutating = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  bool get _isArchive => widget.sourceCollection != 'published_places';
+
+  String get _targetCollection =>
+      widget.sourceCollection == 'admin_trash_place_requests'
+          ? 'place_requests' : 'published_places';
+
+  @override
+  void initState() {
+    super.initState();
+    _rows = _fetch();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetch() =>
+      widget.admin.readScopedAdminList(
+        dedaPhone: widget.dedaPhone,
+        collection: widget.sourceCollection,
+        maxItems: 50,
+      );
+
+  void _refresh() => setState(() => _rows = _fetch());
+
+  Future<String?> _confirm({
+    required String id,
+    required String action,
+  }) async {
+    final permanent = action == 'permanent';
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, refreshDialog) => AlertDialog(
+          title: Text(permanent
+              ? t('حذف نهائي لا يمكن التراجع عنه', 'Irreversible deletion')
+              : action == 'restore'
+                  ? t('تأكيد استرجاع السجل', 'Confirm restore')
+                  : t('نقل إلى محذوفات المدير العام',
+                      'Move to general-manager trash')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(t('المعرّف', 'Record ID') + ': $id'),
+              if (permanent) ...[
+                const SizedBox(height: 12),
+                Text(t(
+                  'الحذف النهائي يمحو النسخة المؤرشفة فقط. '
+                  'اكتب المعرّف كاملاً للتأكيد.',
+                  'Permanently removes ONLY the archived record. '
+                  'Type its full ID to confirm.',
+                )),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  onChanged: (_) => refreshDialog(() {}),
+                  decoration: InputDecoration(
+                    labelText: t('اكتب المعرّف', 'Type the ID'),
+                  ),
+                ),
+              ] else
+                Text(t(
+                  'لا تُعدّل بيانات المستخدمين أو حساباتهم.',
+                  'User accounts and ownership are unchanged.',
+                )),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: permanent && controller.text.trim() != id
+                  ? null : () => Navigator.pop(dialogContext, id),
+              child: Text(t('تأكيد', 'Confirm')),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _mutate(String id, String action) async {
+    if (_mutating) return;
+    final confirmation = await _confirm(id: id, action: action);
+    if (!mounted || confirmation != id || _mutating) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.mutateScopedPlaceArchive(
+        dedaPhone: widget.dedaPhone,
+        sourceCollection: _targetCollection,
+        recordId: id,
+        action: action,
+        permanentConfirmation: action == 'permanent' ? confirmation : null,
+      );
+      if (mounted) {
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم تسجيل العملية في سجل الإدارة.',
+              'Operation completed and audited.')),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        _refresh(); // Discard any stale privileged result on failure.
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t(
+            'تعذرت العملية. تحقق من صلاحية المدير وحالة السجل.',
+            'Operation denied; verify GM access and current record state.',
+          )),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Widget _record(Map<String, dynamic> data) {
+    final id = (data['id'] ?? '').toString();
+    final placeName = (data['placeName'] ?? data['name'] ?? '').toString();
+    final approvalNumber = (data['approvalNumber'] ?? '').toString();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(placeName.isEmpty ? id : placeName,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(id, style: Theme.of(context).textTheme.bodySmall),
+            if (approvalNumber.isNotEmpty)
+              Text(approvalNumber),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              if (!_isArchive)
+                OutlinedButton.icon(
+                  onPressed: _mutating ? null : () => _mutate(id, 'trash'),
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(t('إلى المحذوفات', 'Move to trash')),
+                ),
+              if (_isArchive) ...[
+                FilledButton.icon(
+                  onPressed: _mutating ? null : () => _mutate(id, 'restore'),
+                  icon: const Icon(Icons.restore),
+                  label: Text(t('استرجاع', 'Restore')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _mutating ? null :
+                      () => _mutate(id, 'permanent'),
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: Text(t('حذف نهائي', 'Delete permanently')),
+                ),
+              ],
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      return const SizedBox.shrink();
+    }
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _rows,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t('لا يمكن قراءة السجلات من الخادم.',
+                  'Could not verify archive access from server.')),
+              TextButton(
+                onPressed: _refresh,
+                child: Text(t('إعادة المحاولة', 'Retry')),
+              ),
+            ],
+          ));
+        }
+        final rows = snapshot.data!;
+        return Column(children: [
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton.icon(
+              onPressed: _mutating ? null : _refresh,
+              icon: const Icon(Icons.refresh),
+              label: Text(t('تحديث من الخادم', 'Refresh from server')),
+            ),
+          ),
+          Expanded(
+            child: rows.isEmpty
+                ? Center(child: Text(t('لا توجد سجلات.', 'No records.')))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) => _record(rows[index]),
+                  ),
+          ),
+        ]);
       },
     );
   }
