@@ -39,9 +39,9 @@ class DedaIsolatedAdminProofPolicy {
   }) {
     if (!freshAdminServerRead || !freshEntryServerRead ||
         authUid.trim().isEmpty || accountKey.isEmpty ||
-        admin == null || entry == null) return false;
+        admin == null || entry == null) { return false; }
     if (admin['active'] != true ||
-        DedaBackend.normalizeAdminStatus(admin) != 'active') return false;
+        DedaBackend.normalizeAdminStatus(admin) != 'active') { return false; }
     if (entry['accountKey'] != accountKey || entry['active'] != true) {
       return false;
     }
@@ -102,11 +102,11 @@ class DedaIsolatedAdminProofPolicy {
   }) {
     if (!_knownPermissions.contains(permission) || admin == null ||
         admin['active'] != true ||
-        DedaBackend.normalizeAdminStatus(admin) != 'active') return false;
+        DedaBackend.normalizeAdminStatus(admin) != 'active') { return false; }
     final role = (admin['role'] ?? admin['jobTitle'] ?? '')
         .toString().trim().toLowerCase();
-    if (role.isEmpty) return false;
-    if (DedaBackend.normalizeAdminRole(role) == 'general_manager') return true;
+    if (role.isEmpty) { return false; }
+    if (DedaBackend.normalizeAdminRole(role) == 'general_manager') { return true; }
     final permissions = admin['permissions'];
     return permissions is Map && permissions[permission] == true;
   }
@@ -177,7 +177,7 @@ class DedaIsolatedAdminIdentity {
         .doc(phone).get(const GetOptions(source: Source.server));
     // A session change during either server read invalidates the proof.
     if (_auth.currentUser?.uid != uid ||
-        _mainAuth.currentUser?.uid != expectedPublicUid) return false;
+        _mainAuth.currentUser?.uid != expectedPublicUid) { return false; }
     final entry = entryProof.data();
     final expires = entry?['expiresAt'];
     final allowed = DedaIsolatedAdminProofPolicy.authorized(
