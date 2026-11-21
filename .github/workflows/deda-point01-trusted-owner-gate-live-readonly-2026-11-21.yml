@@ -1,0 +1,67 @@
+name: DEDA Point01 Owner Auth Eligibility LIVE READONLY (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100451-owner-admin-session-safe-repair-2026-11-20
+    paths:
+      - '.github/workflows/deda-point01-trusted-owner-gate-live-readonly-2026-11-21.yml'
+      - 'tools/deda_point01_trusted_owner_gate_readonly_2026_11_21.py'
+      - 'test/test_deda_point01_trusted_owner_gate_readonly_2026_11_21.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-point01-owner-trusted-gate-readonly-20261121
+  cancel-in-progress: false
+jobs:
+  scoped-original-account-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - name: Point01 hard STOP before any write or user/account mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 18f263f51125217e9a7989b60df2475c995faabc HEAD -- \
+            functions/index.js functions/ firestore.rules storage.rules firebase.json \
+            android/ assets/ lib/ pubspec.yaml pubspec.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('tools/deda_point01_trusted_owner_gate_readonly_2026_11_21.py').read_text()
+          for token in ('create_custom_token(', 'create_user(', 'delete_user(', 'update_user(',
+                        'revoke_refresh_tokens(', 'signInAnonymously(', '.set(', '.update(',
+                        '.delete(', '.add(', '.create(', 'list_users(', 'print(uid',
+                        'print(account', 'print(original_id', 'print(info'):
+              assert token not in s, 'BLOCK_UNSAFE_READONLY_SCRIPT_'+token
+          for token in ('HOLD_NO_HISTORICAL_DURABLE_AUTH_PROVIDER',
+                        'HOLD_INDEPENDENT_OWNERSHIP_ATTESTATION_NOT_VERIFIED',
+                        'DEDA_PRIMARY_FIREBASE_SA', 'deda-25b88'):
+              assert token in s
+          assert Path('docs/DEDA_POINT01_OWNER_UID_SESSION_100454_DEVICE_RESULT_2026-11-21.md').is_file()
+          print('PASS_01_PROTECTED_SOURCE_UNCHANGED_NO_UID_NO_FIREBASE_WRITE')
+          PY
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Unit test all safe HOLD combinations before live reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/deda_point01_trusted_owner_gate_readonly_2026_11_21.py
+          python3 -m unittest discover -s test -p test_deda_point01_trusted_owner_gate_readonly_2026_11_21.py -v
+      - name: Install pre-existing read SDK versions without changing production
+        run: python3 -m pip install --quiet firebase-admin==6.9.0 google-cloud-firestore==2.21.0
+      - name: Exact historically approved owner-only Firebase read (no PII logs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_point01_trusted_owner_gate_readonly_2026_11_21.py | tee "$RUNNER_TEMP/deda-point01-readonly-status.txt"
+          grep -q '^POINT01_READONLY_HISTORICAL_AUTH_READ_AVAILABLE YES$' "$RUNNER_TEMP/deda-point01-readonly-status.txt"
+          grep -q '^POINT01_DECISION HOLD_' "$RUNNER_TEMP/deda-point01-readonly-status.txt"
+          grep -q '^POINT01_NO_FIREBASE_WRITES_NO_NEW_UID_NO_TOKEN_NO_DEPLOY$' "$RUNNER_TEMP/deda-point01-readonly-status.txt"
+          echo 'PASS_01_READ_ONLY_COMPLETED_BUT_REAL_ACCOUNT_REMAINS_HELD'
+      - name: Exit without deployment or APK, never issue user entitlement
+        run: echo 'POINT01_NO_AUTH_UID_WRITE_NO_FIRESTORE_WRITE_NO_PLAY_NO_APK_NO_EVIDENCE_GRANT'
