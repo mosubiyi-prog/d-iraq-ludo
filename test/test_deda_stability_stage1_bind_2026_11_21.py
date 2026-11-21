@@ -67,6 +67,41 @@ class Stage1SessionBinding(unittest.TestCase):
         for name in FILES:
             self.assertEqual(fingerprint((REPO / name).read_bytes()), self.before[name])
 
+    def test_real_assembled_auth_runtime_variants_are_supported(self):
+        # Exact wrapper signatures observed in the protected 100436/Stage2
+        # complete assembly. Never use a broad text/regex permission patch.
+        backend_file = self.root / FILES[0]
+        backend = backend_file.read_text()
+        pairs = [
+            ("final credential = await auth.signInAnonymously();",
+             "final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.anonymous(auth));"),
+            ("await signOutAdmin();",
+             "await DedaAuthRuntime.wait(() => signOutAdmin());"),
+            ("final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(",
+             "final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.email(FirebaseAuth.instance,"),
+        ]
+        for old, new in pairs:
+            self.assertEqual(backend.count(old), 1, old)
+            backend = backend.replace(old, new, 1)
+        backend_file.write_text(backend)
+        pin_file = self.root / FILES[1]
+        pin = pin_file.read_text()
+        old = "      await auth.signOut();"
+        new = "      await DedaAuthRuntime.wait(() => DedaAuthRuntime.signOut(auth));"
+        self.assertEqual(pin.count(old), 1)
+        pin_file.write_text(pin.replace(old, new, 1))
+        binder.bind(self.root)
+        binder.bind(self.root, verify_only=True)
+        after = backend_file.read_text()
+        self.assertIn("deda-stability-explicit-auth-entry-no-new-uid", after)
+        self.assertIn("deda-stability-admin-isolated-auth-required", after)
+        self.assertNotIn("await DedaAuthRuntime.wait(() => signOutAdmin());",
+                         after.split("static Future<User> _ensureOwnerSessionForAccountKey(", 1)[1]
+                         .split("static Future<bool> _isCurrentGeneralManagerSession", 1)[0])
+        self.assertNotIn("DedaAuthRuntime.signOut(auth)",
+                         pin_file.read_text().split("static Future<User> _ensureAnonymousSession(", 1)[1]
+                         .split("static Future<User> _ensurePinSessionForAccount(", 1)[0])
+
     def test_unknown_backend_abort_without_modifying_pin(self):
         path = self.root / FILES[0]
         text = path.read_text().replace(
