@@ -31,6 +31,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: SAFE STOP — 100454 device verified no Firebase session, historical A/B/C no provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/DEDA_POINT01_OWNER_UID_SESSION_100454_DEVICE_RESULT_2026-11-21.md
+          echo "::error title=DEDA 100454 real owner NO-GO::Historical A/B/C have no documented linked Firebase provider and the 100454 phone test failed. Do not repeat PIN-as-Auth-password builds. Require independently authorized trusted server identity repair and per-domain grants first."
+          exit 1
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - uses: subosito/flutter-action@v2
