@@ -127,13 +127,17 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
       await widget.admin.updateScopedSupportStatus(
         dedaPhone: widget.dedaPhone, requestId: id, status: status,
       );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t('تم التحديث.', 'Updated.'))),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('تم التحديث.', 'Updated.'))),
+        );
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t('تعذر التحديث.', 'Could not update.'))),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('تعذر التحديث.', 'Could not update.'))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -173,13 +177,17 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
       await widget.admin.replyToScopedSupport(
         dedaPhone: widget.dedaPhone, requestId: id, message: message,
       );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t('تم إرسال الرد.', 'Reply sent.'))),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('تم إرسال الرد.', 'Reply sent.'))),
+        );
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t('تعذر إرسال الرد.', 'Could not send reply.'))),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('تعذر إرسال الرد.', 'Could not send reply.'))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
