@@ -302,9 +302,9 @@ class DedaIsolatedAdminProofPolicy {
     required String placeName,
     required String approvalNumber,
     required String approvalDate,
-  }) => 'تم اعتماد: ${placeName}\n'
-      'رقم الاعتماد: ${approvalNumber}\n'
-      'تاريخ الاعتماد: ${approvalDate}\n'
+  }) => 'تم اعتماد: $placeName\n'
+      'رقم الاعتماد: $approvalNumber\n'
+      'تاريخ الاعتماد: $approvalDate\n'
       'DEDA - الدليل الدقيق';
 
   /// Apply the same server role's activation/province scope to one record.
