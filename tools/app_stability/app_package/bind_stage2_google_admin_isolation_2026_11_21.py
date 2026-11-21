@@ -14,6 +14,7 @@ MODULES = (
     'deda_stable_google_login_2026_11_21.dart',
     'deda_stage2_google_access_card_2026_11_21.dart',
     'deda_stage2_isolated_admin_identity_2026_11_21.dart',
+    'deda_stage2_isolated_admin_dashboard_2026_11_21.dart',
 )
 GOOGLE_TEST = 'deda_stage2_google_and_admin_isolation_policy_test.dart'
 GOOGLE_DEPENDENCY = '  google_sign_in: ^6.2.2'
@@ -30,11 +31,14 @@ def prepare(project: Path, verify_only: bool = False):
         raise ValueError('STAGE2_PROTECTED_OR_REPOSITORY_WRITE_REFUSED')
     main_path = project/'lib/main.dart'
     pubspec_path = project/'pubspec.yaml'
-    if not main_path.exists() or not pubspec_path.exists():
+    admin_path = project/'lib/admin_pages.dart'
+    if not main_path.exists() or not pubspec_path.exists() or not admin_path.exists():
         raise ValueError('STAGE2_REQUIRES_FULL_ASSEMBLED_DEDA_APP')
     main = main_path.read_text()
     pubspec = pubspec_path.read_text()
+    admin_source = admin_path.read_text()
     import_statement = "import 'deda_stage2_google_access_card_2026_11_21.dart';"
+    isolated_admin_import = "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';"
     pilot_insert = """            if (dedaStableGoogleLoginEnabled) ...[
               DedaStage2GoogleAccessCard(
                 onFreshGoogleIdentity: _onStage2FreshGoogleIdentity,
@@ -95,6 +99,7 @@ Future<void> main() async {"""
 
 """
     expected_logout = "            OutlinedButton.icon(\n              onPressed: _logout,"
+    ISOLATED_ADMIN_LOGIN = "      // Isolated Stage2 gateway. Never pass a secondary principal to the\n      // legacy Dashboard while its privileged calls still use default Auth.\n      if (dedaIsolatedAdminIdentityEnabled) {\n        final isolated = await DedaIsolatedAdminIdentity.open();\n        try {\n          await isolated.verifyAdminLogin(\n            email: _email.text,\n            password: _password.text,\n            dedaPhone: widget.dedaPhone,\n          );\n          final verifiedProfile = await isolated.readVerifiedAdminProfile(\n            dedaPhone: widget.dedaPhone,\n          );\n          if (verifiedProfile['mustChangePassword'] == true) {\n            throw StateError('deda-isolated-admin-password-change-pending');\n          }\n          await _saveIdentity();\n          if (!mounted) {\n            await isolated.signOutSecondaryAdmin();\n            return;\n          }\n          Navigator.pushReplacement(\n            context,\n            MaterialPageRoute(\n              builder: (_) => DedaStage2IsolatedDashboardPage(\n                isArabic: widget.isArabic,\n                dedaPhone: widget.dedaPhone,\n                admin: isolated,\n                profile: verifiedProfile,\n              ),\n            ),\n          );\n          return;\n        } catch (_) {\n          await isolated.signOutSecondaryAdmin();\n          rethrow;\n        }\n      }\n"
     if not verify_only:
         if import_statement in main or 'DedaStage2GoogleAccessCard(' in main:
             raise ValueError('STAGE2_ALREADY_APPLIED_VERIFY_ONLY')
@@ -140,6 +145,22 @@ Future<void> main() async {"""
         pubspec = one(pubspec, '  firebase_auth: ^5.3.3\n',
                       '  firebase_auth: ^5.3.3\n' + GOOGLE_DEPENDENCY + '\n',
                       'pubspec-google-signin')
+        if "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';" in admin_source:
+            raise ValueError('STAGE2_ALREADY_APPLIED_VERIFY_ONLY')
+        admin_source = one(
+            admin_source,
+            "import 'deda_backend.dart';\n",
+            "import 'deda_backend.dart';\n"
+            "import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';\n"
+            "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';\n",
+            'isolated-admin-ui-imports',
+        )
+        admin_source = one(
+            admin_source,
+            '      final allowed = await DedaBackend.signInAdmin(\n',
+            ISOLATED_ADMIN_LOGIN + '      final allowed = await DedaBackend.signInAdmin(\n',
+            'isolated-admin-safe-login-route',
+        )
         # Validate all proposed anchor edits BEFORE writing anything.
         for name in MODULES:
             if (project/'lib'/name).exists():
@@ -152,6 +173,7 @@ Future<void> main() async {"""
             raise ValueError('STAGE2_EXISTING_TEST_MISMATCH_REFUSE_OVERWRITE')
         main_path.write_text(main)
         pubspec_path.write_text(pubspec)
+        admin_path.write_text(admin_source)
         for name in MODULES:
             (project/'lib'/name).write_bytes((REPO/'lib'/name).read_bytes())
         (project/'test').mkdir(exist_ok=True)
@@ -173,6 +195,18 @@ Future<void> main() async {"""
         pubspec.count(GOOGLE_DEPENDENCY) != 1
     ):
         raise ValueError('STAGE2_VERIFY_UI_DEPENDENCY_GATE_FAILED')
+    # Both paths are compiled. The legacy route stays intact while Stage2
+    # stays OFF; privileged secondary sessions never enter that old route.
+    if (admin_source.count(isolated_admin_import) != 1 or
+        admin_source.count("import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';") != 1 or
+        admin_source.count('if (dedaIsolatedAdminIdentityEnabled) {') != 1 or
+        admin_source.count('DedaStage2IsolatedDashboardPage(') != 1 or
+        admin_source.count('await DedaBackend.signInAdmin(') != 1 or
+        not admin_source.index('if (dedaIsolatedAdminIdentityEnabled) {') <
+            admin_source.index('await DedaBackend.signInAdmin(') or
+        'deda-isolated-admin-password-change-pending' not in admin_source or
+        'await isolated.signOutSecondaryAdmin();' not in admin_source):
+        raise ValueError('STAGE2_ADMIN_DASHBOARD_BRIDGE_GATE_FAILED')
     for name in MODULES:
         if (project/'lib'/name).read_bytes() != (REPO/'lib'/name).read_bytes():
             raise ValueError('STAGE2_VERIFY_SOURCE_HASH_MISMATCH:'+name)
@@ -194,6 +228,7 @@ Future<void> main() async {"""
         'playChanged': False,
         'featureDefaultOff': True,
         'adminDashboardAuthorized': False,
+        'isolatedRequestBridgePrepared': True,
         'onDeviceQaComplete': False,
         'verifyOnly': verify_only,
     }

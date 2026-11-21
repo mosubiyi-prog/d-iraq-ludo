@@ -10,6 +10,7 @@ on:
       - 'lib/deda_stable_google_login_2026_11_21.dart'
       - 'lib/deda_stage2_google_access_card_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
+      - 'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
       - 'test/deda_stage2_google_and_admin_isolation_policy_test.dart'
       - 'test/test_deda_stage2_source_wiring_2026_11_21.py'
       - '.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml'
@@ -149,6 +150,7 @@ jobs:
             lib/deda_stable_google_login_2026_11_21.dart \
             lib/deda_stage2_google_access_card_2026_11_21.dart \
             lib/deda_stage2_isolated_admin_identity_2026_11_21.dart \
+            lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path
@@ -166,6 +168,8 @@ jobs:
           assert "_dedaStage2LoadPreferencesWithGoogleFence" in home
           assert "DedaPreferences.suspendLegacyLiveSessionForGoogle()" in home
           assert "DedaIsolatedAdminIdentity" in Path("lib/deda_stage2_isolated_admin_identity_2026_11_21.dart").read_text()
+          assert "DedaStage2IsolatedDashboardPage(" in Path("lib/admin_pages.dart").read_text()
+          assert "if (dedaIsolatedAdminIdentityEnabled)" in Path("lib/admin_pages.dart").read_text()
           print('PASS_FULL_ASSEMBLY_MAP_AND_ADMIN_SOURCE_RETAINED_STAGE2_GOOGLE_ADMIN_ISOLATED')
           print('NOT_PHONE_TESTED_STAGE2_GOOGLE_AND_ADMIN_DASHBOARD_NOT_ACTIVATED_NO_APK_NO_PLAY')
           PY
