@@ -51,26 +51,39 @@ class DedaIsolatedAdminProofPolicy {
           inviteExpiresAt != null && inviteExpiresAt.isAfter(now))) {
       return false;
     }
-    final adminRole = DedaBackend.normalizeAdminRole(
-        admin['role'] ?? admin['jobTitle']);
-    final accessType = (entry['accessType'] ?? '').toString().toLowerCase();
+    // Legacy DedaBackend.normalizeAdminRole deliberately maps an empty
+    // string to general_manager for old records. An isolated security check
+    // MUST NOT inherit that permissive compatibility behavior.
+    final rawRole = (admin['role'] ?? admin['jobTitle'] ?? '')
+        .toString().trim().toLowerCase();
+    if (rawRole.isEmpty) return false;
+    final adminRole = DedaBackend.normalizeAdminRole(rawRole);
+    final accessType = (entry['accessType'] ?? '')
+        .toString().trim().toLowerCase();
     if (accessType == 'general_manager_gateway') {
+      final gatewayRole = (entry['allowedRole'] ?? '')
+          .toString().trim().toLowerCase();
       return adminRole == 'general_manager' &&
-          (entry['allowedRole'] ?? 'general_manager').toString() ==
-              'general_manager';
+          gatewayRole == 'general_manager';
     }
-    // Unknown gateway types must not inherit the generic member path.
+    // Unknown gateway types never inherit generic member rights.
     if (accessType != 'member') return false;
-    final allowedRole = DedaBackend.normalizeAdminRole(
-        entry['allowedRole'] ?? entry['role']);
+    final rawAllowedRole = (entry['allowedRole'] ?? entry['role'] ?? '')
+        .toString().trim().toLowerCase();
+    if (rawAllowedRole.isEmpty) return false;
+    final allowedRole = DedaBackend.normalizeAdminRole(rawAllowedRole);
     if (allowedRole != adminRole) return false;
     final savedUid = (entry['adminUid'] ?? '').toString().trim();
+    if (savedUid.isNotEmpty) {
+      // Once the server binds an admin UID, email matching must not
+      // silently reassign it to another Firebase account.
+      return savedUid == authUid;
+    }
     final allowedEmail =
         (entry['allowedAdminEmail'] ?? entry['email'] ?? '')
             .toString().trim().toLowerCase();
     final liveEmail = (authEmail ?? '').trim().toLowerCase();
-    return (savedUid.isNotEmpty && savedUid == authUid) ||
-        (allowedEmail.isNotEmpty && allowedEmail == liveEmail);
+    return allowedEmail.isNotEmpty && allowedEmail == liveEmail;
   }
 }
 

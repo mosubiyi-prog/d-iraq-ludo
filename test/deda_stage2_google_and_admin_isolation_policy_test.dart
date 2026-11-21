@@ -123,6 +123,14 @@ void main() {
       expect(verify(entry:{...gateway,'accessType':'unknown'}), false);
       expect(verify(admin:{...record,'role':'employee'}), false);
     });
+    test('blank inherited role or gateway role never grants general manager', () {
+      expect(verify(admin:{'active':true,'status':'active','role':''}), false);
+      expect(verify(admin:{'active':true,'status':'active'}), false);
+      expect(verify(entry:{...gateway,'allowedRole':''}), false);
+      final missingRole = {...gateway}..remove('allowedRole');
+      expect(verify(entry:missingRole), false);
+      expect(verify(entry:{...gateway,'allowedRole':'employee'}), false);
+    });
     test('Google email by itself never grants admin', () {
       expect(verify(uid:'new-google-uid',admin:{
         'active': false,'status':'disabled','role':'general_manager',
@@ -143,8 +151,14 @@ void main() {
         'adminUid':'staff-uid','allowedAdminEmail':'staff@deda.test',
       };
       expect(verify(uid:'staff-uid',admin:staff,entry:staffEntry), true);
+      // A previously UID-bound role MUST NOT transfer on email alone.
       expect(verify(uid:'staff-v2',email:'staff@deda.test',
-        admin:staff,entry:staffEntry), true);
+        admin:staff,entry:staffEntry), false);
+      // Email is permitted only while the server entry is genuinely
+      // unbound; it does not inherit rights from a different saved UID.
+      final unboundEntry = {...staffEntry, 'adminUid':''};
+      expect(verify(uid:'staff-v2',email:'staff@deda.test',
+        admin:staff,entry:unboundEntry), true);
       expect(verify(uid:'other',email:'other@deda.test',
         admin:staff,entry:staffEntry), false);
       expect(verify(uid:'staff-uid',admin:{...staff,'role':'province_agent'},

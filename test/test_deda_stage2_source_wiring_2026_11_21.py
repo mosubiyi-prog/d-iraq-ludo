@@ -113,6 +113,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         probe=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('Future<String?> verifyRestoredAdminSession(',probe)
         self.assertIn('Future<bool> _serverAuthorizedAdmin(',probe)
+        self.assertIn('if (rawRole.isEmpty) return false;',probe)
+        self.assertIn('if (rawAllowedRole.isEmpty) return false;',probe)
+        self.assertIn('gatewayRole == \'general_manager\'',probe)
+        self.assertIn('return savedUid == authUid;',probe)
+        self.assertNotIn("(entry['allowedRole'] ?? 'general_manager')",probe)
         helper=probe.split('Future<bool> _serverAuthorizedAdmin(',1)[1].split(
             'Future<String?> verifyRestoredAdminSession(',1)[0]
         restored=probe.split('Future<String?> verifyRestoredAdminSession(',1)[1].split(
