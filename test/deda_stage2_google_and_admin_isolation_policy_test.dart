@@ -208,6 +208,55 @@ void main() {
       expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
       expect(scope({'active':false,'role':'general_manager'},'users'),isNull);
     });
+    test('GM hide and unhide preserve verified manager provenance', () {
+      final date = Timestamp.fromDate(DateTime.utc(2026, 11, 22));
+      final publicPlace = <String, dynamic>{
+        'published': true,
+        'placeName': 'Test restaurant',
+        'approvalNumber': 'DEDA-2026-0012345',
+        'ownerUid': 'original-owner',
+      };
+      final managerHidden = <String, dynamic>{
+        ...publicPlace,
+        'published': false,
+        'hiddenByManager': true,
+        'hiddenAt': date,
+        'hiddenByUid': 'verified-admin',
+      };
+      bool allowed(Map<String, dynamic>? admin, String id,
+          Map<String, dynamic>? place, bool hide) =>
+        DedaIsolatedAdminProofPolicy.managerVisibilityChangeAllowed(
+          admin: admin, placeId: id, place: place, hide: hide,
+        );
+      expect(allowed(record, 'place_001', publicPlace, true), true);
+      expect(allowed(record, 'place_001', publicPlace, false), false);
+      expect(allowed(record, 'place_001', managerHidden, false), true);
+      expect(allowed(record, 'place_001', managerHidden, true), false);
+      expect(allowed(record, 'place_001',
+        {...managerHidden, 'hiddenByManager': false}, false), false);
+      expect(allowed(record, 'place_001',
+        {...managerHidden, 'hiddenAt': null}, false), false);
+      expect(allowed(record, 'place_001',
+        {...managerHidden, 'hiddenByUid': ''}, false), false);
+      expect(allowed(record, 'place_001',
+        {...publicPlace, 'published': false}, false), false);
+      expect(allowed(record, '../admins', publicPlace, true), false);
+      expect(allowed(record, 'place_001', null, true), false);
+      expect(allowed({...record, 'role': ''},
+        'place_001', publicPlace, true), false);
+      expect(allowed({...record, 'active': false},
+        'place_001', publicPlace, true), false);
+      final employee = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'employee',
+        'permissions': {'managePlaceArchives': true},
+      };
+      expect(allowed(employee, 'place_001', publicPlace, true), false);
+      expect(allowed({...employee, 'role': 'deputy_manager'},
+        'place_001', publicPlace, true), false);
+      expect(allowed({...employee, 'role': 'province_agent'},
+        'place_001', managerHidden, false), false);
+    });
+
     test('only active verified GM may mutate reversible place archives', () {
       final archive = <String, dynamic>{
         'originalId': 'place_25',
