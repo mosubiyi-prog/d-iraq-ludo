@@ -208,6 +208,103 @@ void main() {
       expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
       expect(scope({'active':false,'role':'general_manager'},'users'),isNull);
     });
+    test('isolated place approval preserves published identity and scope', () {
+      final when = Timestamp.fromDate(DateTime.utc(2026, 11, 15));
+      final data = <String, dynamic>{
+        'status': 'pending',
+        'placeName': 'Place test',
+        'phone': '07701234567',
+        'governorate': 'كركوك',
+        'address': 'Test address',
+        'openingHours': '08:00-20:00',
+        'description': 'A sample place',
+        'latitude': 35.5,
+        'longitude': 44.4,
+        'category': 'restaurant',
+        'ownerUid': 'original-owner',
+        'accountKey': '9647701234567',
+        'createdAt': when,
+      };
+      bool allowed(Map<String, dynamic>? admin,
+          Map<String, dynamic>? request, String status) =>
+          DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+            admin: admin, request: request,
+            requestId: 'place_request_1', expectedStatus: status,
+          );
+      expect(allowed(record, data, 'pending'), true);
+      expect(allowed(record, {...data, 'status': 'reviewing'},
+        'reviewing'), true);
+      expect(allowed(record, {...data, 'status': 'approved'},
+        'approved'), false);
+      expect(allowed(record, {...data, 'status': 'rejected'},
+        'rejected'), false);
+      expect(allowed(record, {...data, 'status': 'needs_changes'},
+        'needs_changes'), false);
+      expect(allowed(record, {...data, 'phone': ''}, 'pending'), false);
+      expect(allowed(record, {...data, 'description': ''}, 'pending'), false);
+      expect(allowed(record, {...data, 'latitude': null}, 'pending'), false);
+      expect(allowed(record, {...data, 'category': 'other',
+        'otherCategoryText': ''}, 'pending'), false);
+      expect(allowed(record, {...data, 'requestType': 'update'},
+        'pending'), false);
+      final employee = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'employee',
+        'firstLoginCompletedAt': Timestamp.fromDate(
+          DateTime.utc(2026, 11, 10)),
+        'permissions': <String, bool>{
+          'approvePlaces': true, 'viewPlaceRequests': true,
+        },
+      };
+      expect(allowed(employee, data, 'pending'), true);
+      expect(allowed({...employee, 'permissions': <String, bool>{
+        'approvePlaces': true}}, data, 'pending'), false);
+      expect(allowed({...employee, 'firstLoginCompletedAt':
+        Timestamp.fromDate(DateTime.utc(2026, 11, 16))},
+        data, 'pending'), false);
+      final province = <String, dynamic>{
+        ...employee, 'role': 'province_agent', 'governorate': 'كركوك',
+      };
+      expect(allowed(province, data, 'pending'), true);
+      expect(allowed({...province, 'governorate': 'بغداد'},
+        data, 'pending'), false);
+      expect(allowed({...record, 'active': false}, data, 'pending'), false);
+      expect(allowed({...record, 'role': ''}, data, 'pending'), false);
+    });
+
+    test('original approval identity and owner cannot be replaced on edits', () {
+      final req = <String, dynamic>{
+        'requestType': 'update', 'ownerUid': 'owner-1',
+        'accountKey': 'account-1', 'governorate': 'كركوك',
+      };
+      final original = <String, dynamic>{
+        'published': true, 'approvalNumber': 'DEDA-2026-0000012',
+        'approvalDate': '22/11/2026', 'ownerUid': 'owner-1',
+        'accountKey': 'account-1', 'governorate': 'كركوك',
+      };
+      bool matches(Map<String, dynamic> request,
+          Map<String, dynamic>? published) =>
+          DedaIsolatedAdminProofPolicy.approvalOriginalMatches(
+            request: request, original: published,
+          );
+      expect(matches(req, original), true);
+      expect(matches({...req, 'ownerUid': 'different'}, original), false);
+      expect(matches({...req, 'accountKey': 'different'}, original), false);
+      expect(matches({...req, 'governorate': 'بغداد'}, original), false);
+      expect(matches(req, {...original, 'published': false}), false);
+      expect(matches(req, {...original, 'approvalNumber': ''}), false);
+      expect(matches(req, {...original, 'approvalDate': ''}), false);
+      expect(matches({...req, 'requestType': 'new'}, original), false);
+      expect(matches(req, null), false);
+      expect(DedaIsolatedAdminProofPolicy.formatApprovalDate(
+        DateTime.utc(2026, 11, 22)), '22/11/2026');
+      expect(DedaIsolatedAdminProofPolicy.placeApprovalMessage(
+        placeName: 'Test', approvalNumber: 'DEDA-2026-0000012',
+        approvalDate: '22/11/2026',
+      ), 'تم اعتماد: Test\\n'
+          'رقم الاعتماد: DEDA-2026-0000012\\n'
+          'تاريخ الاعتماد: 22/11/2026\\n'
+          'DEDA - الدليل الدقيق');
+    });
     test('place review status and activation are fail closed', () {
       final created = Timestamp.fromDate(DateTime.utc(2026, 11, 15));
       final activated = Timestamp.fromDate(DateTime.utc(2026, 11, 10));
