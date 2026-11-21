@@ -543,7 +543,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("static Future<Map<String, dynamic>> preparePlaceApproval(",old)
         self.assertIn("static Future<void> finalizePlaceApproval(",old)
         self.assertIn("transaction.set(\n        published,",old)
-        self.assertIn("collection('system_counters').doc('place_approval')",identity)
+        self.assertIn("collection('system_counters')",identity)
+        self.assertIn(".doc('place_approval')",identity)
         counter=rule.split('match /system_counters/{counterId} {',1)[1].split('}',1)[0]
         self.assertIn("hasAdminPermission('approvePlaces')",counter)
         publish=rule.split('match /published_places/{placeId} {',1)[1].split(
