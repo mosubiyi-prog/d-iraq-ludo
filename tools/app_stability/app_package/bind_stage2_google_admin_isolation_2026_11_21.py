@@ -105,7 +105,7 @@ def prepare(project: Path, verify_only: bool = False):
         prefix, after_start = main.split(start_marker, 1)
         startup, suffix = after_start.split(end_marker, 1)
         startup = one(startup, '  await DedaPreferences.load();\n',
-                      pending_boot.replace('  await DedaPreferences.load();\n', '', 1).replace(
+                      pending_boot.replace(
                           '  await DedaTaskEngine.initializeForCurrentAccount();', ''),
                       'pending-before-task-startup')
         main = prefix + start_marker + startup + end_marker + suffix
