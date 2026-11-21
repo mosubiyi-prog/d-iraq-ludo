@@ -325,6 +325,93 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     }
   }
 
+  Future<String?> _askPlaceReason(String targetStatus) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(targetStatus == 'rejected'
+            ? t('سبب رفض الطلب', 'Reason for rejection')
+            : t('التعديل المطلوب', 'Required changes')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          maxLength: 1000,
+          decoration: InputDecoration(
+            labelText: t('اكتب السبب', 'Write a reason'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              final reason = controller.text.trim();
+              if (reason.isNotEmpty) Navigator.pop(dialogContext, reason);
+            },
+            child: Text(t('تأكيد', 'Confirm')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _placeReview(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    String targetStatus,
+  ) async {
+    if (widget.collection != 'place_requests' || _sending) return;
+    final data = doc.data();
+    final expectedStatus = (data['status'] ?? '').toString();
+    // This local check only controls buttons. The isolated transport
+    // re-checks server role, gateway, activation and latest record.
+    final noteRequired = targetStatus != 'reviewing';
+    if (!DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
+      admin: widget.profile,
+      request: data,
+      requestId: doc.id,
+      expectedStatus: expectedStatus,
+      targetStatus: targetStatus,
+      note: noteRequired ? 'required' : null,
+    )) return;
+    final note = noteRequired ? await _askPlaceReason(targetStatus) : null;
+    if (noteRequired && (note == null || note.isEmpty)) return;
+    if (!mounted || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await widget.admin.updateScopedPlaceReview(
+        dedaPhone: widget.dedaPhone,
+        requestId: doc.id,
+        expectedStatus: expectedStatus,
+        targetStatus: targetStatus,
+        note: note,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('تم تسجيل قرار المراجعة.',
+              'Review decision recorded.'))),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t(
+            'تعذر حفظ القرار؛ تأكد من الصلاحيات والطلب الحالي.',
+            'Could not save the decision; verify access and current status.',
+          ))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   Future<void> _reply(String id) async {
     if (!_canReply || _sending) return;
     final reply = TextEditingController();
@@ -380,6 +467,15 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     final support = widget.collection == 'support_requests';
     final title = (data[support ? 'name' : 'placeName'] ?? doc.id).toString();
     final status = (data['status'] ?? '').toString();
+    bool canReview(String targetStatus) =>
+        !support && DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
+          admin: widget.profile,
+          request: data,
+          requestId: doc.id,
+          expectedStatus: status,
+          targetStatus: targetStatus,
+          note: targetStatus == 'reviewing' ? null : 'required',
+        );
     return Card(
       child: ExpansionTile(
         title: Text(title),
@@ -390,6 +486,42 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
             child: Text((data[support ? 'message' : 'description'] ?? '')
                 .toString()),
           ),
+          if (!support)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                '${t('المحافظة', 'Governorate')}: '
+                '${(data['governorate'] ?? '').toString()}'
+                ' • ${(data['address'] ?? '').toString()}',
+              ),
+            ),
+          if (!support &&
+              (canReview('reviewing') ||
+               canReview('needs_changes') ||
+               canReview('rejected')))
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                if (canReview('reviewing'))
+                  OutlinedButton(
+                    onPressed: _sending ? null :
+                        () => _placeReview(doc, 'reviewing'),
+                    child: Text(t('قيد المراجعة', 'Reviewing')),
+                  ),
+                if (canReview('needs_changes'))
+                  OutlinedButton(
+                    onPressed: _sending ? null :
+                        () => _placeReview(doc, 'needs_changes'),
+                    child: Text(t('يحتاج تعديل', 'Needs changes')),
+                  ),
+                if (canReview('rejected'))
+                  OutlinedButton(
+                    onPressed: _sending ? null :
+                        () => _placeReview(doc, 'rejected'),
+                    child: Text(t('رفض الطلب', 'Reject request')),
+                  ),
+              ]),
+            ),
           if (support && _canReply)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
