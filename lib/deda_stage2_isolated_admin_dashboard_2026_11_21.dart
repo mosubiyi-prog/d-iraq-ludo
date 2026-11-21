@@ -615,7 +615,10 @@ class _DedaIsolatedRequestTab extends StatefulWidget {
 }
 
 class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+  QueryDocumentSnapshot<Map<String, dynamic>>? _pageStart;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
+  int _pageEpoch = 0;
   bool _sending = false;
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
@@ -623,11 +626,38 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
   @override
   void initState() {
     super.initState();
-    _stream = widget.admin.watchScopedAdminRequests(
-      dedaPhone: widget.dedaPhone,
-      collection: widget.collection,
-      maxItems: 50,
-    );
+    _stream = _watchPage();
+  }
+
+  // Keep live server-confirmed updates for every page. The 51st result is
+  // ONLY a pagination sentinel; it is never displayed as a request card.
+  Stream<QuerySnapshot<Map<String, dynamic>>> _watchPage() =>
+      widget.admin.watchScopedAdminRequests(
+        dedaPhone: widget.dedaPhone,
+        collection: widget.collection,
+        maxItems: 51,
+        startAfter: _pageStart,
+      );
+
+  void _nextPage(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (_sending || snapshot.docs.length <= 50) return;
+    final cursor = snapshot.docs[49];
+    if (cursor.metadata.isFromCache || cursor.metadata.hasPendingWrites) return;
+    setState(() {
+      _back.add(_pageStart);
+      _pageStart = cursor;
+      _pageEpoch++;
+      _stream = _watchPage();
+    });
+  }
+
+  void _previousPage() {
+    if (_sending || _back.isEmpty) return;
+    setState(() {
+      _pageStart = _back.removeLast();
+      _pageEpoch++;
+      _stream = _watchPage();
+    });
   }
 
   bool get _canReply => widget.collection == 'support_requests' &&
@@ -1086,6 +1116,9 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
       return const SizedBox.shrink();
     }
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      // Prevent the previous page's privileged rows from remaining visible
+      // while the new page is still waiting for fresh server authorization.
+      key: ValueKey(_pageEpoch),
       stream: _stream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -1097,15 +1130,41 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final records = snapshot.data!.docs;
-        if (records.isEmpty) {
-          return Center(child: Text(t('لا توجد طلبات.', 'No requests.')));
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: records.length,
-          itemBuilder: (context, index) => _request(records[index]),
-        );
+        final serverPage = snapshot.data!;
+        final records = serverPage.docs.take(50).toList(growable: false);
+        final hasNext = serverPage.docs.length > 50;
+        return Column(children: [
+          Expanded(
+            child: records.isEmpty
+                ? Center(child: Text(t('لا توجد طلبات.', 'No requests.')))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: records.length,
+                    itemBuilder: (context, index) => _request(records[index]),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: 6,
+            ),
+            child: Row(children: [
+              Text("${t('صفحة', 'Page')} ${_back.length + 1}"),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: !_sending && _back.isNotEmpty
+                    ? _previousPage : null,
+                icon: const Icon(Icons.chevron_left),
+                label: Text(t('السابق', 'Previous')),
+              ),
+              TextButton.icon(
+                onPressed: !_sending && hasNext
+                    ? () => _nextPage(serverPage) : null,
+                icon: const Icon(Icons.chevron_right),
+                label: Text(t('التالي', 'Next')),
+              ),
+            ]),
+          ),
+        ]);
       },
     );
   }
