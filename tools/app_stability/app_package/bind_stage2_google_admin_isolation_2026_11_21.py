@@ -155,23 +155,31 @@ Future<void> main() async {"""
             "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';\n",
             'isolated-admin-ui-imports',
         )
-        if '      final allowed = await DedaBackend.signInAdmin(\n' not in admin_source:
-            lines = admin_source.splitlines()
-            anchors = [i for i, line in enumerate(lines) if
-                       'signInAdmin(' in line or 'class DedaAdminLoginPage' in line or
-                       'Future<void> _login(' in line or 'signInWithEmailAndPassword(' in line]
-            context = '\n'.join(
-                ('LINE_' + str(i + 1) + ': ' +
-                 '\\n'.join(lines[max(0, i - 8):min(len(lines), i + 12)]))
-                for i in anchors[:5]
-            )
-            raise ValueError('STAGE2_ASSEMBLED_ADMIN_LOGIN_DRIFT_REVIEW:' + context[:4200])
-        admin_source = one(
-            admin_source,
-            '      final allowed = await DedaBackend.signInAdmin(\n',
-            ISOLATED_ADMIN_LOGIN + '      final allowed = await DedaBackend.signInAdmin(\n',
+        # Stage1 added DedaAuthRuntime.run around the ORIGINAL admin login
+        # in the assembled app; the unassembled review copy has a direct call.
+        # Insert the isolated gate at the common outer try block, NEVER
+        # inside that public session transition coordinator.
+        login_start = '  Future<void> _login() async {'
+        login_end = '  Future<bool> _forcePasswordChange() async {'
+        if admin_source.count(login_start) != 1 or admin_source.count(login_end) != 1:
+            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:admin-login-boundaries')
+        before_login, remainder = admin_source.split(login_start, 1)
+        login_body, after_login = remainder.split(login_end, 1)
+        login_prelude = ("    setState(() {\n"
+                         "      _loading = true;\n"
+                         "      _error = null;\n"
+                         "    });\n"
+                         "    try {\n")
+        if (login_body.count(login_prelude) != 1 or
+                login_body.count('DedaBackend.signInAdmin(') != 1 or
+                login_body.count('DedaAdminDashboardPage(') != 1):
+            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:admin-login-core')
+        login_body = one(
+            login_body, login_prelude,
+            login_prelude + ISOLATED_ADMIN_LOGIN,
             'isolated-admin-safe-login-route',
         )
+        admin_source = before_login + login_start + login_body + login_end + after_login
         # Validate all proposed anchor edits BEFORE writing anything.
         for name in MODULES:
             if (project/'lib'/name).exists():
@@ -212,9 +220,9 @@ Future<void> main() async {"""
         admin_source.count("import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';") != 1 or
         admin_source.count('if (dedaIsolatedAdminIdentityEnabled) {') != 1 or
         admin_source.count('DedaStage2IsolatedDashboardPage(') != 1 or
-        admin_source.count('await DedaBackend.signInAdmin(') != 1 or
+        admin_source.count('DedaBackend.signInAdmin(') != 1 or
         not admin_source.index('if (dedaIsolatedAdminIdentityEnabled) {') <
-            admin_source.index('await DedaBackend.signInAdmin(') or
+            admin_source.index('DedaBackend.signInAdmin(') or
         'deda-isolated-admin-password-change-pending' not in admin_source or
         'await isolated.signOutSecondaryAdmin();' not in admin_source):
         raise ValueError('STAGE2_ADMIN_DASHBOARD_BRIDGE_GATE_FAILED')
