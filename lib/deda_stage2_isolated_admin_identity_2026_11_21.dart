@@ -564,13 +564,22 @@ class DedaIsolatedAdminIdentity {
       query = query.orderBy('createdAt', descending: true);
     }
 
+    var deliveredFreshServerSnapshot = false;
     await for (final snapshot in query.limit(maxItems).snapshots(
       includeMetadataChanges: true,
     )) {
-      if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites ||
-          _auth.currentUser?.uid != uid ||
+      if (_auth.currentUser?.uid != uid ||
           _mainAuth.currentUser?.uid != publicUid) {
-        throw StateError('deda-admin-isolated-watch-session-or-cache-denied');
+        throw StateError('deda-admin-isolated-watch-session-changed');
+      }
+      if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites) {
+        // Never deliver cached admin data, but a normal online listener may
+        // emit an initial cache snapshot before the first server response.
+        // If connectivity drops AFTER server data was shown, fail closed.
+        if (deliveredFreshServerSnapshot) {
+          throw StateError('deda-admin-isolated-watch-server-lost');
+        }
+        continue;
       }
       if (!await proof()) {
         throw StateError('deda-admin-isolated-watch-permission-revoked');
@@ -590,6 +599,7 @@ class DedaIsolatedAdminIdentity {
           _mainAuth.currentUser?.uid != publicUid) {
         throw StateError('deda-admin-isolated-watch-scope-changed');
       }
+      deliveredFreshServerSnapshot = true;
       yield snapshot;
     }
   }
