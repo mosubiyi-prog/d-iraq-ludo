@@ -70,6 +70,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
     def test_safety_boundary_no_admin_grant_or_production_mutation(self):
         probe=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         login=(REPO/'lib/deda_stable_google_login_2026_11_21.dart').read_text()
+        card=(REPO/'lib/deda_stage2_google_access_card_2026_11_21.dart').read_text()
+        self.assertIn('explicitLocalDedaReplacementRequired',login)
+        self.assertIn("prefs.getBool('deda_logged_in_v1') == true",login)
+        self.assertIn("if (isAnonymous || user == null)",card)
+        self.assertIn('&& _consentToNewUid',card)
         self.assertIn("FirebaseAuth.instanceFor(app: secondary)",probe)
         self.assertIn("FirebaseFirestore.instanceFor(app: secondary)",probe)
         self.assertIn("Source.server",probe)

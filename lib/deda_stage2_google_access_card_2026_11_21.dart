@@ -53,7 +53,10 @@ class _DedaStage2GoogleAccessCardState extends State<DedaStage2GoogleAccessCard>
     final isAnonymous = user != null && user.isAnonymous;
     final hasGoogle = user != null && !user.isAnonymous &&
         user.providerData.any((p) => p.providerId == 'google.com');
-    final canStart = user == null || hasGoogle || (isAnonymous && _consentToNewUid);
+    // Consent is required even when Auth is empty: a local DEDA login can
+    // still be remembered on this device and must not be fenced off silently.
+    final canStart = hasGoogle ||
+        ((user == null || isAnonymous) && _consentToNewUid);
     return Card(
       key: const ValueKey('deda-stage2-google-identity-card'),
       child: Padding(
@@ -68,14 +71,15 @@ class _DedaStage2GoogleAccessCardState extends State<DedaStage2GoogleAccessCard>
                 ? 'الجلسة الحالية تستخدم Google. لا يتطلب الأمر إنشاء UID آخر.'
                 : 'تسجيل دخول Google اختيار مستقل، ولا يسترجع سجلات A/B/C '
                   'ولا يمنح صلاحيات الإدارة تلقائياً.'),
-            if (isAnonymous)
+            if (isAnonymous || user == null)
               CheckboxListTile(
                 value: _consentToNewUid,
                 onChanged: _busy
                     ? null : (value) =>
                         setState(() => _consentToNewUid = value == true),
-                title: const Text('أوافق على استبدال جلسة Anonymous الحالية '
-                  'بحساب Google ثابت؛ قد يبدأ حساب DEDA الجديد دون أرصدتي القديمة.'),
+                title: const Text('أوافق على بدء/استبدال جلسة Firebase بحساب Google ثابت. '
+                  'قد يتوقف اعتماد تسجيل DEDA المحلي القديم على هذا الجهاز، '
+                  'ولا تنتقل أرصدته وممتلكاته تلقائياً.'),
               ),
             if (user != null && !isAnonymous && !hasGoogle)
               const Text('توجد جلسة موثوقة غير Google. لن نستبدلها من هنا.'),

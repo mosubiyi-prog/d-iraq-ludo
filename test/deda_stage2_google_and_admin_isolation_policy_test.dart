@@ -9,15 +9,25 @@ void main() {
       bool anonymous = false,
       bool google = false,
       bool explicit = false,
+      bool remembered = false,
     }) => DedaStableGoogleLoginPolicy.admission(
       currentUid: uid,
       currentIsAnonymous: anonymous,
       hasVerifiedGoogleProvider: google,
       explicitAnonymousReplacement: explicit,
+      hasRememberedDedaLogin: remembered,
     );
 
     test('signed-out device can start a deliberate Google login', () {
       expect(admit(), DedaGoogleLoginAdmission.startFresh);
+    });
+    test('missing Firebase Auth does not silently discard remembered DEDA login', () {
+      expect(admit(remembered: true),
+        DedaGoogleLoginAdmission.explicitLocalDedaReplacementRequired);
+      expect(admit(remembered: true, explicit: true),
+        DedaGoogleLoginAdmission.startFresh);
+      expect(admit(remembered: false),
+        DedaGoogleLoginAdmission.startFresh);
     });
     test('anonymous B session preserved unless owner consents', () {
       expect(admit(uid: 'old-B', anonymous: true),

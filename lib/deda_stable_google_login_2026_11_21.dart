@@ -12,6 +12,7 @@ enum DedaGoogleLoginAdmission {
   startFresh,
   reuseExistingGoogle,
   explicitAnonymousReplacementRequired,
+  explicitLocalDedaReplacementRequired,
   existingPasswordOrAdminSessionPreserved,
 }
 
@@ -23,9 +24,14 @@ class DedaStableGoogleLoginPolicy {
     required bool currentIsAnonymous,
     required bool hasVerifiedGoogleProvider,
     required bool explicitAnonymousReplacement,
+    bool hasRememberedDedaLogin = false,
   }) {
     if (currentUid == null || currentUid.trim().isEmpty) {
-      return DedaGoogleLoginAdmission.startFresh;
+      // FirebaseAuth may be empty even though the old DEDA phone login
+      // remains locally remembered. Never fence it off without consent.
+      return hasRememberedDedaLogin && !explicitAnonymousReplacement
+          ? DedaGoogleLoginAdmission.explicitLocalDedaReplacementRequired
+          : DedaGoogleLoginAdmission.startFresh;
     }
     if (!currentIsAnonymous && hasVerifiedGoogleProvider) {
       return DedaGoogleLoginAdmission.reuseExistingGoogle;
@@ -114,6 +120,8 @@ class DedaStableGoogleLogin {
     if (_busy) throw StateError('deda-google-login-already-in-progress');
     _busy = true;
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final rememberedDedaLogin = prefs.getBool('deda_logged_in_v1') == true;
       final original = _auth.currentUser;
       final beforeUid = original?.uid;
       final admission = DedaStableGoogleLoginPolicy.admission(
@@ -122,12 +130,16 @@ class DedaStableGoogleLogin {
         hasVerifiedGoogleProvider: original?.providerData
               .any((provider) => provider.providerId == 'google.com') ?? false,
         explicitAnonymousReplacement: explicitAnonymousReplacement,
+        hasRememberedDedaLogin: rememberedDedaLogin,
       );
       if (admission == DedaGoogleLoginAdmission.reuseExistingGoogle) {
         return DedaGoogleIdentityResult.verified(beforeUid!, reused: true);
       }
       if (admission == DedaGoogleLoginAdmission.explicitAnonymousReplacementRequired) {
         throw StateError('deda-google-explicit-anonymous-replacement-required');
+      }
+      if (admission == DedaGoogleLoginAdmission.explicitLocalDedaReplacementRequired) {
+        throw StateError('deda-google-explicit-local-deda-replacement-required');
       }
       if (admission == DedaGoogleLoginAdmission.existingPasswordOrAdminSessionPreserved) {
         throw StateError('deda-google-preserve-existing-credential-session');
@@ -139,6 +151,9 @@ class DedaStableGoogleLogin {
       // NEVER allow this stale intent to overwrite it.
       if (_auth.currentUser?.uid != beforeUid) {
         throw StateError('deda-google-session-changed-during-selection');
+      }
+      if ((prefs.getBool('deda_logged_in_v1') == true) != rememberedDedaLogin) {
+        throw StateError('deda-google-local-login-changed-during-selection');
       }
       final credential = await _auth.signInWithCredential(oauth);
       final current = _auth.currentUser;
@@ -155,7 +170,6 @@ class DedaStableGoogleLogin {
 
       // A historical local phone/profile is NOT owned by this new Google UID.
       // Fence it off instead of projecting legacy ID, map, wallet, or role.
-      final prefs = await SharedPreferences.getInstance();
       if (!await prefs.setBool('deda_logged_in_v1', false) ||
           !await prefs.setString(verifiedUidKey, uid)) {
         throw StateError('deda-google-local-owner-fence-not-persisted');
