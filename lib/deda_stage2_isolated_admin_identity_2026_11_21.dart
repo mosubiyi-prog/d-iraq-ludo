@@ -344,6 +344,27 @@ class DedaIsolatedAdminProofPolicy {
     return action == 'permanent' || source == null;
   }
 
+  /// Preserve the old manager-only hide/unhide behavior, but never unhide
+  /// an unpublished record without explicit manager-hidden provenance.
+  static bool managerVisibilityChangeAllowed({
+    required Map<String, dynamic>? admin,
+    required String placeId,
+    required Map<String, dynamic>? place,
+    required bool hide,
+  }) {
+    if (!validScopedDocumentId(placeId) || place == null ||
+        !allowsPermission(admin: admin, permission: 'managePlaceArchives')) {
+      return false;
+    }
+    if (hide) {
+      return place['published'] == true && place['hiddenByManager'] != true;
+    }
+    return place['published'] == false &&
+        place['hiddenByManager'] == true &&
+        place['hiddenAt'] is Timestamp &&
+        (place['hiddenByUid'] ?? '').toString().trim().isNotEmpty;
+  }
+
   /// Apply the same server role's activation/province scope to one record.
   static bool scopedDocumentMatches({
     required Map<String, dynamic>? admin,
