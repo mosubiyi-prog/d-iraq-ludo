@@ -46,46 +46,202 @@ class _DedaStage2IsolatedDashboardPageState
     if (!dedaIsolatedAdminIdentityEnabled) {
       return const Scaffold(body: Center(child: Text('Admin stage disabled')));
     }
+    // The gateway profile was verified against the server. Hide links that
+    // this role cannot open; each read/write re-proves on the server too.
+    bool can(String permission) => DedaIsolatedAdminProofPolicy.allowsPermission(
+          admin: widget.profile,
+          permission: permission,
+        );
+    final tabs = <Tab>[];
+    final pages = <Widget>[];
+    if (can('supportRead')) {
+      tabs.add(Tab(text: t('الدعم', 'Support')));
+      pages.add(_DedaIsolatedRequestTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        profile: widget.profile,
+        collection: 'support_requests',
+      ));
+    }
+    if (can('viewPlaceRequests')) {
+      tabs.add(Tab(text: t('طلبات الأماكن', 'Place requests')));
+      pages.add(_DedaIsolatedRequestTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        profile: widget.profile,
+        collection: 'place_requests',
+      ));
+    }
+    if (can('viewUsers')) {
+      tabs.add(Tab(text: t('المستخدمون', 'Users')));
+      pages.add(_DedaIsolatedReadOnlyTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        collection: 'users',
+      ));
+    }
+    if (can('viewAudit')) {
+      tabs.add(Tab(text: t('سجل الإدارة', 'Admin audit')));
+      pages.add(_DedaIsolatedReadOnlyTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        collection: 'admin_audit',
+      ));
+    }
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (!didPop) await _exit();
       },
       child: DefaultTabController(
-        length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(t('إدارة DEDA', 'DEDA administration')),
-          actions: [
-            IconButton(
-              tooltip: t('تسجيل خروج الإدارة', 'Admin sign out'),
-              icon: const Icon(Icons.logout),
-              onPressed: _exit,
+        length: tabs.length,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(t('إدارة DEDA', 'DEDA administration')),
+            actions: [
+              IconButton(
+                tooltip: t('تسجيل خروج الإدارة', 'Admin sign out'),
+                icon: const Icon(Icons.logout),
+                onPressed: _exit,
+              ),
+            ],
+            bottom: tabs.isEmpty
+                ? null
+                : TabBar(isScrollable: true, tabs: tabs),
+          ),
+          body: tabs.isEmpty
+              ? Center(child: Text(t(
+                  'لا توجد صلاحيات إدارية متاحة لهذا الحساب.',
+                  'No available administrative permissions.',
+                )))
+              : TabBarView(children: pages),
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaIsolatedReadOnlyTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final String collection;
+  final bool isArabic;
+
+  const _DedaIsolatedReadOnlyTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.collection,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedReadOnlyTab> createState() =>
+      _DedaIsolatedReadOnlyTabState();
+}
+
+class _DedaIsolatedReadOnlyTabState
+    extends State<_DedaIsolatedReadOnlyTab> {
+  late Future<List<Map<String, dynamic>>> _rows;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _rows = _fetch();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetch() =>
+      widget.admin.readScopedAdminList(
+        dedaPhone: widget.dedaPhone,
+        collection: widget.collection,
+        maxItems: 25,
+      );
+
+  void _refresh() => setState(() => _rows = _fetch());
+
+  String _timestamp(dynamic value) {
+    if (value is! Timestamp) return '';
+    final date = value.toDate().toLocal();
+    return date.toString().substring(0, 16);
+  }
+
+  Widget _record(Map<String, dynamic> data) {
+    // Show only existing human-readable fields, not raw Firestore records,
+    // internal tokens, private maps or free-form audit metadata.
+    final user = widget.collection == 'users';
+    final title = user
+        ? (data['name'] ?? '').toString()
+        : (data['action'] ?? '').toString();
+    final subtitle = user
+        ? (data['phone'] ?? '').toString()
+        : (data['adminName'] ?? '').toString();
+    final detail = user
+        ? (data['accountType'] ?? '').toString()
+        : _timestamp(data['createdAt']);
+    return Card(
+      child: ListTile(
+        title: Text(title.isEmpty ? '—' : title),
+        subtitle: Text(subtitle),
+        trailing: Text(detail),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _rows,
+      builder: (context, snapshot) {
+        // A pending refresh must never leave previously fetched privileged
+        // rows visible if a new server proof is denied or connectivity fails.
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(t(
+                  'تعذر التحقق من صلاحيات القراءة من الخادم.',
+                  'Could not verify read access from the server.',
+                )),
+                TextButton(
+                  onPressed: _refresh,
+                  child: Text(t('إعادة المحاولة', 'Retry')),
+                ),
+              ],
+            ),
+          );
+        }
+        final rows = snapshot.data!;
+        return Column(
+          children: [
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+                label: Text(t('تحديث من الخادم', 'Refresh from server')),
+              ),
+            ),
+            Expanded(
+              child: rows.isEmpty
+                  ? Center(child: Text(t('لا توجد سجلات.', 'No records.')))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: rows.length,
+                      itemBuilder: (context, index) => _record(rows[index]),
+                    ),
             ),
           ],
-          bottom: TabBar(tabs: [
-            Tab(text: t('الدعم', 'Support')),
-            Tab(text: t('طلبات الأماكن', 'Place requests')),
-          ]),
-        ),
-        body: TabBarView(children: [
-          _DedaIsolatedRequestTab(
-            admin: widget.admin,
-            dedaPhone: widget.dedaPhone,
-            isArabic: widget.isArabic,
-            profile: widget.profile,
-            collection: 'support_requests',
-          ),
-          _DedaIsolatedRequestTab(
-            admin: widget.admin,
-            dedaPhone: widget.dedaPhone,
-            isArabic: widget.isArabic,
-            profile: widget.profile,
-            collection: 'place_requests',
-          ),
-        ]),
-      ),
-      ),
+        );
+      },
     );
   }
 }
