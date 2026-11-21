@@ -300,7 +300,9 @@ class _DedaIsolatedManagerPlacesTab extends StatefulWidget {
 
 class _DedaIsolatedManagerPlacesTabState
     extends State<_DedaIsolatedManagerPlacesTab> {
-  late Future<List<Map<String, dynamic>>> _rows;
+  late Future<DedaIsolatedManagerPage> _page;
+  QueryDocumentSnapshot<Map<String, dynamic>>? _pageStart;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
   bool _mutating = false;
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
@@ -314,17 +316,39 @@ class _DedaIsolatedManagerPlacesTabState
   @override
   void initState() {
     super.initState();
-    _rows = _fetch();
+    _page = _fetch();
   }
 
-  Future<List<Map<String, dynamic>>> _fetch() =>
-      widget.admin.readScopedAdminList(
+  Future<DedaIsolatedManagerPage> _fetch() =>
+      widget.admin.readScopedManagerPage(
         dedaPhone: widget.dedaPhone,
         collection: widget.sourceCollection,
-        maxItems: 50,
+        startAfter: _pageStart,
+        pageSize: 50,
       );
 
-  void _refresh() => setState(() => _rows = _fetch());
+  void _refresh() => setState(() {
+    _pageStart = null;
+    _back.clear();
+    _page = _fetch();
+  });
+
+  void _next(DedaIsolatedManagerPage page) {
+    if (_mutating || page.nextCursor == null) return;
+    setState(() {
+      _back.add(_pageStart);
+      _pageStart = page.nextCursor;
+      _page = _fetch();
+    });
+  }
+
+  void _previous() {
+    if (_mutating || _back.isEmpty) return;
+    setState(() {
+      _pageStart = _back.removeLast();
+      _page = _fetch();
+    });
+  }
 
   Future<String?> _confirm({
     required String id,
@@ -340,8 +364,12 @@ class _DedaIsolatedManagerPlacesTabState
               ? t('حذف نهائي لا يمكن التراجع عنه', 'Irreversible deletion')
               : action == 'restore'
                   ? t('تأكيد استرجاع السجل', 'Confirm restore')
-                  : t('نقل إلى محذوفات المدير العام',
-                      'Move to general-manager trash')),
+                  : action == 'hide'
+                      ? t('إخفاء المكان عن الخارطة', 'Hide place from map')
+                      : action == 'show'
+                          ? t('إظهار المكان مجدداً', 'Show place again')
+                          : t('نقل إلى محذوفات المدير العام',
+                              'Move to general-manager trash')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -394,13 +422,24 @@ class _DedaIsolatedManagerPlacesTabState
     if (!mounted || confirmation != id || _mutating) return;
     setState(() => _mutating = true);
     try {
-      await widget.admin.mutateScopedPlaceArchive(
-        dedaPhone: widget.dedaPhone,
-        sourceCollection: _targetCollection,
-        recordId: id,
-        action: action,
-        permanentConfirmation: action == 'permanent' ? confirmation : null,
-      );
+      if (action == 'hide' || action == 'show') {
+        if (_isArchive) {
+          throw StateError('deda-admin-visibility-source-invalid');
+        }
+        await widget.admin.setScopedPublishedVisibility(
+          dedaPhone: widget.dedaPhone,
+          placeId: id,
+          hide: action == 'hide',
+        );
+      } else {
+        await widget.admin.mutateScopedPlaceArchive(
+          dedaPhone: widget.dedaPhone,
+          sourceCollection: _targetCollection,
+          recordId: id,
+          action: action,
+          permanentConfirmation: action == 'permanent' ? confirmation : null,
+        );
+      }
       if (mounted) {
         _refresh();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -427,6 +466,11 @@ class _DedaIsolatedManagerPlacesTabState
     final id = (data['id'] ?? '').toString();
     final placeName = (data['placeName'] ?? data['name'] ?? '').toString();
     final approvalNumber = (data['approvalNumber'] ?? '').toString();
+    final published = data['published'] == true;
+    final managerHidden = data['hiddenByManager'] == true;
+    final canRestoreHidden = !published && managerHidden &&
+        data['hiddenAt'] is Timestamp &&
+        (data['hiddenByUid'] ?? '').toString().trim().isNotEmpty;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -438,8 +482,24 @@ class _DedaIsolatedManagerPlacesTabState
             Text(id, style: Theme.of(context).textTheme.bodySmall),
             if (approvalNumber.isNotEmpty)
               Text(approvalNumber),
+            if (!_isArchive && !published)
+              Text(managerHidden
+                  ? t('مخفي بواسطة الإدارة', 'Hidden by administration')
+                  : t('غير منشور', 'Not published')),
             const SizedBox(height: 6),
             Wrap(spacing: 8, runSpacing: 8, children: [
+              if (!_isArchive && published && !managerHidden)
+                OutlinedButton.icon(
+                  onPressed: _mutating ? null : () => _mutate(id, 'hide'),
+                  icon: const Icon(Icons.visibility_off_outlined),
+                  label: Text(t('إخفاء المكان', 'Hide place')),
+                ),
+              if (!_isArchive && canRestoreHidden)
+                OutlinedButton.icon(
+                  onPressed: _mutating ? null : () => _mutate(id, 'show'),
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: Text(t('إظهار المكان', 'Restore visibility')),
+                ),
               if (!_isArchive)
                 OutlinedButton.icon(
                   onPressed: _mutating ? null : () => _mutate(id, 'trash'),
@@ -471,8 +531,8 @@ class _DedaIsolatedManagerPlacesTabState
     if (!dedaIsolatedAdminIdentityEnabled) {
       return const SizedBox.shrink();
     }
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _rows,
+    return FutureBuilder<DedaIsolatedManagerPage>(
+      future: _page,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
@@ -490,7 +550,8 @@ class _DedaIsolatedManagerPlacesTabState
             ],
           ));
         }
-        final rows = snapshot.data!;
+        final page = snapshot.data!;
+        final rows = page.rows;
         return Column(children: [
           Align(
             alignment: AlignmentDirectional.centerEnd,
@@ -508,6 +569,25 @@ class _DedaIsolatedManagerPlacesTabState
                     itemCount: rows.length,
                     itemBuilder: (context, index) => _record(rows[index]),
                   ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(children: [
+              Text("${t('صفحة', 'Page')} ${_back.length + 1}"),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: !_mutating && _back.isNotEmpty
+                    ? _previous : null,
+                icon: const Icon(Icons.chevron_left),
+                label: Text(t('السابق', 'Previous')),
+              ),
+              TextButton.icon(
+                onPressed: !_mutating && page.nextCursor != null
+                    ? () => _next(page) : null,
+                icon: const Icon(Icons.chevron_right),
+                label: Text(t('التالي', 'Next')),
+              ),
+            ]),
           ),
         ]);
       },
