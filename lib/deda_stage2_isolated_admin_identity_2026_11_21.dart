@@ -815,6 +815,159 @@ class DedaIsolatedAdminIdentity {
     };
   }
 
+  /// Shared fresh-server access check for both phases of the ORIGINAL
+  /// two-step approval workflow. No global Auth/Firestore and no UID mint.
+  Future<({String uid, String? publicUid, Map<String, dynamic> admin})>
+      _requireScopedPlaceApproval({
+    required String dedaPhone,
+    required String requestId,
+    required String expectedStatus,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(requestId)) {
+      throw StateError('deda-admin-isolated-approval-not-enabled-or-invalid');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-approval-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verified;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'approvePlaces',
+      onAuthorizedAdmin: (admin) => verified = admin,
+    );
+    if (!await proof() ||
+        !DedaIsolatedAdminProofPolicy.allowsPermission(
+          admin: verified, permission: 'viewPlaceRequests',
+        )) {
+      throw StateError('deda-admin-isolated-approval-role-denied');
+    }
+    final scope = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: verified, collection: 'place_requests',
+    );
+    if (scope == null) {
+      throw StateError('deda-admin-isolated-approval-scope-denied');
+    }
+    final request = await _firestore.collection('place_requests')
+        .doc(requestId).get(const GetOptions(source: Source.server));
+    final data = request.data();
+    if (!request.exists || data == null ||
+        request.metadata.isFromCache || request.metadata.hasPendingWrites ||
+        !DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+          admin: verified, request: data,
+          requestId: requestId, expectedStatus: expectedStatus,
+        )) {
+      throw StateError('deda-admin-isolated-approval-record-denied');
+    }
+    if (!await proof() ||
+        !DedaIsolatedAdminProofPolicy.sameScopedFilters(
+          scope, DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+            admin: verified, collection: 'place_requests',
+          ),
+        ) ||
+        !DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+          admin: verified, request: data,
+          requestId: requestId, expectedStatus: expectedStatus,
+        ) ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-approval-proof-changed');
+    }
+    return (uid: uid, publicUid: publicUid, admin: verified!);
+  }
+
+  /// Phase 1 keeps the original editable approval-message preview. New
+  /// requests reserve a unique serial number transactionally; edit requests
+  /// MUST reuse the original published identity instead.
+  Future<Map<String, dynamic>> prepareScopedPlaceApproval({
+    required String dedaPhone,
+    required String requestId,
+    required String expectedStatus,
+  }) async {
+    final actor = await _requireScopedPlaceApproval(
+      dedaPhone: dedaPhone, requestId: requestId,
+      expectedStatus: expectedStatus,
+    );
+    final requestRef = _firestore.collection('place_requests').doc(requestId);
+    final counterRef = _firestore.collection('system_counters')
+        .doc('place_approval');
+    final name = (actor.admin['displayName'] ?? actor.admin['name'] ??
+        _auth.currentUser?.email ?? 'DEDA Admin').toString();
+    return _firestore.runTransaction<Map<String, dynamic>>(
+      (transaction) async {
+        final snapshot = await transaction.get(requestRef);
+        final data = snapshot.data();
+        if (_auth.currentUser?.uid != actor.uid ||
+            _mainAuth.currentUser?.uid != actor.publicUid ||
+            !snapshot.exists || data == null ||
+            !DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+              admin: actor.admin, request: data,
+              requestId: requestId, expectedStatus: expectedStatus,
+            )) {
+          throw StateError('deda-admin-isolated-approval-prepare-conflict');
+        }
+        final requestType = (data['requestType'] ?? '').toString().trim();
+        final originalId = (data['originalPlaceId'] ?? '').toString().trim();
+        var number = (data['approvalNumber'] ?? '').toString().trim();
+        var date = (data['approvalDate'] ?? '').toString().trim();
+        var newSerial = 0;
+        if (requestType == 'update') {
+          final original = await transaction.get(
+            _firestore.collection('published_places').doc(originalId),
+          );
+          if (!DedaIsolatedAdminProofPolicy.approvalOriginalMatches(
+            request: data, original: original.data(),
+          )) {
+            throw StateError('deda-admin-isolated-approval-original-invalid');
+          }
+          number = (original.data()!['approvalNumber']).toString().trim();
+          date = (original.data()!['approvalDate']).toString().trim();
+        } else if (number.isEmpty) {
+          final counter = await transaction.get(counterRef);
+          final rawValue = counter.data()?['value'];
+          if (rawValue != null && (rawValue is! num ||
+              rawValue < 0 || rawValue > 99999998)) {
+            throw StateError('deda-admin-isolated-approval-counter-invalid');
+          }
+          newSerial = ((rawValue as num?)?.toInt() ?? 0) + 1;
+          final now = DateTime.now();
+          number = 'DEDA-${now.year}-${newSerial.toString().padLeft(7, '0')}';
+          date = DedaIsolatedAdminProofPolicy.formatApprovalDate(now);
+        } else if (date.isEmpty) {
+          // A reserved number without its matching date is not a trustworthy
+          // approval identity. Do not fabricate another identity.
+          throw StateError('deda-admin-isolated-approval-reservation-incomplete');
+        }
+        if (newSerial > 0) {
+          transaction.set(counterRef, <String, dynamic>{
+            'value': newSerial,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+        final placeName = (data['placeName'] ?? '').toString().trim();
+        final message = DedaIsolatedAdminProofPolicy.placeApprovalMessage(
+          placeName: placeName, approvalNumber: number, approvalDate: date,
+        );
+        transaction.update(requestRef, <String, dynamic>{
+          'approvalNumber': number,
+          'approvalDate': date,
+          'approvalMessageDraft': message,
+          'approvalPreparedAt': FieldValue.serverTimestamp(),
+          'approvalPreparedByUid': actor.uid,
+          'approvalPreparedByName': name,
+        });
+        return <String, dynamic>{
+          'approvalNumber': number, 'approvalDate': date,
+          'placeName': placeName, 'message': message,
+        };
+      },
+    );
+  }
+
   /// Stage2: review/reject/needs-changes ONLY, using secondary admin Auth.
   /// Approval is deliberately excluded: it requires a separate atomic
   /// counter + published-place + owner-notification migration.
