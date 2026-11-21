@@ -154,3 +154,12 @@
 - GitHub Actions للفحص الجديد: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44944372306 ؛ نتيجته قيد التحقق حين كتابة هذا السجل، وليست معتمدة بعد.
 - الحالة: SOURCE_ADAPTER_PARTIAL / FLAG_OFF / DASHBOARD_NOT_WIRED / CI_PENDING / NO_APK / NO_PHONE / NO_FIREBASE_PRODUCTION / NO_PLAY / RELEASE_HOLD.
 - المتبقي: توصيل بقية قراءات وكتابات واشتراكات Dashboard والصفحات الفرعية بعد ضبط صلاحياتها خادمياً؛ ثم OAuth/SHA وحساب Google الموثوق؛ بعدها اختبار الهاتف والتابلت وجميع الأقسام قبل تسليم APK كامل وموقع.
+
+
+### إثبات فحص المرحلة الثانية بعد تنظيف تحذيرات الكود المضاف — 21-11-2026
+- آخر تعديل للمصدر: 486c2cd61ede43fd9dc2dac8fe541439cadc87ff، أزال ملاحظتي التحليل المضافتين دون تغيير منطق صلاحيات الدعم. العمل ما زال مقتصراً على وحدة الإدارة المعزولة واختباراتها والتوثيق، ولم تتغير ملفات التطبيق الأساسية أو النسخ المحمية.
+- الدليل الرسمي: GitHub Actions https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/44944667637 بنتيجة SUCCESS في الوظيفتين actual-source-safety وassembled-full-app-source.
+- النتائج: 7 اختبارات Python للمرحلة الأولى + 11 Python للمرحلة الثانية + 19 Flutter/Dart نجحت. تحليل Flutter أبلغ عن 406 ملاحظات info/warning بلا أخطاء من فئة error، مساوياً لعدد الملاحظات في فحص المصدر السابق قبل إضافة النقل الجديد.
+- الوظيفة المنجزة فعلياً: إعداد نقل معزول محدود لعمليتي رد الدعم وتغيير حالته مع حارس صلاحية الخادم وثبات UID وتدقيق ذري؛ لم توصل عمليتا النقل بلوحة Dashboard القديمة بعد، والعلم OFF افتراضياً. لا يصح اعتبار الإدارة مفعلة أو فحص الهاتف ناجحاً.
+- الحالة: SUPPORT_ADAPTER_SOURCE_QA_PASSED / STAGE2_PARTIAL / DASHBOARD_NOT_WIRED / OAUTH_SHA_INCOMPLETE / NO_DEVICE_QA / NO_APK / NO_FIREBASE_PRODUCTION / NO_PLAY / RELEASE_HOLD.
+- العمل التالي في نفس الفرع، وفق تعليمات 01: إكمال تدقيق ونقل جميع وظائف واشتراكات وكتابات Dashboard والصفحات الفرعية بالعميل الإداري المعزول أو تفويض خادمي معتمد، ثم OAuth/SHA وملف DEDA الآمن، وفحص الهاتف والتابلت وجميع الأقسام قبل بناء APK كامل وموقع.
