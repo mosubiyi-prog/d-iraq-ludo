@@ -29,7 +29,11 @@ class _DedaStage2IsolatedDashboardPageState
     extends State<DedaStage2IsolatedDashboardPage> {
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
+  bool _exiting = false;
+
   Future<void> _exit() async {
+    if (_exiting) return;
+    _exiting = true;
     try {
       await widget.admin.signOutSecondaryAdmin();
     } finally {
@@ -42,8 +46,13 @@ class _DedaStage2IsolatedDashboardPageState
     if (!dedaIsolatedAdminIdentityEnabled) {
       return const Scaffold(body: Center(child: Text('Admin stage disabled')));
     }
-    return DefaultTabController(
-      length: 2,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop) await _exit();
+      },
+      child: DefaultTabController(
+        length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: Text(t('إدارة DEDA', 'DEDA administration')),
@@ -75,6 +84,7 @@ class _DedaStage2IsolatedDashboardPageState
             collection: 'place_requests',
           ),
         ]),
+      ),
       ),
     );
   }
