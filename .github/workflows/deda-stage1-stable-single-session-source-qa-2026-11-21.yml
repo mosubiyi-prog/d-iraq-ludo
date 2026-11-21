@@ -101,6 +101,27 @@ jobs:
           for script in bind_admin_league_winners_prizes_100439.py bind_smart_second_stage_account_100439.py bind_gm_compensation_100m_100439.py bind_session_rescue_stage3_100441.py bind_session_rescue_friends_retry_100441.py bind_session_missing_owner_entry_100441.py bind_point2_section_session_guards_2026_11_17.py bind_unified_room_runtime_readonly_2026_11_17.py; do
             python3 "tools/app_stability/app_package/$script" "$project"
           done
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'deda-stage1-complete-source'
+          specs={
+            'lib/deda_backend.dart':[
+              ('public', 'static Future<User> _ensurePublicUser()'),
+              ('owner', 'static Future<User> _ensureOwnerSessionForAccountKey('),
+              ('admin-login', 'static Future<bool> signInAdmin({'),
+              ('admin-logout', 'static Future<void> signOutAdmin() async {')],
+            'lib/deda_pin_auth.dart':[
+              ('anonymous-helper', 'static Future<User> _ensureAnonymousSession(')],
+          }
+          for file, targets in specs.items():
+              body=(root/file).read_text()
+              for label, marker in targets:
+                  at=body.find(marker)
+                  print('STAGE1_REVIEW_BEGIN',file,label,'found='+str(at >= 0))
+                  if at >= 0: print(body[at:at+6500])
+                  print('STAGE1_REVIEW_END',file,label)
+          PY
           python3 tools/app_stability/app_package/bind_stable_single_session_stage1_2026_11_21.py "$project"
           python3 tools/app_stability/app_package/bind_stable_single_session_stage1_2026_11_21.py "$project" --verify-only
           echo "DEDA_STAGE1_SOURCE=$project" >> "$GITHUB_ENV"
