@@ -208,6 +208,83 @@ void main() {
       expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
       expect(scope({'active':false,'role':'general_manager'},'users'),isNull);
     });
+    test('place review status and activation are fail closed', () {
+      final created = Timestamp.fromDate(DateTime.utc(2026, 11, 15));
+      final activated = Timestamp.fromDate(DateTime.utc(2026, 11, 10));
+      final request = <String, dynamic>{
+        'status': 'pending',
+        'governorate': 'كركوك',
+        'createdAt': created,
+      };
+      bool allowed(
+        Map<String, dynamic>? actor,
+        Map<String, dynamic>? data,
+        String from,
+        String target, {
+        String? note,
+        String id = 'place_test_123',
+      }) => DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
+        admin: actor,
+        request: data,
+        requestId: id,
+        expectedStatus: from,
+        targetStatus: target,
+        note: note,
+      );
+      expect(allowed(record, request, 'pending', 'reviewing'), true);
+      expect(allowed(record, request, 'pending', 'rejected',
+        note: 'Invalid address'), true);
+      expect(allowed(record, request, 'pending', 'needs_changes',
+        note: 'Please correct opening hours'), true);
+      expect(allowed(record, request, 'pending', 'approved'), false);
+      expect(allowed(record, request, 'pending', 'needs_changes'), false);
+      expect(allowed(record, request, 'pending', 'rejected',
+        note: '   '), false);
+      expect(allowed(record, request, 'pending', 'rejected',
+        note: 'x' * 1001), false);
+      expect(allowed(record, request, 'pending', 'reviewing',
+        note: 'unasked'), false);
+      expect(allowed(record, request, 'reviewing', 'rejected',
+        note: 'Invalid'), false);
+      expect(allowed(record, {...request, 'status': 'approved'},
+        'approved', 'reviewing'), false);
+      expect(allowed(record, request, 'pending', 'reviewing',
+        id: '../admins'), false);
+      expect(allowed(record, null, 'pending', 'reviewing'), false);
+      final employee = <String, dynamic>{
+        'active': true,
+        'status': 'active',
+        'role': 'employee',
+        'permissions': <String, bool>{
+          'reviewPlaceRequests': true,
+          'rejectPlaces': false,
+        },
+        'firstLoginCompletedAt': activated,
+      };
+      expect(allowed(employee, request, 'pending', 'reviewing'), true);
+      expect(allowed(employee, request, 'pending', 'rejected',
+        note: 'Invalid'), false);
+      expect(allowed({...employee, 'firstLoginCompletedAt': created.toDate().add(
+          const Duration(days: 1))}, request, 'pending', 'reviewing'), false);
+      expect(allowed({...employee}..remove('firstLoginCompletedAt'),
+        request, 'pending', 'reviewing'), false);
+      final province = <String, dynamic>{
+        ...employee,
+        'role': 'province_agent',
+        'governorate': 'كركوك',
+      };
+      expect(allowed(province, request, 'pending', 'reviewing'), true);
+      expect(allowed({...province, 'governorate': 'بغداد'},
+        request, 'pending', 'reviewing'), false);
+      expect(allowed({...province, 'permissions': <String, bool>{}},
+        request, 'pending', 'reviewing'), false);
+      expect(allowed({...employee, 'active': false},
+        request, 'pending', 'reviewing'), false);
+      expect(allowed({'active': true, 'status': 'active', 'role': ''},
+        request, 'pending', 'reviewing'), false);
+      expect(allowed(record, {...request, 'status': 'rejected'},
+        'rejected', 'needs_changes', note: 'No'), false);
+    });
     test('isolated support rejects unknown states and arbitrary document paths', () {
       bool allowed(String id, String status, {String? reply}) =>
           DedaIsolatedAdminProofPolicy.supportMutationInputAllowed(
