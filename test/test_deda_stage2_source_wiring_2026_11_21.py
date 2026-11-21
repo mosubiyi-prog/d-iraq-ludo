@@ -441,7 +441,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("'viewTeam', 'managePlaceArchives'}.contains(permission)",src)
         self.assertIn("normalizedRole != 'general_manager'",src)
         self.assertIn("'admins', 'published_places', 'admin_trash_place_requests'",src)
-        self.assertIn("}.contains(collection) && role != 'general_manager') return null;",src)
+        self.assertIn("}.contains(collection) && role != 'general_manager') {",src)
         self.assertIn("'admins': 'viewTeam'",src)
         self.assertIn("if (can('viewTeam')) {",ui)
         self.assertIn("collection: 'admins'",ui)
