@@ -54,7 +54,7 @@ class Stage1SessionBinding(unittest.TestCase):
         admin = backend.split("static Future<bool> signInAdmin({", 1)[1].split(
             "static Future<void> updateCurrentAdminDisplayName(", 1)[0]
         self.assertLess(admin.index("deda-stability-admin-isolated-auth-required"),
-                        admin.index("signInWithEmailAndPassword"))
+                        admin.index("final credential = await FirebaseAuth.instance.signInWithEmailAndPassword("))
         # Missing owner session or non-anonymous current never switches UID
         # inside the old PIN helper; explicit new enrollment is preserved.
         helper = pin.split("static Future<User> _ensureAnonymousSession(", 1)[1].split(
