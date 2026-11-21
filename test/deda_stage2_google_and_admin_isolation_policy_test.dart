@@ -241,7 +241,7 @@ void main() {
       expect(allowed(record, request, 'pending', 'rejected',
         note: '   '), false);
       expect(allowed(record, request, 'pending', 'rejected',
-        note: 'x' * 1001), false);
+        note: List<String>.filled(1001, 'x').join()), false);
       expect(allowed(record, request, 'pending', 'reviewing',
         note: 'unasked'), false);
       expect(allowed(record, request, 'reviewing', 'rejected',
