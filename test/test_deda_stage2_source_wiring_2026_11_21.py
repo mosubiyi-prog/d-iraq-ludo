@@ -337,6 +337,21 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn(after,compiled)
         self.assertIn('if (!dedaIsolatedAdminIdentityEnabled) _load();',compiled)
 
+    def test_dashboard_protected_assembly_exact_mixin_is_reviewed(self):
+        admin=self.dst/'lib/admin_pages.dart'
+        original=admin.read_text()
+        before='class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {'
+        after=('class _DedaAdminDashboardPageState extends '
+               'State<DedaAdminDashboardPage>  with '
+               'DedaSectionState<DedaAdminDashboardPage> {')
+        self.assertEqual(original.count(before),1)
+        admin.write_text(original.replace(before,after,1))
+        binder.prepare(self.dst)
+        binder.prepare(self.dst,verify_only=True)
+        compiled=admin.read_text()
+        self.assertIn(after,compiled)
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled) _load();',compiled)
+
     def test_renamed_legacy_dashboard_state_blocks_before_any_file_mutation(self):
         admin=self.dst/'lib/admin_pages.dart'
         original=admin.read_text()
