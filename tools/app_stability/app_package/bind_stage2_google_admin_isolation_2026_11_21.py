@@ -220,13 +220,22 @@ Future<void> main() async {"""
 """
         admin_source = one(admin_source, invite_start, invite_block,
                            'legacy-invitation-auth-must-be-blocked')
-        dashboard_start = ('class _DedaAdminDashboardPageState '
-                           'extends State<DedaAdminDashboardPage> {')
-        if admin_source.count(dashboard_start) != 1:
+        dashboard_pattern = re.compile(
+            r'class\\s+_DedaAdminDashboardPageState\\s+extends\\s+'
+            r'State\\s*<\\s*DedaAdminDashboardPage\\s*>\\s*\\{'
+        )
+        dashboard_matches = list(dashboard_pattern.finditer(admin_source))
+        if len(dashboard_matches) != 1:
+            start = admin_source.find('class DedaAdminDashboardPage')
+            excerpt = admin_source[start:start+1300] if start >= 0 else 'absent'
             raise ValueError(
                 'STAGE2_STOP_SOURCE_DRIFT:legacy-dashboard-state:found=' +
-                str(admin_source.count(dashboard_start)))
-        before_dashboard, remainder = admin_source.split(dashboard_start, 1)
+                str(len(dashboard_matches)) + ':source=' + repr(excerpt))
+        dashboard_match = dashboard_matches[0]
+        before_dashboard = admin_source[:dashboard_match.start()]
+        dashboard_start = admin_source[
+            dashboard_match.start():dashboard_match.end()]
+        remainder = admin_source[dashboard_match.end():]
         # The protected assembled app may place a different top-level page
         # after this state. Find its actual next class, never assume its name
         # or edit through to another administrative state.
