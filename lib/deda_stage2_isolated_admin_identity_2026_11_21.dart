@@ -136,7 +136,9 @@ class DedaIsolatedAdminProofPolicy {
       return false;
     }
     if (!const <String>{'new', 'in_progress', 'replied', 'closed'}
-        .contains(status)) return false;
+        .contains(status)) {
+      return false;
+    }
     if (reply == null) return true;
     final message = reply.trim();
     return status == 'replied' && message.isNotEmpty &&
@@ -479,7 +481,7 @@ class DedaIsolatedAdminIdentity {
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
       if (isReply) ...<String, dynamic>{
-        'adminReply': reply!.trim(),
+        'adminReply': reply.trim(),
         'adminReplyAt': FieldValue.serverTimestamp(),
         'adminReplyByUid': uid,
         'adminReplyByName': name,
