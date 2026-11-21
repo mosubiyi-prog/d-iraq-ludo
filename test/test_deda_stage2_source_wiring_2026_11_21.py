@@ -498,6 +498,13 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertIn(part,helper)
         self.assertIn("permission: 'viewPlaceRequests'",helper)
         self.assertIn("GetOptions(source: Source.server)",helper)
+        self.assertIn("if (data['requestType'] != 'update')",helper)
+        self.assertIn("deda-admin-isolated-approval-published-id-in-use",helper)
+        self.assertIn("places.doc(requestId)",helper)
+        self.assertIn("FieldPath.documentId, isEqualTo: requestId",helper)
+        self.assertIn(".where('published', isEqualTo: true)",helper)
+        self.assertIn("existing.metadata.isFromCache",helper)
+        self.assertIn("existing.docs.isNotEmpty",helper)
         for part in ("_requireScopedPlaceApproval(",
                      "runTransaction<Map<String, dynamic>>(",
                      "transaction.get(requestRef)",
