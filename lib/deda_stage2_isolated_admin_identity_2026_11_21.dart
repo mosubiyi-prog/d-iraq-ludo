@@ -108,6 +108,72 @@ class DedaIsolatedAdminIdentity {
     );
   }
 
+  /// The source of truth for BOTH freshly signed-in and restored admin Auth.
+  /// Never trusts cached roles, emails alone, or local UI flags. There are
+  /// no Firebase writes and no sign-in/out in this read-only proof.
+  Future<bool> _serverAuthorizedAdmin({
+    required String uid,
+    required String dedaPhone,
+    required String? expectedPublicUid,
+  }) async {
+    final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone);
+    if (phone.isEmpty || uid.isEmpty ||
+        _auth.currentUser?.uid != uid ||
+        _auth.currentUser?.isAnonymous != false ||
+        _mainAuth.currentUser?.uid != expectedPublicUid) {
+      return false;
+    }
+    final adminProof = await _firestore.collection('admins').doc(uid)
+        .get(const GetOptions(source: Source.server));
+    final entryProof = await _firestore.collection('admin_entry_access')
+        .doc(phone).get(const GetOptions(source: Source.server));
+    // A session change during either server read invalidates the proof.
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != expectedPublicUid) return false;
+    final entry = entryProof.data();
+    final expires = entry?['expiresAt'];
+    return DedaIsolatedAdminProofPolicy.authorized(
+      authUid: uid,
+      authEmail: _auth.currentUser?.email,
+      accountKey: phone,
+      admin: adminProof.exists ? adminProof.data() : null,
+      entry: entryProof.exists ? entry : null,
+      freshAdminServerRead: !adminProof.metadata.isFromCache &&
+          !adminProof.metadata.hasPendingWrites,
+      freshEntryServerRead: !entryProof.metadata.isFromCache &&
+          !entryProof.metadata.hasPendingWrites,
+      now: DateTime.now(),
+      inviteExpiresAt: expires is Timestamp ? expires.toDate() : null,
+    );
+  }
+
+  /// After an app restart the secondary FirebaseAuth SDK may still own a
+  /// session. Read fresh server permissions before trusting that session.
+  /// Never log into an account, create a UID or sign out the DEDA public user.
+  /// A null result means the privileged Dashboard MUST remain closed.
+  Future<String?> verifyRestoredAdminSession({
+    required String dedaPhone,
+  }) async {
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous ||
+        DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone).isEmpty) {
+      return null;
+    }
+    final publicUidBefore = _mainAuth.currentUser?.uid;
+    try {
+      final allowed = await _serverAuthorizedAdmin(
+        uid: current.uid,
+        dedaPhone: dedaPhone,
+        expectedPublicUid: publicUidBefore,
+      );
+      return allowed ? current.uid : null;
+    } catch (_) {
+      // Offline, expired invitation, revoked rights, or unreadable server:
+      // fail closed without changing either Auth session.
+      return null;
+    }
+  }
+
   Future<String> verifyAdminLogin({
     required String email,
     required String password,
@@ -119,7 +185,8 @@ class DedaIsolatedAdminIdentity {
       throw StateError('deda-admin-login-credentials-required');
     }
     final initialPublicUid = _mainAuth.currentUser?.uid;
-    // NEVER call _mainAuth.signIn/Out; only the second FirebaseApp changes.
+    // Only the secondary Auth principal changes here. Both fresh login and
+    // restored sessions share the same server-side authorization function.
     try {
       final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(), password: password,
@@ -130,36 +197,17 @@ class DedaIsolatedAdminIdentity {
           _mainAuth.currentUser?.uid != initialPublicUid) {
         throw StateError('deda-admin-isolated-session-mismatch');
       }
-      final adminProof = await _firestore.collection('admins').doc(uid)
-          .get(const GetOptions(source: Source.server));
-      final entryProof = await _firestore.collection('admin_entry_access')
-          .doc(phone).get(const GetOptions(source: Source.server));
-      if (_auth.currentUser?.uid != uid ||
-          _mainAuth.currentUser?.uid != initialPublicUid) {
-        throw StateError('deda-admin-isolated-session-changed');
-      }
-      final entry = entryProof.data();
-      final expires = entry?['expiresAt'];
-      if (!DedaIsolatedAdminProofPolicy.authorized(
-        authUid: uid,
-        authEmail: _auth.currentUser?.email,
-        accountKey: phone,
-        admin: adminProof.exists ? adminProof.data() : null,
-        entry: entryProof.exists ? entry : null,
-        freshAdminServerRead: !adminProof.metadata.isFromCache &&
-            !adminProof.metadata.hasPendingWrites,
-        freshEntryServerRead: !entryProof.metadata.isFromCache &&
-            !entryProof.metadata.hasPendingWrites,
-        now: DateTime.now(),
-        inviteExpiresAt: expires is Timestamp ? expires.toDate() : null,
+      if (!await _serverAuthorizedAdmin(
+        uid: uid,
+        dedaPhone: phone,
+        expectedPublicUid: initialPublicUid,
       )) {
         throw StateError('deda-admin-isolated-role-or-gateway-denied');
       }
-      // Not sufficient to open the old default-auth admin dashboard. All
-      // privileged Firestore queries must migrate to the isolated instance.
+      // Do not open the old Dashboard while it uses default FirebaseAuth.
       return uid;
     } catch (_) {
-      // The only logout permitted here is the SECONDARY admin Auth.
+      // Failure logs out SECONDARY Auth only, never FirebaseAuth.instance.
       await _auth.signOut();
       rethrow;
     }

@@ -109,6 +109,25 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(
             assembled.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
 
+    def test_restored_isolated_admin_requires_fresh_server_proof(self):
+        probe=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn('Future<String?> verifyRestoredAdminSession(',probe)
+        self.assertIn('Future<bool> _serverAuthorizedAdmin(',probe)
+        helper=probe.split('Future<bool> _serverAuthorizedAdmin(',1)[1].split(
+            'Future<String?> verifyRestoredAdminSession(',1)[0]
+        restored=probe.split('Future<String?> verifyRestoredAdminSession(',1)[1].split(
+            'Future<String> verifyAdminLogin(',1)[0]
+        self.assertIn("collection('admins').doc(uid)",helper)
+        self.assertIn("collection('admin_entry_access')",helper)
+        self.assertGreaterEqual(helper.count('Source.server'),2)
+        self.assertIn('_mainAuth.currentUser?.uid != expectedPublicUid',helper)
+        self.assertIn('DedaIsolatedAdminProofPolicy.authorized(',helper)
+        self.assertIn('return null;',restored)
+        self.assertIn('await _serverAuthorizedAdmin(',restored)
+        self.assertNotIn('signInWithEmailAndPassword',restored)
+        self.assertNotIn('.signOut()',restored)
+        self.assertNotIn('FirebaseAuth.instance.signOut()',probe)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
