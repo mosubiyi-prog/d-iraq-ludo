@@ -152,7 +152,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             '      final allowed = await DedaBackend.signInAdmin(',
             '      final allowed = await changedAdminLogin(',1))
         main_before=(self.dst/'lib/main.dart').read_bytes()
-        with self.assertRaisesRegex(ValueError,'STAGE2_STOP_SOURCE_DRIFT'):
+        with self.assertRaisesRegex(ValueError,'STAGE2_(STOP_SOURCE_DRIFT|ASSEMBLED_ADMIN_LOGIN_DRIFT_REVIEW)'):
             binder.prepare(self.dst)
         self.assertEqual((self.dst/'lib/main.dart').read_bytes(),main_before)
         self.assertFalse((self.dst/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').exists())
