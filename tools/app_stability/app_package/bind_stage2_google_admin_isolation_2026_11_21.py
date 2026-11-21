@@ -216,7 +216,16 @@ Future<void> main() async {"""
     # The new feature can never be silently enabled in user builds.
     for name in MODULES:
         text = (project/'lib'/name).read_text()
-        if name != 'deda_stage2_google_access_card_2026_11_21.dart':
+        if name == 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart':
+            # This view reuses the *single* disabled-by-default constant
+            # from isolated identity; never define another feature flag here.
+            if (text.count('if (!dedaIsolatedAdminIdentityEnabled)') != 2 or
+                    'bool.fromEnvironment(' in text or
+                    'FirebaseAuth.instance' in text or
+                    'FirebaseFirestore.instance' in text or
+                    'DedaBackend.' in text):
+                raise ValueError('STAGE2_ISOLATED_ADMIN_UI_MUST_REMAIN_CLOSED')
+        elif name != 'deda_stage2_google_access_card_2026_11_21.dart':
             if 'defaultValue: false' not in text:
                 raise ValueError('STAGE2_FEATURE_MUST_DEFAULT_OFF:'+name)
     if 'DedaIsolatedAdminIdentity' not in (project/'lib'/MODULES[2]).read_text():
