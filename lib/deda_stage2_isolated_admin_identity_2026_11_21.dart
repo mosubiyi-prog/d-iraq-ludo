@@ -265,6 +265,7 @@ class DedaIsolatedAdminProofPolicy {
   static bool approvalOriginalMatches({
     required Map<String, dynamic> request,
     required Map<String, dynamic>? original,
+    bool allowGovernorateChange = false,
   }) {
     if (request['requestType'] != 'update' || original == null ||
         original['published'] != true ||
@@ -272,15 +273,24 @@ class DedaIsolatedAdminProofPolicy {
         (original['approvalDate'] ?? '').toString().trim().isEmpty) {
       return false;
     }
-    for (final field in const <String>['ownerUid', 'accountKey']) {
-      final fromRequest = (request[field] ?? '').toString().trim();
-      final fromOriginal = (original[field] ?? '').toString().trim();
-      if (fromRequest.isNotEmpty && fromOriginal.isNotEmpty &&
-          fromRequest != fromOriginal) {
-        return false;
-      }
+    final newAccount = (request['accountKey'] ?? '').toString().trim();
+    final oldAccount = (original['accountKey'] ?? '').toString().trim();
+    final newUid = (request['ownerUid'] ?? '').toString().trim();
+    final oldUid = (original['ownerUid'] ?? '').toString().trim();
+    // A phone-linked account may retain multiple historical UIDs, but a
+    // conflicting non-empty account key is NEVER a valid ownership transfer.
+    if (newAccount.isNotEmpty && oldAccount.isNotEmpty &&
+        newAccount != oldAccount) {
+      return false;
     }
-    return request['governorate'] == original['governorate'];
+    final sameAccount = newAccount.isNotEmpty &&
+        oldAccount.isNotEmpty && newAccount == oldAccount;
+    final sameUid = newUid.isNotEmpty && oldUid.isNotEmpty && newUid == oldUid;
+    if (!sameAccount && !sameUid) {
+      return false;
+    }
+    return allowGovernorateChange ||
+        request['governorate'] == original['governorate'];
   }
 
   static String formatApprovalDate(DateTime date) {
@@ -921,6 +931,9 @@ class DedaIsolatedAdminIdentity {
           );
           if (!DedaIsolatedAdminProofPolicy.approvalOriginalMatches(
             request: data, original: original.data(),
+            allowGovernorateChange: DedaBackend.normalizeAdminRole(
+              actor.admin['role'] ?? actor.admin['jobTitle'],
+            ) != 'province_agent',
           )) {
             throw StateError('deda-admin-isolated-approval-original-invalid');
           }
@@ -1016,12 +1029,15 @@ class DedaIsolatedAdminIdentity {
       final publishedId = update ? originalId : requestId;
       final publishedRef =
           _firestore.collection('published_places').doc(publishedId);
+      Map<String, dynamic>? originalData;
       if (update) {
         // Read original BEFORE any transaction writes. Never let a modified
         // edit request change the original place's approval number or owner.
         final published = await transaction.get(publishedRef);
+        originalData = published.data();
         if (!DedaIsolatedAdminProofPolicy.approvalOriginalMatches(
           request: data, original: published.data(),
+          allowGovernorateChange: role != 'province_agent',
         ) ||
             published.data()!['approvalNumber'] != expectedApprovalNumber ||
             published.data()!['approvalDate'] != expectedApprovalDate) {
@@ -1056,6 +1072,12 @@ class DedaIsolatedAdminIdentity {
       });
       transaction.set(publishedRef, <String, dynamic>{
         ...data,
+        // Never rewrite a published place's ownership when the valid phone
+        // account submitted an edit through a different historical UID.
+        if (update && originalData?['ownerUid'] is String)
+          'ownerUid': originalData!['ownerUid'],
+        if (update && originalData?['accountKey'] is String)
+          'accountKey': originalData!['accountKey'],
         'requestId': publishedId,
         'sourceRequestId': requestId,
         'lastSourceRequestId': requestId,
