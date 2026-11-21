@@ -150,8 +150,6 @@ def patch_pin(text: str) -> str:
     ], path)
     return text
 
-def bind    return text
-
 def bind(project: Path, *, verify_only: bool = False) -> dict:
     project = project.resolve()
     if project == REPO or project in REPO.parents or REPO in project.parents:
