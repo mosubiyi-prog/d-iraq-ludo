@@ -873,6 +873,33 @@ class DedaIsolatedAdminIdentity {
         )) {
       throw StateError('deda-admin-isolated-approval-record-denied');
     }
+    if (data['requestType'] != 'update') {
+      // A requester can choose the ID of place_requests. Never let approving
+      // that request overwrite an unrelated published place sharing its ID.
+      // General managers can read even hidden published records; staff must
+      // use a server-filtered query within their existing public read rules.
+      final isManager = DedaBackend.normalizeAdminRole(
+        verified?['role'] ?? verified?['jobTitle'],
+      ) == 'general_manager';
+      final places = _firestore.collection('published_places');
+      if (isManager) {
+        final existing = await places.doc(requestId)
+            .get(const GetOptions(source: Source.server));
+        if (existing.metadata.isFromCache ||
+            existing.metadata.hasPendingWrites || existing.exists) {
+          throw StateError('deda-admin-isolated-approval-published-id-in-use');
+        }
+      } else {
+        final existing = await places
+            .where('published', isEqualTo: true)
+            .where(FieldPath.documentId, isEqualTo: requestId)
+            .limit(1).get(const GetOptions(source: Source.server));
+        if (existing.metadata.isFromCache ||
+            existing.metadata.hasPendingWrites || existing.docs.isNotEmpty) {
+          throw StateError('deda-admin-isolated-approval-published-id-in-use');
+        }
+      }
+    }
     if (!await proof() ||
         !DedaIsolatedAdminProofPolicy.sameScopedFilters(
           scope, DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
