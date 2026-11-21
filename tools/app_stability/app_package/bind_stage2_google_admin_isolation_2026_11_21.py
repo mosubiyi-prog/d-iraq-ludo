@@ -48,8 +48,9 @@ def prepare(project: Path, verify_only: bool = False):
 """
     expected_import = "import 'deda_backend.dart';\n"
     isolated_main_import = "import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';"
-    settings_admin_anchor = ("                                final isAdmin =\n"
-                             "                                    await DedaBackend.currentUserIsAdmin();")
+    # Identify the unique settings branch, not its nested Auth wrapper:
+    # protected full-app assembly may wrap the following call in a guard.
+    settings_admin_anchor = "                                final isAdmin ="
     ISOLATED_SETTINGS_GATE = """                                // The public user session must never enter the
                                 // legacy admin Dashboard with isolated admin ON.
                                 if (dedaIsolatedAdminIdentityEnabled) {
