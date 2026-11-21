@@ -325,6 +325,117 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     }
   }
 
+  Future<String?> _editApprovalMessage(Map<String, dynamic> prepared) async {
+    final controller = TextEditingController(
+      text: (prepared['message'] ?? '').toString(),
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('رسالة اعتماد المكان', 'Place approval message')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(t(
+                'راجع الرسالة ورقم الاعتماد قبل إرسال الموافقة.',
+                'Review the message and approval number before approving.',
+              )),
+              const SizedBox(height: 8),
+              Text(
+                '${(prepared['approvalNumber'] ?? '').toString()} • '
+                '${(prepared['approvalDate'] ?? '').toString()}',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                minLines: 5,
+                maxLines: 8,
+                maxLength: 4000,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(
+              dialogContext, controller.text.trim(),
+            ),
+            icon: const Icon(Icons.send_outlined),
+            label: Text(t('إرسال واعتماد', 'Send & approve')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _approvePlace(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    if (widget.collection != 'place_requests' || _sending ||
+        !DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+          admin: widget.profile, request: doc.data(),
+          requestId: doc.id,
+          expectedStatus: (doc.data()['status'] ?? '').toString(),
+        )) {
+      return;
+    }
+    final expectedStatus = (doc.data()['status'] ?? '').toString();
+    setState(() => _sending = true);
+    try {
+      final prepared = await widget.admin.prepareScopedPlaceApproval(
+        dedaPhone: widget.dedaPhone,
+        requestId: doc.id,
+        expectedStatus: expectedStatus,
+      );
+      if (!mounted) {
+        return;
+      }
+      final message = await _editApprovalMessage(prepared);
+      if (message == null || !mounted) {
+        return;
+      }
+      await widget.admin.finalizeScopedPlaceApproval(
+        dedaPhone: widget.dedaPhone,
+        requestId: doc.id,
+        expectedStatus: expectedStatus,
+        expectedApprovalNumber:
+            (prepared['approvalNumber'] ?? '').toString(),
+        expectedApprovalDate: (prepared['approvalDate'] ?? '').toString(),
+        message: message,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t(
+            'تم اعتماد المكان ونشره وتسجيل القرار.',
+            'The place was approved, published and audited.',
+          ))),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t(
+            'تعذر الاعتماد. تأكد من الصلاحيات وبيانات المكان.',
+            'Approval failed. Verify permissions and place details.',
+          ))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   Future<String?> _askPlaceReason(String targetStatus) async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
@@ -475,6 +586,13 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     final support = widget.collection == 'support_requests';
     final title = (data[support ? 'name' : 'placeName'] ?? doc.id).toString();
     final status = (data['status'] ?? '').toString();
+    final canApprove = !support &&
+        DedaIsolatedAdminProofPolicy.placeApprovalAllowed(
+          admin: widget.profile,
+          request: data,
+          requestId: doc.id,
+          expectedStatus: status,
+        );
     bool canReview(String targetStatus) =>
         !support && DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
           admin: widget.profile,
@@ -504,12 +622,18 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
               ),
             ),
           if (!support &&
-              (canReview('reviewing') ||
+              (canApprove || canReview('reviewing') ||
                canReview('needs_changes') ||
                canReview('rejected')))
             Padding(
               padding: const EdgeInsets.all(12),
               child: Wrap(spacing: 8, runSpacing: 8, children: [
+                if (canApprove)
+                  FilledButton.icon(
+                    onPressed: _sending ? null : () => _approvePlace(doc),
+                    icon: const Icon(Icons.verified_outlined),
+                    label: Text(t('اعتماد المكان', 'Approve place')),
+                  ),
                 if (canReview('reviewing'))
                   OutlinedButton(
                     onPressed: _sending ? null :
