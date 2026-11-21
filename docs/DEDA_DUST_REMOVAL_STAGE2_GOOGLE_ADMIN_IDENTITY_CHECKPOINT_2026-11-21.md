@@ -172,3 +172,12 @@
 - تغيرت فقط وحدة الإدارة المعزولة واختبارا المصدر Dart/Python وهذه الوثيقة. لا تشغيل للوحة القديمة عبر العزل حتى الآن، والعلم OFF افتراضياً، ولا تغيير Firebase Production أو Rules أو Play.
 - فحص المصدر الكامل GitHub Actions مطلوب على هذا التغيير قبل إعلان نجاح؛ العمل المتبقي هو التوصيل الفعلي لجميع عمليات Dashboard، ثم OAuth/SHA وفحص الأجهزة ونسخة APK كاملة موقعة.
 - الحالة: SOURCE_CHANGE_PENDING_QA / STAGE2_PARTIAL / DASHBOARD_NOT_WIRED / FLAG_OFF / NO_APK / NO_PHONE_QA / RELEASE_HOLD.
+
+
+### نتيجة مؤكدة: CI لقراءة السجل المعزولة وجرد 113 نداء — 21-11-2026
+- مرجع التعديل المختبر: f3fa6bf6b25923b0093faacc24c1158d580cfb8d؛ جرى تعديل وحدة العزل واختباري Dart/Python وسجل المرحلة الثانية فقط، دون تعديل ملفات DEDA الأساسية أو Firestore Rules أو مشروع Firebase الإنتاجي أو Google Play أو النسخ المحمية.
+- نجاح GitHub Actions رقم 44945947296: الوظيفتان actual-source-safety وassembled-full-app-source بالحالة success. الاختبارات: 7 Python للمرحلة 1، و13 Python للمرحلة 2 (تشمل جرد 113 نداء وأمان السجل الفردي)، و20 Flutter/Dart ناجحة. Flutter analyze: 406 ملاحظات info/warning، بلا أخطاء من فئة error، نفس خط الأساس السابق.
+- كشف تشغيلان أوليان فشل اختبار Python بسبب وقوع وظيفة القراءة الجديدة داخل نطاق اختبار القراءة القديمة، وتم تصحيح موضع الوظيفة بالمصدر ونجح التشغيل الجديد. لم يُعتمد التشغيل الفاشل ولم يغيّر التطبيق المنشور.
+- ما زال readScopedAdminRecord مهيأً في عميل الإدارة الثانوي فقط، وعلم الإدارة المعزولة OFF افتراضياً، ولم تُوصل عمليات Dashboard الحالية أو بقية الصفحات الفرعية.
+- الحالة الرسمية: SOURCE_QA_PASSED / STAGE2_PARTIAL / LEGACY_ADMIN_113_CALLS_INVENTORIED / ISOLATED_RECORD_READ_PREPARED / DASHBOARD_NOT_WIRED / GOOGLE_OAUTH_SHA_NOT_READY / NO_PHONE_QA / NO_APK / NO_PRODUCTION_WRITE / RELEASE_HOLD.
+- نقطة الاستئناف التالية: استكمال التوصيل الآمن لعمليات Dashboard والصفحات الإدارية الفرعية مع الصلاحيات الفعلية من Firestore، ثم Google OAuth/SHA، واختبار الهاتف والتابلت والخارطة وجميع الأقسام، ثم بناء APK كامل موقع إذا اجتاز الفحوص.
