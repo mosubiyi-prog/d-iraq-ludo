@@ -217,6 +217,42 @@ void main() {
           reply: List.filled(4001, 'x').join()), false);
     });
 
+    test('isolated detail access obeys document and server scope limits', () {
+      bool valid(String value) =>
+          DedaIsolatedAdminProofPolicy.validScopedDocumentId(value);
+      expect(valid('ticket_123'), true);
+      expect(valid(''), false);
+      expect(valid('../admins/owner'), false);
+      expect(valid('a/b'), false);
+      expect(valid('a' * 129), false);
+      final cutoff = Timestamp.fromDate(DateTime.utc(2026, 11, 15));
+      final older = Timestamp.fromDate(DateTime.utc(2026, 11, 1));
+      final staff = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'employee',
+        'firstLoginCompletedAt': cutoff,
+      };
+      bool matches(Map<String, dynamic>? admin, String collection,
+          Map<String, dynamic>? row) =>
+          DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+            admin: admin, collection: collection, data: row);
+      expect(matches(staff, 'support_requests', {'createdAt': cutoff}), true);
+      expect(matches(staff, 'support_requests', {'createdAt': older}), false);
+      expect(matches(staff, 'support_requests', {}), false);
+      final agent = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'province_agent',
+        'governorate': 'كركوك',
+      };
+      expect(matches(agent, 'place_requests', {'governorate': 'كركوك'}), true);
+      expect(matches(agent, 'place_requests', {'governorate': 'بغداد'}), false);
+      expect(matches(agent, 'support_requests', {}), false);
+      final gm = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'general_manager',
+      };
+      expect(matches(gm, 'users', {}), true);
+      expect(matches(gm, 'admin_audit', null), false);
+      expect(matches(gm, 'unknown_collection', {}), false);
+    });
+
     test('unknown server role never authorizes even matching gateway', () {
       final unrecognized = <String,dynamic>{
         'active':true,'status':'active','role':'mystery',

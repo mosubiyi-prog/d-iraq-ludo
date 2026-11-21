@@ -126,13 +126,16 @@ class DedaIsolatedAdminProofPolicy {
     return permissions is Map && permissions[permission] == true;
   }
 
+  static bool validScopedDocumentId(String value) =>
+      RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
+
   /// Explicitly scoped to existing support-ticket status/reply fields.
   static bool supportMutationInputAllowed({
     required String requestId,
     required String status,
     String? reply,
   }) {
-    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(requestId)) {
+    if (!validScopedDocumentId(requestId)) {
       return false;
     }
     if (!const <String>{'new', 'in_progress', 'replied', 'closed'}
@@ -143,6 +146,27 @@ class DedaIsolatedAdminProofPolicy {
     final message = reply.trim();
     return status == 'replied' && message.isNotEmpty &&
         message.length <= 4000;
+  }
+
+  /// Apply the same server role's activation/province scope to one record.
+  static bool scopedDocumentMatches({
+    required Map<String, dynamic>? admin,
+    required String collection,
+    required Map<String, dynamic>? data,
+  }) {
+    if (data == null) return false;
+    final filters = scopedReadQueryFilters(admin: admin, collection: collection);
+    if (filters == null) return false;
+    final since = filters['createdAtMin'];
+    if (since is Timestamp) {
+      final createdAt = data['createdAt'];
+      if (createdAt is! Timestamp || createdAt.compareTo(since) < 0) {
+        return false;
+      }
+    }
+    final province = filters['governorate'];
+    if (province is String && data['governorate'] != province) return false;
+    return true;
   }
 
   /// Derive query constraints from a freshly verified admin document.
@@ -394,6 +418,55 @@ class DedaIsolatedAdminIdentity {
     return rows.docs.map(
       (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
     ).toList(growable: false);
+  }
+
+  /// Authorised single-record read for future administrative detail pages.
+  /// Does not reuse the public FirebaseAuth or FirebaseFirestore client.
+  Future<Map<String, dynamic>?> readScopedAdminRecord({
+    required String dedaPhone,
+    required String collection,
+    required String recordId,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-detail-not-enabled');
+    }
+    final permission = _scopedReadPermissions[collection];
+    if (permission == null ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(recordId)) {
+      throw StateError('deda-admin-isolated-detail-scope-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: permission,
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-detail-permission-denied');
+    }
+    final snapshot = await _firestore.collection(collection).doc(recordId)
+        .get(const GetOptions(source: Source.server));
+    if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites) {
+      throw StateError('deda-admin-isolated-detail-server-required');
+    }
+    final data = snapshot.data();
+    bool inScope() => data == null ||
+        DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+          admin: verifiedAdmin, collection: collection, data: data,
+        );
+    if (!inScope() || !await proof() || !inScope() ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-detail-proof-changed');
+    }
+    if (!snapshot.exists || data == null) return null;
+    return <String, dynamic>{...data, 'id': snapshot.id};
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();

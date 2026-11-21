@@ -177,6 +177,38 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('.delete(',method)
         self.assertNotIn('signOut()',method)
 
+    def test_isolated_detail_read_has_fresh_proof_and_no_public_auth(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn('static bool validScopedDocumentId(String value)',code)
+        self.assertIn('static bool scopedDocumentMatches({',code)
+        method=code.split('Future<Map<String, dynamic>?> readScopedAdminRecord(',1)[1].split('\n  }\n',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
+        self.assertIn('_scopedReadPermissions[collection]',method)
+        self.assertIn('validScopedDocumentId(recordId)',method)
+        self.assertIn('requiredPermission: permission',method)
+        self.assertIn('_firestore.collection(collection).doc(recordId)',method)
+        self.assertIn('GetOptions(source: Source.server)',method)
+        self.assertEqual(method.count('await proof()'),2)
+        self.assertIn('scopedDocumentMatches(',method)
+        self.assertIn('_mainAuth.currentUser?.uid != publicUid',method)
+        self.assertNotIn('FirebaseFirestore.instance.collection(',method)
+        self.assertNotIn('.set(',method)
+        self.assertNotIn('.update(',method)
+        self.assertNotIn('.delete(',method)
+        self.assertNotIn('.signOut()',method)
+
+
+    def test_admin_dashboard_113_legacy_call_sites_remain_accounted_for(self):
+        import re
+        expected = {"lib/admin_pages.dart":"sendOwnerPlaceNotificationFromAdmin signInAdmin currentAdminProfile currentAdminSessionMatchesDedaEntry signOutAdmin changeCurrentAdminPassword activateAdminInvitation normalizeAdminRole normalizeAdminStatus pendingAdminRecoveryCountStream adminHasPermission supportRequestsForAdmin placeRequestsForAdmin supportRequests placeRequests publishedPlaceStream replyToSupport updateSupportStatus trashSupportRequest trashSupportRequests trashPlaceRequest adminUserSnapshot preparePlaceApproval finalizePlaceApproval updateRequestStatus markRequestViewed restoreDeletedPlaceRequest permanentlyDeletePlaceRequest deletedPlaceRequestsForAdmin restoreDeletedSupportRequest permanentlyDeleteSupportRequest deletedSupportRequestsForAdmin hidePublishedPlace restoreHiddenPublishedPlace trashPublishedPlace restoreDeletedPublishedPlace permanentlyDeletePublishedPlace deletedPlacesForGeneralManager publishedPlacesForGeneralManager","lib/admin_team_pages.dart":"normalizeAdminRole adminMembers normalizeAdminStatus markAdminInvitationShared cancelAdminInvitation adminInvitations updateAdminMember createAdminInvitation revokeAdminMemberSessions sendAdminPasswordReset deleteAdminMember adminAudit adminUserSnapshot adminUsers updatePlaceDeletionRequestStatus placeDeletionRequestsForAdmin updateAccountDeletionRequestStatus accountDeletionRequests roadHazards deleteRoadHazardAsAdmin adminHasPermission updateCurrentAdminDisplayName addGeneralManagerAdminEntryPhone adminEntryPhoneDisplay removeGeneralManagerAdminEntryPhone generalManagerAdminEntryPhones"}
+        counts = {"lib/admin_pages.dart":70,"lib/admin_team_pages.dart":43}
+        for path, names in expected.items():
+            found = re.findall(r'DedaBackend\\.([A-Za-z_0-9]+)\\s*\\(', (REPO/path).read_text())
+            self.assertEqual(len(found), counts[path], path)
+            self.assertEqual(set(found), set(names.split()), path)
+        isolated = (REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn('defaultValue: false', isolated)
+
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
         main.write_text(main.read_text().replace('onPressed: _logout,',
