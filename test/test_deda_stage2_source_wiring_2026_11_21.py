@@ -464,6 +464,106 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         for forbidden in ('FirebaseFirestore.instance.collection(','.set(','.update(','.delete('):
             self.assertNotIn(forbidden,method,forbidden)
 
+    def test_isolated_two_phase_place_approval_uses_secondary_auth(self):
+        source=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        guard=source.split("static bool placeApprovalAllowed(",1)[1].split(
+            "/// Update submissions keep",1)[0]
+        helper=source.split("_requireScopedPlaceApproval({",1)[1].split(
+            "/// Phase 1 keeps",1)[0]
+        prepare=source.split("Future<Map<String, dynamic>> prepareScopedPlaceApproval(",1)[1].split(
+            "/// Phase 2 of the legacy approval",1)[0]
+        finish=source.split("Future<void> finalizeScopedPlaceApproval(",1)[1].split(
+            "/// Stage2: review/reject",1)[0]
+        self.assertIn("'approvePlaces'",guard)
+        self.assertIn("'viewPlaceRequests'",guard)
+        self.assertIn("scopedDocumentMatches(",guard)
+        self.assertIn("created.compareTo(activated) < 0",guard)
+        self.assertIn("'pending', 'reviewing'",guard)
+        self.assertIn("request['latitude'] is! num",guard)
+        self.assertIn("request['longitude'] is! num",guard)
+        for sourcePart in (helper,prepare,finish):
+            self.assertNotIn("FirebaseAuth.instance",sourcePart)
+            self.assertNotIn("FirebaseFirestore.instance",sourcePart)
+            self.assertNotIn("DedaBackend.preparePlaceApproval",sourcePart)
+            self.assertNotIn("DedaBackend.finalizePlaceApproval",sourcePart)
+            self.assertNotIn(".signInAnonymously(",sourcePart)
+            self.assertNotIn(".signOut(",sourcePart)
+            self.assertNotIn(".delete(",sourcePart)
+        for part in ("requiredPermission: 'approvePlaces'",
+                     "requiredPermission: 'viewPlaceRequests'",
+                     "Source.server","!await proof()",
+                     "sameScopedFilters(", "_mainAuth.currentUser?.uid"):
+            if part == "requiredPermission: 'viewPlaceRequests'":
+                continue  # view is checked with allowsPermission, not a second read
+            self.assertIn(part,helper)
+        self.assertIn("permission: 'viewPlaceRequests'",helper)
+        self.assertIn("GetOptions(source: Source.server)",helper)
+        for part in ("_requireScopedPlaceApproval(",
+                     "runTransaction<Map<String, dynamic>>(",
+                     "transaction.get(requestRef)",
+                     "transaction.get(counterRef)",
+                     "transaction.get(",
+                     "approvalOriginalMatches(", "formatApprovalDate(",
+                     "placeApprovalMessage(", "approvalMessageDraft",
+                     "approvalPreparedByUid", "transaction.update(requestRef",
+                     "transaction.set(counterRef", "SetOptions(merge: true)"):
+            self.assertIn(part,prepare,part)
+        self.assertIn("newSerial = 0;",prepare)
+        self.assertIn("original.data()!['approvalNumber']",prepare)
+        self.assertIn("original.data()!['approvalDate']",prepare)
+        self.assertIn("deda-admin-isolated-approval-counter-invalid",prepare)
+        for part in ("_requireScopedPlaceApproval(",
+                     "await _firestore.runTransaction(",
+                     "transaction.get(requestRef)",
+                     "data['approvalPreparedByUid'] != actor.uid",
+                     "data['approvalPreparedAt'] is! Timestamp",
+                     "data['approvalNumber'] != expectedApprovalNumber",
+                     "approvalOriginalMatches(", "transaction.get(publishedRef)",
+                     "transaction.update(requestRef", "transaction.set(publishedRef",
+                     "'status': 'approved'", "'published': true",
+                     "'sourceRequestId': requestId", "'approvalNumber': expectedApprovalNumber",
+                     "'approvalDate': expectedApprovalDate",
+                     "SetOptions(merge: true)",
+                     "'type': 'edit_approved'", "'action': 'place_approved'",
+                     "'action': 'owner_notification_sent'",
+                     "transaction.set(approvalAudit", "FieldValue.serverTimestamp()"):
+            self.assertIn(part,finish,part)
+        self.assertLess(finish.index("transaction.get(requestRef)"),
+                        finish.index("transaction.update(requestRef"))
+        self.assertLess(finish.index("transaction.get(publishedRef)"),
+                        finish.index("transaction.set(publishedRef"))
+        self.assertIn("_auth.currentUser?.uid != actor.uid",finish)
+        self.assertIn("_mainAuth.currentUser?.uid != actor.publicUid",finish)
+
+    def test_isolated_approval_matches_existing_rules_and_old_workflow(self):
+        old=(REPO/'lib/deda_backend.dart').read_text()
+        rule=(REPO/'firestore.rules').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        identity=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn("static Future<Map<String, dynamic>> preparePlaceApproval(",old)
+        self.assertIn("static Future<void> finalizePlaceApproval(",old)
+        self.assertIn("transaction.set(\n        published,",old)
+        self.assertIn("collection('system_counters').doc('place_approval')",identity)
+        counter=rule.split('match /system_counters/{counterId} {',1)[1].split('}',1)[0]
+        self.assertIn("hasAdminPermission('approvePlaces')",counter)
+        publish=rule.split('match /published_places/{placeId} {',1)[1].split(
+            'match /deda_place_engagement/',1)[0]
+        self.assertIn("allow create: if hasAdminPermission('approvePlaces')",publish)
+        self.assertIn("allow update: if isGeneralManager()",publish)
+        notice=rule.split('match /owner_place_notifications/{notificationId} {',1)[1].split(
+            'match /place_deletion_requests/',1)[0]
+        self.assertIn("'edit_approved'",notice)
+        self.assertIn("request.resource.data.createdByUid == request.auth.uid",notice)
+        self.assertIn("'approvalNumber'",notice)
+        self.assertIn("'governorate'",notice)
+        self.assertIn("widget.admin.prepareScopedPlaceApproval(",ui)
+        self.assertIn("widget.admin.finalizeScopedPlaceApproval(",ui)
+        self.assertIn("_editApprovalMessage(",ui)
+        self.assertIn("canApprove",ui)
+        self.assertNotIn("DedaBackend.preparePlaceApproval(",ui)
+        self.assertNotIn("DedaBackend.finalizePlaceApproval(",ui)
+        self.assertNotIn("DedaBackend.updateRequestStatus(",ui)
+
     def test_isolated_place_review_atomic_writes_and_no_approval_shortcut(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
