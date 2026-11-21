@@ -254,14 +254,15 @@ Future<void> main() async {"""
         )
         dashboard_body = one(
             dashboard_body,
-            '  Widget build(BuildContext context) {\n    final profile = _profile;',
+            '  Widget build(BuildContext context) {',
             """  Widget build(BuildContext context) {
+    // Reject all public-admin Dashboard paths while the secondary principal
+    // is active, before any legacy widgets or backend streams are built.
     if (dedaIsolatedAdminIdentityEnabled) {
       return const Scaffold(
         body: Center(child: Text('Use isolated administrator sign-in.')),
       );
-    }
-    final profile = _profile;""",
+    }""",
             'legacy-dashboard-build-fail-closed',
         )
         admin_source = (before_dashboard + dashboard_start + dashboard_body +
