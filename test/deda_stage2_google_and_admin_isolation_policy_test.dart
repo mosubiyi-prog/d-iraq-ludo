@@ -131,6 +131,29 @@ void main() {
       expect(verify(entry:missingRole), false);
       expect(verify(entry:{...gateway,'allowedRole':'employee'}), false);
     });
+    test('UID-bound general manager gateway never transfers access', () {
+      expect(verify(entry:{...gateway,'adminUid':adminUid}), true);
+      expect(verify(uid:'new-uid',entry:{...gateway,'adminUid':adminUid}), false);
+      expect(verify(entry:{...gateway,'adminUid':'someone-else'}), false);
+      expect(verify(entry:gateway), true);
+    });
+    test('isolated admin operations require explicit role and permissions', () {
+      bool can(Map<String,dynamic>? data, String permission) =>
+          DedaIsolatedAdminProofPolicy.allowsPermission(
+            admin:data,permission:permission);
+      expect(can(record,'viewAudit'), true);
+      expect(can(record,'nonexistentPermission'), false);
+      expect(can({'active':true,'status':'active','role':''},'viewUsers'), false);
+      expect(can({'active':true,'status':'active'},'viewUsers'), false);
+      final employee = <String,dynamic>{
+        'active':true,'status':'active','role':'employee',
+        'permissions':<String,bool>{'supportRead':true,'viewUsers':false},
+      };
+      expect(can(employee,'supportRead'), true);
+      expect(can(employee,'viewUsers'), false);
+      expect(can({...employee,'status':'disabled'},'supportRead'), false);
+      expect(can({...employee,'permissions':<String,bool>{}},'supportRead'), false);
+    });
     test('Google email by itself never grants admin', () {
       expect(verify(uid:'new-google-uid',admin:{
         'active': false,'status':'disabled','role':'general_manager',
