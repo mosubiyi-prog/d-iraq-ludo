@@ -355,9 +355,9 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
     def test_dashboard_build_guard_precedes_compiled_body_variations(self):
         admin=self.dst/'lib/admin_pages.dart'
         original=admin.read_text()
-        before='  Widget build(BuildContext context) {\\n    final profile = _profile;'
-        after=('  Widget build(BuildContext context) {\\n'
-               '    final sourceAssemblyWidgetGate = true;\\n'
+        before='  Widget build(BuildContext context) {\n    final profile = _profile;'
+        after=('  Widget build(BuildContext context) {\n'
+               '    final sourceAssemblyWidgetGate = true;\n'
                '    final profile = _profile;')
         self.assertEqual(original.count(before),1)
         admin.write_text(original.replace(before,after,1))
