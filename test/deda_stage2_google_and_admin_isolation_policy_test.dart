@@ -143,6 +143,7 @@ void main() {
           DedaIsolatedAdminProofPolicy.allowsPermission(
             admin:data,permission:permission);
       expect(can(record,'viewAudit'), true);
+      expect(can(record,'viewTeam'), true);
       expect(can(record,'nonexistentPermission'), false);
       expect(can({'active':true,'status':'active','role':''},'viewUsers'), false);
       expect(can({'active':true,'status':'active'},'viewUsers'), false);
@@ -152,6 +153,8 @@ void main() {
       };
       expect(can(employee,'supportRead'), true);
       expect(can(employee,'viewUsers'), false);
+      expect(can({...employee,'permissions':<String,bool>{'viewTeam':true}},
+          'viewTeam'), false);
       expect(can({...employee,'status':'disabled'},'supportRead'), false);
       expect(can({...employee,'permissions':<String,bool>{}},'supportRead'), false);
       final province = <String,dynamic>{
@@ -165,6 +168,8 @@ void main() {
       expect(can(province,'supportReply'), false);
       expect(can(province,'viewUsers'), false);
       expect(can(province,'viewAudit'), false);
+      expect(can({...province,'permissions':<String,bool>{'viewTeam':true}},
+          'viewTeam'), false);
       expect(can(province,'viewPlaceRequests'), true);
     });
     test('scoped admin read matches Firestore activation and province rules', () {
@@ -174,6 +179,7 @@ void main() {
           );
       expect(scope(record,'support_requests'), isEmpty);
       expect(scope(record,'place_requests'), isEmpty);
+      expect(scope(record,'admins'), isEmpty);
       final activation = Timestamp.fromDate(DateTime.utc(2026, 11, 1));
       final staff = <String,dynamic>{
         'active':true,'status':'active','role':'employee',
@@ -183,6 +189,7 @@ void main() {
       expect(scope(staff,'place_requests')?['createdAtMin'],activation);
       expect(scope(staff,'users'), isEmpty);
       expect(scope(staff,'admin_audit'), isEmpty);
+      expect(scope(staff,'admins'), isNull);
       expect(scope({...staff}..remove('firstLoginCompletedAt'),
           'support_requests'),isNull);
       expect(scope({...staff,'firstLoginCompletedAt':'2026-11-01'},
@@ -195,6 +202,7 @@ void main() {
       expect(scope(province,'support_requests'),isNull);
       expect(scope(province,'users'),isNull);
       expect(scope(province,'admin_audit'),isNull);
+      expect(scope(province,'admins'),isNull);
       expect(scope({...province,'governorate':''},'place_requests'),isNull);
       expect(scope(record,'not_in_allowlist'),isNull);
       expect(scope({'active':true,'status':'active','role':'mystery'},'users'),isNull);
