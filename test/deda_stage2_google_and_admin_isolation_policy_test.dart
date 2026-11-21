@@ -96,6 +96,7 @@ void main() {
       expect(verify(accountKey:'different-account'), false);
       expect(verify(entry:{...gateway,'accountKey':'other'}), false);
       expect(verify(entry:{...gateway,'allowedRole':'employee'}), false);
+      expect(verify(entry:{...gateway,'accessType':'unknown'}), false);
       expect(verify(admin:{...record,'role':'employee'}), false);
     });
     test('Google email by itself never grants admin', () {
