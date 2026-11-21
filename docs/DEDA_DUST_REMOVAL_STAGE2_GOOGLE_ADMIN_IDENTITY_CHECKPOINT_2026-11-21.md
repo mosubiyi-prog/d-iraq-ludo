@@ -190,3 +190,13 @@
 - اختبارا Dart وPython يغطيان اختلاف تاريخ التفعيل ومحافظة الوكيل وإبطال الصلاحيات وحماية عميل Firebase العام. **المسارات الجديدة لا تزال غير موصولة بلوحة Dashboard القديمة؛ تظل ميزة العزل OFF حتى يكتمل نقل وظائف الإدارة وفحص الأجهزة.**
 - قبل اعتماد هذه الإضافة، يجب التحقق من GitHub Actions بنفس فحوص المصدر الكامل. لا APK ولا نشر ولا تغيير إعدادات Google OAuth/SHA في هذا التعديل.
 - التالي: وصل اشتراكات ولوحة الإدارة/الصفحات الفرعية في مسار يلتزم بجرد 113 استدعاء قديم، ثم تهيئة Google OAuth/SHA وفحوص الهاتف والتابلت والخارطة والأقسام.
+
+
+### إثبات نجاح اشتراكات الإدارة المعزولة وفحوص المصدر الكاملة — 21-11-2026
+- المرجع الفعلي المختبر للشفرة: c82262960653dd36aabc2de4952c5bf06b73d460، على نفس الفرع الوحيد deda-100451-owner-admin-session-safe-repair-2026-11-20.
+- تشغيل GitHub Actions رقم 44947083106: SUCCESS للوظيفتين actual-source-safety وassembled-full-app-source، يشمل 7 اختبارات Python للمرحلة الأولى و15 اختبار Python للمرحلة الثانية و21 اختبار Flutter/Dart ناجحة، وتحليل Flutter دون أي error وبمجموع 406 ملاحظات info/warning، وهو نفس خط الأساس السابق.
+- التغيير ضمن وحدة lib/deda_stage2_isolated_admin_identity_2026_11_21.dart واختباري Dart/Python والتوثيق فقط. تمت مقارنة الشفرة مع 24ca06a0 ولم تتغير lib/admin_pages.dart أو lib/admin_team_pages.dart أو lib/main.dart أو lib/deda_backend.dart أو Firestore rules أو Android أو أي ملف إنتاجي.
+- تم إعداد watchScopedAdminRequests لطلبات الدعم والأماكن فقط وإثبات هوية الإدارة عبر readVerifiedAdminProfile. فحص صلاحيات الخادم ونطاق العرض وتاريخ التفعيل/المحافظة وثبات UID عند كل حدث، ومنع عرض cache، وإهمال snapshot الأول من الذاكرة حتى وصول الخادم مع قطع الاشتراك عند فقد الخادم بعد تقديم بيانات موثوقة. تمت أيضاً إعادة فحص نطاق readScopedAdminList بعد جلب البيانات.
+- نجاح فحص المصدر **لا يثبت تشغيل Dashboard**: الأساليب الجديدة لم توصل بعد بصفحات الإدارة القديمة، ولا يتم تفعيلها في الحزمة المنشورة. إعداد Google OAuth/SHA لم يكتمل، ولا يوجد APK أو فحص هاتف/تابلت؛ علم العزل OFF افتراضياً، ولا تحديث Firebase الإنتاجي أو Google Play.
+- الحالة: SOURCE_QA_PASSED / ISOLATED_ADMIN_REQUEST_STREAMS_PREPARED / READ_PROFILE_SERVER_VERIFIED / DASHBOARD_NOT_WIRED / GOOGLE_OAUTH_SHA_INCOMPLETE / NO_DEVICE_QA / NO_APK / RELEASE_HOLD.
+- الاستئناف التالي: توصيل جميع وظائف لوحة الإدارة الأصلية مع النقل الآمن للقراءات والاشتراكات والكتابات والإشعارات والدوري وصلاحيات المدير/الموظفين، مع استمرار جرد 113 استدعاء، ثم OAuth/SHA واختبار الأجهزة والأقسام وتسليم APK كامل موقّع بعد إثبات السلامة.
