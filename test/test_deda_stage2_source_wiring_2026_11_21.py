@@ -137,6 +137,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         probe=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('(boundUid.isEmpty || boundUid == authUid)',probe)
         self.assertIn('static bool allowsPermission({',probe)
+        self.assertIn("normalizedRole == 'province_agent'",probe)
+        self.assertIn("'supportRead', 'supportReply', 'viewUsers', 'viewAudit'",probe)
         self.assertIn("'support_requests': 'supportRead'",probe)
         self.assertIn("'admin_audit': 'viewAudit'",probe)
         scoped=probe.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(

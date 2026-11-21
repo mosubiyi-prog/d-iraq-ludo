@@ -153,6 +153,18 @@ void main() {
       expect(can(employee,'viewUsers'), false);
       expect(can({...employee,'status':'disabled'},'supportRead'), false);
       expect(can({...employee,'permissions':<String,bool>{}},'supportRead'), false);
+      final province = <String,dynamic>{
+        'active':true,'status':'active','role':'province_agent',
+        'permissions':<String,bool>{
+          'supportRead':true,'supportReply':true,'viewUsers':true,
+          'viewAudit':true,'viewPlaceRequests':true,
+        },
+      };
+      expect(can(province,'supportRead'), false);
+      expect(can(province,'supportReply'), false);
+      expect(can(province,'viewUsers'), false);
+      expect(can(province,'viewAudit'), false);
+      expect(can(province,'viewPlaceRequests'), true);
     });
     test('Google email by itself never grants admin', () {
       expect(verify(uid:'new-google-uid',admin:{

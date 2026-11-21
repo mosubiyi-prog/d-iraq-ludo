@@ -106,7 +106,16 @@ class DedaIsolatedAdminProofPolicy {
     final role = (admin['role'] ?? admin['jobTitle'] ?? '')
         .toString().trim().toLowerCase();
     if (role.isEmpty) { return false; }
-    if (DedaBackend.normalizeAdminRole(role) == 'general_manager') { return true; }
+    final normalizedRole = DedaBackend.normalizeAdminRole(role);
+    if (normalizedRole == 'general_manager') { return true; }
+    // Firestore rules deny these four actions to province agents even if
+    // a legacy permissions map accidentally contains a true value.
+    if (normalizedRole == 'province_agent' &&
+        const <String>{
+          'supportRead', 'supportReply', 'viewUsers', 'viewAudit',
+        }.contains(permission)) {
+      return false;
+    }
     final permissions = admin['permissions'];
     return permissions is Map && permissions[permission] == true;
   }
