@@ -465,6 +465,13 @@ class DedaIsolatedAdminProofPolicy {
   }
 }
 
+/// Opaque server-backed page cursor: only the independent administrator
+/// FirebaseApp creates these snapshots; no Firestore handle is exposed.
+typedef DedaIsolatedManagerPage = ({
+  List<Map<String, dynamic>> rows,
+  QueryDocumentSnapshot<Map<String, dynamic>>? nextCursor,
+});
+
 class DedaIsolatedAdminIdentity {
   DedaIsolatedAdminIdentity._(this._auth, this._firestore, this._mainAuth);
 
@@ -696,6 +703,73 @@ class DedaIsolatedAdminIdentity {
     return rows.docs.map(
       (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
     ).toList(growable: false);
+  }
+
+  /// Stable Firestore document-ID keyset pagination. A 51st record proves
+  /// the next page exists; the manager can read it without widening the 50
+  /// document cap or reusing stale role data after each page fetch.
+  Future<DedaIsolatedManagerPage> readScopedManagerPage({
+    required String dedaPhone,
+    required String collection,
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
+    int pageSize = 50,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !const <String>{
+          'published_places', 'admin_trash_place_requests',
+          'admin_trash_places',
+        }.contains(collection) ||
+        pageSize < 1 || pageSize > 50) {
+      throw StateError('deda-admin-isolated-manager-page-input-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-manager-page-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'managePlaceArchives',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof() ||
+        DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+          admin: verifiedAdmin, collection: collection,
+        )?.isNotEmpty != false) {
+      throw StateError('deda-admin-isolated-manager-page-role-denied');
+    }
+    Query<Map<String, dynamic>> query = _firestore.collection(collection)
+        .orderBy(FieldPath.documentId);
+    if (startAfter != null) {
+      if (startAfter.reference.parent.path != collection ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfter.id)) {
+        throw StateError('deda-admin-isolated-manager-page-cursor-denied');
+      }
+      query = query.startAfterDocument(startAfter);
+    }
+    final snapshot = await query.limit(pageSize + 1)
+        .get(const GetOptions(source: Source.server));
+    if (snapshot.metadata.isFromCache ||
+        snapshot.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() ||
+        DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+          admin: verifiedAdmin, collection: collection,
+        )?.isNotEmpty != false) {
+      throw StateError('deda-admin-isolated-manager-page-proof-changed');
+    }
+    final visible = snapshot.docs.take(pageSize).toList(growable: false);
+    return (
+      rows: visible.map((doc) =>
+        <String, dynamic>{...doc.data(), 'id': doc.id},
+      ).toList(growable: false),
+      nextCursor: snapshot.docs.length > pageSize ? visible.last : null,
+    );
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();
