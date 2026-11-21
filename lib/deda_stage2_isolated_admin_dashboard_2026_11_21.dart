@@ -555,6 +555,11 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         admin: widget.profile, permission: 'supportReply',
       );
 
+  bool get _canArchivePlace => widget.collection == 'place_requests' &&
+      DedaIsolatedAdminProofPolicy.allowsPermission(
+        admin: widget.profile, permission: 'managePlaceArchives',
+      );
+
   Future<void> _setStatus(String id, String status) async {
     if (!_canReply || _sending) return;
     setState(() => _sending = true);
@@ -683,6 +688,56 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
             'Approval failed. Verify permissions and place details.',
           ))),
         );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _archivePlaceRequest(String id) async {
+    if (!_canArchivePlace || _sending) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('نقل الطلب إلى محذوفات المدير العام',
+            'Move request to general-manager trash')),
+        content: Text(t('تأكيد نقل الطلب إلى المحذوفات؟',
+            'Move this request to recoverable trash?') + '\n$id'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('تأكيد', 'Confirm')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await widget.admin.mutateScopedPlaceArchive(
+        dedaPhone: widget.dedaPhone,
+        sourceCollection: 'place_requests',
+        recordId: id,
+        action: 'trash',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('نُقل الطلب إلى المحذوفات.',
+              'Request archived for recovery.')),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t(
+            'تعذّر نقل الطلب؛ راجع حالة الصلاحيات والسجل.',
+            'Could not archive the request; verify rights and record.',
+          )),
+        ));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -906,6 +961,19 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
                     child: Text(t('رفض الطلب', 'Reject request')),
                   ),
               ]),
+            ),
+          if (!support && _canArchivePlace)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: _sending ? null :
+                      () => _archivePlaceRequest(doc.id),
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(t('نقل الطلب للمحذوفات', 'Archive request')),
+                ),
+              ),
             ),
           if (support && _canReply)
             Padding(
