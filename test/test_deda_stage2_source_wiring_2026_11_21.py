@@ -328,7 +328,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         admin=self.dst/'lib/admin_pages.dart'
         original=admin.read_text()
         before='class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {'
-        after='class _DedaAdminDashboardPageState\\n    extends State<DedaAdminDashboardPage> {'
+        after='class _DedaAdminDashboardPageState\n    extends State<DedaAdminDashboardPage> {'
         self.assertEqual(original.count(before),1)
         admin.write_text(original.replace(before,after,1))
         binder.prepare(self.dst)
