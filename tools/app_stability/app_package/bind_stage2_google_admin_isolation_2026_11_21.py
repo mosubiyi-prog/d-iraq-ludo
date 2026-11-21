@@ -333,7 +333,26 @@ Future<void> main() async {"""
         if name == 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart':
             # This view reuses the *single* disabled-by-default constant
             # from isolated identity; never define another feature flag here.
-            if (text.count('if (!dedaIsolatedAdminIdentityEnabled)') != 2 or
+            # Exactly one fail-closed feature check per active UI surface:
+            # dashboard, GM-only archive screen, and requests screen. The
+            # earlier two-screen guard must NOT disable this third guard.
+            sections = (
+                text.split('class _DedaStage2IsolatedDashboardPageState', 1)[1]
+                    .split('class _DedaIsolatedReadOnlyTab', 1)[0],
+                text.split('class _DedaIsolatedManagerPlacesTabState', 1)[1]
+                    .split('class _DedaIsolatedRequestTab', 1)[0],
+                text.split('class _DedaIsolatedRequestTabState', 1)[1],
+            ) if all(marker in text for marker in (
+                'class _DedaStage2IsolatedDashboardPageState',
+                'class _DedaIsolatedManagerPlacesTabState',
+                'class _DedaIsolatedRequestTabState',
+            )) else ()
+            if (text.count('if (!dedaIsolatedAdminIdentityEnabled)') != 3 or
+                    len(sections) != 3 or
+                    any(part.count('if (!dedaIsolatedAdminIdentityEnabled)') != 1
+                        for part in sections) or
+                    "if (can('managePlaceArchives'))" not in sections[0] or
+                    'mutateScopedPlaceArchive(' not in sections[1] or
                     'bool.fromEnvironment(' in text or
                     'FirebaseAuth.instance' in text or
                     'FirebaseFirestore.instance' in text or
