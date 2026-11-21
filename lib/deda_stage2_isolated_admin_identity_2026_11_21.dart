@@ -939,21 +939,22 @@ class DedaIsolatedAdminIdentity {
           }
           number = (original.data()!['approvalNumber']).toString().trim();
           date = (original.data()!['approvalDate']).toString().trim();
-        } else if (number.isEmpty) {
+        } else {
+          // User-created place_requests are allowed to carry extra fields by
+          // the current Firestore CREATE rule. They could supply a forged
+          // approvalNumber/preparedAt; never reuse that untrusted input.
+          // An abandoned preview may consume a serial (as in the old UI),
+          // but only the privileged counter allocates the actual number.
           final counter = await transaction.get(counterRef);
           final rawValue = counter.data()?['value'];
-          if (rawValue != null && (rawValue is! num ||
+          if (rawValue != null && (rawValue is! int ||
               rawValue < 0 || rawValue > 99999998)) {
             throw StateError('deda-admin-isolated-approval-counter-invalid');
           }
-          newSerial = ((rawValue as num?)?.toInt() ?? 0) + 1;
+          newSerial = (rawValue as int? ?? 0) + 1;
           final now = DateTime.now();
           number = 'DEDA-${now.year}-${newSerial.toString().padLeft(7, '0')}';
           date = DedaIsolatedAdminProofPolicy.formatApprovalDate(now);
-        } else if (date.isEmpty) {
-          // A reserved number without its matching date is not a trustworthy
-          // approval identity. Do not fabricate another identity.
-          throw StateError('deda-admin-isolated-approval-reservation-incomplete');
         }
         if (newSerial > 0) {
           transaction.set(counterRef, <String, dynamic>{
