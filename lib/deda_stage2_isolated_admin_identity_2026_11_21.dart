@@ -59,6 +59,8 @@ class DedaIsolatedAdminProofPolicy {
           (entry['allowedRole'] ?? 'general_manager').toString() ==
               'general_manager';
     }
+    // Unknown gateway types must not inherit the generic member path.
+    if (accessType != 'member') return false;
     final allowedRole = DedaBackend.normalizeAdminRole(
         entry['allowedRole'] ?? entry['role']);
     if (allowedRole != adminRole) return false;
