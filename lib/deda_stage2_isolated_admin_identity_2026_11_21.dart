@@ -169,9 +169,13 @@ class DedaIsolatedAdminProofPolicy {
     const sourceStatuses = <String>{
       'pending', 'reviewing', 'needs_changes', 'rejected',
     };
-    if (!sourceStatuses.contains(expectedStatus)) return false;
+    if (!sourceStatuses.contains(expectedStatus)) {
+      return false;
+    }
     if (!const <String>{'reviewing', 'needs_changes', 'rejected'}
-        .contains(targetStatus)) return false;
+        .contains(targetStatus)) {
+      return false;
+    }
     final permission = targetStatus == 'rejected'
         ? 'rejectPlaces' : 'reviewPlaceRequests';
     if (!allowsPermission(admin: admin, permission: permission) ||
@@ -187,7 +191,9 @@ class DedaIsolatedAdminProofPolicy {
       final activation = admin['firstLoginCompletedAt'];
       final createdAt = request['createdAt'];
       if (activation is! Timestamp || createdAt is! Timestamp ||
-          createdAt.compareTo(activation) < 0) return false;
+          createdAt.compareTo(activation) < 0) {
+        return false;
+      }
     }
     final cleanNote = (note ?? '').trim();
     if (targetStatus == 'reviewing') {
@@ -638,13 +644,18 @@ class DedaIsolatedAdminIdentity {
           _mainAuth.currentUser?.uid != publicUid) {
         throw StateError('deda-admin-isolated-watch-session-changed');
       }
-      if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites) {
-        // Never deliver cached admin data, but a normal online listener may
-        // emit an initial cache snapshot before the first server response.
-        // If connectivity drops AFTER server data was shown, fail closed.
+      if (snapshot.metadata.isFromCache) {
+        // Never expose cached admin data. Offline or cache-only delivery
+        // AFTER a confirmed server snapshot fails closed.
         if (deliveredFreshServerSnapshot) {
           throw StateError('deda-admin-isolated-watch-server-lost');
         }
+        continue;
+      }
+      if (snapshot.metadata.hasPendingWrites) {
+        // An admin action on THIS secondary client first produces a local
+        // pending-write event. Do not display the unconfirmed data or
+        // destroy the listener: await the next server-confirmed version.
         continue;
       }
       if (!await proof()) {
@@ -812,7 +823,9 @@ class DedaIsolatedAdminIdentity {
     await _firestore.runTransaction((transaction) async {
       final fresh = await transaction.get(requestRef);
       final latest = fresh.data();
-      if (!fresh.exists || latest == null ||
+      if (_auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !fresh.exists || latest == null ||
           !DedaIsolatedAdminProofPolicy.placeReviewMutationAllowed(
             admin: admin,
             request: latest,
@@ -870,6 +883,25 @@ class DedaIsolatedAdminIdentity {
             'createdByUid': uid,
             'createdByName': name,
             'createdByRole': role,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          // Match the legacy owner-notification audit, but commit it
+          // atomically with the request and notification.
+          transaction.set(_firestore.collection('admin_audit').doc(),
+              <String, dynamic>{
+            'action': 'owner_notification_sent',
+            'adminUid': uid,
+            'adminName': name,
+            'adminRole': role,
+            'notificationType': 'needs_changes',
+            'sourceType': 'place_requests',
+            'sourceId': id,
+            'placeId': placeId,
+            'placeName': placeName,
+            'accountKey': accountKey,
+            'title': 'يحتاج طلبك تعديل',
+            'message': 'طلب المكان «$placeName» يحتاج إلى تعديل قبل '
+                'اعتماده. ملاحظة الإدارة: $cleanNote',
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
