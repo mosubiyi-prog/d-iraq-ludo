@@ -167,6 +167,49 @@ void main() {
       expect(allowed(target: {...activeStaff, 'role': 'province_agent'}), true);
     });
 
+    test('invitation cancellation rejects claimed and foreign gateways', () {
+      const inviteId = 'invite-123';
+      final pending = <String, dynamic>{
+        'status': 'pending', 'role': 'employee',
+        'phone': account, 'email': 'staff@deda.test',
+      };
+      final entry = <String, dynamic>{
+        'accountKey': account, 'inviteId': inviteId,
+        'accessType': 'member', 'allowedRole': 'employee',
+        'allowedAdminEmail': 'staff@deda.test',
+        'adminUid': '', 'active': true, 'status': 'invited',
+      };
+      bool canCancel({
+        String id = inviteId,
+        String gatewayAccount = account,
+        Map<String, dynamic>? actor,
+        Map<String, dynamic>? invitation,
+        Map<String, dynamic>? gateway,
+        String reason = 'Cancelled by general manager',
+      }) => DedaIsolatedAdminProofPolicy.invitationCancellationAllowed(
+        actorUid: adminUid, actor: actor ?? record,
+        inviteId: id, invitation: invitation ?? pending,
+        accountKey: gatewayAccount, entry: gateway ?? entry,
+        reason: reason,
+      );
+      expect(canCancel(), true);
+      expect(canCancel(id: '../admins/other'), false);
+      expect(canCancel(id: 'other-invite'), false);
+      expect(canCancel(gatewayAccount: '9647912345678'), false);
+      expect(canCancel(reason: ' '), false);
+      expect(canCancel(reason: List<String>.filled(401, 'x').join()), false);
+      expect(canCancel(actor: {...record, 'role': ''}), false);
+      expect(canCancel(invitation: {...pending, 'status': 'claimed'}), false);
+      expect(canCancel(invitation: {...pending, 'claimedUid': 'staff-uid'}), false);
+      expect(canCancel(invitation: {...pending, 'role': 'general_manager'}), false);
+      expect(canCancel(invitation: {...pending, 'role': ''}), false);
+      expect(canCancel(gateway: {...entry, 'adminUid': 'staff-uid'}), false);
+      expect(canCancel(gateway: {...entry, 'status': 'active'}), false);
+      expect(canCancel(gateway: {...entry, 'allowedRole': 'province_agent'}), false);
+      expect(canCancel(gateway: {...entry, 'inviteId': 'other'}), false);
+      expect(canCancel(gateway: {...entry, 'allowedAdminEmail': 'foreign@deda.test'}), false);
+    });
+
     test('isolated admin operations require explicit role and permissions', () {
       bool can(Map<String,dynamic>? data, String permission) =>
           DedaIsolatedAdminProofPolicy.allowsPermission(
