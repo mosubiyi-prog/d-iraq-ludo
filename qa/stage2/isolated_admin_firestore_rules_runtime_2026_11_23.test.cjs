@@ -1,0 +1,196 @@
+"use strict";
+/*
+ * Stage2 administrator rules integration gate. Synthetic, throwaway data
+ * against the checked-in Firestore rules on LOCAL EMULATOR ONLY.
+ * This does not invoke Firebase production, Admin SDK, Cloud Functions or
+ * DEDA wallets, and does not assert Flutter UI/device success.
+ */
+const fs = require("node:fs");
+const assert = require("node:assert/strict");
+const { test } = require("node:test");
+const firebase = require("firebase/compat/app");
+require("firebase/compat/firestore");
+const {
+  initializeTestEnvironment, assertSucceeds, assertFails
+} = require("@firebase/rules-unit-testing");
+
+const project = "demo-deda-stage2-isolated-admin-private-qa";
+const account = "9647712345678";
+const secondaryAccount = "9647712345679";
+const managerUid = "qa_manager_uid";
+const staffUid = "qa_staff_uid";
+const publicUid = "qa_public_uid";
+const outsiderUid = "qa_outsider_uid";
+const gmEmail = "qa.manager@example.invalid";
+const staffEmail = "qa.staff@example.invalid";
+const sent = () => firebase.firestore.FieldValue.serverTimestamp();
+const expires = () => firebase.firestore.Timestamp.fromDate(
+  new Date(Date.now() + 3600000));
+const makeInvitation = (id, phone, email = staffEmail) => ({
+  adminId: id,
+  displayName: "QA Staff Person",
+  email,
+  phone,
+  department: "Support",
+  role: "employee",
+  governorate: "",
+  permissions: {supportRead: true},
+  status: "pending",
+  activationCode: "12345678",
+  createdByUid: managerUid,
+  createdByName: "QA General Manager",
+  createdAt: sent(),
+  updatedAt: sent(),
+  expiresAt: expires(),
+});
+const recovery = () => ({
+  requesterUid: publicUid,
+  accountKey: account,
+  phone: "07712345678",
+  fullName: "QA Staff Member",
+  email: staffEmail,
+  targetAdminUid: staffUid,
+  targetAdminId: "DEDA-ADM-QA-STAFF",
+  targetRole: "employee",
+  status: "new",
+  createdAt: sent(),
+  updatedAt: sent(),
+});
+
+test("actual checked-in Firestore rules: secondary admin isolation + release holds",{
+  timeout: 180000,
+}, async (t) => {
+  assert.equal(process.env.DEDA_EMULATOR_ONLY, "true");
+  assert.equal(process.env.FIRESTORE_EMULATOR_HOST, "127.0.0.1:8097");
+  const env = await initializeTestEnvironment({
+    projectId: project,
+    firestore: {
+      rules: fs.readFileSync("firestore.rules", "utf8"),
+      host: "127.0.0.1", port: 8097,
+    },
+  });
+  const manager = env.authenticatedContext(managerUid, {email: gmEmail})
+    .firestore();
+  const staff = env.authenticatedContext(staffUid, {email: staffEmail})
+    .firestore();
+  const publicDb = env.authenticatedContext(publicUid)
+    .firestore();
+  const outsider = env.authenticatedContext(outsiderUid, {
+    email: "not.staff@example.invalid",
+  }).firestore();
+  try {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await Promise.all([
+        db.doc("admins/" + managerUid).set({
+          role: "general_manager", active: true, status: "active",
+          email: gmEmail, displayName: "QA General Manager",
+        }),
+        db.doc("admins/" + staffUid).set({
+          role: "employee", active: true, status: "active",
+          email: staffEmail, displayName: "QA Staff Member",
+          adminId: "DEDA-ADM-QA-STAFF", phone: account,
+          permissions: {supportRead: true},
+        }),
+        db.doc("deda_sessions/" + publicUid).set({
+          uid: publicUid, accountKey: account,
+        }),
+        db.doc("admin_entry_access/" + account).set({
+          accountKey: account, accessType: "member",
+          allowedRole: "employee", allowedAdminEmail: staffEmail,
+          active: true, status: "active", adminUid: staffUid,
+          adminId: "DEDA-ADM-QA-STAFF",
+        }),
+        db.doc("admin_entry_access/" + secondaryAccount).set({
+          accountKey: secondaryAccount, accessType: "general_manager_gateway",
+          allowedRole: "general_manager", active: true, status: "active",
+          managedByUid: managerUid,
+        }),
+      ]);
+    });
+
+    await t.test("unrelated users cannot read admin team or pending invite", async () => {
+      await assertFails(outsider.collection("admins").get());
+      await assertFails(outsider.doc("admins/" + staffUid).get());
+      await assertSucceeds(manager.collection("admins").get());
+      await assertFails(outsider.doc("admin_invites/private_pending").get());
+    });
+
+    await t.test("owner's public UID reads only its own entry gateway", async () => {
+      await assertSucceeds(publicDb.doc("admin_entry_access/" + account).get());
+      await assertFails(outsider.doc("admin_entry_access/" + account).get());
+    });
+
+    await t.test("manager may create a valid subordinate invite; outsider cannot", async () => {
+      await assertSucceeds(manager.doc("admin_invites/private_pending").set(
+        makeInvitation("DEDA-ADM-QA-INVITE", account)));
+      await assertFails(outsider.doc("admin_invites/private_forged").set(
+        makeInvitation("DEDA-ADM-QA-FORGED", secondaryAccount)));
+    });
+
+    await t.test("wrong code/email cannot claim, intended staff may claim", async () => {
+      const ref = staff.doc("admin_invites/private_pending");
+      await assertFails(ref.update({
+        status: "claimed", claimedUid: staffUid,
+        claimCode: "00000000", claimedAt: sent(), updatedAt: sent(),
+      }));
+      await assertFails(outsider.doc("admin_invites/private_pending").update({
+        status: "claimed", claimedUid: outsiderUid,
+        claimCode: "12345678", claimedAt: sent(), updatedAt: sent(),
+      }));
+      await assertSucceeds(ref.update({
+        status: "claimed", claimedUid: staffUid,
+        claimCode: "12345678", claimedAt: sent(), updatedAt: sent(),
+      }));
+      const claimed = await assertSucceeds(ref.get());
+      assert.equal(claimed.data().claimedUid, staffUid);
+    });
+
+    await t.test("requester owns recovery request; GM decides, staff cannot", async () => {
+      const path = "admin_recovery_requests/qa_recovery";
+      await assertSucceeds(publicDb.doc(path).set(recovery()));
+      await assertFails(outsider.doc(path).get());
+      await assertSucceeds(publicDb.doc(path).get());
+      await assertFails(staff.doc(path).update({
+        status: "ready", decisionByUid: staffUid,
+        decisionByName: "Not GM", decisionAt: sent(),
+        updatedAt: sent(), rejectionReason: "",
+        recoveryPin: "123456",
+        recoveryPinIssuedAt: sent(), recoveryPinExpiresAt: expires(),
+      }));
+      await assertSucceeds(manager.doc(path).update({
+        status: "ready", decisionByUid: managerUid,
+        decisionByName: "QA General Manager", decisionAt: sent(),
+        updatedAt: sent(), rejectionReason: "",
+        recoveryPin: "123456",
+        recoveryPinIssuedAt: sent(), recoveryPinExpiresAt: expires(),
+      }));
+      await assertFails(manager.doc(path).update({status: "rejected"}));
+    });
+
+    await t.test("release-hold observation: two concurrent emails are not server-unique", async () => {
+      const email = "qa.duplicate@example.invalid";
+      // Existing rules don't enforce uniqueness of the email across docs.
+      const first = manager.doc("admin_invites/parallel_one");
+      const second = manager.doc("admin_invites/parallel_two");
+      await Promise.all([
+        assertSucceeds(first.set(makeInvitation("DEDA-ADM-PARA", account, email))),
+        assertSucceeds(second.set(makeInvitation("DEDA-ADM-PARB",
+          secondaryAccount, email))),
+      ]);
+      assert.equal((await first.get()).data().email,
+        (await second.get()).data().email);
+      console.log("RELEASE_HOLD_DUPLICATE_ADMIN_INVITE_EMAIL_ALLOWED_BY_CURRENT_RULES");
+    });
+
+    await t.test("release-hold observation: rules permit manager deleting final gateway", async () => {
+      // This records existing RULES behavior, not a desired safety property:
+      // client anchor checks alone cannot defend against legacy clients.
+      await assertSucceeds(manager.doc("admin_entry_access/" + secondaryAccount)
+        .delete());
+      console.log("RELEASE_HOLD_LAST_GM_GATEWAY_DELETE_ALLOWED_BY_CURRENT_RULES");
+    });
+  } finally {
+    await env.cleanup();
+  }
+});
