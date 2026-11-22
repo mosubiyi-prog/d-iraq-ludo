@@ -134,6 +134,31 @@ class DedaIsolatedAdminProofPolicy {
   static bool validScopedDocumentId(String value) =>
       RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
 
+  /// Fail closed: this restricted path never suspends the current manager,
+  /// another general manager, an inactive record or an unknown role.
+  static bool memberSuspensionAllowed({
+    required String actorUid,
+    required Map<String, dynamic>? actor,
+    required String targetUid,
+    required Map<String, dynamic>? target,
+    required String reason,
+  }) {
+    if (!validScopedDocumentId(actorUid) ||
+        !validScopedDocumentId(targetUid) ||
+        actorUid == targetUid ||
+        reason.trim().isEmpty || reason.trim().length > 400 ||
+        !allowsPermission(admin: actor, permission: 'viewTeam') ||
+        target == null || target['active'] != true ||
+        DedaBackend.normalizeAdminStatus(target) != 'active') {
+      return false;
+    }
+    // Do not normalize the blank legacy role to general_manager.
+    final role = (target['role'] ?? '').toString().trim().toLowerCase();
+    return const <String>{
+      'deputy_manager', 'employee', 'province_agent',
+    }.contains(role);
+  }
+
   /// Explicitly scoped to existing support-ticket status/reply fields.
   static bool supportMutationInputAllowed({
     required String requestId,
@@ -733,6 +758,80 @@ class DedaIsolatedAdminIdentity {
   /// Stable Firestore document-ID keyset pagination. A 51st record proves
   /// the next page exists; the manager can read it without widening the 50
   /// document cap or reusing stale role data after each page fetch.
+  /// Only the secondary administrator signs this atomic team mutation.
+  /// This suspends admin access; it does not revoke Firebase Auth tokens.
+  Future<void> suspendScopedAdminMember({
+    required String dedaPhone,
+    required String targetUid,
+    required String reason,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-team-write-not-enabled');
+    }
+    final cleanTarget = targetUid.trim();
+    final cleanReason = reason.trim();
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(cleanTarget) ||
+        cleanReason.isEmpty || cleanReason.length > 400 ||
+        cleanTarget == uid || !await proof()) {
+      throw StateError('deda-admin-isolated-team-suspension-denied');
+    }
+    final ref = _firestore.collection('admins').doc(cleanTarget);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+      final target = snapshot.data();
+      if (!snapshot.exists ||
+          !DedaIsolatedAdminProofPolicy.memberSuspensionAllowed(
+            actorUid: uid, actor: verifiedAdmin, targetUid: cleanTarget,
+            target: target, reason: cleanReason,
+          ) ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.memberSuspensionAllowed(
+            actorUid: uid, actor: verifiedAdmin, targetUid: cleanTarget,
+            target: target, reason: cleanReason,
+          ) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-team-suspension-proof-changed');
+      }
+      final actor = verifiedAdmin!;
+      final actorName = (actor['displayName'] ?? actor['name'] ??
+          current.email ?? 'DEDA Admin').toString();
+      transaction.update(ref, <String, dynamic>{
+        'status': 'temporarily_stopped',
+        'active': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'statusReason': cleanReason,
+        'statusUpdatedAt': FieldValue.serverTimestamp(),
+        'statusUpdatedByUid': uid,
+        'statusUpdatedByName': actorName,
+      });
+      transaction.set(auditRef, <String, dynamic>{
+        'action': 'admin_access_suspended',
+        'adminUid': uid,
+        'adminName': actorName,
+        'adminRole': 'general_manager',
+        'targetAdminUid': cleanTarget,
+        'targetAdminId': target?['adminId'],
+        'targetAdminName': target?['displayName'],
+        'reason': cleanReason,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   Future<DedaIsolatedManagerPage> readScopedManagerPage({
     required String dedaPhone,
     required String collection,
