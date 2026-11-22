@@ -100,6 +100,13 @@ class _DedaStage2IsolatedDashboardPageState
         isArabic: widget.isArabic,
         collection: 'admins',
       ));
+      tabs.add(Tab(text: t('الدعوات الإدارية', 'Admin invitations')));
+      pages.add(_DedaIsolatedReadOnlyTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        collection: 'admin_invites',
+      ));
     }
     // Only the server-proved GM may access reversible place archives.
     if (can('managePlaceArchives')) {
@@ -190,28 +197,26 @@ class _DedaIsolatedReadOnlyTabState
 
   void _refresh() => setState(() => _rows = _fetch());
 
-  Future<void> _suspendMember(Map<String, dynamic> member) async {
-    if (_mutating || widget.collection != 'admins') return;
-    final targetUid = (member['id'] ?? '').toString();
-    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(targetUid)) {
-      return;
-    }
+  Future<String?> _askTeamReason({
+    required String title,
+    required String displayName,
+  }) async {
     String reason = '';
-    final confirmedReason = await showDialog<String>(
+    return showDialog<String>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, updateDialog) => AlertDialog(
-          title: Text(t('تعليق صلاحيات الموظف', 'Suspend staff access')),
+          title: Text(title),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text((member['displayName'] ?? '').toString()),
+              Text(displayName),
               const SizedBox(height: 12),
               TextField(
                 maxLength: 400,
                 maxLines: 2,
                 decoration: InputDecoration(
-                  labelText: t('سبب التعليق', 'Reason for suspension'),
+                  labelText: t('السبب', 'Reason'),
                 ),
                 onChanged: (value) => updateDialog(() => reason = value.trim()),
               ),
@@ -225,11 +230,23 @@ class _DedaIsolatedReadOnlyTabState
             FilledButton(
               onPressed: reason.isEmpty
                   ? null : () => Navigator.pop(dialogContext, reason),
-              child: Text(t('تأكيد التعليق', 'Confirm suspension')),
+              child: Text(t('تأكيد', 'Confirm')),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _suspendMember(Map<String, dynamic> member) async {
+    if (_mutating || widget.collection != 'admins') return;
+    final targetUid = (member['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(targetUid)) {
+      return;
+    }
+    final confirmedReason = await _askTeamReason(
+      title: t('تعليق صلاحيات الموظف', 'Suspend staff access'),
+      displayName: (member['displayName'] ?? '').toString(),
     );
     if (confirmedReason == null || !mounted) return;
     setState(() => _mutating = true);
@@ -260,6 +277,43 @@ class _DedaIsolatedReadOnlyTabState
 
 
 
+  Future<void> _cancelInvitation(Map<String, dynamic> invitation) async {
+    if (_mutating || widget.collection != 'admin_invites') return;
+    final inviteId = (invitation['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(inviteId)) {
+      return;
+    }
+    final confirmedReason = await _askTeamReason(
+      title: t('إلغاء دعوة معلقة', 'Cancel pending invitation'),
+      displayName: (invitation['displayName'] ?? '').toString(),
+    );
+    if (confirmedReason == null || !mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.cancelScopedAdminInvitation(
+        dedaPhone: widget.dedaPhone,
+        inviteId: inviteId,
+        reason: confirmedReason,
+      );
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تم إلغاء الدعوة المعلقة.', 'Pending invitation cancelled.')),
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'تعذر الإلغاء: الدعوة غير معلقة أو تغيرت الصلاحيات أو بوابة الهاتف.',
+          'Cancellation denied: invitation, permission or gateway changed.',
+        )),
+      ));
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
   String _timestamp(dynamic value) {
     if (value is! Timestamp) return '';
     final date = value.toDate().toLocal();
@@ -271,37 +325,46 @@ class _DedaIsolatedReadOnlyTabState
     // internal tokens, private maps or free-form audit metadata.
     final user = widget.collection == 'users';
     final team = widget.collection == 'admins';
-    final title = team
+    final invite = widget.collection == 'admin_invites';
+    final title = (team || invite)
         ? (data['displayName'] ?? data['name'] ?? '').toString()
-        : user
-            ? (data['name'] ?? '').toString()
+        : user ? (data['name'] ?? '').toString()
             : (data['action'] ?? '').toString();
-    final subtitle = team
+    final subtitle = (team || invite)
         ? (data['email'] ?? '').toString()
-        : user
-            ? (data['phone'] ?? '').toString()
+        : user ? (data['phone'] ?? '').toString()
             : (data['adminName'] ?? '').toString();
-    final detail = team
-        ? (data['role'] ?? '').toString()
-        : user
-            ? (data['accountType'] ?? '').toString()
-            : _timestamp(data['createdAt']);
+    final detail = team ? (data['role'] ?? '').toString()
+        : invite ? (data['status'] ?? '').toString()
+        : user ? (data['accountType'] ?? '').toString()
+        : _timestamp(data['createdAt']);
+    final subordinate = const <String>{
+      'deputy_manager', 'employee', 'province_agent',
+    }.contains((data['role'] ?? '').toString().trim().toLowerCase());
+    final canSuspend = team && data['active'] == true && subordinate;
+    final canCancel = invite && data['status'] == 'pending' && subordinate;
     return Card(
       child: ListTile(
         title: Text(title.isEmpty ? '—' : title),
         subtitle: Text(subtitle),
-        trailing: team && data['active'] == true &&
-                const <String>{
-                  'deputy_manager', 'employee', 'province_agent',
-                }.contains((data['role'] ?? '').toString().trim().toLowerCase())
+        trailing: canSuspend || canCancel
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(detail),
                   IconButton(
-                    tooltip: t('تعليق الصلاحيات', 'Suspend access'),
-                    onPressed: _mutating ? null : () => _suspendMember(data),
-                    icon: const Icon(Icons.block_outlined),
+                    tooltip: canSuspend
+                        ? t('تعليق الصلاحيات', 'Suspend access')
+                        : t('إلغاء الدعوة', 'Cancel invitation'),
+                    onPressed: _mutating ? null : () {
+                      if (canSuspend) {
+                        _suspendMember(data);
+                      } else {
+                        _cancelInvitation(data);
+                      }
+                    },
+                    icon: Icon(canSuspend
+                        ? Icons.block_outlined : Icons.cancel_outlined),
                   ),
                 ],
               )
