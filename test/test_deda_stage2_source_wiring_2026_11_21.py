@@ -379,6 +379,51 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("RegExp(r'^[0-9]{8}$').hasMatch(",ui)
         self.assertIn('PopupMenuButton<String>',ui)
 
+
+    def test_isolated_manager_gateway_crud_preserves_one_anchor(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertEqual(backend.count('static bool activeGeneralManagerGateway('),1)
+        self.assertEqual(backend.count('static bool managerGatewayRemovalAllowed('),1)
+        self.assertEqual(backend.count('Future<List<Map<String, dynamic>>> readScopedGeneralManagerGateways('),1)
+        self.assertEqual(backend.count('Future<void> addScopedGeneralManagerGateway('),1)
+        self.assertEqual(backend.count('Future<void> removeScopedGeneralManagerGateway('),1)
+        self.assertEqual(ui.count('class _DedaIsolatedManagerGatewaysTabState'),1)
+        self.assertEqual(ui.count('widget.admin.addScopedGeneralManagerGateway('),1)
+        self.assertEqual(ui.count('widget.admin.removeScopedGeneralManagerGateway('),1)
+        self.assertIn("can('viewTeam')",ui)
+        self.assertIn("Manager entry phones",ui)
+        self.assertIn("request.auth.uid", rules)
+        self.assertIn("match /admin_entry_access/{accountKey} {",rules)
+        listing=backend.split('Future<List<Map<String, dynamic>>> readScopedGeneralManagerGateways(',1)[1].split(
+            '  /// A new manager entry door',1)[0]
+        self.assertIn('limit(51)',listing)
+        self.assertIn('Source.server',listing)
+        self.assertIn("requiredPermission: 'viewTeam'",listing)
+        self.assertIn('!await proof()',listing)
+        self.assertNotIn('FirebaseAuth.instance',listing)
+        addition=backend.split('Future<void> addScopedGeneralManagerGateway(',1)[1].split(
+            '  /// Fail closed on ambiguous',1)[0]
+        self.assertIn('_firestore.runTransaction((tx) async {',addition)
+        self.assertIn('final existing = await tx.get(gatewayRef);',addition)
+        self.assertIn('final directory = await tx.get(directoryRef);',addition)
+        self.assertIn('existing.exists || !directory.exists',addition)
+        self.assertIn('tx.set(auditRef, <String, dynamic>{',addition)
+        self.assertNotIn('FirebaseFirestore.instance',addition)
+        removal=backend.split('Future<void> removeScopedGeneralManagerGateway(',1)[1].split(
+            '  /// Authorised single-record read',1)[0]
+        self.assertIn('active.first',removal)
+        self.assertIn('targetPhoneKey == anchorPhoneKey',removal)
+        self.assertIn('final anchor = await tx.get(anchorRef);',removal)
+        self.assertIn('final target = await tx.get(targetRef);',removal)
+        self.assertIn('tx.delete(targetRef);',removal)
+        self.assertIn('tx.set(auditRef, <String, dynamic>{',removal)
+        self.assertIn('managerGatewayRemovalAllowed(',removal)
+        self.assertIn('!await proof()',removal)
+        self.assertNotIn('FirebaseAuth.instance',removal)
+        self.assertNotIn('FirebaseFirestore.instance',removal)
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)

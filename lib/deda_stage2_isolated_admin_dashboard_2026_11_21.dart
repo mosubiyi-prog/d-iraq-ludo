@@ -109,6 +109,12 @@ class _DedaStage2IsolatedDashboardPageState
         isArabic: widget.isArabic,
         collection: 'admin_invites',
       ));
+      tabs.add(Tab(text: t('أرقام دخول المدير', 'Manager entry phones')));
+      pages.add(_DedaIsolatedManagerGatewaysTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+      ));
     }
     // Only the server-proved GM may access reversible place archives.
     if (can('managePlaceArchives')) {
@@ -887,6 +893,257 @@ class _DedaIsolatedReadOnlyTabState
             ),
           ],
         );
+      },
+    );
+  }
+}
+
+
+/// Management of existing manager entrance phone gateways using only the
+/// independently authenticated secondary administrator. No public Auth writes.
+class _DedaIsolatedManagerGatewaysTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+
+  const _DedaIsolatedManagerGatewaysTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedManagerGatewaysTab> createState() =>
+      _DedaIsolatedManagerGatewaysTabState();
+}
+
+class _DedaIsolatedManagerGatewaysTabState
+    extends State<_DedaIsolatedManagerGatewaysTab> {
+  late Future<List<Map<String, dynamic>>> _rows;
+  bool _mutating = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _rows = _fetch();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetch() =>
+      widget.admin.readScopedGeneralManagerGateways(
+        dedaPhone: widget.dedaPhone,
+      );
+
+  void _refresh() => setState(() => _rows = _fetch());
+
+  Future<void> _add() async {
+    if (_mutating) return;
+    final phone = TextEditingController();
+    try {
+      final value = await showDialog<String>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: Text(t('إضافة رقم دخول للمدير العام',
+              'Add general-manager gateway')),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(t('يجب أن يكون الرقم حساب DEDA نشطاً. لن يُنشأ حساب إداري جديد.',
+                'The phone must already be an active DEDA account; no admin account will be created.')),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              textDirection: TextDirection.ltr,
+              maxLength: 16,
+              decoration: InputDecoration(
+                labelText: t('رقم DEDA', 'DEDA phone'),
+                hintText: '07XXXXXXXXX',
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, phone.text.trim()),
+              child: Text(t('إضافة', 'Add')),
+            ),
+          ],
+        ),
+      );
+      if (value == null || value.isEmpty || !mounted) return;
+      setState(() => _mutating = true);
+      try {
+        await widget.admin.addScopedGeneralManagerGateway(
+          dedaPhone: widget.dedaPhone, targetPhone: value,
+        );
+        if (mounted) {
+          _refresh();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('أُضيفت بوابة المدير العام بنجاح.',
+                'Manager gateway added.')),
+          ));
+        }
+      } catch (_) {
+        if (mounted) {
+          _refresh();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('لم تُضف البوابة: تحقق من الرقم والتخويل وعدم تكرار الهاتف.',
+                'Gateway denied: verify account, authority, and duplicate phone.')),
+          ));
+        }
+      } finally {
+        if (mounted) setState(() => _mutating = false);
+      }
+    } finally {
+      phone.dispose();
+    }
+  }
+
+  Future<void> _remove(Map<String, dynamic> row) async {
+    if (_mutating) return;
+    final phone = (row['id'] ?? '').toString();
+    final reason = TextEditingController();
+    try {
+      final confirmedReason = await showDialog<String>(
+        context: context,
+        builder: (dialog) => StatefulBuilder(
+          builder: (dialog, rebuild) => AlertDialog(
+            title: Text(t('حذف بوابة رقم المدير',
+                'Remove manager phone gateway')),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(t('تُزال بوابة الهاتف فقط دون حذف حساب DEDA أو المدير. '
+                  'البوابة الأقدم بحسب الرقم محمية من الحذف.',
+                  'Only the phone gateway will be removed. DEDA and administrator accounts stay unchanged. '
+                  'The lowest-numbered active gateway is protected.')),
+              const SizedBox(height: 8),
+              SelectableText(phone, textDirection: TextDirection.ltr),
+              TextField(
+                controller: reason, maxLength: 400, maxLines: 2,
+                decoration: InputDecoration(labelText: t('السبب', 'Reason')),
+                onChanged: (_) => rebuild(() {}),
+              ),
+            ]),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton(
+                onPressed: reason.text.trim().isEmpty
+                    ? null : () => Navigator.pop(dialog, reason.text.trim()),
+                child: Text(t('تأكيد الحذف', 'Confirm removal')),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmedReason == null || !mounted) return;
+      setState(() => _mutating = true);
+      try {
+        await widget.admin.removeScopedGeneralManagerGateway(
+          dedaPhone: widget.dedaPhone,
+          targetPhone: phone, reason: confirmedReason,
+        );
+        if (mounted) {
+          _refresh();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('أُزيلت بوابة الهاتف فقط مع سجل تدقيق.',
+                'Phone gateway removed with audit.')),
+          ));
+        }
+      } catch (_) {
+        if (mounted) {
+          _refresh();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('رُفض الحذف لحماية آخر بوابة أو لتغيّر صلاحيات المدير.',
+                'Removal denied to protect manager access or changed authorization.')),
+          ));
+        }
+      } finally {
+        if (mounted) setState(() => _mutating = false);
+      }
+    } finally {
+      reason.dispose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _rows,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(child: TextButton(
+            onPressed: _refresh,
+            child: Text(t('تعذر التحقق من الخادم. إعادة المحاولة',
+                'Server check failed. Retry')),
+          ));
+        }
+        final rows = snapshot.data!;
+        final active = rows.where((row) =>
+            DedaIsolatedAdminProofPolicy.activeGeneralManagerGateway(
+              accountKey: (row['id'] ?? '').toString(),
+              entry: row,
+            )).toList();
+        final protectedId =
+            active.isEmpty ? '' : (active.first['id'] ?? '').toString();
+        final selfPhone =
+            DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(
+              widget.dedaPhone,
+            );
+        return Column(children: [
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Wrap(spacing: 8, children: [
+              FilledButton.icon(
+                onPressed: _mutating ? null : _add,
+                icon: const Icon(Icons.add_moderator_outlined),
+                label: Text(t('إضافة رقم', 'Add phone')),
+              ),
+              TextButton.icon(
+                onPressed: _mutating ? null : _refresh,
+                icon: const Icon(Icons.refresh),
+                label: Text(t('تحديث من الخادم', 'Refresh from server')),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: rows.isEmpty
+                ? Center(child: Text(t('لا توجد بوابات.', 'No gateways.')))
+                : ListView.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final row = rows[index];
+                      final id = (row['id'] ?? '').toString();
+                      final removable = !_mutating && active.length > 1 &&
+                          protectedId != id && selfPhone != id &&
+                          DedaIsolatedAdminProofPolicy.activeGeneralManagerGateway(
+                            accountKey: id, entry: row,
+                          );
+                      return ListTile(
+                        leading: id == protectedId
+                            ? const Icon(Icons.lock_outline)
+                            : const Icon(Icons.phone_android_outlined),
+                        title: Text((row['phone'] ?? id).toString()),
+                        subtitle: Text(id == protectedId
+                            ? t('البوابة المحمية', 'Protected gateway')
+                            : (row['status'] ?? '').toString()),
+                        trailing: IconButton(
+                          tooltip: t('إزالة بوابة الهاتف', 'Remove gateway'),
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: removable ? () => _remove(row) : null,
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ]);
       },
     );
   }

@@ -218,6 +218,51 @@ class DedaIsolatedAdminProofPolicy {
         reason.trim().isNotEmpty && reason.trim().length <= 400;
   }
 
+
+  /// A manager gateway is an already existing approved DEDA phone door,
+  /// not a new Firebase administrator or an alternative public UID.
+  static bool activeGeneralManagerGateway({
+    required String accountKey,
+    required Map<String, dynamic>? entry,
+  }) =>
+      canonicalIraqiPhone(accountKey) == accountKey &&
+      entry != null &&
+      entry['accountKey'] == accountKey &&
+      entry['accessType'] == 'general_manager_gateway' &&
+      entry['allowedRole'] == 'general_manager' &&
+      entry['status'] == 'active' &&
+      entry['active'] == true;
+
+  /// Every isolated removal preserves the lexicographically first LIVE GM
+  /// gateway, not merely the acting manager's gateway. Thus concurrent
+  /// isolated removals cannot each delete the other's last surviving door.
+  /// This invariant requires legacy/admin SDK writers to obey the same rule;
+  /// production rollout requires a Firestore-rules/emulator review.
+  static bool managerGatewayRemovalAllowed({
+    required String actorUid,
+    required Map<String, dynamic>? actor,
+    required String actingAccountKey,
+    required String targetAccountKey,
+    required Map<String, dynamic>? target,
+    required String anchorAccountKey,
+    required Map<String, dynamic>? anchor,
+    required int confirmedActiveCount,
+    required String reason,
+  }) =>
+      validScopedDocumentId(actorUid) &&
+      allowsPermission(admin: actor, permission: 'viewTeam') &&
+      canonicalIraqiPhone(actingAccountKey) == actingAccountKey &&
+      confirmedActiveCount >= 2 &&
+      reason.trim().isNotEmpty && reason.trim().length <= 400 &&
+      targetAccountKey != actingAccountKey &&
+      targetAccountKey != anchorAccountKey &&
+      activeGeneralManagerGateway(
+        accountKey: targetAccountKey, entry: target,
+      ) &&
+      activeGeneralManagerGateway(
+        accountKey: anchorAccountKey, entry: anchor,
+      );
+
   /// Fail closed: this restricted path never suspends the current manager,
   /// another general manager, an inactive record or an unknown role.
   static bool memberSuspensionAllowed({
@@ -1718,6 +1763,223 @@ class DedaIsolatedAdminIdentity {
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();
+
+  /// Display no more than 50 gateway records and never expose public Auth.
+  /// The manager's secondary login is re-proved before and after server reads.
+  Future<List<Map<String, dynamic>>> readScopedGeneralManagerGateways({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-gateways-disabled');
+    }
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('deda-admin-isolated-gateway-session-required');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+    );
+    if (publicUid == null || !await proof()) {
+      throw StateError('deda-admin-isolated-gateway-list-denied');
+    }
+    final snap = await _firestore.collection('admin_entry_access')
+        .where('accessType', isEqualTo: 'general_manager_gateway')
+        .limit(51).get(const GetOptions(source: Source.server));
+    if (snap.metadata.isFromCache || snap.metadata.hasPendingWrites ||
+        snap.docs.length > 50 ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof()) {
+      throw StateError('deda-admin-isolated-gateway-list-proof-changed');
+    }
+    final rows = snap.docs.map((doc) => <String, dynamic>{
+      'id': doc.id,
+      'accountKey': doc.data()['accountKey'],
+      'phone': doc.data()['phone'],
+      'active': doc.data()['active'],
+      'status': doc.data()['status'],
+      'accessType': doc.data()['accessType'],
+      'allowedRole': doc.data()['allowedRole'],
+    }).toList(growable: false);
+    rows.sort((a, b) =>
+        (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString()));
+    return rows;
+  }
+
+  /// A new manager entry door does not create a UID, role or admin account.
+  /// Refuses to replace any existing phone gateway, even a legacy one.
+  Future<void> addScopedGeneralManagerGateway({
+    required String dedaPhone,
+    required String targetPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-gateway-add-disabled');
+    }
+    final targetPhoneKey =
+        DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(targetPhone);
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous || targetPhoneKey.isEmpty) {
+      throw StateError('deda-admin-isolated-gateway-add-input-denied');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? actor;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (admin) => actor = admin,
+    );
+    if (publicUid == null || !await proof()) {
+      throw StateError('deda-admin-isolated-gateway-add-no-proof');
+    }
+    final gatewayRef =
+        _firestore.collection('admin_entry_access').doc(targetPhoneKey);
+    final directoryRef =
+        _firestore.collection('deda_account_directory').doc(targetPhoneKey);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final existing = await tx.get(gatewayRef);
+      final directory = await tx.get(directoryRef);
+      if (existing.exists || !directory.exists ||
+          directory.data()?['active'] != true ||
+          !await proof() ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-gateway-add-proof-changed');
+      }
+      final manager = actor!;
+      final managerName = (manager['displayName'] ??
+          manager['name'] ?? user.email ?? 'DEDA Admin').toString();
+      tx.set(gatewayRef, <String, dynamic>{
+        'accountKey': targetPhoneKey,
+        'phone': targetPhone.trim(),
+        'accessType': 'general_manager_gateway',
+        'allowedRole': 'general_manager',
+        'status': 'active',
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'managedByUid': uid,
+        'managedByName': managerName,
+      });
+      tx.set(auditRef, <String, dynamic>{
+        'action': 'general_manager_entry_phone_added',
+        'adminUid': uid,
+        'adminName': managerName,
+        'adminRole': 'general_manager',
+        'targetAccountKey': targetPhoneKey,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Fail closed on ambiguous/incomplete historical manager registries.
+  /// The FIRST active gateway remains protected across all isolated removals;
+  /// the anchor and target are re-read inside the SAME transaction.
+  Future<void> removeScopedGeneralManagerGateway({
+    required String dedaPhone,
+    required String targetPhone,
+    required String reason,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-gateway-remove-disabled');
+    }
+    final targetPhoneKey =
+        DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(targetPhone);
+    final actingPhoneKey =
+        DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone);
+    final cleanReason = reason.trim();
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous || targetPhoneKey.isEmpty ||
+        actingPhoneKey.isEmpty ||
+        targetPhoneKey == actingPhoneKey ||
+        cleanReason.isEmpty || cleanReason.length > 400) {
+      throw StateError('deda-admin-isolated-gateway-remove-input-denied');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? actor;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (admin) => actor = admin,
+    );
+    if (publicUid == null || !await proof()) {
+      throw StateError('deda-admin-isolated-gateway-remove-no-proof');
+    }
+    final current = await readScopedGeneralManagerGateways(
+      dedaPhone: dedaPhone,
+    );
+    // A manager's unknown/malformed active gateway is not silently ignored.
+    if (current.any((row) => row['active'] == true &&
+        !DedaIsolatedAdminProofPolicy.activeGeneralManagerGateway(
+          accountKey: (row['id'] ?? '').toString(),
+          entry: row,
+        ))) {
+      throw StateError('deda-admin-isolated-gateway-registry-invalid');
+    }
+    final active = current.where((row) =>
+        DedaIsolatedAdminProofPolicy.activeGeneralManagerGateway(
+          accountKey: (row['id'] ?? '').toString(), entry: row,
+        )).toList(growable: false);
+    if (active.length < 2 ||
+        !active.any((row) => row['id'] == targetPhoneKey)) {
+      throw StateError('deda-admin-isolated-last-or-unknown-gateway');
+    }
+    // The listing is sorted by canonical document ID, not device-local order.
+    final anchorPhoneKey = (active.first['id'] ?? '').toString();
+    if (targetPhoneKey == anchorPhoneKey) {
+      throw StateError('deda-admin-isolated-protected-anchor-gateway');
+    }
+    final targetRef =
+        _firestore.collection('admin_entry_access').doc(targetPhoneKey);
+    final anchorRef =
+        _firestore.collection('admin_entry_access').doc(anchorPhoneKey);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final target = await tx.get(targetRef);
+      final anchor = await tx.get(anchorRef);
+      if (!target.exists || !anchor.exists ||
+          !DedaIsolatedAdminProofPolicy.managerGatewayRemovalAllowed(
+            actorUid: uid, actor: actor,
+            actingAccountKey: actingPhoneKey,
+            targetAccountKey: targetPhoneKey, target: target.data(),
+            anchorAccountKey: anchorPhoneKey, anchor: anchor.data(),
+            confirmedActiveCount: active.length, reason: cleanReason,
+          ) ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.managerGatewayRemovalAllowed(
+            actorUid: uid, actor: actor,
+            actingAccountKey: actingPhoneKey,
+            targetAccountKey: targetPhoneKey, target: target.data(),
+            anchorAccountKey: anchorPhoneKey, anchor: anchor.data(),
+            confirmedActiveCount: active.length, reason: cleanReason,
+          ) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-gateway-remove-proof-changed');
+      }
+      final manager = actor!;
+      final managerName = (manager['displayName'] ??
+          manager['name'] ?? user.email ?? 'DEDA Admin').toString();
+      tx.delete(targetRef);
+      tx.set(auditRef, <String, dynamic>{
+        'action': 'general_manager_entry_phone_removed',
+        'adminUid': uid,
+        'adminName': managerName,
+        'adminRole': 'general_manager',
+        'targetAccountKey': targetPhoneKey,
+        'protectedAnchorAccountKey': anchorPhoneKey,
+        'reason': cleanReason,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+
 
   /// Authorised single-record read for future administrative detail pages.
   /// Does not reuse the public FirebaseAuth or FirebaseFirestore client.

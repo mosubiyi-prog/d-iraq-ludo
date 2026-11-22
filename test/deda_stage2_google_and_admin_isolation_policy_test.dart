@@ -234,6 +234,57 @@ void main() {
         reason: 'Verified removal'), false);
     });
 
+
+    test('manager phone gateway is strict and never removes the anchor', () {
+      const anotherPhone = '9647712345679';
+      const thirdPhone = '9647712345680';
+      final root = <String, dynamic>{
+        'accountKey': account, 'accessType': 'general_manager_gateway',
+        'allowedRole': 'general_manager', 'active': true, 'status': 'active',
+      };
+      final target = <String, dynamic>{...root, 'accountKey': anotherPhone};
+      bool shape(String phone, Map<String, dynamic>? row) =>
+          DedaIsolatedAdminProofPolicy.activeGeneralManagerGateway(
+            accountKey: phone, entry: row,
+          );
+      expect(shape(account, root), true);
+      expect(shape(anotherPhone, target), true);
+      expect(shape(account, {...root, 'accessType': 'member'}), false);
+      expect(shape(account, {...root, 'active': false}), false);
+      expect(shape(account, {...root, 'status': 'invited'}), false);
+      expect(shape(account, {...root, 'allowedRole': 'employee'}), false);
+      expect(shape(account, {...root, 'accountKey': anotherPhone}), false);
+      expect(shape('not-a-phone', root), false);
+
+      bool mayRemove({
+        String actorUid = adminUid,
+        Map<String, dynamic>? actor,
+        String actingPhone = thirdPhone,
+        String targetPhone = anotherPhone,
+        String anchorPhone = account,
+        Map<String, dynamic>? targetEntry,
+        Map<String, dynamic>? anchorEntry,
+        int count = 3,
+        String reason = 'Approved removal reason',
+      }) => DedaIsolatedAdminProofPolicy.managerGatewayRemovalAllowed(
+        actorUid: actorUid, actor: actor ?? record,
+        actingAccountKey: actingPhone,
+        targetAccountKey: targetPhone, target: targetEntry ?? target,
+        anchorAccountKey: anchorPhone, anchor: anchorEntry ?? root,
+        confirmedActiveCount: count, reason: reason,
+      );
+      expect(mayRemove(), true);
+      expect(mayRemove(count: 1), false);
+      expect(mayRemove(targetPhone: account), false);
+      expect(mayRemove(targetPhone: thirdPhone), false);
+      expect(mayRemove(actor: {...record, 'role': 'employee'}), false);
+      expect(mayRemove(actor: {...record, 'role': ''}), false);
+      expect(mayRemove(anchorEntry: {...root, 'active': false}), false);
+      expect(mayRemove(targetEntry: {...target, 'allowedRole': 'employee'}), false);
+      expect(mayRemove(reason: '   '), false);
+      expect(mayRemove(reason: List<String>.filled(401, 'x').join()), false);
+    });
+
     test('invitation cancellation rejects claimed and foreign gateways', () {
       const inviteId = 'invite-123';
       final pending = <String, dynamic>{
