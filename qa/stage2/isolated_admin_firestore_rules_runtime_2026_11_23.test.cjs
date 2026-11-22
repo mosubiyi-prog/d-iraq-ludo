@@ -212,6 +212,40 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       console.log("PASS_ISOLATED_INVITATION_SHA256_ATOMIC_ONE_WINNER");
     });
 
+
+    await t.test("release-hold: invited staff profile can access users before gateway bound", async()=>{
+      const partialUid = "qa_unbound_staff_uid";
+      const partialPhone = "9647712345688";
+      const privateUid = "qa_other_private_user";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("admins/"+partialUid).set({
+            role:"employee",status:"active",active:true,
+            inviteId:"qa_unbound_staff_invite",
+            phone:partialPhone,adminId:"DEDA-ADM-QA-UNBOUND",
+            email:"qa.unbound@example.invalid",permissions:{viewUsers:true},
+          }),
+          db.doc("admin_entry_access/"+partialPhone).set({
+            accountKey:partialPhone,accessType:"member",
+            allowedRole:"employee",allowedAdminEmail:"qa.unbound@example.invalid",
+            inviteId:"qa_unbound_staff_invite",adminId:"DEDA-ADM-QA-UNBOUND",
+            adminUid:"",active:true,status:"invited",
+          }),
+          db.doc("users/"+privateUid).set({
+            accountKey:"9647712345998",name:"QA private user",
+          }),
+        ]);
+      });
+      const partial=env.authenticatedContext(partialUid,{
+        email:"qa.unbound@example.invalid",
+      }).firestore();
+      // This is a diagnostic safety failure in the checked-in rules,
+      // NOT acceptable production behavior. The candidate below denies it.
+      await assertSucceeds(partial.doc("users/"+privateUid).get());
+      console.log("RELEASE_HOLD_UNBOUND_INVITEE_ADMIN_DATA_ACCESS_ALLOWED_BY_CURRENT_RULES");
+    });
+
     await t.test("release-hold observation: rules permit manager deleting final gateway", async () => {
       // This records existing RULES behavior, not a desired safety property:
       // client anchor checks alone cannot defend against legacy clients.

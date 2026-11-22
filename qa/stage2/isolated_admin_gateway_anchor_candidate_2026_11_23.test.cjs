@@ -88,6 +88,87 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertSucceeds(manager.doc("admin_entry_access/"+staffPhone).delete());
       assert.equal((await manager.doc("admin_entry_access/"+primary).get()).exists,true);
     });
+
+    await t.test("new staff privileges fail closed until matching gateway fully activated",async()=>{
+      const uid="qa_cand_unbound_staff";
+      const privateUid="qa_cand_private_user";
+      const phone="9647712345689";
+      const mail="qa.cand.staff@example.invalid";
+      const inviteId="qa_cand_claimed_invite";
+      const adminId="DEDA-ADM-CAND-INVITE";
+      const user=env.authenticatedContext(uid,{email:mail}).firestore();
+      const legacyUid="qa_cand_legacy_staff";
+      const legacy=env.authenticatedContext(legacyUid,{
+        email:"qa.cand.legacy@example.invalid",
+      }).firestore();
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("admins/"+uid).set({
+            role:"employee",status:"active",active:true,
+            inviteId,adminId,phone,email:mail,permissions:{viewUsers:true},
+          }),
+          db.doc("admins/"+legacyUid).set({
+            role:"employee",status:"active",active:true,
+            email:"qa.cand.legacy@example.invalid",
+            permissions:{viewUsers:true},
+          }),
+          db.doc("admin_entry_access/"+phone).set({
+            accountKey:phone,accessType:"member",adminUid:"",
+            adminId,inviteId,allowedRole:"employee",
+            allowedAdminEmail:mail,active:true,status:"invited",
+          }),
+          db.doc("admin_invites/"+inviteId).set({
+            status:"claimed",claimedUid:uid,claimCode:"12345678",
+            activationCode:"12345678",email:mail,role:"employee",
+            phone,adminId,createdByUid:managerUid,
+          }),
+          db.doc("users/"+privateUid).set({
+            accountKey:"9647712345900",name:"Synthetic private user",
+          }),
+        ]);
+      });
+      const privateRef="users/"+privateUid;
+      await assertFails(user.doc(privateRef).get());
+      await assertSucceeds(legacy.doc(privateRef).get());
+      // Exact client completion writes are allowed even while privilege
+      // queries remain CLOSED; admin_entry_access.update uses isAdmin()
+      // for the scoped self-bind, not hasAdminPermission().
+      const F=require("firebase/compat/app").firestore.FieldValue;
+      await assertSucceeds(user.runTransaction(async tx=>{
+        const inviteRef=user.doc("admin_invites/"+inviteId);
+        const entryRef=user.doc("admin_entry_access/"+phone);
+        const auditRef=user.doc("admin_audit/qa_cand_staff_activation_audit");
+        const invitation=await tx.get(inviteRef);
+        const gateway=await tx.get(entryRef);
+        assert.equal(invitation.data().claimedUid,uid);
+        assert.equal(gateway.data().status,"invited");
+        tx.update(entryRef,{
+          adminUid:uid,adminId,status:"active",
+          active:true,updatedAt:F.serverTimestamp(),
+        });
+        tx.update(inviteRef,{
+          status:"completed",acceptedAt:F.serverTimestamp(),
+          updatedAt:F.serverTimestamp(),
+          activationCode:F.delete(),claimCode:F.delete(),
+        });
+        tx.set(auditRef,{
+          action:"admin_invite_accepted",adminUid:uid,
+          adminName:"QA staff",adminRole:"employee",inviteId,
+          createdAt:F.serverTimestamp(),
+        });
+      }));
+      await assertSucceeds(user.doc(privateRef).get());
+      await assertSucceeds(legacy.doc(privateRef).get());
+      await assertSucceeds(manager.doc(privateRef).get());
+      // A later access revocation must immediately close privileged reads.
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admin_entry_access/"+phone)
+          .update({active:false,status:"disabled"});
+      });
+      await assertFails(user.doc(privateRef).get());
+    });
+
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
       await env.withSecurityRulesDisabled(async ctx=>{
         await ctx.firestore().doc("admin_gateway_protection/primary").delete();
