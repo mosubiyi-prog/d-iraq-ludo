@@ -210,6 +210,52 @@ void main() {
       expect(canCancel(gateway: {...entry, 'allowedAdminEmail': 'foreign@deda.test'}), false);
     });
 
+    test('invitation creation denies forged roles and mismatched permissions', () {
+      Map<String, bool> defaults(String role) =>
+          DedaIsolatedAdminProofPolicy.defaultInvitationPermissions(role);
+      final employee = defaults('employee');
+      final deputy = defaults('deputy_manager');
+      final agent = defaults('province_agent');
+      expect(employee.values.every((v) => v == false), true);
+      expect(deputy.values.every((v) => v == true), true);
+      expect(agent['viewPlaceRequests'], true);
+      expect(agent['reviewPlaceRequests'], true);
+      expect(agent['viewGovernorates'], true);
+      expect(agent['supportRead'], false);
+      bool valid({
+        String name = 'Approved employee',
+        String email = 'new.staff@example.com',
+        String phone = account,
+        String role = 'employee',
+        String department = 'Support',
+        String governorate = '',
+        Map<String, bool>? permissions,
+      }) => DedaIsolatedAdminProofPolicy.invitationCreateInputAllowed(
+        displayName: name, email: email, accountKey: phone,
+        role: role, department: department, governorate: governorate,
+        permissions: permissions ?? defaults(role),
+      );
+      expect(valid(), true);
+      expect(valid(role: 'deputy_manager'), true);
+      expect(valid(role: 'province_agent', governorate: 'كركوك'), true);
+      expect(valid(role: 'general_manager'), false);
+      expect(valid(role: ''), false);
+      expect(valid(name: 'A'), false);
+      expect(valid(email: 'not-an-email'), false);
+      expect(valid(phone: '07712345678'), false);
+      expect(valid(phone: '964711'), false);
+      expect(valid(department: ''), false);
+      expect(valid(role: 'province_agent'), false);
+      expect(valid(governorate: 'كركوك'), false);
+      expect(valid(permissions: <String, bool>{'viewTeam': true}), false);
+      expect(valid(permissions: {...employee, 'viewTeam': true}), false);
+      expect(valid(permissions: {...employee, 'supportReply': true}), false);
+      expect(valid(permissions: {...employee, 'approvePlaces': true}), false);
+      expect(valid(permissions: {...employee, 'manageReports': true}), false);
+      expect(valid(role: 'province_agent', governorate: 'كركوك',
+        permissions: {...agent, 'supportRead': true}), false);
+    });
+
     test('isolated admin operations require explicit role and permissions', () {
       bool can(Map<String,dynamic>? data, String permission) =>
           DedaIsolatedAdminProofPolicy.allowsPermission(
