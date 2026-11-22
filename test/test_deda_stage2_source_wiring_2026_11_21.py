@@ -297,7 +297,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(backend.count('Future<void> cancelScopedAdminInvitation('),1)
         self.assertEqual(backend.count('static bool invitationCancellationAllowed('),1)
         self.assertIn("'admin_invites': 'viewTeam'",backend)
-        self.assertEqual(backend.count("'admins', 'admin_invites', 'published_places'"),2)
+        self.assertEqual(backend.count("'admins', 'admin_invites', 'admin_recovery_requests'"),2)
         method=backend.split('Future<void> cancelScopedAdminInvitation(',1)[1].split(
             '  /// Read-only scoped data path, with fresh server permissions before and',1)[0]
         self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
@@ -742,7 +742,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn("'viewTeam', 'managePlaceArchives'}.contains(permission)",src)
         self.assertIn("normalizedRole != 'general_manager'",src)
-        self.assertEqual(src.count("'admins', 'admin_invites', 'published_places'"),2)
+        self.assertEqual(src.count("'admins', 'admin_invites', 'admin_recovery_requests'"),2)
         self.assertIn("}.contains(collection) && role != 'general_manager') {",src)
         self.assertIn("'admins': 'viewTeam'",src)
         self.assertIn("if (can('viewTeam')) {",ui)
