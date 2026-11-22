@@ -204,8 +204,8 @@ class DedaIsolatedAdminProofPolicy {
         (entry['adminUid'] ?? '').toString().trim().isEmpty;
   }
 
-  /// The legacy team's 11 permission keys are allowed; new admin identity
-  /// rights (viewTeam/managePlaceArchives) can NEVER be granted via invites.
+  /// Only the legacy team's eleven subordinate permission keys are
+  /// accepted here; admin identity or manager-only permissions are excluded.
   static const List<String> invitationPermissionKeys = <String>[
     'supportRead', 'supportReply', 'viewPlaceRequests',
     'reviewPlaceRequests', 'approvePlaces', 'rejectPlaces',
@@ -213,8 +213,7 @@ class DedaIsolatedAdminProofPolicy {
     'viewGovernorates', 'viewAudit',
   ];
 
-  /// Role defaults retain the old team form's behavior, but restricted to
-  /// a subordinate. This is one policy shared by the new transport and UI.
+  /// Role defaults match the old administration form, without a GM invite.
   static Map<String, bool> defaultInvitationPermissions(String role) {
     final values = <String, bool>{
       for (final key in invitationPermissionKeys) key: false,
@@ -231,6 +230,7 @@ class DedaIsolatedAdminProofPolicy {
     return values;
   }
 
+  /// Fail closed on malformed staff invitations and privilege maps.
   static bool invitationCreateInputAllowed({
     required String displayName,
     required String email,
@@ -240,130 +240,47 @@ class DedaIsolatedAdminProofPolicy {
     required String governorate,
     required Map<String, bool> permissions,
   }) {
+    final cleanEmail = email.trim().toLowerCase();
     if (displayName.trim().length < 2 || displayName.trim().length > 100 ||
-        email.trim().length > 254 ||
-        !RegExp(r'^[^@\\s]+@[^@\\s]+\\.[^@\\s]+
-  static bool supportMutationInputAllowed({
-    required String requestId,
-    required String status,
-    String? reply,
-  }) {
-    if (!validScopedDocumentId(requestId)) {
+        cleanEmail.length > 254 ||
+        !RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}$')
+            .hasMatch(cleanEmail) ||
+        canonicalIraqiPhone(accountKey) != accountKey ||
+        department.trim().isEmpty || department.trim().length > 100 ||
+        !const <String>{
+          'deputy_manager', 'employee', 'province_agent',
+        }.contains(role)) {
       return false;
     }
-    if (!const <String>{'new', 'in_progress', 'replied', 'closed'}
-        .contains(status)) {
+    if (role == 'province_agent' &&
+        (governorate.trim().isEmpty || governorate.trim().length > 80)) {
       return false;
     }
-    if (reply == null) return true;
-    final message = reply.trim();
-    return status == 'replied' && message.isNotEmpty &&
-        message.length <= 4000;
-  }
-
-  /// A bounded review action; never approves, publishes, deletes or mints
-  /// an approval number. Server Firestore Rules remain authoritative.
-  static bool placeReviewMutationAllowed({
-    required Map<String, dynamic>? admin,
-    required Map<String, dynamic>? request,
-    required String requestId,
-    required String expectedStatus,
-    required String targetStatus,
-    String? note,
-  }) {
-    if (!validScopedDocumentId(requestId) || admin == null ||
-        request == null || request['status'] != expectedStatus) {
+    if (role != 'province_agent' && governorate.trim().isNotEmpty) {
       return false;
     }
-    const sourceStatuses = <String>{
-      'pending', 'reviewing', 'needs_changes', 'rejected',
-    };
-    if (!sourceStatuses.contains(expectedStatus)) {
+    if (permissions.length != invitationPermissionKeys.length ||
+        !permissions.keys.toSet().containsAll(invitationPermissionKeys)) {
       return false;
     }
-    if (!const <String>{'reviewing', 'needs_changes', 'rejected'}
-        .contains(targetStatus)) {
+    if (permissions['supportReply'] == true &&
+        permissions['supportRead'] != true) {
       return false;
     }
-    final permission = targetStatus == 'rejected'
-        ? 'rejectPlaces' : 'reviewPlaceRequests';
-    if (!allowsPermission(admin: admin, permission: permission) ||
-        !scopedDocumentMatches(
-          admin: admin, collection: 'place_requests', data: request,
-        )) {
+    if ((permissions['reviewPlaceRequests'] == true ||
+         permissions['approvePlaces'] == true ||
+         permissions['rejectPlaces'] == true) &&
+        permissions['viewPlaceRequests'] != true) {
       return false;
     }
-    // Firestore place-request UPDATE checks activation even for province
-    // agents, whose existing LIST permission is province-only.
-    final role = DedaBackend.normalizeAdminRole(admin['role'] ?? admin['jobTitle']);
-    if (role != 'general_manager') {
-      final activation = admin['firstLoginCompletedAt'];
-      final createdAt = request['createdAt'];
-      if (activation is! Timestamp || createdAt is! Timestamp ||
-          createdAt.compareTo(activation) < 0) {
-        return false;
-      }
-    }
-    final cleanNote = (note ?? '').trim();
-    if (targetStatus == 'reviewing') {
-      return expectedStatus != 'reviewing' && cleanNote.isEmpty;
-    }
-    if (targetStatus == 'needs_changes' &&
-        expectedStatus != 'pending' && expectedStatus != 'reviewing') {
+    if (permissions['manageReports'] == true &&
+        permissions['viewReports'] != true) {
       return false;
     }
-    return cleanNote.isNotEmpty && cleanNote.length <= 1000;
-  }
-
-  /// Final approval is separate from review and always requires the
-  /// freshly verified approval AND inbox-view permissions. A stale row,
-  /// incomplete location or unactivated provincial employee cannot approve.
-  static bool placeApprovalAllowed({
-    required Map<String, dynamic>? admin,
-    required Map<String, dynamic>? request,
-    required String requestId,
-    required String expectedStatus,
-  }) {
-    if (!validScopedDocumentId(requestId) ||
-        !const <String>{'pending', 'reviewing'}.contains(expectedStatus) ||
-        admin == null || request == null ||
-        request['status'] != expectedStatus ||
-        !allowsPermission(admin: admin, permission: 'approvePlaces') ||
-        !allowsPermission(admin: admin, permission: 'viewPlaceRequests') ||
-        !scopedDocumentMatches(
-          admin: admin, collection: 'place_requests', data: request,
-        )) {
-      return false;
-    }
-    const requiredText = <String>[
-      'placeName', 'phone', 'governorate', 'address',
-      'openingHours', 'description',
-    ];
-    if (requiredText.any(
-          (key) => (request[key] ?? '').toString().trim().isEmpty,
-        ) ||
-        request['latitude'] is! num ||
-        request['longitude'] is! num ||
-        (request['category'] ?? '').toString().trim().isEmpty ||
-        (request['category'] == 'other' &&
-         (request['otherCategoryText'] ?? '').toString().trim().isEmpty)) {
-      return false;
-    }
-    final role = DedaBackend.normalizeAdminRole(
-      admin['role'] ?? admin['jobTitle'],
-    );
-    if (role != 'general_manager') {
-      final activated = admin['firstLoginCompletedAt'];
-      final created = request['createdAt'];
-      if (activated is! Timestamp || created is! Timestamp ||
-          created.compareTo(activated) < 0) {
-        return false;
-      }
-    }
-    if (request['requestType'] == 'update' &&
-        !validScopedDocumentId(
-          (request['originalPlaceId'] ?? '').toString(),
-        )) {
+    if (role == 'province_agent' && const <String>{
+      'supportRead', 'supportReply', 'viewUsers', 'viewAudit',
+      'viewReports', 'manageReports',
+    }.any((key) => permissions[key] == true)) {
       return false;
     }
     return true;
