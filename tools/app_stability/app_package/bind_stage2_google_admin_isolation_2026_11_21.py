@@ -220,6 +220,19 @@ Future<void> main() async {"""
 """
         admin_source = one(admin_source, invite_start, invite_block,
                            'legacy-invitation-auth-must-be-blocked')
+        # Stage2 invitation activation must never invoke public FirebaseAuth.
+        # Keep the old page's explicit fail-closed guard as defence in depth.
+        admin_source = one(
+            admin_source,
+            "builder: (_) => DedaAdminInviteActivationPage(",
+            "builder: (_) => dedaIsolatedAdminIdentityEnabled\n"
+            "                                   ? DedaStage2IsolatedInviteActivationPage(\n"
+            "                                       isArabic: widget.isArabic,\n"
+            "                                       dedaPhone: widget.dedaPhone,\n"
+            "                                     )\n"
+            "                                   : DedaAdminInviteActivationPage(",
+            'isolated-invitation-entry-only',
+        )
         dashboard_pattern = re.compile(
             r'class\s+_DedaAdminDashboardPageState\s+extends\s+'
             r'State\s*<\s*DedaAdminDashboardPage\s*>\s*'
@@ -319,6 +332,7 @@ Future<void> main() async {"""
         'await isolated.signOutSecondaryAdmin();' not in admin_source or
         admin_source.count('if (!dedaIsolatedAdminIdentityEnabled) _load();') != 1 or
         admin_source.count('Use isolated administrator sign-in.') != 1 or
+        admin_source.count('DedaStage2IsolatedInviteActivationPage(') != 1 or
         admin_source.count('Invitation activation is unavailable during isolated admin migration.') != 1):
         raise ValueError('STAGE2_ADMIN_DASHBOARD_BRIDGE_GATE_FAILED')
     for name in MODULES:

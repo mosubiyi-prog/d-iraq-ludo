@@ -424,6 +424,55 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseAuth.instance',removal)
         self.assertNotIn('FirebaseFirestore.instance',removal)
 
+
+    def test_isolated_staff_activation_claim_and_secondary_only(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertEqual(backend.count('Future<String> activateScopedAdminInvitation('),1)
+        self.assertEqual(backend.count('static bool invitationClaimMatchesGateway('),1)
+        self.assertEqual(ui.count('class DedaStage2IsolatedInviteActivationPage'),1)
+        self.assertIn('isolated.activateScopedAdminInvitation(',ui)
+        self.assertIn('isolated.readVerifiedAdminProfile(',ui)
+        self.assertIn('DedaStage2IsolatedDashboardPage(',ui)
+        method=backend.split('Future<String> activateScopedAdminInvitation(',1)[1].split(
+            '  /// Only the secondary administrator signs',1)[0]
+        self.assertIn("if (!dedaIsolatedAdminIdentityEnabled)",method)
+        self.assertIn('FirebaseFirestore.instanceFor(app: _mainAuth.app)',method)
+        self.assertIn("collection('deda_sessions')",method)
+        self.assertIn("collection('admin_entry_access')",method)
+        self.assertIn('_auth.createUserWithEmailAndPassword(',method)
+        self.assertNotIn('FirebaseAuth.instance',method)
+        self.assertNotIn('_mainAuth.signOut()',method)
+        self.assertNotIn('_mainAuth.createUser',method)
+        self.assertIn("'claimCode': code",method)
+        self.assertIn("'claimedUid': uid",method)
+        self.assertIn('adminRef.set(<String, dynamic>{',method)
+        self.assertIn('_firestore.runTransaction((tx) async {',method)
+        self.assertIn('tx.update(entryRef, <String, dynamic>{',method)
+        self.assertIn('tx.update(inviteRef, <String, dynamic>{',method)
+        self.assertIn('tx.set(auditRef, <String, dynamic>{',method)
+        self.assertIn('created.delete()',method)
+        self.assertIn('manager-repair-required',method)
+        self.assertIn('match /admin_invites/{inviteId} {',rules)
+        self.assertIn('match /admins/{uid} {',rules)
+        self.assertIn('match /admin_entry_access/{accountKey} {',rules)
+        self.assertIn('request.resource.data.claimCode == resource.data.activationCode',rules)
+        self.assertIn("request.resource.data.status == 'completed'",rules)
+
+    def test_stage2_invite_button_routes_to_secondary_not_legacy_auth(self):
+        binder.prepare(self.dst)
+        binder.prepare(self.dst, verify_only=True)
+        admin=(self.dst/'lib/admin_pages.dart').read_text()
+        self.assertEqual(admin.count('DedaStage2IsolatedInviteActivationPage('),1)
+        self.assertEqual(admin.count('DedaAdminInviteActivationPage('),1)
+        self.assertIn('builder: (_) => dedaIsolatedAdminIdentityEnabled',admin)
+        self.assertIn('Invitation activation is unavailable during isolated admin migration.',admin)
+        self.assertEqual(admin.count('await DedaBackend.activateAdminInvitation('),1)
+        self.assertNotIn('FirebaseAuth.instance',(
+            self.dst/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
+        ).read_text())
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)

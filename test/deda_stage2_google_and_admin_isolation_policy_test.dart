@@ -285,6 +285,54 @@ void main() {
       expect(mayRemove(reason: List<String>.filled(401, 'x').join()), false);
     });
 
+
+    test('isolated invitation claim requires staff role and matching gateway', () {
+      final activeExpiry = Timestamp.fromDate(DateTime.now().add(
+          const Duration(days: 2)));
+      final permissions = DedaIsolatedAdminProofPolicy
+          .defaultInvitationPermissions('employee');
+      final claimed = <String, dynamic>{
+        'status':'claimed', 'claimedUid':'new-staff-uid',
+        'claimCode':'12345678', 'activationCode':'12345678',
+        'email':'staff@example.com', 'phone':account,
+        'adminId':'DEDA-ADM-000007', 'role':'employee',
+        'displayName':'Approved Staff', 'department':'Support',
+        'governorate':'', 'permissions':permissions,
+        'createdByUid':adminUid, 'createdByName':'Manager',
+        'expiresAt':activeExpiry,
+      };
+      final gateway = <String, dynamic>{
+        'accountKey':account, 'accessType':'member',
+        'status':'invited', 'active':true,
+        'adminUid':'', 'adminId':'DEDA-ADM-000007',
+        'inviteId':'invite-123', 'allowedRole':'employee',
+        'allowedAdminEmail':'staff@example.com',
+      };
+      bool valid({String uid='new-staff-uid',
+        String code='12345678', String email='staff@example.com',
+        Map<String, dynamic>? invite, Map<String, dynamic>? entry}) =>
+        DedaIsolatedAdminProofPolicy.invitationClaimMatchesGateway(
+          uid:uid, email:email, phoneKey:account,
+          inviteId:'invite-123', code:code, now:DateTime.now(),
+          invite:invite ?? claimed, gateway:entry ?? gateway,
+        );
+      expect(valid(), true);
+      expect(valid(uid:'other-uid'), false);
+      expect(valid(code:'87654321'), false);
+      expect(valid(email:'another@example.com'), false);
+      expect(valid(invite:{...claimed, 'status':'pending'}), false);
+      expect(valid(invite:{...claimed, 'role':'general_manager'},
+        entry:{...gateway, 'allowedRole':'general_manager'}), false);
+      expect(valid(invite:{...claimed,
+        'expiresAt':Timestamp.fromDate(DateTime.now().subtract(
+          const Duration(days:1)))}), false);
+      expect(valid(entry:{...gateway,'inviteId':'another'}), false);
+      expect(valid(entry:{...gateway,'adminUid':'foreign'}), false);
+      expect(valid(entry:{...gateway,'adminId':'DEDA-ADM-123999'}), false);
+      expect(valid(invite:{...claimed, 'permissions':{
+          ...permissions,'viewTeam':true}}), false);
+    });
+
     test('invitation cancellation rejects claimed and foreign gateways', () {
       const inviteId = 'invite-123';
       final pending = <String, dynamic>{

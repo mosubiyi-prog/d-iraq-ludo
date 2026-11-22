@@ -2040,3 +2040,186 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     );
   }
 }
+
+
+/// A new invited staff member uses the second Firebase Auth, never the
+/// currently logged-in public DEDA account. The legacy activation stays off.
+class DedaStage2IsolatedInviteActivationPage extends StatefulWidget {
+  final bool isArabic;
+  final String dedaPhone;
+
+  const DedaStage2IsolatedInviteActivationPage({
+    super.key,
+    required this.isArabic,
+    required this.dedaPhone,
+  });
+
+  @override
+  State<DedaStage2IsolatedInviteActivationPage> createState() =>
+      _DedaStage2IsolatedInviteActivationPageState();
+}
+
+class _DedaStage2IsolatedInviteActivationPageState
+    extends State<DedaStage2IsolatedInviteActivationPage> {
+  final _email = TextEditingController();
+  final _inviteId = TextEditingController();
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _inviteId.dispose();
+    _code.dispose();
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _activate() async {
+    if (_busy) return;
+    final email = _email.text.trim().toLowerCase();
+    final id = _inviteId.text.trim();
+    final code = _code.text.trim();
+    final password = _password.text;
+    if (!RegExp(r'^[^@\s]+@[^@\s]+[.][^@\s]+$').hasMatch(email) ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !RegExp(r'^[0-9]{8}$').hasMatch(code) ||
+        password.length < 8 || password != _confirm.text) {
+      setState(() => _error = t(
+        'أكمل البريد ورقم الدعوة والرمز الصحيح وكلمتي مرور متطابقتين (8 أحرف على الأقل).',
+        'Enter your email, invitation, 8-digit code and matching 8+ character passwords.',
+      ));
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final isolated = await DedaIsolatedAdminIdentity.open();
+      await isolated.activateScopedAdminInvitation(
+        dedaPhone: widget.dedaPhone,
+        inviteId: id,
+        email: email,
+        activationCode: code,
+        password: password,
+      );
+      final verifiedProfile = await isolated.readVerifiedAdminProfile(
+        dedaPhone: widget.dedaPhone,
+      );
+      if (!mounted) {
+        await isolated.signOutSecondaryAdmin();
+        return;
+      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => DedaStage2IsolatedDashboardPage(
+            isArabic: widget.isArabic,
+            dedaPhone: widget.dedaPhone,
+            admin: isolated,
+            profile: verifiedProfile,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final raw = error.toString();
+      setState(() => _error = raw.contains('manager-repair-required') ||
+              raw.contains('auth-cleanup-required')
+          ? t(
+              'تعذّر إكمال تنظيف سجل دعوة الإدارة؛ راجع المدير العام قبل إعادة التفعيل.',
+              'Administrator invitation cleanup needs manager review before another attempt.',
+            )
+          : t(
+              'التفعيل لم يكتمل؛ تأكد من ملكية رقم DEDA والدعوة والرمز واتصال الإنترنت.',
+              'Activation not completed. Verify DEDA phone ownership, invitation, code and internet.',
+            ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(t('تفعيل دعوة الإدارة', 'Activate admin invitation')),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(t(
+                  'التفعيل مرتبط بحساب DEDA الحالي، ويستخدم جلسة إدارة منفصلة.',
+                  'Activation verifies this DEDA account and uses separate admin Auth.',
+                ), textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _email, enabled: !_busy,
+                  textDirection: TextDirection.ltr,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(labelText: t('البريد', 'Email')),
+                ),
+                TextField(
+                  controller: _inviteId, enabled: !_busy,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('معرّف الدعوة', 'Invitation ID')),
+                ),
+                TextField(
+                  controller: _code, enabled: !_busy, maxLength: 8,
+                  keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('رمز التفعيل 8 أرقام', '8-digit activation code')),
+                ),
+                TextField(
+                  controller: _password, enabled: !_busy,
+                  obscureText: true,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('كلمة المرور', 'New password')),
+                ),
+                TextField(
+                  controller: _confirm, enabled: !_busy,
+                  obscureText: true,
+                  textDirection: TextDirection.ltr,
+                  onSubmitted: (_) => _activate(),
+                  decoration: InputDecoration(
+                    labelText: t('تأكيد كلمة المرور', 'Confirm password')),
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(_error!,
+                      style: const TextStyle(color: Colors.red)),
+                  ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _busy ? null : _activate,
+                  icon: _busy ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ) : const Icon(Icons.verified_user_outlined),
+                  label: Text(t(
+                    'تفعيل الحساب الإداري', 'Activate administrator')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
