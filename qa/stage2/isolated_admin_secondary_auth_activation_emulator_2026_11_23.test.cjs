@@ -149,7 +149,10 @@ test("secondary Auth signup, claimed invitation, bound gate; public UID unchange
       await assert.rejects(getDocFromServer(
         doc(isolatedAdminApp.db,"users",guestUid)),/permission-denied/i);
     });
-    const fullyLinked=await t.test("link invitation+gateway+audit in one real client transaction",async()=>{
+    // Node's t.test() Promise resolves undefined on success, so record
+    // completion inside the test body instead of interpreting that return.
+    let fullyLinked=false;
+    await t.test("link invitation+gateway+audit in one real client transaction",async()=>{
       const auditRef=doc(isolatedAdminApp.db,"admin_audit",
         "qa_stage2_auth_sdk_accepted");
       await runTransaction(isolatedAdminApp.db,async tx=>{
@@ -190,9 +193,11 @@ test("secondary Auth signup, claimed invitation, bound gate; public UID unchange
         doc(isolatedAdminApp.db,"users",guestUid))).data().name,
         "Synthetic private user");
       assert.equal(publicApp.auth.currentUser.uid,publicUid);
+      fullyLinked=true;
     });
     assert.equal(fullyLinked,true,"All transaction and access checks must pass");
-    const publicPreserved=await t.test("separate admin sign-out cannot sign out public DEDA UID",async()=>{
+    let publicPreserved=false;
+    await t.test("separate admin sign-out cannot sign out public DEDA UID",async()=>{
       await signOut(isolatedAdminApp.auth);
       assert.equal(isolatedAdminApp.auth.currentUser,null);
       assert.equal(publicApp.auth.currentUser.uid,publicUid);
@@ -201,6 +206,7 @@ test("secondary Auth signup, claimed invitation, bound gate; public UID unchange
       assert.equal(session.data().uid,publicUid);
       await assert.rejects(getDocFromServer(
         doc(publicApp.db,"users",guestUid)),/permission-denied/i);
+      publicPreserved=true;
     });
     assert.equal(publicPreserved,true,"Public DEDA UID must remain signed in");
     console.log("PASS_SECONDARY_AUTH_REAL_EMULATOR_PUBLIC_UID_UNCHANGED");
