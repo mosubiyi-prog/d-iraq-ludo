@@ -159,6 +159,47 @@ class DedaIsolatedAdminProofPolicy {
     }.contains(role);
   }
 
+  /// Only an unclaimed subordinate invitation with an exact, dedicated
+  /// DEDA phone gateway can be atomically cancelled. A claimed/completed
+  /// invitation or a GM gateway is not safe to delete through this path.
+  static bool invitationCancellationAllowed({
+    required String actorUid,
+    required Map<String, dynamic>? actor,
+    required String inviteId,
+    required Map<String, dynamic>? invitation,
+    required String accountKey,
+    required Map<String, dynamic>? entry,
+    required String reason,
+  }) {
+    if (!validScopedDocumentId(actorUid) ||
+        !validScopedDocumentId(inviteId) ||
+        reason.trim().isEmpty || reason.trim().length > 400 ||
+        !allowsPermission(admin: actor, permission: 'viewTeam') ||
+        invitation == null || entry == null ||
+        invitation['status'] != 'pending' ||
+        (invitation['claimedUid'] ?? '').toString().trim().isNotEmpty) {
+      return false;
+    }
+    final role = (invitation['role'] ?? '').toString().trim().toLowerCase();
+    if (!const <String>{
+      'deputy_manager', 'employee', 'province_agent',
+    }.contains(role)) return false;
+    final expectedAccount = canonicalIraqiPhone(
+      (invitation['phone'] ?? '').toString(),
+    );
+    final email = (invitation['email'] ?? '').toString().trim().toLowerCase();
+    return expectedAccount.isNotEmpty && accountKey == expectedAccount &&
+        email.isNotEmpty &&
+        entry['accountKey'] == accountKey &&
+        entry['inviteId'] == inviteId &&
+        entry['accessType'] == 'member' &&
+        entry['allowedRole'] == role &&
+        (entry['allowedAdminEmail'] ?? '').toString().trim().toLowerCase() ==
+            email &&
+        entry['status'] == 'invited' && entry['active'] == true &&
+        (entry['adminUid'] ?? '').toString().trim().isEmpty;
+  }
+
   /// Explicitly scoped to existing support-ticket status/reply fields.
   static bool supportMutationInputAllowed({
     required String requestId,
@@ -481,7 +522,7 @@ class DedaIsolatedAdminProofPolicy {
         DedaBackend.normalizeAdminStatus(admin) != 'active') return null;
     const collections = <String>{
       'support_requests', 'place_requests', 'users', 'admin_audit',
-      'admins', 'published_places', 'admin_trash_place_requests',
+      'admins', 'admin_invites', 'published_places', 'admin_trash_place_requests',
       'admin_trash_places',
     };
     if (!collections.contains(collection)) return null;
@@ -493,7 +534,7 @@ class DedaIsolatedAdminProofPolicy {
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(role)) return null;
     if (const <String>{
-      'admins', 'published_places', 'admin_trash_place_requests',
+      'admins', 'admin_invites', 'published_places', 'admin_trash_place_requests',
       'admin_trash_places',
     }.contains(collection) && role != 'general_manager') {
       return null;
@@ -538,6 +579,7 @@ class DedaIsolatedAdminIdentity {
     'users': 'viewUsers',
     'admin_audit': 'viewAudit',
     'admins': 'viewTeam',
+    'admin_invites': 'viewTeam',
     'published_places': 'managePlaceArchives',
     'admin_trash_place_requests': 'managePlaceArchives',
     'admin_trash_places': 'managePlaceArchives',
@@ -753,6 +795,87 @@ class DedaIsolatedAdminIdentity {
         'targetAdminUid': cleanTarget,
         'targetAdminId': target?['adminId'],
         'targetAdminName': target?['displayName'],
+        'reason': cleanReason,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Cancel a pending subordinate invitation and only its exact phone
+  /// gateway in one transaction; never touch a claimed Firebase identity.
+  Future<void> cancelScopedAdminInvitation({
+    required String dedaPhone,
+    required String inviteId,
+    required String reason,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-invite-write-not-enabled');
+    }
+    final cleanId = inviteId.trim();
+    final cleanReason = reason.trim();
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(cleanId) ||
+        cleanReason.isEmpty || cleanReason.length > 400 ||
+        !await proof()) {
+      throw StateError('deda-admin-isolated-invite-cancel-denied');
+    }
+    final inviteRef = _firestore.collection('admin_invites').doc(cleanId);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((transaction) async {
+      // Both reads are transaction reads: a concurrent claim makes this
+      // attempt retry and then refuse deletion.
+      final inviteSnapshot = await transaction.get(inviteRef);
+      final invitation = inviteSnapshot.data();
+      final accountKey = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(
+        (invitation?['phone'] ?? '').toString(),
+      );
+      if (!inviteSnapshot.exists || accountKey.isEmpty) {
+        throw StateError('deda-admin-isolated-invite-no-pending-gateway');
+      }
+      final entryRef = _firestore.collection('admin_entry_access')
+          .doc(accountKey);
+      final entrySnapshot = await transaction.get(entryRef);
+      if (!entrySnapshot.exists ||
+          !DedaIsolatedAdminProofPolicy.invitationCancellationAllowed(
+            actorUid: uid, actor: verifiedAdmin, inviteId: cleanId,
+            invitation: invitation, accountKey: accountKey,
+            entry: entrySnapshot.data(), reason: cleanReason,
+          ) ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.invitationCancellationAllowed(
+            actorUid: uid, actor: verifiedAdmin, inviteId: cleanId,
+            invitation: invitation, accountKey: accountKey,
+            entry: entrySnapshot.data(), reason: cleanReason,
+          ) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-invite-proof-changed');
+      }
+      final actor = verifiedAdmin!;
+      final name = (actor['displayName'] ?? actor['name'] ??
+          current.email ?? 'DEDA Admin').toString();
+      transaction.delete(entryRef);
+      transaction.delete(inviteRef);
+      transaction.set(auditRef, <String, dynamic>{
+        'action': 'admin_invite_cancelled',
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': 'general_manager',
+        'inviteId': cleanId,
+        'targetAdminId': invitation?['adminId'],
+        'targetAdminName': invitation?['displayName'],
+        'targetEmail': invitation?['email'],
         'reason': cleanReason,
         'createdAt': FieldValue.serverTimestamp(),
       });
