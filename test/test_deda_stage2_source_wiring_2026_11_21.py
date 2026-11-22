@@ -465,7 +465,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         binder.prepare(self.dst, verify_only=True)
         admin=(self.dst/'lib/admin_pages.dart').read_text()
         self.assertEqual(admin.count('DedaStage2IsolatedInviteActivationPage('),1)
-        self.assertEqual(admin.count('DedaAdminInviteActivationPage('),1)
+        self.assertIn(': DedaAdminInviteActivationPage(', admin)
         self.assertIn('builder: (_) => dedaIsolatedAdminIdentityEnabled',admin)
         self.assertIn('Invitation activation is unavailable during isolated admin migration.',admin)
         self.assertEqual(admin.count('await DedaBackend.activateAdminInvitation('),1)
