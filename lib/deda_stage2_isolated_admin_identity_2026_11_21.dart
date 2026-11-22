@@ -157,7 +157,9 @@ class DedaIsolatedAdminProofPolicy {
         (entry['adminId'] ?? '').toString() !=
             (target['adminId'] ?? '').toString() ||
         (entry['allowedRole'] ?? '').toString() !=
-            (target['role'] ?? '').toString()) return false;
+            (target['role'] ?? '').toString()) {
+      return false;
+    }
     final email = (target['email'] ?? '').toString().trim().toLowerCase();
     return email.isNotEmpty &&
         (entry['allowedAdminEmail'] ?? '').toString().trim().toLowerCase()
@@ -186,7 +188,9 @@ class DedaIsolatedAdminProofPolicy {
             .contains((target['role'] ?? '').toString().trim().toLowerCase()) ||
         !const <String>{'active', 'temporarily_stopped', 'disabled'}
             .contains(status) ||
-        reason.trim().isEmpty || reason.trim().length > 400) return false;
+        reason.trim().isEmpty || reason.trim().length > 400) {
+      return false;
+    }
     return invitationCreateInputAllowed(
       displayName: displayName,
       email: (target['email'] ?? '').toString(),
@@ -1453,7 +1457,9 @@ class DedaIsolatedAdminIdentity {
       onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
     );
     if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(cleanTarget) ||
-        !await proof()) throw StateError('deda-admin-isolated-team-remove-denied');
+        !await proof()) {
+      throw StateError('deda-admin-isolated-team-remove-denied');
+    }
     final memberRef = _firestore.collection('admins').doc(cleanTarget);
     final auditRef = _firestore.collection('admin_audit').doc();
     await _firestore.runTransaction((transaction) async {

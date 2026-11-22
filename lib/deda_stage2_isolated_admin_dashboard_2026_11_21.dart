@@ -531,10 +531,15 @@ class _DedaIsolatedReadOnlyTabState
                     DropdownMenuItem(value: 'deputy_manager', child: Text(t('معاون', 'Deputy'))),
                     DropdownMenuItem(value: 'province_agent', child: Text(t('وكيل محافظة', 'Province agent'))),
                   ],
-                  onChanged: (v) { if (v != null) refresh(() {
-                    role = v;
-                    permissions = DedaIsolatedAdminProofPolicy.defaultInvitationPermissions(v);
-                  }); },
+                  onChanged: (v) {
+                    if (v != null) {
+                      refresh(() {
+                        role = v;
+                        permissions = DedaIsolatedAdminProofPolicy
+                            .defaultInvitationPermissions(v);
+                      });
+                    }
+                  },
                 ),
                 if (role == 'province_agent')
                   TextField(controller: province, maxLength: 80,
@@ -659,12 +664,18 @@ class _DedaIsolatedReadOnlyTabState
       await widget.admin.requestScopedMemberPasswordReset(
         dedaPhone: widget.dedaPhone, targetUid: id,
       );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('طُلب رابط إعادة التعيين.', 'Reset email requested.'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('طُلب رابط إعادة التعيين.', 'Reset email requested.')),
+        ));
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('تعذر الطلب. راجع تخويل الإدارة والاتصال.',
-          'Password reset denied; verify authorization and connection.'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر الطلب. راجع تخويل الإدارة والاتصال.',
+            'Password reset denied; verify authorization and connection.')),
+        ));
+      }
     } finally { if (mounted) setState(() => _mutating = false); }
   }
 
