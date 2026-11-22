@@ -24,6 +24,9 @@ GUARD_MATCH = """    // Stage2 CANDIDATE ONLY: immutable primary gateway anchor.
 PERMISSION_ORIGINAL = "    function hasAdminPermission(permission) {\n      return isGeneralManager()\n        || (\n          isAdmin()\n          && adminData().keys().hasAny(['permissions'])\n          && adminData().permissions is map\n          && adminData().permissions.keys().hasAny([permission])\n          && adminData().permissions[permission] == true\n        );\n    }\n"
 PERMISSION_HARDENED = "\n    // STAGE2 QA CANDIDATE: newly invited staff have no privileged data\n    // access until the exact secondary Auth UID is bound to the original\n    // invitation and ACTIVE phone gateway. Legacy staff without inviteId\n    // retain their existing authorized permissions.\n    function activeInvitedMemberGateway() {\n      return !adminData().keys().hasAny(['inviteId'])\n        || (\n          adminData().inviteId is string\n          && adminData().phone is string\n          && exists(/databases/$(database)/documents/admin_entry_access/$(adminData().phone))\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.accountKey == adminData().phone\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.accessType == 'member'\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.status == 'active'\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.active == true\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.adminUid == request.auth.uid\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.inviteId == adminData().inviteId\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.adminId == adminData().adminId\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.allowedRole == adminData().role\n          && get(/databases/$(database)/documents/admin_entry_access/$(adminData().phone)).data.allowedAdminEmail == request.auth.token.email\n        );\n    }\n\n    function hasAdminPermission(permission) {\n      return isAdmin()\n        && activeInvitedMemberGateway()\n        && (\n          isGeneralManager()\n          || (\n            adminData().keys().hasAny(['permissions'])\n            && adminData().permissions is map\n            && adminData().permissions.keys().hasAny([permission])\n            && adminData().permissions[permission] == true\n          )\n        );\n    }\n"
 
+NOTIFICATION_CREATE_ORIGINAL = "      allow create: if isAdmin()\n        && adminProvinceMatches(request.resource.data)"
+NOTIFICATION_CREATE_HARDENED = "      allow create: if isAdmin()\n        && activeInvitedMemberGateway()\n        && adminProvinceMatches(request.resource.data)"
+
 GM_ROLE_ORIGINAL = "    function isGeneralManager() {\n      return isAdmin()\n        && (\n          !adminData().keys().hasAny(['role'])\n          || adminData().role in [\n            'general_manager', 'manager', 'director', 'admin'\n          ]\n        );\n    }\n"
 GM_ROLE_HARDENED = "    // QA CANDIDATE: no implicit general manager if role is absent.\n    // Preserve explicit legacy role aliases until deployed accounts audited.\n    function isGeneralManager() {\n      return isAdmin()\n        && adminData().keys().hasAny(['role'])\n        && adminData().role in [\n          'general_manager', 'manager', 'director', 'admin'\n        ];\n    }\n"
 
@@ -69,7 +72,12 @@ def candidate(source):
     result = result.replace(GM_ROLE_ORIGINAL, GM_ROLE_HARDENED, 1)
     if result.count("function isGeneralManager()") != 1:
         raise ValueError("FAIL_CANDIDATE_GM_ROLE_DUPLICATED")
-    if result.count("activeInvitedMemberGateway()") != 2:
+    if result.count(NOTIFICATION_CREATE_ORIGINAL) != 1:
+        raise ValueError("FAIL_CANDIDATE_NOTIFICATION_RULES_DRIFT")
+    result = result.replace(
+        NOTIFICATION_CREATE_ORIGINAL, NOTIFICATION_CREATE_HARDENED, 1
+    )
+    if result.count("activeInvitedMemberGateway()") != 3:
         raise ValueError("FAIL_CANDIDATE_INVITEE_GUARD_MISSING")
     if result.count("managerGatewayMutationAllowed()") != 3:
         raise ValueError("FAIL_CANDIDATE_RULES_DUPLICATE_GUARD")

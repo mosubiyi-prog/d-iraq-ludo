@@ -244,6 +244,20 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       // NOT acceptable production behavior. The candidate below denies it.
       await assertSucceeds(partial.doc("users/"+privateUid).get());
       console.log("RELEASE_HOLD_UNBOUND_INVITEE_ADMIN_DATA_ACCESS_ALLOWED_BY_CURRENT_RULES");
+
+      await assertSucceeds(await partial.doc("owner_place_notifications/qa_prebinding_notice").set({
+  type:"admin_alert",accountKey:"9647712345900",
+  ownerUid:"qa_private_owner",placeId:"qa_place_1",
+  placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
+  titleAr:"تنبيه اختبار",titleEn:"Synthetic QA alert",
+  bodyAr:"اختبار وهمي",bodyEn:"Synthetic QA only",
+  sourceType:"admin",sourceId:"qa_alert",
+  createdByUid:partialUid,
+  createdByName:"QA Staff",createdByRole:"employee",
+  createdAt:sent(),
+}));
+      console.log("RELEASE_HOLD_UNBOUND_INVITEE_CAN_CREATE_OWNER_ALERT_CURRENT_RULES");
+
     });
 
 
