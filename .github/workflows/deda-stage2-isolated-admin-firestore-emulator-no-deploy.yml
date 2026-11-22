@@ -57,12 +57,14 @@ jobs:
             @firebase/rules-unit-testing@4.0.0
           echo "NODE_PATH=$root/node_modules" >> "$GITHUB_ENV"
           python3 - <<'PY'
-          import json,os,pathlib
+          import json,os,pathlib,shutil
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'deda-stage2-admin-runtime'
           p=pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'firestore.rules'
           assert p.exists() and p.stat().st_size>10000
+          shutil.copy2(p,root/'checked-in-firestore.rules')
+          assert (root/'checked-in-firestore.rules').read_bytes()==p.read_bytes()
           (root/'firebase.json').write_text(json.dumps({
-              'firestore': {'rules': str(p.resolve())},
+              'firestore': {'rules': 'checked-in-firestore.rules'},
               'emulators': {'firestore': {'host': '127.0.0.1', 'port': 8097},
                             'ui': {'enabled': False}}
           }))
@@ -94,7 +96,7 @@ jobs:
           rules=root/'candidate.rules'
           assert rules.exists() and rules.stat().st_size>10000
           (root/'candidate-firebase.json').write_text(json.dumps({
-            'firestore': {'rules': str(rules.resolve())},
+            'firestore': {'rules': 'candidate.rules'},
             'emulators': {'auth': {'host': '127.0.0.1', 'port': 9097},
                           'firestore': {'host': '127.0.0.1', 'port': 8097},
                           'ui': {'enabled': False}}

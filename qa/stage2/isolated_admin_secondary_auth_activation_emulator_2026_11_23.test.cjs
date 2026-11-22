@@ -149,7 +149,7 @@ test("secondary Auth signup, claimed invitation, bound gate; public UID unchange
       await assert.rejects(getDocFromServer(
         doc(isolatedAdminApp.db,"users",guestUid)),/permission-denied/i);
     });
-    await t.test("link invitation+gateway+audit in one real client transaction",async()=>{
+    const fullyLinked=await t.test("link invitation+gateway+audit in one real client transaction",async()=>{
       const auditRef=doc(isolatedAdminApp.db,"admin_audit",
         "qa_stage2_auth_sdk_accepted");
       await runTransaction(isolatedAdminApp.db,async tx=>{
@@ -177,13 +177,22 @@ test("secondary Auth signup, claimed invitation, bound gate; public UID unchange
       });
       assert.equal((await getDocFromServer(inviteRef)).data().status,"completed");
       assert.equal((await getDocFromServer(gateRef)).data().adminUid,adminUid);
-      assert.equal((await getDocFromServer(auditRef)).data().adminUid,adminUid);
+      // Normal staff MUST NOT receive viewAudit merely for onboarding.
+      await assert.rejects(getDocFromServer(auditRef),/permission-denied/i);
+      // A trusted QA-only inspector may validate the atomic audit commit,
+      // without broadening any staff permission or touching production.
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const record=await ctx.firestore()
+          .doc("admin_audit/qa_stage2_auth_sdk_accepted").get();
+        assert.equal(record.data().adminUid,adminUid);
+      });
       assert.equal((await getDocFromServer(
         doc(isolatedAdminApp.db,"users",guestUid))).data().name,
         "Synthetic private user");
       assert.equal(publicApp.auth.currentUser.uid,publicUid);
     });
-    await t.test("separate admin sign-out cannot sign out public DEDA UID",async()=>{
+    assert.equal(fullyLinked,true,"All transaction and access checks must pass");
+    const publicPreserved=await t.test("separate admin sign-out cannot sign out public DEDA UID",async()=>{
       await signOut(isolatedAdminApp.auth);
       assert.equal(isolatedAdminApp.auth.currentUser,null);
       assert.equal(publicApp.auth.currentUser.uid,publicUid);
@@ -193,6 +202,7 @@ test("secondary Auth signup, claimed invitation, bound gate; public UID unchange
       await assert.rejects(getDocFromServer(
         doc(publicApp.db,"users",guestUid)),/permission-denied/i);
     });
+    assert.equal(publicPreserved,true,"Public DEDA UID must remain signed in");
     console.log("PASS_SECONDARY_AUTH_REAL_EMULATOR_PUBLIC_UID_UNCHANGED");
     console.log("PASS_INVITATION_CLAIM_GATEWAY_AUDIT_REAL_SDK_TRANSACTION");
   }finally{
