@@ -109,6 +109,13 @@ class _DedaStage2IsolatedDashboardPageState
         isArabic: widget.isArabic,
         collection: 'admin_invites',
       ));
+      tabs.add(Tab(text: t('طلبات استرجاع الموظفين', 'Staff recovery')));
+      pages.add(_DedaIsolatedReadOnlyTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+        collection: 'admin_recovery_requests',
+      ));
       tabs.add(Tab(text: t('أرقام دخول المدير', 'Manager entry phones')));
       pages.add(_DedaIsolatedManagerGatewaysTab(
         admin: widget.admin,
@@ -760,6 +767,107 @@ class _DedaIsolatedReadOnlyTabState
     } finally { if (mounted) setState(() => _mutating = false); }
   }
 
+
+  /// Reuse the same verified list/tab, rather than adding a second recovery
+  /// implementation. Only a fresh secondary manager can decide server-side.
+  Future<void> _decideStaffRecovery(Map<String, dynamic> row,
+      bool approve) async {
+    if (_mutating || widget.collection != 'admin_recovery_requests' ||
+        row['status'] != 'new') return;
+    final id = (row['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) return;
+    String? reason = '';
+    if (approve) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: Text(t('موافقة على الاسترجاع', 'Approve staff recovery')),
+          content: Text(t(
+            'سيُصدر رمز استرجاع مدته 30 دقيقة بعد إثبات هوية الموظف وبوابة رقم DEDA.',
+            'A 30-minute recovery code will be issued after checking the staff UID and DEDA phone gateway.',
+          )),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: Text(t('موافقة', 'Approve')),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true) return;
+    } else {
+      final controller = TextEditingController();
+      try {
+        reason = await showDialog<String>(
+          context: context,
+          builder: (dialog) => StatefulBuilder(
+            builder: (dialog, refresh) => AlertDialog(
+              title: Text(t('رفض طلب الاسترجاع', 'Reject recovery request')),
+              content: TextField(
+                controller: controller,
+                maxLength: 400,
+                maxLines: 3,
+                onChanged: (_) => refresh(() {}),
+                decoration: InputDecoration(
+                  labelText: t('سبب الرفض', 'Rejection reason')),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialog),
+                  child: Text(t('إلغاء', 'Cancel')),
+                ),
+                FilledButton(
+                  onPressed: controller.text.trim().isEmpty
+                      ? null : () => Navigator.pop(
+                          dialog, controller.text.trim()),
+                  child: Text(t('رفض', 'Reject')),
+                ),
+              ],
+            ),
+          ),
+        );
+      } finally {
+        controller.dispose();
+      }
+      if (reason == null) return;
+    }
+    if (!mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.decideScopedStaffRecovery(
+        dedaPhone: widget.dedaPhone,
+        requestId: id,
+        approve: approve,
+        rejectionReason: reason,
+      );
+      if (mounted) {
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t(
+            approve ? 'تم إصدار رمز الاسترجاع.' : 'تم رفض الطلب وتسجيل السبب.',
+            approve ? 'Recovery code issued.' : 'Recovery rejected with reason.',
+          )),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t(
+            'لم يكتمل القرار: تحقق من صلاحية المدير وربط حساب الموظف.',
+            'Decision denied: verify manager authority and staff binding.',
+          )),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
   String _timestamp(dynamic value) {
     if (value is! Timestamp) return '';
     final date = value.toDate().toLocal();
@@ -772,15 +880,20 @@ class _DedaIsolatedReadOnlyTabState
     final user = widget.collection == 'users';
     final team = widget.collection == 'admins';
     final invite = widget.collection == 'admin_invites';
-    final title = (team || invite)
+    final recovery = widget.collection == 'admin_recovery_requests';
+    final title = recovery ? (data['fullName'] ?? '').toString()
+        : (team || invite)
         ? (data['displayName'] ?? data['name'] ?? '').toString()
         : user ? (data['name'] ?? '').toString()
             : (data['action'] ?? '').toString();
-    final subtitle = (team || invite)
+    final subtitle = recovery
+        ? (data['email'] ?? '').toString()
+        : (team || invite)
         ? (data['email'] ?? '').toString()
         : user ? (data['phone'] ?? '').toString()
             : (data['adminName'] ?? '').toString();
-    final detail = team ? (data['role'] ?? '').toString()
+    final detail = recovery ? (data['status'] ?? '').toString()
+        : team ? (data['role'] ?? '').toString()
         : invite ? (data['status'] ?? '').toString()
         : user ? (data['accountType'] ?? '').toString()
         : _timestamp(data['createdAt']);
@@ -789,15 +902,20 @@ class _DedaIsolatedReadOnlyTabState
     }.contains((data['role'] ?? '').toString().trim().toLowerCase());
     final canSuspend = team && data['active'] == true && subordinate;
     final canCancel = invite && data['status'] == 'pending' && subordinate;
+    final canRecover = recovery && data['status'] == 'new';
     return Card(
       child: ListTile(
         title: Text(title.isEmpty ? '—' : title),
         subtitle: Text(subtitle),
-        trailing: (team && subordinate) || canCancel
+        trailing: (team && subordinate) || canCancel || canRecover
             ? PopupMenuButton<String>(
                 enabled: !_mutating,
                 tooltip: t('إجراءات الإدارة', 'Administration actions'),
                 itemBuilder: (_) => [
+                  if (canRecover) PopupMenuItem(value: 'approveRecovery',
+                    child: Text(t('موافقة وإصدار رمز', 'Approve recovery'))),
+                  if (canRecover) PopupMenuItem(value: 'rejectRecovery',
+                    child: Text(t('رفض الطلب', 'Reject recovery'))),
                   if (team) PopupMenuItem(value: 'edit',
                     child: Text(t('تعديل', 'Edit'))),
                   if (canSuspend) PopupMenuItem(value: 'suspend',
@@ -813,6 +931,8 @@ class _DedaIsolatedReadOnlyTabState
                 ],
                 onSelected: (action) {
                   switch (action) {
+                    case 'approveRecovery': _decideStaffRecovery(data, true); break;
+                    case 'rejectRecovery': _decideStaffRecovery(data, false); break;
                     case 'edit': _editMember(data); break;
                     case 'suspend': _suspendMember(data); break;
                     case 'reset': _resetMemberPassword(data); break;

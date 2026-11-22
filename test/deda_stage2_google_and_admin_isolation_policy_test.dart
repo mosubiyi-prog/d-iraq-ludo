@@ -333,6 +333,51 @@ void main() {
           ...permissions,'viewTeam':true}}), false);
     });
 
+
+    test('recovery decisions reject other staff, GM, expired gateway and no reason', () {
+      final member = <String,dynamic>{
+        'role':'employee', 'active':true, 'status':'active',
+        'phone':account, 'adminId':'DEDA-ADM-000123',
+        'email':'staff@example.com',
+      };
+      final gate = <String,dynamic>{
+        'accountKey':account, 'accessType':'member',
+        'adminUid':'staff-uid', 'adminId':'DEDA-ADM-000123',
+        'allowedRole':'employee', 'allowedAdminEmail':'staff@example.com',
+        'active':true, 'status':'active',
+      };
+      final request = <String,dynamic>{
+        'status':'new','requesterUid':'phone-owner-uid',
+        'accountKey':account,'phone':account,
+        'targetAdminUid':'staff-uid','targetAdminId':'DEDA-ADM-000123',
+        'targetRole':'employee','email':'staff@example.com',
+      };
+      bool okay({Map<String,dynamic>? r, Map<String,dynamic>? m,
+        Map<String,dynamic>? g, Map<String,dynamic>? actor,
+        bool approve=true, String reason=''}) =>
+          DedaIsolatedAdminProofPolicy.staffRecoveryDecisionAllowed(
+            actorUid:adminUid,actor:actor ?? record,requestId:'req-1',
+            request:r ?? request,member:m ?? member,gateway:g ?? gate,
+            approve:approve,reason:reason,
+          );
+      expect(okay(),true);
+      expect(okay(approve:false,reason:'Confirmed identity mismatch'),true);
+      expect(okay(approve:false),false);
+      expect(okay(approve:true,reason:'not empty'),false);
+      expect(okay(r:{...request,'status':'ready'}),false);
+      expect(okay(r:{...request,'targetAdminUid':adminUid}),false);
+      expect(okay(r:{...request,'targetAdminId':'foreign'}),false);
+      expect(okay(r:{...request,'email':'foreign@example.com'}),false);
+      expect(okay(r:{...request,'accountKey':'9647712345999'}),false);
+      expect(okay(m:{...member,'role':'general_manager'},
+          r:{...request,'targetRole':'general_manager'},
+          g:{...gate,'allowedRole':'general_manager'}),false);
+      expect(okay(g:{...gate,'adminUid':'other-uid'}),false);
+      expect(okay(g:{...gate,'active':false}),false);
+      expect(okay(m:{...member,'active':false}),false);
+      expect(okay(actor:{...record,'role':'employee'}),false);
+    });
+
     test('invitation cancellation rejects claimed and foreign gateways', () {
       const inviteId = 'invite-123';
       final pending = <String, dynamic>{

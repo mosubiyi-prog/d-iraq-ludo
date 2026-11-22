@@ -473,6 +473,40 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.dst/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
         ).read_text())
 
+
+    def test_manager_staff_recovery_uses_secondary_transaction_not_old_backend(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertEqual(backend.count('static bool staffRecoveryDecisionAllowed('),1)
+        self.assertEqual(backend.count('Future<void> decideScopedStaffRecovery('),1)
+        self.assertEqual(ui.count('Future<void> _decideStaffRecovery('),1)
+        self.assertIn("'admin_recovery_requests': 'viewTeam'",backend)
+        self.assertIn("collection: 'admin_recovery_requests'",ui)
+        self.assertIn("query.orderBy('createdAt', descending: true)",backend)
+        self.assertIn("if (can('viewTeam'))",ui)
+        self.assertIn("widget.admin.decideScopedStaffRecovery(",ui)
+        self.assertIn("case 'approveRecovery': _decideStaffRecovery(data, true);",ui)
+        self.assertIn("case 'rejectRecovery': _decideStaffRecovery(data, false);",ui)
+        method=backend.split('Future<void> decideScopedStaffRecovery(',1)[1].split(
+            '  /// Password reset cannot be part',1)[0]
+        for token in ("_firestore.runTransaction((tx) async {",
+                      "final requestSnapshot = await tx.get(ref);",
+                      "final member = await tx.get(memberRef);",
+                      "final gateway = await tx.get(gatewayRef);",
+                      "staffRecoveryDecisionAllowed(",
+                      "!await proof()","tx.update(ref, <String, dynamic>{",
+                      "tx.set(auditRef, <String, dynamic>{",
+                      "'recoveryPinIssuedAt': FieldValue.serverTimestamp()",
+                      "'recoveryPinExpiresAt': expiry"):
+            self.assertIn(token,method)
+        self.assertNotIn("FirebaseAuth.instance",method)
+        self.assertNotIn("FirebaseFirestore.instance",method)
+        self.assertNotIn("_mainAuth.signOut()",method)
+        self.assertIn("match /admin_recovery_requests/{requestId} {",rules)
+        self.assertIn("resource.data.status == 'new'",rules)
+        self.assertIn("request.resource.data.status in ['ready', 'rejected']",rules)
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)
