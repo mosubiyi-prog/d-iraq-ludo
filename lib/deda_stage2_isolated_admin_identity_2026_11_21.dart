@@ -81,6 +81,24 @@ class DedaIsolatedAdminProofPolicy {
     final allowedRole = DedaBackend.normalizeAdminRole(rawAllowedRole);
     if (allowedRole != adminRole) return false;
     final savedUid = (entry['adminUid'] ?? '').toString().trim();
+    // Newly invited administrators may never enter via the old unbound-email
+    // compatibility path. Only the completed invitation + bound gateway can
+    // authorize them. A failed midway activation stays outside the Dashboard.
+    final adminInviteId = (admin['inviteId'] ?? '').toString().trim();
+    if (adminInviteId.isNotEmpty) {
+      final entryInviteId = (entry['inviteId'] ?? '').toString().trim();
+      final adminId = (admin['adminId'] ?? '').toString().trim();
+      final entryAdminId = (entry['adminId'] ?? '').toString().trim();
+      final adminEmail = (admin['email'] ?? '').toString().trim().toLowerCase();
+      final liveEmail = (authEmail ?? '').trim().toLowerCase();
+      if (entryStatus != 'active' ||
+          savedUid != authUid ||
+          entryInviteId != adminInviteId ||
+          adminId.isEmpty || entryAdminId != adminId ||
+          adminEmail.isEmpty || adminEmail != liveEmail) {
+        return false;
+      }
+    }
     if (savedUid.isNotEmpty) {
       // Once the server binds an admin UID, email matching must not
       // silently reassign it to another Firebase account.

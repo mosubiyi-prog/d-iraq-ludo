@@ -1025,6 +1025,36 @@ void main() {
       expect(verify(uid:'staff-uid',admin:{...staff,'role':'province_agent'},
         entry:staffEntry), false);
     });
+
+    test('newly invited staff never enters before completed gateway binding', () {
+      final staff = <String,dynamic>{
+        'active':true, 'status':'active', 'role':'employee',
+        'inviteId':'invite-staff', 'adminId':'DEDA-ADM-000111',
+        'email':'staff@deda.test',
+      };
+      final gateway = <String,dynamic>{
+        'accountKey':account, 'active':true, 'status':'invited',
+        'accessType':'member', 'allowedRole':'employee',
+        'adminUid':'', 'allowedAdminEmail':'staff@deda.test',
+        'inviteId':'invite-staff', 'adminId':'DEDA-ADM-000111',
+      };
+      expect(verify(uid:'staff-uid',email:'staff@deda.test',
+        admin:staff,entry:gateway,expiry:now.add(const Duration(days:1))), false);
+      expect(verify(uid:'staff-uid',email:'staff@deda.test',
+        admin:staff,entry:{...gateway,'status':'active'}), false);
+      final completed = {...gateway,'status':'active','adminUid':'staff-uid'};
+      expect(verify(uid:'staff-uid',email:'staff@deda.test',
+        admin:staff,entry:completed), true);
+      expect(verify(uid:'other-uid',email:'staff@deda.test',
+        admin:staff,entry:completed), false);
+      expect(verify(uid:'staff-uid',email:'staff@deda.test',
+        admin:staff,entry:{...completed,'inviteId':'other'}), false);
+      expect(verify(uid:'staff-uid',email:'staff@deda.test',
+        admin:staff,entry:{...completed,'adminId':'other'}), false);
+      expect(verify(uid:'staff-uid',email:'wrong@deda.test',
+        admin:staff,entry:completed), false);
+    });
+
     test('invitation expired or unreadable fails closed', () {
       final invite = {...gateway,'status':'invited'};
       expect(verify(entry:invite), false);
