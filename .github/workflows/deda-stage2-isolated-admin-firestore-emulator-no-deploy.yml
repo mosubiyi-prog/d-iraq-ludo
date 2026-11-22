@@ -6,6 +6,8 @@ on:
       - deda-100451-owner-admin-session-safe-repair-2026-11-20
     paths:
       - 'qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs'
+      - 'qa/stage2/build_isolated_admin_gateway_anchor_candidate_2026_11_23.py'
+      - 'qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
       - '.github/workflows/deda-stage2-isolated-admin-firestore-emulator-no-deploy.yml'
   workflow_dispatch:
 
@@ -76,6 +78,38 @@ jobs:
             --only firestore --non-interactive \
             'node --test qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs'
           echo 'PASS_EMULATOR_RUNTIME_ONLY_NO_REAL_FIREBASE_DATA'
+      - name: Generate rules hardening CANDIDATE into runner temp, never repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/deda-stage2-admin-runtime"
+          export DEDA_ADMIN_CANDIDATE_RULES_PATH="$root/candidate.rules"
+          python3 qa/stage2/build_isolated_admin_gateway_anchor_candidate_2026_11_23.py \
+            --output "$DEDA_ADMIN_CANDIDATE_RULES_PATH"
+          node --check qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'deda-stage2-admin-runtime'
+          rules=root/'candidate.rules'
+          assert rules.exists() and rules.stat().st_size>10000
+          (root/'candidate-firebase.json').write_text(json.dumps({
+            'firestore': {'rules': str(rules.resolve())},
+            'emulators': {'firestore': {'host': '127.0.0.1', 'port': 8097},
+                          'ui': {'enabled': False}}
+          }))
+          PY
+          echo "DEDA_ADMIN_CANDIDATE_RULES_PATH=$DEDA_ADMIN_CANDIDATE_RULES_PATH" >> "$GITHUB_ENV"
+      - name: Verify protected GM gateway candidate on fake local emulator only
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/deda-stage2-admin-runtime"
+          "$root/node_modules/.bin/firebase" emulators:exec \
+            --project demo-deda-stage2-isolated-admin-anchor-qa \
+            --config "$root/candidate-firebase.json" \
+            --only firestore --non-interactive \
+            'node --test qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
+          echo 'PASS_LOCAL_CANDIDATE_ANCHOR_ONLY_NOT_PRODUCTION_DEPLOYED'
       - name: Verify no writes to source, production or build outputs
         if: always()
         shell: bash
