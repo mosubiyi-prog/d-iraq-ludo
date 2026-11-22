@@ -6,6 +6,7 @@
  * DEDA wallets, and does not assert Flutter UI/device success.
  */
 const fs = require("node:fs");
+const {createHash} = require("node:crypto");
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const firebase = require("firebase/compat/app");
@@ -181,6 +182,34 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       assert.equal((await first.get()).data().email,
         (await second.get()).data().email);
       console.log("RELEASE_HOLD_DUPLICATE_ADMIN_INVITE_EMAIL_ALLOWED_BY_CURRENT_RULES");
+    });
+
+
+    await t.test("two isolated managers racing on SHA256 email key: one invite only", async () => {
+      const sameEmail = "qa.atomic.race@example.invalid";
+      const key = "e_" + createHash("sha256").update(sameEmail).digest("hex");
+      assert.match(key, /^e_[0-9a-f]{64}$/);
+      const ref = manager.doc("admin_invites/" + key);
+      async function attempt(phone, id) {
+        return manager.runTransaction(async (tx) => {
+          const existing = await tx.get(ref);
+          if (existing.exists) throw new Error("email-already-invited");
+          tx.set(ref, makeInvitation(id, phone, sameEmail));
+          return id;
+        });
+      }
+      const outcomes = await Promise.allSettled([
+        attempt(account, "DEDA-ADM-RACE-1"),
+        attempt(secondaryAccount, "DEDA-ADM-RACE-2"),
+      ]);
+      const successful = outcomes.filter((o) => o.status === "fulfilled");
+      const rejected = outcomes.filter((o) => o.status === "rejected");
+      assert.equal(successful.length, 1, "exactly one atomic invitation wins");
+      assert.equal(rejected.length, 1, "parallel duplicate must fail closed");
+      const winner = (await ref.get()).data();
+      assert.equal(winner.email, sameEmail);
+      assert.equal(winner.adminId, successful[0].value);
+      console.log("PASS_ISOLATED_INVITATION_SHA256_ATOMIC_ONE_WINNER");
     });
 
     await t.test("release-hold observation: rules permit manager deleting final gateway", async () => {
