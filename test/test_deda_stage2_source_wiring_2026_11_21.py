@@ -212,7 +212,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(backend.count('Future<void> suspendScopedAdminMember('),1)
         self.assertEqual(backend.count('static bool memberSuspensionAllowed('),1)
         method=backend.split('Future<void> suspendScopedAdminMember(',1)[1].split(
-            '  Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
+            '  Future<void> cancelScopedAdminInvitation(',1)[0]
         self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
         self.assertIn('requiredPermission: \'viewTeam\'',method)
         self.assertGreaterEqual(method.count('!await proof()'),2)
@@ -238,6 +238,43 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('maxLength: 400',ui)
         self.assertIn('match /admins/{uid} {',rules)
         self.assertIn("request.resource.data.status == 'temporarily_stopped'",rules)
+        self.assertIn('match /admin_audit/{auditId} {',rules)
+
+    def test_isolated_invitation_cancellation_atomic_restricted_and_tested(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertEqual(backend.count('Future<void> cancelScopedAdminInvitation('),1)
+        self.assertEqual(backend.count('static bool invitationCancellationAllowed('),1)
+        self.assertIn("'admin_invites': 'viewTeam'",backend)
+        self.assertEqual(backend.count("'admins', 'admin_invites', 'published_places'"),2)
+        method=backend.split('Future<void> cancelScopedAdminInvitation(',1)[1].split(
+            '  /// Read-only scoped data path, with fresh server permissions before and',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
+        self.assertIn("requiredPermission: 'viewTeam'",method)
+        self.assertGreaterEqual(method.count('!await proof()'),2)
+        self.assertIn('_firestore.runTransaction((transaction) async {',method)
+        self.assertIn('await transaction.get(inviteRef)',method)
+        self.assertIn('await transaction.get(entryRef)',method)
+        self.assertIn('transaction.delete(entryRef);',method)
+        self.assertIn('transaction.delete(inviteRef);',method)
+        self.assertIn('transaction.set(auditRef, <String, dynamic>{',method)
+        self.assertIn("'adminUid': uid",method)
+        self.assertIn("'action': 'admin_invite_cancelled'",method)
+        self.assertNotIn('FirebaseFirestore.instance',method)
+        self.assertNotIn('FirebaseAuth.instance',method)
+        policy=backend.split('static bool invitationCancellationAllowed(',1)[1].split(
+            '  /// Explicitly scoped to existing support-ticket status/reply fields.',1)[0]
+        for condition in ("invitation['status'] != 'pending'", "'claimedUid'",
+                          "'inviteId'", "'allowedRole'", "'allowedAdminEmail'",
+                          "'adminUid'", "entry['active'] == true"):
+            self.assertIn(condition,policy)
+        self.assertIn('collection: \'admin_invites\'',ui)
+        self.assertIn('widget.admin.cancelScopedAdminInvitation(',ui)
+        self.assertIn("widget.collection != 'admin_invites'",ui)
+        self.assertEqual(ui.count('Future<String?> _askTeamReason('),1)
+        self.assertIn('match /admin_invites/{inviteId} {',rules)
+        self.assertIn('match /admin_entry_access/{accountKey} {',rules)
         self.assertIn('match /admin_audit/{auditId} {',rules)
 
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
