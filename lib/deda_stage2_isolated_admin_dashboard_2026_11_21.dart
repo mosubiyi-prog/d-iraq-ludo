@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
 
@@ -487,6 +489,260 @@ class _DedaIsolatedReadOnlyTabState
     }
   }
 
+
+  Future<void> _editMember(Map<String, dynamic> member) async {
+    if (_mutating || widget.collection != 'admins') return;
+    final id = (member['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) return;
+    final name = TextEditingController(text: (member['displayName'] ?? '').toString());
+    final phone = TextEditingController(text: (member['phone'] ?? '').toString());
+    final department = TextEditingController(text: (member['department'] ?? '').toString());
+    final province = TextEditingController(text: (member['governorate'] ?? '').toString());
+    var role = (member['role'] ?? 'employee').toString();
+    var status = (member['status'] ?? 'disabled').toString();
+    if (!const <String>{'active', 'temporarily_stopped', 'disabled'}.contains(status)) {
+      status = member['active'] == true ? 'active' : 'disabled';
+    }
+    final prior = member['permissions'];
+    var permissions = <String, bool>{
+      for (final key in DedaIsolatedAdminProofPolicy.invitationPermissionKeys)
+        key: prior is Map && prior[key] == true,
+    };
+    try {
+      final values = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialog) => StatefulBuilder(
+          builder: (dialog, refresh) => AlertDialog(
+            title: Text(t('تعديل الموظف وصلاحياته', 'Edit staff and permissions')),
+            content: SizedBox(width: 430, child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: name, maxLength: 100,
+                  decoration: InputDecoration(labelText: t('الاسم', 'Name'))),
+                TextField(controller: phone, keyboardType: TextInputType.phone,
+                  maxLength: 16,
+                  decoration: InputDecoration(labelText: t('هاتف حساب DEDA', 'DEDA phone'))),
+                TextField(controller: department, maxLength: 100,
+                  decoration: InputDecoration(labelText: t('القسم', 'Department'))),
+                DropdownButtonFormField<String>(
+                  initialValue: role,
+                  decoration: InputDecoration(labelText: t('الدور', 'Role')),
+                  items: [
+                    DropdownMenuItem(value: 'employee', child: Text(t('موظف', 'Employee'))),
+                    DropdownMenuItem(value: 'deputy_manager', child: Text(t('معاون', 'Deputy'))),
+                    DropdownMenuItem(value: 'province_agent', child: Text(t('وكيل محافظة', 'Province agent'))),
+                  ],
+                  onChanged: (v) { if (v != null) refresh(() {
+                    role = v;
+                    permissions = DedaIsolatedAdminProofPolicy.defaultInvitationPermissions(v);
+                  }); },
+                ),
+                if (role == 'province_agent')
+                  TextField(controller: province, maxLength: 80,
+                    decoration: InputDecoration(labelText: t('المحافظة', 'Governorate'))),
+                DropdownButtonFormField<String>(
+                  initialValue: status,
+                  decoration: InputDecoration(labelText: t('حالة الوصول', 'Access status')),
+                  items: [
+                    DropdownMenuItem(value: 'active', child: Text(t('نشط', 'Active'))),
+                    DropdownMenuItem(value: 'temporarily_stopped', child: Text(t('موقوف مؤقتاً', 'Suspended'))),
+                    DropdownMenuItem(value: 'disabled', child: Text(t('معطّل', 'Disabled'))),
+                  ],
+                  onChanged: (v) { if (v != null) refresh(() => status = v); },
+                ),
+                const Divider(),
+                Text(t('الصلاحيات', 'Permissions')),
+                ...DedaIsolatedAdminProofPolicy.invitationPermissionKeys.map((key) =>
+                  SwitchListTile(
+                    dense: true, title: Text(key),
+                    value: permissions[key] ?? false,
+                    onChanged: (v) => refresh(() => permissions[key] = v),
+                  )),
+              ]),
+            )),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialog),
+                child: Text(t('إلغاء', 'Cancel'))),
+              FilledButton(onPressed: () => Navigator.pop(dialog, <String, dynamic>{
+                'name': name.text, 'phone': phone.text, 'department': department.text,
+                'province': province.text, 'role': role, 'status': status,
+                'permissions': Map<String, bool>.from(permissions),
+              }), child: Text(t('متابعة', 'Continue'))),
+            ],
+          ),
+        ),
+      );
+      if (values == null || !mounted) return;
+      final reason = await _askTeamReason(
+        title: t('تأكيد تعديل الموظف', 'Confirm staff update'),
+        displayName: (member['displayName'] ?? '').toString(),
+      );
+      if (reason == null || !mounted) return;
+      setState(() => _mutating = true);
+      try {
+        await widget.admin.updateScopedAdminMember(
+          dedaPhone: widget.dedaPhone, targetUid: id,
+          displayName: values['name'] as String, phone: values['phone'] as String,
+          role: values['role'] as String, department: values['department'] as String,
+          governorate: values['role'] == 'province_agent' ? values['province'] as String : '',
+          status: values['status'] as String,
+          permissions: values['permissions'] as Map<String, bool>, reason: reason,
+        );
+        if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم تعديل الموظف وبوابته.', 'Staff and gateway updated.')))); }
+      } catch (_) {
+        if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('فشل التعديل: راجع الصلاحيات وربط الهاتف.',
+            'Update denied: verify permissions and phone binding.')))); }
+      } finally { if (mounted) setState(() => _mutating = false); }
+    } finally {
+      name.dispose(); phone.dispose(); department.dispose(); province.dispose();
+    }
+  }
+
+  Future<void> _removeMemberAccess(Map<String, dynamic> member) async {
+    if (_mutating || widget.collection != 'admins') return;
+    final id = (member['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) return;
+    final reason = await _askTeamReason(
+      title: t('إزالة وصول الموظف', 'Remove staff access'),
+      displayName: (member['displayName'] ?? '').toString(),
+    );
+    if (reason == null || !mounted) return;
+    final confirm = await showDialog<bool>(context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(t('تأكيد نهائي', 'Final confirmation')),
+        content: Text(t('سيُحذف وصول الإدارة وبوابة الهاتف فقط، ولن يُحذف حساب DEDA أو Firebase Auth.',
+          'Only admin access and its gateway are removed, not DEDA or Firebase Auth.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false),
+            child: Text(t('إلغاء', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(dialog, true),
+            child: Text(t('إزالة الوصول', 'Remove access'))),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.removeScopedAdminMemberAccess(
+        dedaPhone: widget.dedaPhone, targetUid: id, reason: reason,
+      );
+      if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('أُزيل وصول الإدارة فقط.', 'Admin access removed.')))); }
+    } catch (_) {
+      if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تعذرت الإزالة: لم يثبت ربط الموظف وبوابة الهاتف.',
+          'Removal denied: staff gateway binding unverified.')))); }
+    } finally { if (mounted) setState(() => _mutating = false); }
+  }
+
+  Future<void> _resetMemberPassword(Map<String, dynamic> member) async {
+    if (_mutating || widget.collection != 'admins') return;
+    final id = (member['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) return;
+    final confirm = await showDialog<bool>(context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(t('إعادة تعيين كلمة المرور', 'Password reset')),
+        content: Text(t('إرسال رابط إعادة تعيين إلى البريد الموثق لهذا الموظف؟',
+          'Send a password reset link to the verified staff email?')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false),
+            child: Text(t('إلغاء', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(dialog, true),
+            child: Text(t('طلب الرابط', 'Request link'))),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.requestScopedMemberPasswordReset(
+        dedaPhone: widget.dedaPhone, targetUid: id,
+      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('طُلب رابط إعادة التعيين.', 'Reset email requested.'))));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تعذر الطلب. راجع تخويل الإدارة والاتصال.',
+          'Password reset denied; verify authorization and connection.'))));
+    } finally { if (mounted) setState(() => _mutating = false); }
+  }
+
+  Future<void> _shareInvitation(Map<String, dynamic> invitation) async {
+    if (_mutating || widget.collection != 'admin_invites') return;
+    final id = (invitation['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) return;
+    setState(() => _mutating = true);
+    try {
+      final live = await widget.admin.readScopedAdminRecord(
+        dedaPhone: widget.dedaPhone, collection: 'admin_invites', recordId: id,
+      );
+      final expiry = live?['expiresAt'];
+      if (live == null || live['status'] != 'pending' ||
+          (live['claimedUid'] ?? '').toString().trim().isNotEmpty ||
+          expiry is! Timestamp || !expiry.toDate().isAfter(DateTime.now()) ||
+          !RegExp(r'^[0-9]{8}$').hasMatch(
+            (live['activationCode'] ?? '').toString())) {
+        throw StateError('deda-admin-invitation-share-denied');
+      }
+      final email = (live['email'] ?? '').toString().trim();
+      final msg = t(
+        'دعوة إدارية إلى DEDA\n'
+        'البريد: $email\n'
+        'معرّف الدعوة: $id\n'
+        'الرقم الإداري: ${live['adminId']}\n'
+        'رمز التفعيل: ${live['activationCode']}\n'
+        'من دخول الإدارة اختر تفعيل الدعوة. لا تشارك الرمز مع شخص آخر.',
+        'DEDA administration invitation\n'
+        'Email: $email\n'
+        'Invitation ID: $id\n'
+        'Admin ID: ${live['adminId']}\n'
+        'Activation code: ${live['activationCode']}\n'
+        'Choose Activate invitation from admin sign-in. Keep code private.',
+      );
+      if (!mounted) return;
+      final action = await showDialog<String>(context: context,
+        builder: (dialog) => AlertDialog(
+          title: Text(t('مشاركة الدعوة', 'Share invitation')),
+          content: Text(t('لصاحب البريد المقصود فقط. فتح البريد لا يثبت الإرسال.',
+            'Share only with intended recipient; opening mail does not prove delivery.')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog),
+              child: Text(t('إلغاء', 'Cancel'))),
+            TextButton(onPressed: () => Navigator.pop(dialog, 'copy'),
+              child: Text(t('نسخ', 'Copy'))),
+            FilledButton(onPressed: () => Navigator.pop(dialog, 'email_draft'),
+              child: Text(t('فتح البريد', 'Open email'))),
+          ],
+        ),
+      );
+      if (action == null || !mounted) return;
+      if (action == 'copy') {
+        await Clipboard.setData(ClipboardData(text: msg));
+      } else if (action == 'email_draft') {
+        final uri = Uri(scheme: 'mailto', path: email, queryParameters: {
+          'subject': t('دعوة إدارية إلى DEDA', 'DEDA admin invitation'),
+          'body': msg,
+        });
+        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          throw StateError('deda-admin-mail-not-available');
+        }
+      } else { return; }
+      await widget.admin.markScopedAdminInvitationShared(
+        dedaPhone: widget.dedaPhone, inviteId: id, channel: action,
+      );
+      if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          action == 'copy' ? 'نُسخت الدعوة.' : 'فُتحت مسودة البريد.',
+          action == 'copy' ? 'Invitation copied.' : 'Email draft opened.',
+        )))); }
+    } catch (_) {
+      if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تعذرت المشاركة: تحقق من صلاحية الدعوة.',
+          'Share denied: verify invitation and authorization.')))); }
+    } finally { if (mounted) setState(() => _mutating = false); }
+  }
+
   String _timestamp(dynamic value) {
     if (value is! Timestamp) return '';
     final date = value.toDate().toLocal();
@@ -520,26 +776,40 @@ class _DedaIsolatedReadOnlyTabState
       child: ListTile(
         title: Text(title.isEmpty ? '—' : title),
         subtitle: Text(subtitle),
-        trailing: canSuspend || canCancel
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(detail),
-                  IconButton(
-                    tooltip: canSuspend
-                        ? t('تعليق الصلاحيات', 'Suspend access')
-                        : t('إلغاء الدعوة', 'Cancel invitation'),
-                    onPressed: _mutating ? null : () {
-                      if (canSuspend) {
-                        _suspendMember(data);
-                      } else {
-                        _cancelInvitation(data);
-                      }
-                    },
-                    icon: Icon(canSuspend
-                        ? Icons.block_outlined : Icons.cancel_outlined),
-                  ),
+        trailing: (team && subordinate) || canCancel
+            ? PopupMenuButton<String>(
+                enabled: !_mutating,
+                tooltip: t('إجراءات الإدارة', 'Administration actions'),
+                itemBuilder: (_) => [
+                  if (team) PopupMenuItem(value: 'edit',
+                    child: Text(t('تعديل', 'Edit'))),
+                  if (canSuspend) PopupMenuItem(value: 'suspend',
+                    child: Text(t('تعليق', 'Suspend'))),
+                  if (team) PopupMenuItem(value: 'reset',
+                    child: Text(t('رابط كلمة المرور', 'Password reset'))),
+                  if (team) PopupMenuItem(value: 'remove',
+                    child: Text(t('إزالة الوصول', 'Remove access'))),
+                  if (canCancel) PopupMenuItem(value: 'share',
+                    child: Text(t('مشاركة', 'Share'))),
+                  if (canCancel) PopupMenuItem(value: 'cancel',
+                    child: Text(t('إلغاء الدعوة', 'Cancel invitation'))),
                 ],
+                onSelected: (action) {
+                  switch (action) {
+                    case 'edit': _editMember(data); break;
+                    case 'suspend': _suspendMember(data); break;
+                    case 'reset': _resetMemberPassword(data); break;
+                    case 'remove': _removeMemberAccess(data); break;
+                    case 'share': _shareInvitation(data); break;
+                    case 'cancel': _cancelInvitation(data); break;
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(detail), const Icon(Icons.more_vert),
+                  ]),
+                ),
               )
             : Text(detail),
       ),
