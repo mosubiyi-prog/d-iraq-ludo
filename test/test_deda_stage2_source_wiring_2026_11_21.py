@@ -267,6 +267,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('Random.secure()',create)
         self.assertIn("collection('deda_account_directory')",create)
         self.assertIn('GetOptions(source: Source.server)',create)
+        self.assertIn("invites.docs.length >= 20",create)
         self.assertIn("collection('system_counters')",create)
         self.assertIn("'admin_members'",create)
         self.assertIn('_firestore.runTransaction((transaction) async {',create)
