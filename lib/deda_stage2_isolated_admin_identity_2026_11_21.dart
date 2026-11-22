@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
@@ -480,6 +482,19 @@ class DedaIsolatedAdminProofPolicy {
       values['viewGovernorates'] = true;
     }
     return values;
+  }
+
+
+  /// Atomic same-email invitation document across isolated writers.
+  /// Does not protect against older random-ID writers: RELEASE HOLD remains.
+  static String scopedInvitationIdForEmail(String email) {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty || normalized.length > 254 ||
+        !RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}$')
+            .hasMatch(normalized)) {
+      throw ArgumentError.value(email, 'email', 'Invalid invitation email');
+    }
+    return 'e_${sha256.convert(utf8.encode(normalized))}';
   }
 
   /// Fail closed on malformed staff invitations and privilege maps.
@@ -1524,7 +1539,10 @@ class DedaIsolatedAdminIdentity {
       throw StateError('deda-admin-isolated-invite-proof-changed');
     }
 
-    final inviteRef = _firestore.collection('admin_invites').doc();
+    // Deterministic reference: parallel managers contend on this exact key.
+    final inviteRef = _firestore.collection('admin_invites').doc(
+      DedaIsolatedAdminProofPolicy.scopedInvitationIdForEmail(cleanEmail),
+    );
     final entryRef = _firestore.collection('admin_entry_access')
         .doc(cleanAccount);
     final counterRef = _firestore.collection('system_counters')
@@ -1542,11 +1560,13 @@ class DedaIsolatedAdminIdentity {
     await _firestore.runTransaction((transaction) async {
       // Reads occur before writes; no inactive/foreign gateway is overwritten.
       final gateway = await transaction.get(entryRef);
+      final sameEmailInvite = await transaction.get(inviteRef);
       final counter = await transaction.get(counterRef);
       final counterValue = counter.data()?['value'];
       final previous = counterValue == null ? 0
           : counterValue is int ? counterValue : -1;
-      if (gateway.exists || previous < 0 || previous >= 999999999 ||
+      if (gateway.exists || sameEmailInvite.exists ||
+          previous < 0 || previous >= 999999999 ||
           !await proof() ||
           _auth.currentUser?.uid != uid ||
           _mainAuth.currentUser?.uid != publicUid) {

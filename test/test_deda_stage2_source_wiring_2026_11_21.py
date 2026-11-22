@@ -507,6 +507,24 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("resource.data.status == 'new'",rules)
         self.assertIn("request.resource.data.status in ['ready', 'rejected']",rules)
 
+
+    def test_isolated_invitation_email_uses_atomic_shared_sha256_doc(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        binder_file=(REPO/'tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py').read_text()
+        self.assertEqual(backend.count('static String scopedInvitationIdForEmail('),1)
+        self.assertIn("import 'package:crypto/crypto.dart';",backend)
+        self.assertIn("sha256.convert(utf8.encode(normalized))",backend)
+        method=backend.split('Future<Map<String, dynamic>> createScopedAdminInvitation(',1)[1].split(
+            '  /// Record only an explicitly initiated share',1)[0]
+        self.assertIn("scopedInvitationIdForEmail(cleanEmail)",method)
+        self.assertIn("final sameEmailInvite = await transaction.get(inviteRef);",method)
+        self.assertIn("gateway.exists || sameEmailInvite.exists",method)
+        self.assertLess(method.index("transaction.get(inviteRef)"),
+                        method.index("transaction.set(inviteRef,"))
+        self.assertIn("invites.docs.length >= 20",method)
+        self.assertIn("CRYPTO_DEPENDENCY = '  crypto: ^3.0.7'",binder_file)
+        self.assertIn("pubspec.count(CRYPTO_DEPENDENCY) != 1",binder_file)
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)

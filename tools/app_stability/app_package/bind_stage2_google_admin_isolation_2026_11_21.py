@@ -19,6 +19,7 @@ MODULES = (
 )
 GOOGLE_TEST = 'deda_stage2_google_and_admin_isolation_policy_test.dart'
 GOOGLE_DEPENDENCY = '  google_sign_in: ^6.2.2'
+CRYPTO_DEPENDENCY = '  crypto: ^3.0.7'
 
 def one(s, old, new, label):
     count = s.count(old)
@@ -165,10 +166,10 @@ Future<void> main() async {"""
         main = one(main, settings_admin_anchor,
                    ISOLATED_SETTINGS_GATE + settings_admin_anchor,
                    'settings-isolated-route-before-legacy-auth')
-        if 'google_sign_in:' in pubspec:
+        if 'google_sign_in:' in pubspec or '  crypto:' in pubspec:
             raise ValueError('STAGE2_EXISTING_GOOGLE_DEPENDENCY_REVIEW_REQUIRED')
         pubspec = one(pubspec, '  firebase_auth: ^5.3.3\n',
-                      '  firebase_auth: ^5.3.3\n' + GOOGLE_DEPENDENCY + '\n',
+                      '  firebase_auth: ^5.3.3\n' + GOOGLE_DEPENDENCY + '\n' + CRYPTO_DEPENDENCY + '\n',
                       'pubspec-google-signin')
         if "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';" in admin_source:
             raise ValueError('STAGE2_ALREADY_APPLIED_VERIFY_ONLY')
@@ -316,7 +317,8 @@ Future<void> main() async {"""
         not main.index('await DedaStableGoogleLogin.pendingGoogleUid();') <
             main.index('await DedaTaskEngine.initializeForCurrentAccount();') or
         main.count(expected_logout) != 1 or
-        pubspec.count(GOOGLE_DEPENDENCY) != 1
+        pubspec.count(GOOGLE_DEPENDENCY) != 1 or
+        pubspec.count(CRYPTO_DEPENDENCY) != 1
         )):
         raise ValueError('STAGE2_VERIFY_UI_DEPENDENCY_GATE_FAILED')
     # Both paths are compiled. The legacy route stays intact while Stage2

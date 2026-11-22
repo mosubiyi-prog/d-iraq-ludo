@@ -378,6 +378,22 @@ void main() {
       expect(okay(actor:{...record,'role':'employee'}),false);
     });
 
+
+    test('isolated invitations derive the same SHA256 ID for identical email', () {
+      final a = DedaIsolatedAdminProofPolicy
+          .scopedInvitationIdForEmail(' STAFF.Name+QA@example.com ');
+      final b = DedaIsolatedAdminProofPolicy
+          .scopedInvitationIdForEmail('staff.name+qa@EXAMPLE.COM');
+      final c = DedaIsolatedAdminProofPolicy
+          .scopedInvitationIdForEmail('someone.else@example.com');
+      expect(a, b);
+      expect(a, isNot(c));
+      expect(a, matches(RegExp(r'^e_[0-9a-f]{64}$')));
+      expect(DedaIsolatedAdminProofPolicy.validScopedDocumentId(a), true);
+      expect(() => DedaIsolatedAdminProofPolicy
+          .scopedInvitationIdForEmail('invalid'), throwsArgumentError);
+    });
+
     test('invitation cancellation rejects claimed and foreign gateways', () {
       const inviteId = 'invite-123';
       final pending = <String, dynamic>{
