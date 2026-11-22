@@ -171,6 +171,7 @@ class _DedaIsolatedReadOnlyTab extends StatefulWidget {
 class _DedaIsolatedReadOnlyTabState
     extends State<_DedaIsolatedReadOnlyTab> {
   late Future<List<Map<String, dynamic>>> _rows;
+  bool _mutating = false;
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -188,6 +189,76 @@ class _DedaIsolatedReadOnlyTabState
       );
 
   void _refresh() => setState(() => _rows = _fetch());
+
+  Future<void> _suspendMember(Map<String, dynamic> member) async {
+    if (_mutating || widget.collection != 'admins') return;
+    final targetUid = (member['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(targetUid)) {
+      return;
+    }
+    String reason = '';
+    final confirmedReason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) => AlertDialog(
+          title: Text(t('تعليق صلاحيات الموظف', 'Suspend staff access')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text((member['displayName'] ?? '').toString()),
+              const SizedBox(height: 12),
+              TextField(
+                maxLength: 400,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: t('سبب التعليق', 'Reason for suspension'),
+                ),
+                onChanged: (value) => updateDialog(() => reason = value.trim()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: reason.isEmpty
+                  ? null : () => Navigator.pop(dialogContext, reason),
+              child: Text(t('تأكيد التعليق', 'Confirm suspension')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmedReason == null || !mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.suspendScopedAdminMember(
+        dedaPhone: widget.dedaPhone,
+        targetUid: targetUid,
+        reason: confirmedReason,
+      );
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تم تعليق صلاحيات الموظف.', 'Staff access suspended.')),
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'تعذر التعليق: يجب إعادة التحقق من صلاحية المدير والاتصال بالخادم.',
+          'Suspension denied: verify manager rights and server connectivity.',
+        )),
+      ));
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+
 
   String _timestamp(dynamic value) {
     if (value is! Timestamp) return '';
@@ -219,7 +290,22 @@ class _DedaIsolatedReadOnlyTabState
       child: ListTile(
         title: Text(title.isEmpty ? '—' : title),
         subtitle: Text(subtitle),
-        trailing: Text(detail),
+        trailing: team && data['active'] == true &&
+                const <String>{
+                  'deputy_manager', 'employee', 'province_agent',
+                }.contains((data['role'] ?? '').toString().trim().toLowerCase())
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(detail),
+                  IconButton(
+                    tooltip: t('تعليق الصلاحيات', 'Suspend access'),
+                    onPressed: _mutating ? null : () => _suspendMember(data),
+                    icon: const Icon(Icons.block_outlined),
+                  ),
+                ],
+              )
+            : Text(detail),
       ),
     );
   }
