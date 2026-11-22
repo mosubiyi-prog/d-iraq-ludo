@@ -138,6 +138,35 @@ void main() {
       expect(verify(entry:{...gateway,'adminUid':'someone-else'}), false);
       expect(verify(entry:gateway), true);
     });
+    test('isolated team suspension refuses self GM and unverified target', () {
+      final activeStaff = <String, dynamic>{
+        'active': true, 'status': 'active', 'role': 'employee',
+      };
+      bool allowed({
+        String actorUid = 'manager-uid',
+        String targetUid = 'staff-uid',
+        Map<String, dynamic>? actor,
+        Map<String, dynamic>? target,
+        String reason = 'Verified administrative reason',
+      }) => DedaIsolatedAdminProofPolicy.memberSuspensionAllowed(
+        actorUid: actorUid, actor: actor ?? record, targetUid: targetUid,
+        target: target ?? activeStaff, reason: reason,
+      );
+      expect(allowed(), true);
+      expect(allowed(actorUid: 'staff-uid'), false);
+      expect(allowed(targetUid: '../admins/manager'), false);
+      expect(allowed(reason: '   '), false);
+      expect(allowed(reason: 'x' * 401), false);
+      expect(allowed(actor: {...record, 'role': ''}), false);
+      expect(allowed(actor: {...record, 'status': 'disabled'}), false);
+      expect(allowed(target: {...activeStaff, 'active': false}), false);
+      expect(allowed(target: {...activeStaff, 'status': 'disabled'}), false);
+      expect(allowed(target: {...activeStaff, 'role': ''}), false);
+      expect(allowed(target: {...activeStaff, 'role': 'general_manager'}), false);
+      expect(allowed(target: {...activeStaff, 'role': 'unexpected'}), false);
+      expect(allowed(target: {...activeStaff, 'role': 'province_agent'}), true);
+    });
+
     test('isolated admin operations require explicit role and permissions', () {
       bool can(Map<String,dynamic>? data, String permission) =>
           DedaIsolatedAdminProofPolicy.allowsPermission(
