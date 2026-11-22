@@ -1031,6 +1031,8 @@ class DedaIsolatedAdminIdentity {
     if (admins.metadata.isFromCache || admins.metadata.hasPendingWrites ||
         invites.metadata.isFromCache || invites.metadata.hasPendingWrites ||
         admins.docs.isNotEmpty ||
+        // A capped query cannot prove uniqueness when the cap was reached.
+        invites.docs.length >= 20 ||
         invites.docs.any((d) => const <String>{'pending', 'claimed'}
             .contains((d.data()['status'] ?? '').toString()))) {
       throw StateError('deda-admin-isolated-invite-email-in-use');
