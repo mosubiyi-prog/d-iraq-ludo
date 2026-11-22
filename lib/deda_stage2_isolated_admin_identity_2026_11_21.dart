@@ -216,6 +216,52 @@ class DedaIsolatedAdminProofPolicy {
     );
   }
 
+
+  /// A recovery decision is for the exact active subordinate and verified
+  /// DEDA phone gateway, never for another UID or general manager.
+  static bool staffRecoveryDecisionAllowed({
+    required String actorUid,
+    required Map<String, dynamic>? actor,
+    required String requestId,
+    required Map<String, dynamic>? request,
+    required Map<String, dynamic>? member,
+    required Map<String, dynamic>? gateway,
+    required bool approve,
+    required String reason,
+  }) {
+    if (!validScopedDocumentId(actorUid) ||
+        !validScopedDocumentId(requestId) ||
+        !allowsPermission(admin: actor, permission: 'viewTeam') ||
+        request == null || member == null || gateway == null ||
+        request['status'] != 'new' ||
+        !validScopedDocumentId((request['requesterUid'] ?? '').toString()) ||
+        !validScopedDocumentId((request['targetAdminUid'] ?? '').toString()) ||
+        request['targetAdminUid'] == actorUid ||
+        !const <String>{'deputy_manager', 'employee', 'province_agent'}
+            .contains((member['role'] ?? '').toString()) ||
+        request['targetRole'] != member['role'] ||
+        (request['targetAdminId'] ?? '').toString().trim().isEmpty ||
+        request['targetAdminId'] != member['adminId'] ||
+        (request['email'] ?? '').toString().trim().toLowerCase() !=
+            (member['email'] ?? '').toString().trim().toLowerCase() ||
+        (request['email'] ?? '').toString().trim().isEmpty ||
+        canonicalIraqiPhone((request['phone'] ?? '').toString()) !=
+            (request['accountKey'] ?? '').toString() ||
+        !memberGatewayMatches(
+          targetUid: (request['targetAdminUid'] ?? '').toString(),
+          target: member,
+          accountKey: (request['accountKey'] ?? '').toString(),
+          entry: gateway,
+        ) ||
+        member['status'] != 'active' || member['active'] != true ||
+        gateway['status'] != 'active' || gateway['active'] != true) {
+      return false;
+    }
+    return approve
+        ? reason.isEmpty
+        : reason.trim().isNotEmpty && reason.trim().length <= 400;
+  }
+
   /// A subordinate member must remain bound to the exact Firebase Auth UID,
   /// DEDA phone and administrative email. A legacy unbound or foreign gateway
   /// must be repaired separately, never adopted by an editing operation.
@@ -814,7 +860,8 @@ class DedaIsolatedAdminProofPolicy {
         DedaBackend.normalizeAdminStatus(admin) != 'active') return null;
     const collections = <String>{
       'support_requests', 'place_requests', 'users', 'admin_audit',
-      'admins', 'admin_invites', 'published_places', 'admin_trash_place_requests',
+      'admins', 'admin_invites', 'admin_recovery_requests',
+      'published_places', 'admin_trash_place_requests',
       'admin_trash_places',
     };
     if (!collections.contains(collection)) return null;
@@ -826,7 +873,8 @@ class DedaIsolatedAdminProofPolicy {
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(role)) return null;
     if (const <String>{
-      'admins', 'admin_invites', 'published_places', 'admin_trash_place_requests',
+      'admins', 'admin_invites', 'admin_recovery_requests',
+      'published_places', 'admin_trash_place_requests',
       'admin_trash_places',
     }.contains(collection) && role != 'general_manager') {
       return null;
@@ -872,6 +920,7 @@ class DedaIsolatedAdminIdentity {
     'admin_audit': 'viewAudit',
     'admins': 'viewTeam',
     'admin_invites': 'viewTeam',
+    'admin_recovery_requests': 'viewTeam',
     'published_places': 'managePlaceArchives',
     'admin_trash_place_requests': 'managePlaceArchives',
     'admin_trash_places': 'managePlaceArchives',
@@ -1860,6 +1909,108 @@ class DedaIsolatedAdminIdentity {
     });
   }
 
+
+  /// Manager approval/rejection uses only SECONDARY Auth. The ordinary DEDA
+  /// phone request stays public. All staff bindings are rechecked in one
+  /// transaction and the admin audit is committed with the decision.
+  Future<void> decideScopedStaffRecovery({
+    required String dedaPhone,
+    required String requestId,
+    required bool approve,
+    String rejectionReason = '',
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(requestId)) {
+      throw StateError('deda-isolated-recovery-decision-disabled');
+    }
+    final reason = rejectionReason.trim();
+    if ((approve && reason.isNotEmpty) ||
+        (!approve && (reason.isEmpty || reason.length > 400))) {
+      throw StateError('deda-isolated-recovery-reason-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-isolated-admin-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (publicUid == null || !await proof()) {
+      throw StateError('deda-isolated-recovery-permission-denied');
+    }
+    final ref = _firestore.collection('admin_recovery_requests').doc(requestId);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    final pin = approve
+        ? (100000 + Random.secure().nextInt(900000)).toString() : '';
+    final expiry = Timestamp.fromDate(
+      DateTime.now().add(const Duration(minutes: 30)),
+    );
+    await _firestore.runTransaction((tx) async {
+      final requestSnapshot = await tx.get(ref);
+      final request = requestSnapshot.data();
+      final targetUid = (request?['targetAdminUid'] ?? '').toString();
+      final accountKey = (request?['accountKey'] ?? '').toString();
+      if (!requestSnapshot.exists || request?['status'] != 'new' ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(targetUid) ||
+          DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(accountKey)
+              != accountKey) {
+        throw StateError('deda-isolated-recovery-request-invalid');
+      }
+      final memberRef = _firestore.collection('admins').doc(targetUid);
+      final gatewayRef = _firestore.collection('admin_entry_access')
+          .doc(accountKey);
+      final member = await tx.get(memberRef);
+      final gateway = await tx.get(gatewayRef);
+      if (!member.exists || !gateway.exists ||
+          !DedaIsolatedAdminProofPolicy.staffRecoveryDecisionAllowed(
+            actorUid: uid, actor: verifiedAdmin, requestId: requestId,
+            request: request, member: member.data(), gateway: gateway.data(),
+            approve: approve, reason: reason,
+          ) ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.staffRecoveryDecisionAllowed(
+            actorUid: uid, actor: verifiedAdmin, requestId: requestId,
+            request: request, member: member.data(), gateway: gateway.data(),
+            approve: approve, reason: reason,
+          ) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-isolated-recovery-gateway-changed');
+      }
+      final actor = verifiedAdmin!;
+      final name = (actor['displayName'] ?? actor['name'] ??
+          current.email ?? 'DEDA Admin').toString();
+      tx.update(ref, <String, dynamic>{
+        'status': approve ? 'ready' : 'rejected',
+        'decisionByUid': uid,
+        'decisionByName': name,
+        'decisionAt': FieldValue.serverTimestamp(),
+        'rejectionReason': approve ? '' : reason,
+        if (approve) 'recoveryPin': pin,
+        if (approve) 'recoveryPinIssuedAt': FieldValue.serverTimestamp(),
+        if (approve) 'recoveryPinExpiresAt': expiry,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(auditRef, <String, dynamic>{
+        'action': approve ? 'admin_recovery_approved' : 'admin_recovery_rejected',
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': 'general_manager',
+        'requestId': requestId,
+        'targetAdminUid': targetUid,
+        'targetAdminId': request?['targetAdminId'],
+        'targetEmail': request?['email'],
+        'reason': approve ? '' : reason,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// Password reset cannot be part of a Firestore transaction; Auth sends an
   /// email separately. Verify the immutable UID/email/gateway before sending.
   Future<void> requestScopedMemberPasswordReset({
@@ -1973,6 +2124,9 @@ class DedaIsolatedAdminIdentity {
     }
     if (province is String) {
       query = query.where('governorate', isEqualTo: province);
+    }
+    if (collection == 'admin_recovery_requests') {
+      query = query.orderBy('createdAt', descending: true);
     }
     final rows = await query
         .limit(maxItems).get(const GetOptions(source: Source.server));
