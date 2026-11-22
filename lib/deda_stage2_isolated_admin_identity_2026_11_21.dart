@@ -137,6 +137,67 @@ class DedaIsolatedAdminProofPolicy {
       RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
 
 
+
+  /// A claimed invitation is never authority by itself: bind the exact
+  /// phone gateway, email, role, secret, expiry and manager-issued identity.
+  static bool invitationClaimMatchesGateway({
+    required String uid,
+    required String email,
+    required String phoneKey,
+    required String inviteId,
+    required String code,
+    required Map<String, dynamic>? invite,
+    required Map<String, dynamic>? gateway,
+    required DateTime now,
+  }) {
+    if (!validScopedDocumentId(uid) ||
+        !validScopedDocumentId(inviteId) ||
+        !RegExp(r'^[0-9]{8}$').hasMatch(code) ||
+        canonicalIraqiPhone(phoneKey) != phoneKey ||
+        invite == null || gateway == null ||
+        invite['status'] != 'claimed' ||
+        invite['claimedUid'] != uid ||
+        invite['claimCode'] != code ||
+        invite['activationCode'] != code ||
+        (invite['email'] ?? '').toString().trim().toLowerCase() !=
+            email.trim().toLowerCase() ||
+        canonicalIraqiPhone((invite['phone'] ?? '').toString()) != phoneKey ||
+        gateway['accountKey'] != phoneKey ||
+        gateway['accessType'] != 'member' ||
+        gateway['status'] != 'invited' ||
+        gateway['active'] != true ||
+        (gateway['adminUid'] ?? '').toString().isNotEmpty ||
+        gateway['inviteId'] != inviteId ||
+        (gateway['allowedAdminEmail'] ?? '').toString().trim().toLowerCase() !=
+            email.trim().toLowerCase() ||
+        gateway['allowedRole'] != invite['role'] ||
+        (invite['adminId'] ?? '').toString().trim().isEmpty ||
+        gateway['adminId'] != invite['adminId'] ||
+        (invite['createdByUid'] ?? '').toString().trim().isEmpty ||
+        (invite['createdByName'] ?? '').toString().trim().isEmpty) {
+      return false;
+    }
+    final expiry = invite['expiresAt'];
+    if (expiry is! Timestamp || !expiry.toDate().isAfter(now)) return false;
+    final rawPermissions = invite['permissions'];
+    if (rawPermissions is! Map) return false;
+    Map<String, bool> permissions;
+    try {
+      permissions = Map<String, bool>.from(rawPermissions);
+    } catch (_) {
+      return false;
+    }
+    return invitationCreateInputAllowed(
+      displayName: (invite['displayName'] ?? '').toString().trim(),
+      email: email.trim().toLowerCase(),
+      accountKey: phoneKey,
+      role: (invite['role'] ?? '').toString(),
+      department: (invite['department'] ?? '').toString(),
+      governorate: (invite['governorate'] ?? '').toString(),
+      permissions: permissions,
+    );
+  }
+
   /// A subordinate member must remain bound to the exact Firebase Auth UID,
   /// DEDA phone and administrative email. A legacy unbound or foreign gateway
   /// must be repaired separately, never adopted by an editing operation.
@@ -936,6 +997,232 @@ class DedaIsolatedAdminIdentity {
     } catch (_) {
       // Failure logs out SECONDARY Auth only, never FirebaseAuth.instance.
       await _auth.signOut();
+      rethrow;
+    }
+  }
+
+
+  /// The public DEDA principal is read only to prove the active phone.
+  /// Signup is restricted to the independent admin Auth: never touch public
+  /// Auth or the owner's DEDA UID. This is OFF until approved runtime QA.
+  Future<String> activateScopedAdminInvitation({
+    required String dedaPhone,
+    required String inviteId,
+    required String email,
+    required String activationCode,
+    required String password,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-isolated-invite-disabled');
+    }
+    final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone);
+    final id = inviteId.trim();
+    final mail = email.trim().toLowerCase();
+    final code = activationCode.trim();
+    if (phone.isEmpty ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !RegExp(r'^[0-9]{8}$').hasMatch(code) ||
+        !RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}$')
+            .hasMatch(mail) || password.length < 8) {
+      throw StateError('deda-isolated-invite-invalid-input');
+    }
+    // Do not replace an existing secondary administrator.
+    if (_auth.currentUser != null) {
+      throw StateError('deda-isolated-existing-admin-session-preserved');
+    }
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (publicUid == null || publicUid.isEmpty) {
+      throw StateError('deda-isolated-public-deda-login-required');
+    }
+    final publicDb = FirebaseFirestore.instanceFor(app: _mainAuth.app);
+    final session = await publicDb.collection('deda_sessions').doc(publicUid)
+        .get(const GetOptions(source: Source.server));
+    if (!session.exists ||
+        session.metadata.isFromCache || session.metadata.hasPendingWrites ||
+        session.data()?['accountKey'] != phone ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-isolated-deda-phone-owner-unverified');
+    }
+    // Read the public phone's own entrance record before creating an admin
+    // UID. This never lists administrative data or writes to public Firestore.
+    final ownerGateway = await publicDb.collection('admin_entry_access')
+        .doc(phone).get(const GetOptions(source: Source.server));
+    final gateway = ownerGateway.data();
+    if (!ownerGateway.exists ||
+        ownerGateway.metadata.isFromCache ||
+        ownerGateway.metadata.hasPendingWrites ||
+        gateway?['accountKey'] != phone ||
+        gateway?['accessType'] != 'member' ||
+        gateway?['inviteId'] != id ||
+        gateway?['status'] != 'invited' ||
+        gateway?['active'] != true ||
+        (gateway?['adminUid'] ?? '').toString().isNotEmpty ||
+        (gateway?['adminId'] ?? '').toString().trim().isEmpty ||
+        (gateway?['allowedAdminEmail'] ?? '').toString().trim()
+            .toLowerCase() != mail ||
+        !const <String>{'employee', 'deputy_manager', 'province_agent'}
+            .contains((gateway?['allowedRole'] ?? '').toString()) ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-isolated-invitation-gateway-denied');
+    }
+
+    User? created;
+    bool claimed = false;
+    bool adminCreated = false;
+    final inviteRef = _firestore.collection('admin_invites').doc(id);
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: mail, password: password,
+      );
+      created = credential.user;
+      final uid = created?.uid;
+      if (uid == null ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(uid) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-isolated-created-admin-session-changed');
+      }
+      // /admin_invites rules compare the submitted 8 digits against the
+      // pending code. New staff cannot read that code before claiming.
+      await inviteRef.update(<String, dynamic>{
+        'status': 'claimed',
+        'claimedUid': uid,
+        'claimCode': code,
+        'claimedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      claimed = true;
+      final claim = await inviteRef.get(const GetOptions(source: Source.server));
+      final invitation = claim.data();
+      if (!claim.exists || claim.metadata.isFromCache ||
+          claim.metadata.hasPendingWrites ||
+          !DedaIsolatedAdminProofPolicy.invitationClaimMatchesGateway(
+            uid: uid, email: mail, phoneKey: phone,
+            inviteId: id, code: code, invite: invitation,
+            gateway: gateway, now: DateTime.now(),
+          ) ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-isolated-claimed-invitation-unverified');
+      }
+      final adminRef = _firestore.collection('admins').doc(uid);
+      final previous = await adminRef.get(
+          const GetOptions(source: Source.server));
+      if (previous.exists || previous.metadata.isFromCache ||
+          previous.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-isolated-duplicate-admin-denied');
+      }
+      final data = invitation!;
+      // Exact existing /admins/{uid} creation schema, no invented role
+      // or permissions. Manager role is rejected by the policy above.
+      await adminRef.set(<String, dynamic>{
+        'adminId': data['adminId'],
+        'displayName': data['displayName'],
+        'email': mail,
+        'phone': data['phone'],
+        'department': data['department'],
+        'role': data['role'],
+        'governorate': data['governorate'],
+        'status': 'active',
+        'active': true,
+        'permissions': Map<String, bool>.from(data['permissions'] as Map),
+        'mustChangePassword': false,
+        'inviteId': id,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdByUid': data['createdByUid'],
+        'createdByName': data['createdByName'],
+        'permissionsUpdatedAt': FieldValue.serverTimestamp(),
+        'permissionsUpdatedByUid': data['createdByUid'],
+        'permissionsUpdatedByName': data['createdByName'],
+        'lastSeenAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'firstLoginCompletedAt': FieldValue.serverTimestamp(),
+      });
+      adminCreated = true;
+      final entryRef = _firestore.collection('admin_entry_access').doc(phone);
+      final auditRef = _firestore.collection('admin_audit').doc();
+      await _firestore.runTransaction((tx) async {
+        final liveInvite = await tx.get(inviteRef);
+        final liveGateway = await tx.get(entryRef);
+        if (!DedaIsolatedAdminProofPolicy.invitationClaimMatchesGateway(
+              uid: uid, email: mail, phoneKey: phone,
+              inviteId: id, code: code,
+              invite: liveInvite.data(), gateway: liveGateway.data(),
+              now: DateTime.now(),
+            ) ||
+            _auth.currentUser?.uid != uid ||
+            _mainAuth.currentUser?.uid != publicUid) {
+          throw StateError('deda-isolated-invite-entry-changed');
+        }
+        tx.update(entryRef, <String, dynamic>{
+          'adminUid': uid,
+          'adminId': data['adminId'],
+          'status': 'active',
+          'active': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        tx.update(inviteRef, <String, dynamic>{
+          'status': 'completed',
+          'acceptedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'activationCode': FieldValue.delete(),
+          'claimCode': FieldValue.delete(),
+        });
+        tx.set(auditRef, <String, dynamic>{
+          'action': 'admin_invite_accepted',
+          'adminUid': uid,
+          'adminName': data['displayName'],
+          'adminRole': data['role'],
+          'inviteId': id,
+          'targetAdminId': data['adminId'],
+          'targetAdminRole': data['role'],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      });
+      if (!await _serverAuthorizedAdmin(
+            uid: uid, dedaPhone: phone, expectedPublicUid: publicUid,
+          ) ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          _auth.currentUser?.uid != uid) {
+        throw StateError('deda-isolated-admin-final-verification-failed');
+      }
+      return uid;
+    } catch (_) {
+      // No deletion ever touches the public DEDA UID. If an admin profile
+      // was created, do not attempt client-side privileged deletion.
+      if (!adminCreated && created != null) {
+        var safeToDelete = !claimed;
+        if (claimed) {
+          try {
+            await inviteRef.update(<String, dynamic>{
+              'status': 'pending',
+              'claimedUid': FieldValue.delete(),
+              'claimCode': FieldValue.delete(),
+              'claimedAt': FieldValue.delete(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+            safeToDelete = true;
+          } catch (_) {
+            safeToDelete = false;
+          }
+        }
+        if (!safeToDelete) {
+          if (_auth.currentUser?.uid == created.uid) await _auth.signOut();
+          throw StateError('deda-isolated-invitation-manager-repair-required');
+        }
+        try {
+          await created.delete();
+        } catch (_) {
+          if (_auth.currentUser?.uid == created.uid) await _auth.signOut();
+          throw StateError('deda-isolated-admin-auth-cleanup-required');
+        }
+      }
+      if (created != null && _auth.currentUser?.uid == created.uid) {
+        await _auth.signOut();
+      }
       rethrow;
     }
   }
