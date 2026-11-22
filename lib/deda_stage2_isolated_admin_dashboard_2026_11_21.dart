@@ -773,7 +773,9 @@ class _DedaIsolatedReadOnlyTabState
   Future<void> _decideStaffRecovery(Map<String, dynamic> row,
       bool approve) async {
     if (_mutating || widget.collection != 'admin_recovery_requests' ||
-        row['status'] != 'new') return;
+        row['status'] != 'new') {
+      return;
+    }
     final id = (row['id'] ?? '').toString();
     if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) return;
     String? reason = '';
