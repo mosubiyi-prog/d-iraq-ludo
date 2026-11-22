@@ -197,6 +197,179 @@ class _DedaIsolatedReadOnlyTabState
 
   void _refresh() => setState(() => _rows = _fetch());
 
+  Future<void> _createInvitation() async {
+    if (_mutating || widget.collection != 'admin_invites') return;
+    setState(() => _mutating = true);
+    final name = TextEditingController();
+    final email = TextEditingController();
+    final phone = TextEditingController();
+    final department = TextEditingController();
+    final province = TextEditingController();
+    var role = 'employee';
+    try {
+      final data = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, updateDialog) => AlertDialog(
+            title: Text(t('دعوة موظف إداري', 'Invite administrative staff')),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: name,
+                    maxLength: 100,
+                    decoration: InputDecoration(
+                      labelText: t('الاسم الكامل', 'Full name'),
+                    ),
+                  ),
+                  TextField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    maxLength: 254,
+                    decoration: InputDecoration(
+                      labelText: t('البريد الإداري', 'Admin email'),
+                    ),
+                  ),
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 16,
+                    decoration: InputDecoration(
+                      labelText: t('رقم حساب DEDA', 'DEDA account phone'),
+                    ),
+                  ),
+                  TextField(
+                    controller: department,
+                    maxLength: 100,
+                    decoration: InputDecoration(
+                      labelText: t('القسم', 'Department'),
+                    ),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: role,
+                    decoration: InputDecoration(
+                      labelText: t('الدور', 'Role'),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'employee',
+                        child: Text(t('موظف', 'Employee')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'deputy_manager',
+                        child: Text(t('معاون المدير', 'Deputy manager')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'province_agent',
+                        child: Text(t('وكيل محافظة', 'Province agent')),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) updateDialog(() => role = value);
+                    },
+                  ),
+                  if (role == 'province_agent')
+                    TextField(
+                      controller: province,
+                      maxLength: 80,
+                      decoration: InputDecoration(
+                        labelText: t('المحافظة', 'Governorate'),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(t(
+                    'الصلاحيات الافتراضية للدور؛ لا تُفعّل الدعوة قبل قبولها.',
+                    'Role defaults; the invitation does not create an admin login.',
+                  )),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, <String, String>{
+                  'name': name.text,
+                  'email': email.text,
+                  'phone': phone.text,
+                  'department': department.text,
+                  'province': province.text,
+                  'role': role,
+                }),
+                child: Text(t('إنشاء الدعوة', 'Create invitation')),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (data == null || !mounted) return;
+      final cleanRole = data['role'] ?? '';
+      final result = await widget.admin.createScopedAdminInvitation(
+        dedaPhone: widget.dedaPhone,
+        displayName: data['name'] ?? '',
+        email: data['email'] ?? '',
+        phone: data['phone'] ?? '',
+        role: cleanRole,
+        department: data['department'] ?? '',
+        governorate: cleanRole == 'province_agent'
+            ? data['province'] ?? '' : '',
+        permissions: DedaIsolatedAdminProofPolicy
+            .defaultInvitationPermissions(cleanRole),
+      );
+      if (!mounted) return;
+      _refresh();
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(t('دعوة إدارية جديدة', 'New administrative invitation')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t(
+                  'شارك التفاصيل مع صاحب البريد فقط، ولا تنشر رمز التفعيل.',
+                  'Share with the invited email owner only; keep the activation code private.',
+                )),
+                const SizedBox(height: 10),
+                SelectableText('Email: ${result['email']}'),
+                SelectableText('Invite ID: ${result['inviteId']}'),
+                SelectableText('Admin ID: ${result['adminId']}'),
+                SelectableText('Activation code: ${result['activationCode']}'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إغلاق', 'Close')),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t(
+            'لم تُنشأ الدعوة: تحقق من البيانات والصلاحيات وعدم استخدام البريد أو الهاتف مسبقاً.',
+            'Invitation not created: check inputs, manager rights, email and phone.',
+          )),
+        ));
+      }
+    } finally {
+      name.dispose();
+      email.dispose();
+      phone.dispose();
+      department.dispose();
+      province.dispose();
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
   Future<String?> _askTeamReason({
     required String title,
     required String displayName,
@@ -405,10 +578,21 @@ class _DedaIsolatedReadOnlyTabState
           children: [
             Align(
               alignment: AlignmentDirectional.centerEnd,
-              child: TextButton.icon(
-                onPressed: _refresh,
-                icon: const Icon(Icons.refresh),
-                label: Text(t('تحديث من الخادم', 'Refresh from server')),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  if (widget.collection == 'admin_invites')
+                    FilledButton.icon(
+                      onPressed: _mutating ? null : _createInvitation,
+                      icon: const Icon(Icons.person_add_alt_1_outlined),
+                      label: Text(t('دعوة موظف', 'Invite staff')),
+                    ),
+                  TextButton.icon(
+                    onPressed: _mutating ? null : _refresh,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(t('تحديث من الخادم', 'Refresh from server')),
+                  ),
+                ],
               ),
             ),
             Expanded(
