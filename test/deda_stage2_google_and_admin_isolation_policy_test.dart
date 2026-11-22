@@ -156,7 +156,7 @@ void main() {
       expect(allowed(actorUid: 'staff-uid'), false);
       expect(allowed(targetUid: '../admins/manager'), false);
       expect(allowed(reason: '   '), false);
-      expect(allowed(reason: 'x' * 401), false);
+      expect(allowed(reason: List<String>.filled(401, 'x').join()), false);
       expect(allowed(actor: {...record, 'role': ''}), false);
       expect(allowed(actor: {...record, 'status': 'disabled'}), false);
       expect(allowed(target: {...activeStaff, 'active': false}), false);
