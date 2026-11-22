@@ -512,7 +512,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn("'viewTeam', 'managePlaceArchives'}.contains(permission)",src)
         self.assertIn("normalizedRole != 'general_manager'",src)
-        self.assertIn("'admins', 'published_places', 'admin_trash_place_requests'",src)
+        self.assertEqual(src.count("'admins', 'admin_invites', 'published_places'"),2)
         self.assertIn("}.contains(collection) && role != 'general_manager') {",src)
         self.assertIn("'admins': 'viewTeam'",src)
         self.assertIn("if (can('viewTeam')) {",ui)
