@@ -246,6 +246,24 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       console.log("RELEASE_HOLD_UNBOUND_INVITEE_ADMIN_DATA_ACCESS_ALLOWED_BY_CURRENT_RULES");
     });
 
+
+    await t.test("release hold: active roleless admin is treated as general manager",async()=>{
+      const missingUid="qa_roleless_legacy_account";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admins/"+missingUid).set({
+          active:true,status:"active",email:"qa.roleless@example.invalid",
+        });
+      });
+      const roleless=env.authenticatedContext(missingUid,{
+        email:"qa.roleless@example.invalid",
+      }).firestore();
+      // Current rules: !keys.hasAny(['role']) grants GM access.
+      // This is an observation, NOT an approval to ship as safe.
+      await assertSucceeds(roleless.collection("admin_invites").get());
+      await assertSucceeds(roleless.collection("admins").get());
+      console.log("RELEASE_HOLD_ROLELESS_ADMIN_GENERAL_MANAGER_ALLOWED_BY_CURRENT_RULES");
+    });
+
     await t.test("release-hold observation: rules permit manager deleting final gateway", async () => {
       // This records existing RULES behavior, not a desired safety property:
       // client anchor checks alone cannot defend against legacy clients.

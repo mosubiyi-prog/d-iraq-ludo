@@ -169,6 +169,35 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertFails(user.doc(privateRef).get());
     });
 
+
+    await t.test("missing role cannot inherit GM rights; explicit legacy aliases retain GM",async()=>{
+      const missingUid="qa_candidate_roleless";
+      const aliasUid="qa_candidate_explicit_alias";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("admins/"+missingUid).set({
+            active:true,status:"active",email:"qa.roleless@example.invalid",
+          }),
+          db.doc("admins/"+aliasUid).set({
+            active:true,status:"active",role:"manager",
+            email:"qa.explicit.manager@example.invalid",
+          }),
+        ]);
+      });
+      const roleless=env.authenticatedContext(missingUid,{
+        email:"qa.roleless@example.invalid",
+      }).firestore();
+      const alias=env.authenticatedContext(aliasUid,{
+        email:"qa.explicit.manager@example.invalid",
+      }).firestore();
+      await assertFails(roleless.collection("admin_invites").get());
+      await assertFails(roleless.collection("admins").get());
+      await assertSucceeds(alias.collection("admin_invites").get());
+      await assertSucceeds(manager.collection("admin_invites").get());
+      console.log("PASS_CANDIDATE_DENIES_ROLELESS_GM_PRESERVES_EXPLICIT_LEGACY");
+    });
+
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
       await env.withSecurityRulesDisabled(async ctx=>{
         await ctx.firestore().doc("admin_gateway_protection/primary").delete();
