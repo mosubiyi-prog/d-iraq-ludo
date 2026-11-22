@@ -205,6 +205,41 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('.update(',scoped)
         self.assertNotIn('.delete(',scoped)
 
+    def test_isolated_team_suspension_server_gate_and_atomic_audit(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertEqual(backend.count('Future<void> suspendScopedAdminMember('),1)
+        self.assertEqual(backend.count('static bool memberSuspensionAllowed('),1)
+        method=backend.split('Future<void> suspendScopedAdminMember(',1)[1].split(
+            '  Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
+        self.assertIn('requiredPermission: \'viewTeam\'',method)
+        self.assertGreaterEqual(method.count('!await proof()'),2)
+        self.assertIn('_firestore.runTransaction((transaction) async {',method)
+        self.assertIn('final snapshot = await transaction.get(ref);',method)
+        self.assertGreaterEqual(method.count('memberSuspensionAllowed('),2)
+        self.assertIn("transaction.update(ref, <String, dynamic>{",method)
+        self.assertIn("transaction.set(auditRef, <String, dynamic>{",method)
+        self.assertIn("'status': 'temporarily_stopped'",method)
+        self.assertIn("'adminUid': uid",method)
+        self.assertNotIn('FirebaseFirestore.instance',method)
+        self.assertNotIn('FirebaseAuth.instance',method)
+        policy=backend.split('static bool memberSuspensionAllowed(',1)[1].split(
+            '  /// Explicitly scoped to existing support-ticket status/reply fields.',1)[0]
+        for required in ("actorUid == targetUid", "'viewTeam'",
+                         "'active'", "'general_manager'"):
+            if required=="'general_manager'":
+                self.assertNotIn("'general_manager'",policy)
+            else:
+                self.assertIn(required,policy)
+        self.assertIn('widget.admin.suspendScopedAdminMember(',ui)
+        self.assertIn('if (_mutating || widget.collection != \'admins\') return;',ui)
+        self.assertIn('maxLength: 400',ui)
+        self.assertIn('match /admins/{uid} {',rules)
+        self.assertIn("request.resource.data.status == 'temporarily_stopped'",rules)
+        self.assertIn('match /admin_audit/{auditId} {',rules)
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)
