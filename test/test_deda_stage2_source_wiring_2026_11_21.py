@@ -327,6 +327,37 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('match /admin_entry_access/{accountKey} {',rules)
         self.assertIn('match /admin_audit/{auditId} {',rules)
 
+
+    def test_isolated_team_member_edit_remove_and_reset_are_separate_and_guarded(self):
+        code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        for name in ('memberGatewayMatches', 'memberUpdateInputAllowed',
+                     'memberRemovalAllowed', 'markScopedAdminInvitationShared',
+                     'updateScopedAdminMember', 'removeScopedAdminMemberAccess',
+                     'requestScopedMemberPasswordReset'):
+            self.assertEqual(code.count(name + '(') >= 1, True, name)
+        edit=code.split('Future<void> updateScopedAdminMember(',1)[1].split(
+            '  /// Remove only subordinate administrative access',1)[0]
+        removal=code.split('Future<void> removeScopedAdminMemberAccess(',1)[1].split(
+            '  /// Password reset cannot be part',1)[0]
+        for block in (edit,removal):
+            self.assertIn("requiredPermission: 'viewTeam'",block)
+            self.assertIn('_firestore.runTransaction((transaction) async {',block)
+            self.assertIn('memberGatewayMatches(',block)
+            self.assertIn('!await proof()',block)
+            self.assertIn('transaction.set(auditRef, <String, dynamic>{',block)
+            self.assertNotIn('FirebaseAuth.instance',block)
+            self.assertNotIn('FirebaseFirestore.instance',block)
+        self.assertIn('transaction.delete(oldRef);',edit)
+        self.assertIn('transaction.update(oldRef, gateway);',edit)
+        self.assertIn('transaction.delete(gatewayRef);',removal)
+        self.assertIn('transaction.delete(memberRef);',removal)
+        self.assertIn('!await proof()',code.split(
+            'Future<void> requestScopedMemberPasswordReset(',1)[1].split(
+            '  /// Read-only scoped data path',1)[0])
+        self.assertIn('match /admin_entry_access/{accountKey} {',rules)
+        self.assertIn('match /admins/{uid} {',rules)
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)
