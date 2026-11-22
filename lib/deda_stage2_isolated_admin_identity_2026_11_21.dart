@@ -183,7 +183,9 @@ class DedaIsolatedAdminProofPolicy {
     final role = (invitation['role'] ?? '').toString().trim().toLowerCase();
     if (!const <String>{
       'deputy_manager', 'employee', 'province_agent',
-    }.contains(role)) return false;
+    }.contains(role)) {
+      return false;
+    }
     final expectedAccount = canonicalIraqiPhone(
       (invitation['phone'] ?? '').toString(),
     );
