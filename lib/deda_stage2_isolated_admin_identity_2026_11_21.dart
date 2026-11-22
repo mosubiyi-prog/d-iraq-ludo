@@ -152,6 +152,8 @@ class DedaIsolatedAdminProofPolicy {
         entry['accountKey'] != accountKey ||
         entry['accessType'] != 'member' ||
         (entry['adminUid'] ?? '').toString() != targetUid ||
+        (target['adminId'] ?? '').toString().trim().isEmpty ||
+        (entry['adminId'] ?? '').toString().trim().isEmpty ||
         (entry['adminId'] ?? '').toString() !=
             (target['adminId'] ?? '').toString() ||
         (entry['allowedRole'] ?? '').toString() !=

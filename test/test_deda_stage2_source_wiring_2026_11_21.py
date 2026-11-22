@@ -358,6 +358,27 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('match /admin_entry_access/{accountKey} {',rules)
         self.assertIn('match /admins/{uid} {',rules)
 
+
+    def test_isolated_team_ui_actions_are_unique_and_no_public_auth(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        for method in ('_editMember', '_removeMemberAccess',
+                       '_resetMemberPassword', '_shareInvitation'):
+            self.assertEqual(ui.count('Future<void> ' + method + '('), 1)
+        for method in ('updateScopedAdminMember', 'removeScopedAdminMemberAccess',
+                       'requestScopedMemberPasswordReset',
+                       'markScopedAdminInvitationShared'):
+            self.assertEqual(backend.count('Future<void> ' + method + '('), 1)
+            self.assertIn('widget.admin.' + method + '(', ui)
+        self.assertEqual(ui.count('class _DedaIsolatedReadOnlyTabState'),1)
+        self.assertEqual(ui.count('String _timestamp(dynamic value)'),1)
+        self.assertNotIn('FirebaseAuth.instance',ui)
+        self.assertNotIn('FirebaseFirestore.instance',ui)
+        self.assertIn("import 'package:flutter/services.dart';",ui)
+        self.assertIn("import 'package:url_launcher/url_launcher.dart';",ui)
+        self.assertIn("RegExp(r'^[0-9]{8}$').hasMatch(",ui)
+        self.assertIn('PopupMenuButton<String>',ui)
+
     def test_isolated_support_write_requires_server_proof_and_atomic_audit(self):
         code=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         self.assertIn('static bool supportMutationInputAllowed({',code)

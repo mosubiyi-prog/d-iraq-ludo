@@ -167,6 +167,73 @@ void main() {
       expect(allowed(target: {...activeStaff, 'role': 'province_agent'}), true);
     });
 
+
+    test('staff edits and removals require bound subordinate UID and gateway', () {
+      const staffUid = 'verified-staff-uid';
+      final member = <String, dynamic>{
+        'role': 'employee', 'active': true, 'status': 'active',
+        'phone': account, 'adminId': 'DEDA-ADM-000123',
+        'email': 'staff@example.com',
+      };
+      final entry = <String, dynamic>{
+        'accountKey': account, 'accessType': 'member',
+        'adminUid': staffUid, 'adminId': 'DEDA-ADM-000123',
+        'allowedRole': 'employee',
+        'allowedAdminEmail': 'staff@example.com',
+        'active': true, 'status': 'active',
+      };
+      bool bound({Map<String, dynamic>? target, Map<String, dynamic>? gate,
+          String uid = staffUid}) =>
+        DedaIsolatedAdminProofPolicy.memberGatewayMatches(
+          targetUid: uid, target: target ?? member,
+          accountKey: account, entry: gate ?? entry,
+        );
+      expect(bound(), true);
+      expect(bound(uid: 'another-uid'), false);
+      expect(bound(gate: {...entry, 'adminUid': ''}), false);
+      expect(bound(gate: {...entry, 'adminId': 'foreign'}), false);
+      expect(bound(gate: {...entry, 'allowedRole': 'general_manager'}), false);
+      expect(bound(gate: {...entry, 'allowedAdminEmail': 'other@example.com'}), false);
+      expect(bound(gate: {...entry, 'accessType': 'general_manager_gateway'}), false);
+      expect(bound(target: {...member, 'adminId': ''},
+        gate: {...entry, 'adminId': ''}), false);
+
+      final permissions = DedaIsolatedAdminProofPolicy
+          .defaultInvitationPermissions('employee');
+      bool edit({String actorUid = adminUid, String targetUid = staffUid,
+        Map<String, dynamic>? actor, Map<String, dynamic>? target,
+        String role = 'employee', String status = 'active',
+        Map<String, bool>? rights, String reason = 'Authorized reason',
+      }) => DedaIsolatedAdminProofPolicy.memberUpdateInputAllowed(
+        actorUid: actorUid, actor: actor ?? record, targetUid: targetUid,
+        target: target ?? member, displayName: 'Approved Staff',
+        role: role, department: 'Support', governorate: '',
+        status: status, accountKey: account,
+        permissions: rights ?? permissions, reason: reason,
+      );
+      expect(edit(), true);
+      expect(edit(status: 'disabled'), true);
+      expect(edit(status: 'temporarily_stopped'), true);
+      expect(edit(actorUid: staffUid), false);
+      expect(edit(actor: {...record, 'role': ''}), false);
+      expect(edit(target: {...member, 'role': 'general_manager'}), false);
+      expect(edit(role: 'general_manager'), false);
+      expect(edit(role: 'province_agent'), false);
+      expect(edit(status: 'superuser'), false);
+      expect(edit(reason: '  '), false);
+      expect(edit(rights: {...permissions, 'viewTeam': true}), false);
+      expect(DedaIsolatedAdminProofPolicy.memberRemovalAllowed(
+        actorUid: adminUid, actor: record, targetUid: staffUid,
+        target: member, reason: 'Verified removal'), true);
+      expect(DedaIsolatedAdminProofPolicy.memberRemovalAllowed(
+        actorUid: staffUid, actor: record, targetUid: staffUid,
+        target: member, reason: 'Verified removal'), false);
+      expect(DedaIsolatedAdminProofPolicy.memberRemovalAllowed(
+        actorUid: adminUid, actor: record, targetUid: staffUid,
+        target: {...member, 'role': 'general_manager'},
+        reason: 'Verified removal'), false);
+    });
+
     test('invitation cancellation rejects claimed and foreign gateways', () {
       const inviteId = 'invite-123';
       final pending = <String, dynamic>{
