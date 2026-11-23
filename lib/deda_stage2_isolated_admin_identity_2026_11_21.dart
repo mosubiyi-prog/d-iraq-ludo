@@ -4191,7 +4191,7 @@ class DedaIsolatedAdminIdentity {
     final trashRef = _firestore.collection('admin_trash_places').doc(id);
     final type = status == 'deleted' ? 'deletion_approved' : 'deletion_rejected';
     final noticeRef = _firestore.collection('owner_place_notifications')
-        .doc(type + '_' + id);
+        .doc('${type}_$id');
     final auditRef = _firestore.collection('admin_audit').doc();
     final noticeAuditRef = _firestore.collection('admin_audit').doc();
 
