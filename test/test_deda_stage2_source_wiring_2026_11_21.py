@@ -1938,7 +1938,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertIn(required,paged,required)
         self.assertNotIn("tx.set(",paged)
         method=service.split('Future<void> mutateScopedSupportTrash({',1)[1].split(
-            '/// Paged fresh-server queue',1)[0]
+            '/// The first opening of a support/place request',1)[0]
         for required in (
             "'trash', 'restore', 'permanent'", "permanentConfirmation != id",
             "gm?['role'] != 'general_manager'",
@@ -1959,6 +1959,28 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertNotIn(forbidden,method,forbidden)
         self.assertIn("match /support_uploads/{uid}/{fileName}",storage)
         self.assertNotIn("allow delete:",storage)
+        view=service.split('Future<void> markScopedAdminRequestViewed({',1)[1].split(
+            '/// Paged fresh-server queue',1)[0]
+        for needed in (
+            "requiredPermission: permission", "scopedReadQueryFilters(",
+            "scopedDocumentMatches(", "sameScopedFilters(",
+            "_firestore.runTransaction((tx) async", "tx.get(request)",
+            "if (data['firstViewedAt'] != null) return;",
+            "'firstViewedAt': FieldValue.serverTimestamp()",
+            "'lastViewedAt': FieldValue.serverTimestamp()",
+            "tx.update(request,", "tx.set(audit,", "'action': 'request_viewed'",
+        ):
+            if needed == "requiredPermission: permission":
+                self.assertIn(needed,view)
+            else:
+                self.assertIn(needed,view,needed)
+        self.assertNotIn("FirebaseFirestore.instance",view)
+        self.assertNotIn("FirebaseAuth.instance",view)
+        self.assertIn("widget.admin.markScopedAdminRequestViewed(",dashboard)
+        self.assertIn("onExpansionChanged: (expanded)",dashboard)
+        self.assertIn("String _section = 'current';",dashboard)
+        self.assertIn("إحصائية الصفحة الحالية فقط",dashboard)
+        self.assertIn("final visible = records.where(",dashboard)
         self.assertIn("DedaStage2IsolatedSupportTrashPage(",dashboard)
         self.assertIn("widget.admin.mutateScopedSupportTrash(",dashboard)
         self.assertIn("action: 'trash'",dashboard)
