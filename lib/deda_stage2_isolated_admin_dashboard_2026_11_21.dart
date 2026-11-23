@@ -2790,6 +2790,13 @@ class _DedaIsolatedReadOnlyTabState
   late Future<List<Map<String, dynamic>>> _rows;
   bool _mutating = false;
   bool _openingUser = false;
+  String? _pageStartId;
+  final List<String?> _pageHistory = <String?>[];
+  final _userSearch = TextEditingController();
+  bool get _isStaffPaged => const <String>{
+    'admins', 'admin_invites', 'admin_recovery_requests',
+  }.contains(widget.collection);
+  static const int _staffPageSize = 25;
   final _userSearch = TextEditingController();
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
@@ -2815,9 +2822,36 @@ class _DedaIsolatedReadOnlyTabState
               dedaPhone: widget.dedaPhone,
               collection: widget.collection,
               maxItems: widget.collection == 'admin_audit' ? 300 : 25,
+              startAfterId: _isStaffPaged ? _pageStartId : null,
             );
 
-  void _refresh() => setState(() => _rows = _fetch());
+  void _refresh() {
+    if (_mutating) return;
+    setState(() {
+      _pageStartId = null;
+      _pageHistory.clear();
+      _rows = _fetch();
+    });
+  }
+
+  void _nextStaffPage(List<Map<String, dynamic>> records) {
+    if (!_isStaffPaged || _mutating || records.length <= _staffPageSize) return;
+    final last = (records[_staffPageSize - 1]['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(last)) return;
+    setState(() {
+      _pageHistory.add(_pageStartId);
+      _pageStartId = last;
+      _rows = _fetch();
+    });
+  }
+
+  void _previousStaffPage() {
+    if (!_isStaffPaged || _mutating || _pageHistory.isEmpty) return;
+    setState(() {
+      _pageStartId = _pageHistory.removeLast();
+      _rows = _fetch();
+    });
+  }
 
   Widget _userInfoRow(String label, dynamic value, {bool ltr = false}) {
     final raw = (value ?? '').toString().trim();
@@ -3930,7 +3964,12 @@ class _DedaIsolatedReadOnlyTabState
             ),
           );
         }
-        final rows = snapshot.data!;
+        final allRows = snapshot.data!;
+        final hasStaffNext = _isStaffPaged &&
+            allRows.length > _staffPageSize;
+        final rows = _isStaffPaged
+            ? allRows.take(_staffPageSize).toList(growable: false)
+            : allRows;
         final search = _userSearch.text.trim().toLowerCase();
         final filtered = widget.collection == 'users'
             ? (rows.where((user) {
@@ -3988,6 +4027,27 @@ class _DedaIsolatedReadOnlyTabState
                       itemBuilder: (context, index) => _record(filtered[index]),
                     ),
             ),
+            if (_isStaffPaged)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                child: Row(children: [
+                  Text('${t('صفحة', 'Page')} ${_pageHistory.length + 1}'),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _mutating || _pageHistory.isEmpty
+                        ? null : _previousStaffPage,
+                    icon: const Icon(Icons.chevron_left),
+                    label: Text(t('السابق', 'Previous')),
+                  ),
+                  TextButton.icon(
+                    onPressed: _mutating || !hasStaffNext
+                        ? null : () => _nextStaffPage(allRows),
+                    icon: const Icon(Icons.chevron_right),
+                    label: Text(t('التالي', 'Next')),
+                  ),
+                ]),
+              ),
           ],
         );
       },

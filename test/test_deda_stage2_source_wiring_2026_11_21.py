@@ -205,6 +205,37 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('.update(',scoped)
         self.assertNotIn('.delete(',scoped)
 
+    def test_staff_team_invites_recovery_lists_page_without_widening_or_duplication(self):
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        read=backend.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
+            'Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
+        tab=ui.split('class _DedaIsolatedReadOnlyTabState',1)[1].split(
+            '/// Management of existing manager entrance',1)[0]
+        self.assertIn('String? startAfterId,',read)
+        self.assertIn("collection != 'admins' && collection != 'admin_invites'",read)
+        self.assertIn("collection != 'admin_recovery_requests'",read)
+        self.assertIn("validScopedDocumentId(startAfterId)",read)
+        self.assertIn(".doc(startAfterId).get(const GetOptions(source: Source.server))",read)
+        self.assertIn('cursor.metadata.isFromCache',read)
+        self.assertIn('cursor.metadata.hasPendingWrites',read)
+        self.assertIn('scopedDocumentMatches(',read)
+        self.assertIn('query.startAfterDocument(cursor)',read)
+        self.assertIn("collection == 'admin_invites'",read)
+        self.assertIn("collection == 'admin_audit'",read)
+        self.assertIn("collection == 'admin_recovery_requests' ? 1 : 0",read)
+        self.assertEqual(read.count('await proof()'),2)
+        self.assertNotIn('FirebaseFirestore.instance',read)
+        self.assertNotIn('tx.set(',read)
+        self.assertIn('static const int _staffPageSize = 25;',tab)
+        self.assertIn('startAfterId: _isStaffPaged ? _pageStartId : null',tab)
+        self.assertIn('allRows.take(_staffPageSize)',tab)
+        self.assertIn('hasStaffNext',tab)
+        self.assertIn('_previousStaffPage()',tab)
+        self.assertIn('_nextStaffPage(allRows)',tab)
+        self.assertNotIn('FirebaseFirestore.instance',tab)
+        self.assertNotIn('DedaBackend.',tab)
+
     def test_isolated_team_suspension_server_gate_and_atomic_audit(self):
         backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()

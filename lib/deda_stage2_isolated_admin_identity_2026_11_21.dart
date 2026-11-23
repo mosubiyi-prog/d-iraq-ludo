@@ -3107,13 +3107,18 @@ class DedaIsolatedAdminIdentity {
     required String dedaPhone,
     required String collection,
     int maxItems = 25,
+    String? startAfterId,
   }) async {
     if (!dedaIsolatedAdminIdentityEnabled) {
       throw StateError('deda-admin-isolated-list-not-enabled');
     }
     final permission = _scopedReadPermissions[collection];
     if (permission == null || maxItems < 1 ||
-        maxItems > (collection == 'admin_audit' ? 300 : 50)) {
+        maxItems > (collection == 'admin_audit' ? 300 : 50) ||
+        (startAfterId != null &&
+          (collection != 'admins' && collection != 'admin_invites' &&
+           collection != 'admin_recovery_requests' ||
+           !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfterId)))) {
       throw StateError('deda-admin-isolated-read-scope-denied');
     }
     final current = _auth.currentUser;
@@ -3147,11 +3152,32 @@ class DedaIsolatedAdminIdentity {
       query = query.where('governorate', isEqualTo: province);
     }
     if (collection == 'admin_recovery_requests' ||
-        collection == 'admin_audit') {
+        collection == 'admin_audit' || collection == 'admin_invites') {
       query = query.orderBy('createdAt', descending: true);
     }
+    if (startAfterId != null) {
+      // A cursor is never accepted by ID alone: re-read its document from
+      // the same isolated Firestore on the server and verify the SAME scope.
+      // A removed, cached or foreign-scope cursor fails closed.
+      final cursor = await _firestore.collection(collection)
+          .doc(startAfterId).get(const GetOptions(source: Source.server));
+      if (!cursor.exists || cursor.metadata.isFromCache ||
+          cursor.metadata.hasPendingWrites ||
+          !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+            admin: verifiedAdmin, collection: collection, data: cursor.data(),
+          ) || _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-list-cursor-proof-denied');
+      }
+      query = query.startAfterDocument(cursor);
+    }
+    // One sentinel document gives the interface an honest next-page
+    // indicator. The audit log retains its original 300-row behavior.
     final rows = await query
-        .limit(maxItems).get(const GetOptions(source: Source.server));
+        .limit(maxItems + (collection == 'admins' ||
+            collection == 'admin_invites' ||
+            collection == 'admin_recovery_requests' ? 1 : 0))
+        .get(const GetOptions(source: Source.server));
     if (rows.metadata.isFromCache || rows.metadata.hasPendingWrites ||
         _auth.currentUser?.uid != uid ||
         _mainAuth.currentUser?.uid != publicUid ||
