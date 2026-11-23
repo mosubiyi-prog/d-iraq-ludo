@@ -57,10 +57,10 @@ def audit(main, files=None):
         "original-favorites-route": "SavedPlacesPage(showFavorites: true)" in grid,
         "original-activity-route": "SavedPlacesPage(showFavorites: false)" in grid,
         "public-profile-preview-route": "DedaPublicProfilePreviewPage(" in grid,
-        "level-achievement-preview-route": "DedaLevelAchievementsPage(" in grid,
-        "level-achievement-does-not-forge-proof": (
-            "verifiedServerLevel: null" in grid and
-            "hasVerifiedAccountAndLevel: false" in grid),
+        "original-six-achievements-route": "DedaSixAchievementsPage(" in grid,
+        "original-badge-xp-not-task-point-source": (
+            "DedaSocialProgressWallet.levelForXp(" in grid and
+            "DedaSocialProgressWallet.xpNotifier.value" in grid),
         "single-original-store-entry": (
             section.count("  Future<void> _openDedaMyStore() async {") == 1 and
             section.count("DedaStage2ProfileOwnerBoundMyStore(") == 1),
@@ -87,9 +87,11 @@ def audit(main, files=None):
         "friends_stat_has_literal_zero": bool(re.search(
             r"value:\s*'0'\s*,\s*label:\s*dedaText\('الأصدقاء'", stats)),
         "separate_photos_tile_absent_by_approved_single_store_design": "الصور" not in titles,
-        "achievement_release_deliberately_locked": (
-            "verifiedServerLevel: null" in grid and
-            "hasVerifiedAccountAndLevel: false" in grid),
+        "active_six_badge_route_uses_current_xp_not_server_level": (
+            "DedaSixAchievementsPage(" in grid and
+            "DedaSocialProgressWallet.levelForXp(" in grid),
+        "verified_preview_page_is_separate_and_not_activated": (
+            "DedaLevelAchievementsPage(" not in grid),
     }
     return info
 
@@ -105,6 +107,8 @@ def main():
     print("PROFILE_ASSEMBLED_PARITY=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
     if result["friends_stat_has_literal_zero"]:
         print("PROFILE_DEFERRED:friends-count-is-literal-zero-needs-existing-social-bridge")
+    if result["active_six_badge_route_uses_current_xp_not_server_level"]:
+        print("PROFILE_DEFERRED:legacy-level-badges-use-local-XP; separate verified-policy-release-unproven")
     print("PROFILE_RELEASE_HOLD_NO_FIREBASE_WRITE_NO_APK_NO_PLAY")
 
 if __name__ == "__main__":
