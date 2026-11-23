@@ -169,6 +169,13 @@ test("candidate rules protect one immutable GM gateway against all clients",{
         createdAt:F.serverTimestamp(),
       }));
 
+      // A standalone update before accepting the invitation must fail.
+      // The legitimate transaction below completes invite, gateway and audit.
+      await assertFails(user.doc("admin_entry_access/"+phone).update({
+        adminUid:uid, adminId, status:"active", active:true,
+        updatedAt:F.serverTimestamp(),
+      }));
+
       // Exact client completion writes are allowed even while privilege
       // queries remain CLOSED; admin_entry_access.update uses isAdmin()
       // for the scoped self-bind, not hasAdminPermission().
@@ -257,6 +264,29 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertSucceeds(alias.collection("admin_invites").get());
       await assertSucceeds(manager.collection("admin_invites").get());
       console.log("PASS_CANDIDATE_DENIES_ROLELESS_GM_PRESERVES_EXPLICIT_LEGACY");
+    });
+
+    await t.test("invited GM cannot bypass direct manager, automation, league routes",async()=>{
+      const uid="qa_unbound_direct_manager";
+      const phone="9647712345699";
+      const email="qa.unbound.manager@example.invalid";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admins/"+uid).set({
+          role:"general_manager",active:true,status:"active",
+          inviteId:"qa_unbound_gm_invitation",phone,email,
+          adminId:"DEDA-ADM-UNBOUND-GM",
+        });
+      });
+      const unbound=env.authenticatedContext(uid,{email}).firestore();
+      await assertFails(unbound.collection("admin_invites").get());
+      await assertFails(unbound.collection("admin_daily_schedule_previews").get());
+      await assertFails(unbound.doc("deda_automation_status/place_auto_approval").get());
+      await assertFails(unbound.collection("deda_weekly_direct_admin_events").get());
+      // Existing approved GM with no inviteId retains all four routes.
+      await assertSucceeds(manager.collection("admin_invites").get());
+      await assertSucceeds(manager.collection("admin_daily_schedule_previews").get());
+      await assertSucceeds(manager.doc("deda_automation_status/place_auto_approval").get());
+      await assertSucceeds(manager.collection("deda_weekly_direct_admin_events").get());
     });
 
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
