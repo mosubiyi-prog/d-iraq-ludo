@@ -1825,7 +1825,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             "readScopedAdminRecord(",
             "collection: 'users'",
             "manager?['role'] == 'general_manager'",
-            "collection('published_places')",
+            "related('published_places')",
             "related('place_requests')",
             "related('support_requests')",
             "get(const GetOptions(source: Source.server))",
