@@ -556,6 +556,47 @@ class _DedaStage2IsolatedDashboardPageState
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
   bool _exiting = false;
+  bool _refreshing = false;
+  bool _refreshProofFailed = false;
+  int _refreshEpoch = 0;
+  Map<String, dynamic>? _freshVerifiedProfile;
+  late Stream<int> _staffRecoveryStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _staffRecoveryStream = widget.admin.watchScopedPendingStaffRecoveryCount(
+      dedaPhone: widget.dedaPhone,
+    );
+  }
+
+  Future<void> _refreshDashboard() async {
+    if (_refreshing || _exiting) return;
+    setState(() => _refreshing = true);
+    try {
+      // Refresh the actual server profile before rebuilding ALL destinations.
+      final verified = await widget.admin.readVerifiedAdminProfile(
+        dedaPhone: widget.dedaPhone,
+      );
+      if (!mounted) return;
+      setState(() {
+        _freshVerifiedProfile = verified;
+        _refreshEpoch++;
+        _refreshProofFailed = false;
+        _staffRecoveryStream =
+            widget.admin.watchScopedPendingStaffRecoveryCount(
+          dedaPhone: widget.dedaPhone,
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // A revoked role/network failure must never leave old privileged
+      // cards visible as though a fresh authorization succeeded.
+      setState(() => _refreshProofFailed = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   Future<void> _exit() async {
     if (_exiting) return;
@@ -572,10 +613,30 @@ class _DedaStage2IsolatedDashboardPageState
     if (!dedaIsolatedAdminIdentityEnabled) {
       return const Scaffold(body: Center(child: Text('Admin stage disabled')));
     }
-    // The gateway profile was verified against the server. Hide links that
-    // this role cannot open; each read/write re-proves on the server too.
+    if (_refreshProofFailed) {
+      return Scaffold(
+        appBar: AppBar(title: Text(t('إدارة DEDA', 'DEDA administration')),
+          actions: [
+            IconButton(
+              onPressed: _refreshing ? null : _refreshDashboard,
+              icon: const Icon(Icons.refresh),
+              tooltip: t('إعادة التحقق', 'Recheck access'),
+            ),
+            IconButton(
+              onPressed: _exit, icon: const Icon(Icons.logout),
+              tooltip: t('تسجيل خروج الإدارة', 'Admin sign out'),
+            ),
+          ]),
+        body: Center(child: Text(t(
+          'تعذر إثبات صلاحيات الإدارة من الخادم. أعد المحاولة.',
+          'Could not confirm administrator privileges. Retry.',
+        ))),
+      );
+    }
+    final profile = _freshVerifiedProfile ?? widget.profile;
+    // Fresh server proof controls the refreshed card grid.
     bool can(String permission) => DedaIsolatedAdminProofPolicy.allowsPermission(
-          admin: widget.profile,
+          admin: profile,
           permission: permission,
         );
     // Keep the accepted legacy tile design without duplicating its widget.
@@ -587,6 +648,7 @@ class _DedaStage2IsolatedDashboardPageState
     final cardSubtitles = <String>[];
     final cardColors = <Color>[];
     final cardExclusivePalettes = <bool>[];
+    int? staffRecoveryTabIndex;
     void addDestination({
       required String title,
       required String subtitle,
@@ -613,7 +675,7 @@ class _DedaStage2IsolatedDashboardPageState
           admin: widget.admin,
           dedaPhone: widget.dedaPhone,
           isArabic: widget.isArabic,
-          profile: widget.profile,
+          profile: profile,
           collection: 'support_requests',
         ),
       );
@@ -629,7 +691,7 @@ class _DedaStage2IsolatedDashboardPageState
           admin: widget.admin,
           dedaPhone: widget.dedaPhone,
           isArabic: widget.isArabic,
-          profile: widget.profile,
+          profile: profile,
           collection: 'place_requests',
         ),
       );
@@ -687,6 +749,7 @@ class _DedaStage2IsolatedDashboardPageState
           collection: 'admin_invites',
         ),
       );
+      staffRecoveryTabIndex = tabs.length + 1;
       addDestination(
         title: t('طلبات استرجاع الموظفين', 'Staff recovery'),
         subtitle: t('مراجعة الطلبات الموثوقة', 'Review verified requests'),
@@ -757,7 +820,7 @@ class _DedaStage2IsolatedDashboardPageState
           admin: widget.admin,
           dedaPhone: widget.dedaPhone,
           isArabic: widget.isArabic,
-          profile: widget.profile,
+          profile: profile,
         ),
       );
     }
@@ -777,7 +840,7 @@ class _DedaStage2IsolatedDashboardPageState
     }
     // Private owner 100-ID card: no public Auth or local catalog.
     if (can('managePlaceArchives') &&
-        widget.profile['role'] == 'general_manager') {
+        profile['role'] == 'general_manager') {
       addDestination(
         title: t('إدارة المعرّفات الحصرية', 'Exclusive ID management'),
         subtitle: t('الـ100 • الألوان • المنح • السجل',
@@ -793,7 +856,7 @@ class _DedaStage2IsolatedDashboardPageState
     }
     // Original \"🏆 الرابحون معنا\" (not the weekly-league payout report).
     if (can('reviewPrizeWinners') &&
-        widget.profile['role'] == 'general_manager') {
+        profile['role'] == 'general_manager') {
       addDestination(
         title: t('🏆 الرابحون معنا', '🏆 Prize winners'),
         subtitle: t('طلبات الفوز والتدقيق وتسليم الجوائز',
@@ -809,7 +872,7 @@ class _DedaStage2IsolatedDashboardPageState
     // Original weekly league card, never prize_v1 winners.
     // One destination with independently authorized actions and read-only prizes.
     if (can('manageLeague') &&
-        widget.profile['role'] == 'general_manager') {
+        profile['role'] == 'general_manager') {
       addDestination(
         title: t('إدارة الدوري', 'League management'),
         subtitle: t('المتصدرون • التحكم • الأرشيف • الجوائز',
@@ -823,7 +886,7 @@ class _DedaStage2IsolatedDashboardPageState
     }
     // Original 1D7690 manager task tile; same eight slots and local login
     // offers, backed only by the independent administrator identity.
-    if (can('viewTeam') && widget.profile['role'] == 'general_manager') {
+    if (can('viewTeam') && profile['role'] == 'general_manager') {
       addDestination(
         title:t('إدارة المهام والمكافآت','Tasks & rewards'),
         subtitle:t('المهام اليومية فقط','Daily tasks only'),
@@ -836,7 +899,7 @@ class _DedaStage2IsolatedDashboardPageState
     }
     // Original owner place deletion: archive, removal, notice and audit.
     if (can('managePlaceArchives') &&
-        widget.profile['role'] == 'general_manager') {
+        profile['role'] == 'general_manager') {
       addDestination(
         title: t('طلبات حذف الأماكن', 'Place deletion requests'),
         subtitle: t('المالك • المحذوفات • الإشعار • التدقيق',
@@ -852,7 +915,7 @@ class _DedaStage2IsolatedDashboardPageState
     }
     // Account deletion requests: review status only, not user deletion.
     if (can('reviewAccountDeletions') &&
-        widget.profile['role'] == 'general_manager') {
+        profile['role'] == 'general_manager') {
       addDestination(
         title: t('طلبات حذف الحساب', 'Account deletion'),
         subtitle: t('الطلبات والقرارات المسجلة', 'Requests and audited decisions'),
@@ -884,11 +947,65 @@ class _DedaStage2IsolatedDashboardPageState
         if (!didPop) await _exit();
       },
       child: DefaultTabController(
+        key: ValueKey('deda_stage2_admin_refresh_$_refreshEpoch'),
         length: tabs.isEmpty ? 0 : tabs.length + 1,
         child: Scaffold(
           appBar: AppBar(
             title: Text(t('إدارة DEDA', 'DEDA administration')),
             actions: [
+              if (staffRecoveryTabIndex != null &&
+                  profile['role'] == 'general_manager')
+                Builder(builder: (headerContext) => StreamBuilder<int>(
+                  stream: _staffRecoveryStream,
+                  builder: (context, snapshot) {
+                    // Unknown/error isn't zero; show no count until server
+                    // confirms the exact pending request count.
+                    final count = snapshot.hasData ? snapshot.data : null;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        IconButton(
+                          tooltip: t('طلبات استرجاع دخول الموظفين',
+                              'Staff sign-in recovery requests'),
+                          icon: const Icon(Icons.mail_outline),
+                          onPressed: () => DefaultTabController.of(
+                            headerContext,
+                          ).animateTo(staffRecoveryTabIndex!),
+                        ),
+                        if (count != null && count > 0)
+                          PositionedDirectional(
+                            top: 5, end: 4,
+                            child: Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 18, minHeight: 18,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFB3261E),
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                count > 99 ? '99+' : count.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white, fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                )),
+              IconButton(
+                tooltip: t('تحديث', 'Refresh'),
+                icon: _refreshing
+                    ? const Icon(Icons.sync) : const Icon(Icons.refresh),
+                onPressed: _refreshing ? null : _refreshDashboard,
+              ),
               IconButton(
                 tooltip: t('تسجيل خروج الإدارة', 'Admin sign out'),
                 icon: const Icon(Icons.logout),
