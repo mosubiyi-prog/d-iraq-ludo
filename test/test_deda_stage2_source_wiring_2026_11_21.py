@@ -883,7 +883,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseAuth.instance',tab)
         self.assertIn("collection == 'admin_audit' ? 300 : 50",backend)
         reader=backend.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split('Future<DedaIsolatedManagerPage>',1)[0]
-        self.assertIn("collection == 'admin_audit') {",reader)
+        self.assertIn("collection == 'admin_audit' || collection == 'admin_invites') {",reader)
+        self.assertIn("orderBy('createdAt', descending: true)",reader)
         self.assertIn("orderBy('createdAt', descending: true)",reader)
         self.assertIn('GetOptions(source: Source.server)',reader)
         self.assertIn('sameScopedFilters(',reader)
