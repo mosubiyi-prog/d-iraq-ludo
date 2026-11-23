@@ -66,11 +66,13 @@ class _DedaStage2IsolatedDashboardPageState
     final cardIcons = <IconData>[];
     final cardSubtitles = <String>[];
     final cardColors = <Color>[];
+    final cardExclusivePalettes = <bool>[];
     void addDestination({
       required String title,
       required String subtitle,
       required IconData icon,
       required Color accentColor,
+      bool exclusiveNavyTurquoise = false,
       required Widget page,
     }) {
       tabs.add(Tab(text: title));
@@ -78,6 +80,7 @@ class _DedaStage2IsolatedDashboardPageState
       cardIcons.add(icon);
       cardSubtitles.add(subtitle);
       cardColors.add(accentColor);
+      cardExclusivePalettes.add(exclusiveNavyTurquoise);
     }
 
     if (can('supportRead')) {
@@ -260,7 +263,9 @@ class _DedaStage2IsolatedDashboardPageState
         subtitle: t('الـ100 • الألوان • المنح • السجل',
             '100 IDs • colors • grants • history'),
         icon: Icons.verified_user_outlined,
-        accentColor: const Color(0xFF125D67),
+        // Original Stage19 palette (navy/turquoise), not generic teal.
+        accentColor: const Color(0xFF103E50),
+        exclusiveNavyTurquoise: true,
         page: DedaStage2IsolatedExclusiveIdsAdminPage(
           admin:widget.admin,dedaPhone:widget.dedaPhone,
           isArabic:widget.isArabic),
@@ -398,6 +403,7 @@ class _DedaStage2IsolatedDashboardPageState
                           title: tabs[index].text ?? '',
                           subtitle: cardSubtitles[index],
                           accentColor: cardColors[index],
+                          exclusiveNavyTurquoise: cardExclusivePalettes[index],
                           onTap: () => DefaultTabController.of(overviewContext)
                               .animateTo(index + 1),
                         ),
