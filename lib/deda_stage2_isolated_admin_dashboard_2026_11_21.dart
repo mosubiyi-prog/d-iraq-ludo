@@ -434,9 +434,8 @@ class _DedaIsolatedAdminSettingsTabState
 
   @override
   Widget build(BuildContext context) {
-    if (!dedaIsolatedAdminIdentityEnabled) {
-      return const SizedBox.shrink();
-    }
+    // This private tab exists only under the already flag-gated Dashboard.
+    // The isolated identity's read/write methods independently enforce OFF.
     return FutureBuilder<Map<String, dynamic>>(
       future: _freshProfile,
       builder: (context, snapshot) {

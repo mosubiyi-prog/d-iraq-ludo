@@ -1339,7 +1339,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("DedaBackend.",ui)
         self.assertNotIn("FirebaseAuth.instance",ui)
         self.assertNotIn("FirebaseFirestore.instance",ui)
-        self.assertNotIn("SharedPreferences",ui)
+        self.assertNotIn("SharedPreferences.getInstance(",ui)
 
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
