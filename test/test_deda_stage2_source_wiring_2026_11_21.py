@@ -2131,7 +2131,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             'Stream<int> watchScopedPendingStaffRecoveryCount({'),1)
         source=service.split(
             'Stream<int> watchScopedPendingStaffRecoveryCount({',1)[1].split(
-            '/// Read-only scoped data path',1)[0]
+            '/// Original user PIN-recovery queue',1)[0]
         for required in (
             'dedaIsolatedAdminIdentityEnabled',
             'requiredPermission: \'viewTeam\'',
