@@ -88,7 +88,7 @@ class _UnrelatedNextState {}
             'dedaSectionExpiredView()',
         ):
             with self.assertRaises(ValueError):
-                mod.audit_original_editor(editor.replace(required,'BROKEN',1))
+                mod.audit_original_editor(editor.replace(required,'BROKEN'))
 
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):
