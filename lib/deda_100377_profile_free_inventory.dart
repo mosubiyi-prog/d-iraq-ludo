@@ -59,9 +59,9 @@ class DedaProfileFreeInventory {
       'إطار DEDA الأساسي الأول',
       'إطار DEDA الأساسي الثاني',
       'إطار DEDA الأساسي الثالث',
-      'وردي ملكي',
-      'ذهبي ملكي',
       'زمردي ملكي',
+      'ذهبي ملكي',
+      'وردي ملكي',
     ];
     for (final style in frameChoices) {
       results.add(DedaMyStoreItem(
