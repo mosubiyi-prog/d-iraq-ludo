@@ -269,6 +269,66 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
     });
 
 
+    await t.test("GM-only account deletion request status + audit remain atomic; users untouched", async () => {
+      const requestPath = "account_deletion_requests/qa_isolated_status_review";
+      const auditPath = "admin_audit/qa_isolated_status_review_audit";
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await Promise.all([
+          ctx.firestore().doc(requestPath).set({
+            requesterUid: publicUid, accountKey: account,
+            name: "QA synthetic requester", phone: "07712345678",
+            reason: "User requested account review",
+            status: "new", createdAt: sent(), updatedAt: sent(),
+          }),
+          ctx.firestore().doc("users/" + publicUid).set({
+            accountKey: account, name: "QA account must remain",
+          }),
+        ]);
+      });
+      const requestRef = manager.doc(requestPath);
+      const deniedUpdate = {
+        status: "reviewing", updatedAt: sent(),
+        reviewedByUid: staffUid, reviewedByName: "Unauthorized",
+        reviewedByRole: "employee", reviewNote: "Not allowed",
+      };
+      await assertSucceeds(manager.collection("account_deletion_requests")
+        .orderBy("createdAt", "desc").limit(51).get());
+      await assertSucceeds(publicDb.doc(requestPath).get());
+      await assertFails(staff.doc(requestPath).get());
+      await assertFails(outsider.doc(requestPath).get());
+      await assertFails(staff.doc(requestPath).update(deniedUpdate));
+      await assertFails(publicDb.doc(requestPath).update({
+        ...deniedUpdate, reviewedByUid: publicUid,
+      }));
+      await assertSucceeds(manager.runTransaction(async (tx) => {
+        const before = await tx.get(requestRef);
+        assert.equal(before.data().status, "new");
+        tx.update(requestRef, {
+          status: "reviewing", updatedAt: sent(),
+          reviewedByUid: managerUid, reviewedByName: "QA General Manager",
+          reviewedByRole: "general_manager",
+          reviewNote: "Verified QA review only",
+        });
+        tx.set(manager.doc(auditPath), {
+          action: "account_deletion_status_changed",
+          adminUid: managerUid, adminName: "QA General Manager",
+          adminRole: "general_manager",
+          details: {requestId: "qa_isolated_status_review",
+            oldStatus: "new", newStatus: "reviewing",
+            statusOnlyNoAccountDeletion: true},
+          createdAt: sent(),
+        });
+      }));
+      const reviewed = await assertSucceeds(requestRef.get());
+      assert.equal(reviewed.data().status, "reviewing");
+      const audit = await assertSucceeds(manager.doc(auditPath).get());
+      assert.equal(audit.data().details.statusOnlyNoAccountDeletion, true);
+      const user = await assertSucceeds(publicDb.doc("users/" + publicUid).get());
+      assert.equal(user.exists, true);
+      console.log("PASS_SYNTHETIC_ACCOUNT_DELETION_STATUS_ONLY_ATOMIC_AUDIT_NO_USER_DELETE");
+    });
+
+
     await t.test("release hold: active roleless admin is treated as general manager",async()=>{
       const missingUid="qa_roleless_legacy_account";
       await env.withSecurityRulesDisabled(async ctx=>{
