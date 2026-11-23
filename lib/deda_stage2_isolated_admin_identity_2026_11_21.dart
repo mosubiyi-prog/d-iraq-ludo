@@ -20,6 +20,7 @@ import 'deda_weekly_prize_plan.dart' show DedaWeeklyPrizePlan;
 import 'deda_admin_task_drafts.dart' show DedaAdminTaskDraft;
 import 'deda_daily_task_slots.dart';
 import 'deda_daily_schedule_policy.dart';
+import 'deda_launch_feature_gates.dart';
 import 'deda_social_task_live_service.dart' show DedaLiveSocialTaskService;
 
 const bool dedaIsolatedAdminIdentityEnabled = bool.fromEnvironment(
@@ -1101,6 +1102,12 @@ class DedaIsolatedAdminProofPolicy {
 typedef DedaIsolatedManagerPage = ({
   List<Map<String, dynamic>> rows,
   QueryDocumentSnapshot<Map<String, dynamic>>? nextCursor,
+});
+
+typedef DedaIsolatedAutomationState = ({
+  bool enabled,
+  bool backendReady,
+  int revision,
 });
 
 class DedaIsolatedAdminIdentity {
@@ -2886,6 +2893,195 @@ class DedaIsolatedAdminIdentity {
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();
+
+
+  /// Separate admin Auth only. The callable is the TRUSTED deployed
+  /// worker handshake: a Firestore flag alone never proves readiness.
+  Future<bool> _confirmScopedPlaceWorker({
+    required String uid,
+    required String dedaPhone,
+    required String? publicUid,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaLaunchFeatureGates.serverFeaturesEnabled) return false;
+    Map<String, dynamic>? gm;
+    if (!await _serverAuthorizedAdmin(
+          uid: uid, dedaPhone: dedaPhone,
+          expectedPublicUid: publicUid,
+          onAuthorizedAdmin: (admin) => gm = admin,
+        ) || gm?['role'] != 'general_manager') return false;
+    try {
+      // Never use FirebaseFunctions.instance (public DEDA Auth).
+      final response = await FirebaseFunctions.instanceFor(app: _auth.app)
+          .httpsCallable('dedaAutomationReadiness',
+            options: HttpsCallableOptions(
+              timeout: const Duration(seconds: 6),
+            )).call();
+      if (_auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await _serverAuthorizedAdmin(
+            uid: uid, dedaPhone: dedaPhone,
+            expectedPublicUid: publicUid,
+            onAuthorizedAdmin: (admin) => gm = admin,
+          ) || gm?['role'] != 'general_manager') return false;
+      return response.data is Map && response.data['ready'] == true;
+    } catch (_) {
+      // Missing/failed worker must fail CLOSED; never turn a switch on.
+      return false;
+    }
+  }
+
+  /// Parity with the original green place switch, under SECONDARY Auth.
+  /// The app's original server-automation gate is OFF by default: in that
+  /// state this method performs NO network call or settings write.
+  Future<DedaIsolatedAutomationState> readScopedPlaceAutoApproval({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-isolated-place-auto-stage-off');
+    }
+    if (!DedaLaunchFeatureGates.serverFeaturesEnabled) {
+      return (enabled: false, backendReady: false, revision: 0);
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-isolated-place-auto-no-admin-session');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      onAuthorizedAdmin: (admin) => gm = admin,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-place-auto-gm-required');
+    }
+    final workerReady = await _confirmScopedPlaceWorker(
+      uid: uid, dedaPhone: dedaPhone, publicUid: publicUid,
+    );
+    final config = await _firestore.collection('deda_automation_settings')
+        .doc('place_auto_approval')
+        .get(const GetOptions(source: Source.server));
+    final marker = await _firestore.collection('deda_automation_status')
+        .doc('place_auto_approval')
+        .get(const GetOptions(source: Source.server));
+    if (config.metadata.isFromCache || config.metadata.hasPendingWrites ||
+        marker.metadata.isFromCache || marker.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-place-auto-session-changed');
+    }
+    final revision = config.data()?['revision'];
+    final checked = marker.data()?['checkedAt'];
+    final age = checked is Timestamp
+        ? DateTime.now().difference(checked.toDate())
+        : const Duration(days: 1);
+    final freshMarker = age >= Duration.zero &&
+        age <= const Duration(minutes: 5);
+    return (
+      enabled: config.data()?['enabled'] == true,
+      backendReady: workerReady && marker.data()?['ready'] == true &&
+          freshMarker,
+      revision: revision is int && revision >= 0 ? revision : 0,
+    );
+  }
+
+  /// No device-side automatic approvals: only the original trusted worker
+  /// acts on future eligible requests. OFF is possible during worker outage;
+  /// ON demands a fresh callable handshake, server marker and GM proof.
+  Future<void> setScopedPlaceAutoApproval({
+    required String dedaPhone,
+    required bool enabled,
+    required int expectedRevision,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaLaunchFeatureGates.serverFeaturesEnabled ||
+        expectedRevision < 0) {
+      throw StateError('deda-isolated-place-auto-write-stage-off');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-isolated-place-auto-no-admin-session');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      onAuthorizedAdmin: (admin) => gm = admin,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-place-auto-gm-required');
+    }
+    if (enabled && !await _confirmScopedPlaceWorker(
+      uid: uid, dedaPhone: dedaPhone, publicUid: publicUid,
+    )) {
+      throw StateError('deda-isolated-place-auto-worker-not-ready');
+    }
+    final config = _firestore.collection('deda_automation_settings')
+        .doc('place_auto_approval');
+    final marker = _firestore.collection('deda_automation_status')
+        .doc('place_auto_approval');
+    final audit = _firestore.collection('admin_audit').doc();
+    final name = (gm?['displayName'] ?? gm?['name'] ??
+        actor.email ?? 'DEDA Admin').toString().trim();
+    if (name.isEmpty) {
+      throw StateError('deda-isolated-place-auto-admin-name-invalid');
+    }
+    await _firestore.runTransaction((tx) async {
+      final previous = await tx.get(config);
+      final status = enabled ? await tx.get(marker) : null;
+      if (_auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await proof() || gm?['role'] != 'general_manager' ||
+          previous.metadata.isFromCache ||
+          previous.metadata.hasPendingWrites ||
+          (status != null && (status.metadata.isFromCache ||
+              status.metadata.hasPendingWrites))) {
+        throw StateError('deda-isolated-place-auto-proof-changed');
+      }
+      final revision = previous.data()?['revision'];
+      final currentRevision = revision is int && revision >= 0
+          ? revision : 0;
+      if (currentRevision != expectedRevision ||
+          previous.data()?['enabled'] == enabled) {
+        throw StateError('deda-isolated-place-auto-setting-changed');
+      }
+      if (enabled) {
+        final checked = status?.data()?['checkedAt'];
+        final age = checked is Timestamp
+            ? DateTime.now().difference(checked.toDate())
+            : const Duration(days: 1);
+        if (status?.data()?['ready'] != true ||
+            age < Duration.zero || age > const Duration(minutes: 5)) {
+          throw StateError('deda-isolated-place-auto-worker-marker-stale');
+        }
+      }
+      final fields = <String, dynamic>{
+        'enabled': enabled,
+        'enabledAt': enabled ? FieldValue.serverTimestamp() : null,
+        'revision': currentRevision + 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'changedByUid': uid,
+      };
+      if (previous.exists) {
+        tx.update(config, fields);
+      } else {
+        tx.set(config, fields);
+      }
+      tx.set(audit, <String, dynamic>{
+        'action': enabled ? 'place_auto_approval_enabled'
+            : 'place_auto_approval_disabled',
+        'adminUid': uid, 'adminName': name,
+        'adminRole': 'general_manager',
+        'sourceCollection': 'deda_automation_settings',
+        'sourceId': 'place_auto_approval',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
 
   /// The existing support-trash collection under SECONDARY manager Auth.
   /// The stored rows remain private and can never be read by public users.
