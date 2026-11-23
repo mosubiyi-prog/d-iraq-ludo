@@ -228,6 +228,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseFirestore.instance',read)
         self.assertNotIn('tx.set(',read)
         self.assertIn('static const int _staffPageSize = 25;',tab)
+        self.assertEqual(tab.count('final _userSearch = TextEditingController();'),1)
         self.assertIn('startAfterId: _isStaffPaged ? _pageStartId : null',tab)
         self.assertIn('allRows.take(_staffPageSize)',tab)
         self.assertIn('hasStaffNext',tab)
