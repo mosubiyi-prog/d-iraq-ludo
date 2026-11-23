@@ -1889,7 +1889,10 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertIn(key,read)
         self.assertLess(read.index("prizePlanVerified=false;"),
                         read.index("final frozen="))
-        self.assertIn("'currentRows':view(current),'reviewRows':view(other)",read)
+        self.assertIn("'currentRows':view(current??const <DedaAdminLeagueRow>[])",read)
+        self.assertIn("'reviewRows':view(other??const <DedaAdminLeagueRow>[])",read)
+        self.assertIn("'currentStandingsVerified':current!=null",read)
+        self.assertIn("'reviewStandingsVerified':other!=null",read)
         self.assertIn("'paused':control.data()?['paused']==true",read)
         self.assertIn("v['prizePlanVerified'] == true",ui)
         self.assertIn('if (!prizePlanVerified)',ui)
