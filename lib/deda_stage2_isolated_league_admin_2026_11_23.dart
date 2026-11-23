@@ -201,6 +201,8 @@ class _DedaStage2IsolatedLeagueAdminPageState
         final review = v['reviewRows'] as List<Map<String,dynamic>>;
         final week = v['reviewWeek'] as String;
         final amounts = v['amounts'] as List<int>;
+        final prizePlanVerified = v['prizePlanVerified'] == true &&
+            amounts.length == 10;
         final receipts = v['receipts'] as Map<String,dynamic>;
         final paused = v['paused'] == true;
         return ListView(padding: const EdgeInsets.all(12), children: [
@@ -251,11 +253,19 @@ class _DedaStage2IsolatedLeagueAdminPageState
           _panel(t('جوائز الدوري وهداياي — قراءة فقط',
               'League prizes and Hadaya — read only'),
             Column(children: [
-              for (var i = 0; i < amounts.length; i++)
-                ListTile(dense: true,
-                  title: Text(t('المركز ', 'Place ') + (i+1).toString()),
-                  trailing: Text(amounts[i].toString() + ' ' +
-                    t('ماسة', 'diamonds'))),
+              if (!prizePlanVerified)
+                Text(t('خطة الجوائز المخزونة غير متوافقة مع الحد المعتمد '
+                    'للصرف. عُطّل عرض المبالغ وتعديلها حتى مراجعة '
+                    'الخطة من الخادم؛ جدول الدوري ومراجعة النقاط مستمران.',
+                    'Saved prize plan conflicts with the approved payout '
+                    'minimum. Amount display and editing are blocked pending '
+                    'server review; standings and score reviews still work.')),
+              if (prizePlanVerified)
+                for (var i = 0; i < amounts.length; i++)
+                  ListTile(dense: true,
+                    title: Text(t('المركز ', 'Place ') + (i+1).toString()),
+                    trailing: Text(amounts[i].toString() + ' ' +
+                      t('ماسة', 'diamonds'))),
               const Divider(),
               Text(receipts['verified'] == true
                 ? t('هدايا مسجلة: ', 'Created gifts: ') +
@@ -269,15 +279,16 @@ class _DedaStage2IsolatedLeagueAdminPageState
                     'Hadaya receipts cannot be verified.')),
               Text(t('الجوائز المخططة لا تثبت الصرف ولا تحوّل ماسات.',
                 'Planned prizes never prove payout or transfer diamonds.')),
-              DedaStage2IsolatedLeaguePrizeEditor(
-                key: ValueKey('stage2-league-prizes-' +
-                    v['currentWeek'].toString() + amounts.join('-')),
-                admin: widget.admin, dedaPhone: widget.dedaPhone,
-                isArabic: widget.isArabic,
-                weekId: v['currentWeek'] as String,
-                confirmed: amounts, paused: paused,
-                onSaved: _refresh,
-              ),
+              if (prizePlanVerified)
+                DedaStage2IsolatedLeaguePrizeEditor(
+                  key: ValueKey('stage2-league-prizes-' +
+                      v['currentWeek'].toString() + amounts.join('-')),
+                  admin: widget.admin, dedaPhone: widget.dedaPhone,
+                  isArabic: widget.isArabic,
+                  weekId: v['currentWeek'] as String,
+                  confirmed: amounts, paused: paused,
+                  onSaved: _refresh,
+                ),
             ]),
           ),
           _panel(t('سجل الفائزين وجوائز الأسابيع المكتملة',

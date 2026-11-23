@@ -1841,6 +1841,28 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("collection('deda_diamond_gift_balances')",increase)
         self.assertNotIn("collection('users')",increase)
 
+    def test_bad_historical_league_plan_blocks_only_prizes_not_full_dashboard(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()
+        read=service.split('Future<Map<String,dynamic>> readScopedLeague(',1)[1].split(
+            'Future<List<Map<String,dynamic>>> readScopedLeagueArchive(',1)[0]
+        for key in ("prizePlanVerified=false;", "'prizePlanVerified':",
+                    "amounts.length==10", "on StateError",
+                    "DedaWeeklyPrizeProjection.amounts("):
+            self.assertIn(key,read)
+        self.assertLess(read.index("prizePlanVerified=false;"),
+                        read.index("final frozen="))
+        self.assertIn("'currentRows':view(current),'reviewRows':view(other)",read)
+        self.assertIn("'paused':control.data()?['paused']==true",read)
+        self.assertIn("v['prizePlanVerified'] == true",ui)
+        self.assertIn('if (!prizePlanVerified)',ui)
+        self.assertIn('if (prizePlanVerified)',ui)
+        self.assertIn('Amount display and editing are blocked',ui)
+        # Only the existing editor may write a plan; no new payout writer.
+        self.assertEqual(ui.count('class DedaStage2IsolatedLeaguePrizeEditor'),1)
+        self.assertNotIn("collection('deda_diamond_gift_balances')",ui)
+        self.assertNotIn('FirebaseFirestore.instance',ui)
+
     def test_league_card_isolated_original_functions_and_no_wallet_mutation(self):
         service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()

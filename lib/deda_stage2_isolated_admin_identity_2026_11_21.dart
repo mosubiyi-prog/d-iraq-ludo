@@ -6007,13 +6007,21 @@ class DedaIsolatedAdminIdentity {
     // Reuse the original 100439 projection validator, never invent a
     // second prize schedule or silently downgrade a saved amount.
     final raw=plan.data()?['amounts'];
-    if (plan.exists && raw is! List) {
-      // A present but malformed plan must NOT be mistaken for no plan.
-      throw StateError('league-prize-saved-plan-invalid');
+    var prizePlanVerified=true;
+    List<int> amounts=const <int>[];
+    try {
+      if (plan.exists && raw is! List) {
+        // Do not mistake an invalid saved plan for an absent plan.
+        throw StateError('league-prize-saved-plan-invalid');
+      }
+      amounts=DedaWeeklyPrizeProjection.amounts(
+        plan.exists ? List<dynamic>.from(raw as List) : null,
+      );
+    } on StateError {
+      // Do not hide leaderboard, freeze control or archive due to an
+      // old/invalid prize plan. Only amount display and editing fail closed.
+      prizePlanVerified=false;
     }
-    final amounts=DedaWeeklyPrizeProjection.amounts(
-      plan.exists ? List<dynamic>.from(raw as List) : null,
-    );
     Map<String,dynamic> receipts={'verified':false};
     try {
       final gifts=await _firestore.collection('deda_diamond_gifts')
@@ -6049,7 +6057,9 @@ class DedaIsolatedAdminIdentity {
           control.data()?['weekId']==currentWeek,
       'weekFrozen':clock.phase==DedaWeeklyPhase.frozen,
       'currentRows':view(current),'reviewRows':view(other),
-      'amounts':List<int>.unmodifiable(amounts),'receipts':receipts,
+      'amounts':List<int>.unmodifiable(amounts),
+      'prizePlanVerified':prizePlanVerified && amounts.length==10,
+      'receipts':receipts,
     };
   }
 
