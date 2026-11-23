@@ -129,6 +129,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
         ]);
       });
       const privateRef="users/"+privateUid;
+      const F=require("firebase/compat/app").firestore.FieldValue;
       await assertFails(user.doc(privateRef).get());
       await assertSucceeds(legacy.doc(privateRef).get());
 
@@ -158,7 +159,6 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       // Exact client completion writes are allowed even while privilege
       // queries remain CLOSED; admin_entry_access.update uses isAdmin()
       // for the scoped self-bind, not hasAdminPermission().
-      const F=require("firebase/compat/app").firestore.FieldValue;
       await assertSucceeds(user.runTransaction(async tx=>{
         const inviteRef=user.doc("admin_invites/"+inviteId);
         const entryRef=user.doc("admin_entry_access/"+phone);
