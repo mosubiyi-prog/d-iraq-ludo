@@ -329,6 +329,164 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
     });
 
 
+    await t.test("GM can atomically archive and remove only one owner-approved place, notify and audit", async () => {
+      const id = "qa_owner_place_delete";
+      const requestRef = manager.doc("place_deletion_requests/" + id);
+      const placeRef = manager.doc("published_places/" + id);
+      const trashRef = manager.doc("admin_trash_places/" + id);
+      const noticeRef = manager.doc("owner_place_notifications/deletion_approved_" + id);
+      const auditRef = manager.doc("admin_audit/qa_place_delete_atomic_audit");
+      const noticeAuditRef = manager.doc("admin_audit/qa_place_delete_owner_audit");
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db = ctx.firestore();
+        await Promise.all([
+          db.doc("place_deletion_requests/" + id).set({
+            placeId:id, requesterUid:publicUid, accountKey:account,
+            placeName:"QA Baghdad place", approvalNumber:"DEDA-QA-45",
+            governorate:"Baghdad",address:"QA synthetic street",
+            phone:"07712345678", reason:"Owner requested removal",
+            status:"new", createdAt:sent(),updatedAt:sent(),
+          }),
+          db.doc("published_places/" + id).set({
+            ownerUid:publicUid, accountKey:account, placeName:"QA Baghdad place",
+            approvalNumber:"DEDA-QA-45", governorate:"Baghdad",
+            published:true, status:"approved",
+          }),
+        ]);
+      });
+      await assertSucceeds(manager.collection("place_deletion_requests")
+        .orderBy("updatedAt","desc").limit(51).get());
+      await assertFails(staff.doc("place_deletion_requests/" + id).get());
+      await assertFails(outsider.doc("place_deletion_requests/" + id).get());
+      await assertFails(staff.doc("place_deletion_requests/" + id)
+        .update({status:"deleted",updatedAt:sent(),reviewedByUid:staffUid,
+          reviewedByName:"QA Staff",reviewedByRole:"employee",
+          reviewNote:"Unauthorized action"}));
+      await assertFails(publicDb.doc("published_places/" + id).delete());
+
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const req = await tx.get(requestRef);
+        const published = await tx.get(placeRef);
+        const archived = await tx.get(trashRef);
+        const existingNotice = await tx.get(noticeRef);
+        assert.equal(req.data().status,"new");
+        assert.equal(published.exists,true);
+        assert.equal(archived.exists,false);
+        assert.equal(existingNotice.exists,false);
+        tx.set(trashRef,{
+          ...published.data(),originalId:id,
+          trashKind:"owner_requested_place_deletion",
+          deletedFromCollection:"published_places",
+          deletionRequestId:id,deletedAt:sent(),
+          deletedByUid:managerUid,deletedByName:"QA General Manager",
+          deletedByRole:"general_manager",
+        });
+        tx.delete(placeRef);
+        tx.update(requestRef,{
+          status:"deleted",updatedAt:sent(),reviewedByUid:managerUid,
+          reviewedByName:"QA General Manager",reviewedByRole:"general_manager",
+          reviewNote:"Owner confirmed removal",completedAt:sent(),
+        });
+        tx.set(noticeRef,{
+          type:"deletion_approved",accountKey:account,
+          ownerUid:publicUid,placeId:id,placeName:"QA Baghdad place",
+          approvalNumber:"DEDA-QA-45",governorate:"Baghdad",
+          titleAr:"تمت الموافقة على حذف المكان",titleEn:"Place deletion approved",
+          bodyAr:"تمت إزالة المكان بناءً على طلبك",bodyEn:"Requested place removed",
+          sourceType:"place_deletion_requests",sourceId:id,
+          createdByUid:managerUid,createdByName:"QA General Manager",
+          createdByRole:"general_manager",createdAt:sent(),
+        });
+        tx.set(auditRef,{action:"place_deletion_status_changed",
+          adminUid:managerUid,adminName:"QA General Manager",
+          adminRole:"general_manager",createdAt:sent(),
+          details:{requestId:id,newStatus:"deleted",placeArchived:true}});
+        tx.set(noticeAuditRef,{action:"owner_notification_sent",
+          adminUid:managerUid,adminName:"QA General Manager",
+          adminRole:"general_manager",createdAt:sent(),
+          notificationType:"deletion_approved",sourceId:id});
+      }));
+      const request = await assertSucceeds(requestRef.get());
+      assert.equal(request.data().status,"deleted");
+      const trash = await assertSucceeds(trashRef.get());
+      assert.equal(trash.data().originalId,id);
+      assert.equal(trash.data().ownerUid,publicUid);
+      assert.equal(trash.data().approvalNumber,"DEDA-QA-45");
+      assert.equal(trash.data().trashKind,"owner_requested_place_deletion");
+      const notice = await assertSucceeds(publicDb.doc(
+        "owner_place_notifications/deletion_approved_" + id).get());
+      assert.equal(notice.data().type,"deletion_approved");
+      assert.equal((await assertSucceeds(auditRef.get())).data()
+        .details.placeArchived,true);
+      assert.equal((await assertSucceeds(noticeAuditRef.get())).data()
+        .notificationType,"deletion_approved");
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db = ctx.firestore();
+        assert.equal((await db.doc("published_places/"+id).get()).exists,false);
+        assert.equal((await db.doc("users/"+publicUid).get()).exists,true);
+      });
+      console.log("PASS_OWNER_PLACE_DELETION_ATOMIC_ARCHIVE_REMOVE_OWNER_NOTICE_TWO_AUDITS_NO_USER_DELETE");
+    });
+
+    await t.test("rejected owner place request notifies without removing the published place", async () => {
+      const id="qa_owner_place_reject";
+      const requestRef=manager.doc("place_deletion_requests/"+id);
+      const placeRef=manager.doc("published_places/"+id);
+      const noticeRef=manager.doc("owner_place_notifications/deletion_rejected_"+id);
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("place_deletion_requests/"+id).set({
+            placeId:id,requesterUid:publicUid,accountKey:account,
+            placeName:"QA retained place",approvalNumber:"DEDA-QA-46",
+            governorate:"Baghdad",address:"QA road",phone:"07712345678",
+            reason:"Owner deletion request",status:"reviewing",
+            createdAt:sent(),updatedAt:sent(),
+          }),
+          db.doc("published_places/"+id).set({
+            ownerUid:publicUid,accountKey:account,
+            placeName:"QA retained place",approvalNumber:"DEDA-QA-46",
+            governorate:"Baghdad",published:true,status:"approved",
+          }),
+        ]);
+      });
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const before=await tx.get(requestRef);
+        const existingNotice=await tx.get(noticeRef);
+        assert.equal(before.data().status,"reviewing");
+        assert.equal(existingNotice.exists,false);
+        tx.update(requestRef,{status:"rejected",updatedAt:sent(),
+          reviewedByUid:managerUid,reviewedByName:"QA General Manager",
+          reviewedByRole:"general_manager",reviewNote:"Owner proof incomplete",
+          closedAt:sent()});
+        tx.set(noticeRef,{
+          type:"deletion_rejected",accountKey:account,
+          ownerUid:publicUid,placeId:id,placeName:"QA retained place",
+          approvalNumber:"DEDA-QA-46",governorate:"Baghdad",
+          titleAr:"تم رفض طلب الحذف",titleEn:"Place deletion request rejected",
+          bodyAr:"لم تتم الموافقة على حذف المكان",bodyEn:"Deletion not approved",
+          sourceType:"place_deletion_requests",sourceId:id,
+          createdByUid:managerUid,createdByName:"QA General Manager",
+          createdByRole:"general_manager",createdAt:sent(),
+        });
+        tx.set(manager.doc("admin_audit/qa_place_reject_audit"),{
+          action:"place_deletion_status_changed",adminUid:managerUid,
+          adminName:"QA General Manager",adminRole:"general_manager",
+          createdAt:sent(),details:{requestId:id,newStatus:"rejected"}});
+        tx.set(manager.doc("admin_audit/qa_place_reject_notice_audit"),{
+          action:"owner_notification_sent",adminUid:managerUid,
+          adminName:"QA General Manager",adminRole:"general_manager",
+          createdAt:sent(),notificationType:"deletion_rejected",sourceId:id});
+      }));
+      assert.equal((await assertSucceeds(requestRef.get())).data().status,
+        "rejected");
+      assert.equal((await assertSucceeds(placeRef.get())).exists,true);
+      assert.equal((await assertSucceeds(publicDb.doc(
+        "owner_place_notifications/deletion_rejected_"+id).get()))
+        .data().type,"deletion_rejected");
+      console.log("PASS_OWNER_PLACE_REJECTION_ATOMIC_REQUEST_NOTICE_AND_AUDIT_NO_REMOVAL");
+    });
+
     await t.test("release hold: active roleless admin is treated as general manager",async()=>{
       const missingUid="qa_roleless_legacy_account";
       await env.withSecurityRulesDisabled(async ctx=>{
