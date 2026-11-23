@@ -270,6 +270,63 @@ test("candidate rules protect one immutable GM gateway against all clients",{
     });
 
 
+    await t.test("manual notice candidate: only GM publishes owner notice and account link cannot be forged",async()=>{
+      const staffUid="qa_cand_notice_staff";
+      const ownerUid="qa_cand_notice_owner";
+      const accountKey="9647712345900";
+      const staff=env.authenticatedContext(staffUid).firestore();
+      const F=require("firebase/compat/app").firestore.FieldValue;
+      const placeId="qa_cand_published_notice";
+      const requestId="qa_cand_private_request";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("admins/"+staffUid).set({
+            role:"employee",active:true,status:"active",
+            permissions:{viewPlaceRequests:true},
+          }),
+          db.doc("published_places/"+placeId).set({
+            published:true,placeName:"Candidate place",governorate:"Baghdad",
+            accountKey,ownerUid,
+          }),
+          db.doc("place_requests/"+requestId).set({
+            placeName:"Candidate request",governorate:"Baghdad",
+            accountKey,ownerUid,status:"pending",
+          }),
+        ]);
+      });
+      const notice=(uid,sourceType,sourceId)=>({
+        type:"admin_alert",accountKey,ownerUid,
+        placeId,placeName:"Candidate place",approvalNumber:"",
+        governorate:"Baghdad",titleAr:"تنبيه اختبار",
+        titleEn:"Candidate notice",bodyAr:"تنبيه آمن",
+        bodyEn:"Candidate secure notice",sourceType,sourceId,
+        createdByUid:uid,createdByName:"QA Admin",
+        createdByRole:uid==managerUid?"general_manager":"employee",
+        createdAt:F.serverTimestamp(),
+      });
+      await assertSucceeds(manager.doc(
+        "owner_place_notifications/qa_cand_gm_published").set(
+        notice(managerUid,"published_places",placeId)));
+      await assertFails(staff.doc(
+        "owner_place_notifications/qa_cand_staff_published").set(
+        notice(staffUid,"published_places",placeId)));
+      await assertSucceeds(staff.doc(
+        "owner_place_notifications/qa_cand_staff_request").set(
+        notice(staffUid,"place_requests",requestId)));
+      await assertFails(staff.doc(
+        "owner_place_notifications/qa_cand_forged_account").set({
+        ...notice(staffUid,"place_requests",requestId),
+        accountKey:"9647900009999",
+      }));
+      await assertFails(manager.doc(
+        "owner_place_notifications/qa_cand_forged_owner").set({
+        ...notice(managerUid,"published_places",placeId),
+        ownerUid:"qa_cand_wrong_owner",
+      }));
+      console.log("PASS_CANDIDATE_MANUAL_NOTICE_GM_PUBLISHED_AND_OWNER_BINDING");
+    });
+
     await t.test("missing role cannot inherit GM rights; explicit legacy aliases retain GM",async()=>{
       const missingUid="qa_candidate_roleless";
       const aliasUid="qa_candidate_explicit_alias";
