@@ -48,6 +48,24 @@ class ProfileEntitlementParity(unittest.TestCase):
         self.assertIn("style >= 6 && style < 6 + paidFrames.length", art)
         self.assertIn("return index < 0 ? null : index + 6;", art)
 
+    def test_my_store_free_royal_names_match_original_edit_profile(self):
+        inventory = source("lib/deda_100377_profile_free_inventory.dart")
+        owner_editor = source("tools/stage_deda_100377_point02_exact_frame_names.py")
+        match = re.search(r"const frameNames = <String>\[(.*?)\];", inventory, re.S)
+        self.assertIsNotNone(match)
+        labels = re.findall(r"'([^']+)'", match.group(1))
+        self.assertEqual(len(labels), 6)
+        self.assertEqual(
+            labels[3:],
+            ["زمردي ملكي", "ذهبي ملكي", "وردي ملكي"],
+        )
+        for label in labels[3:]:
+            self.assertIn(f"dedaText('{label}'", owner_editor)
+        self.assertIn("index == 3", owner_editor)
+        self.assertIn("index == 4", owner_editor)
+        self.assertIn("previewAsset: style >= 3", inventory)
+        self.assertIn("royal_frame_\${style - 3}.webp", inventory)
+
     def test_no_display_balance_masquerades_as_paid_frame_purchase_proof(self):
         checkout = source("lib/deda_lab_frame_secure_checkout.dart")
         owned = source("lib/deda_owned_frame_reader.dart")
