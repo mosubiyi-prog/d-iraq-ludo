@@ -87,3 +87,19 @@
 **الحالة:** `PROFILE_FRAME_LABELS_SOURCE_FIXED / THIRTEEN_PAID_THREE_FREE_PARITY_QA_PASS / PREMIUM_ID_OWNER_PROOF_GUARDED / EXISTING_BADGE_ROUTE_PRESERVED / FULL_FLUTTER_ASSEMBLY_SUCCESS / NO_PRODUCTION / NO_APK / NO_DEVICE_QA / RELEASE_HOLD`.
 
 **خطوة الاستئناف التالية:** بقاء العمل داخل الملف الشخصي لمراجعة التكافؤ الدقيق لما تبقى من وظائف مرتبطة بالمقتنيات، دون إعادة فتح أقسام أو تفعيل خدمات محمية. أي نقص قابل للإصلاح يُثبت بالمصدر أولاً، ثم يعالج في موضعه الأصلي، مع منع التكرار.
+
+---
+
+## 🌿 استئناف الملف: مقتنيات الإطارات المصوّرة في متجري — 24-11-2026
+
+- **المرجع:** الفرع الوحيد `deda-100451-owner-admin-session-safe-repair-2026-11-20`، بدءاً من توثيق `66de9ea75c6bf330522b62015a68ac9dae8f9fac`، بعد قراءة تعليمات المدير العام 01.
+- **الخلل:** صورة الإطار الأصلي `frame.assetPath` كانت متوفرة في الكتالوج وفي `DedaMyStorePage.previewAsset`، لكن قائمة الإطارات المدفوعة المملوكة لم تمررها للعنصر. يظهر الصف نصياً فقط حتى مع تحقق ملكيته.
+- **التصحيح الآمن:** إضافة `previewAsset: frame.assetPath` إلى صف الإطار الواحد ضمن قائمة «متجري»، فقط بعد تطابق `ownedFrames.contains(frame.id)` مع `DedaOwner18FrameCheckout.verifiedOwnedFrameIds(originalId)`. **مصدر الملكية المعتمد هو Owner18، ويصنف الصف `DedaMyStoreProof.accountSaved`، ولا يُحوّل إلى ادعاء إيصال شراء خادمي في كل الحالات.** يمنع عرض مقتنى من تفضيلات الجهاز أو قائمة غير مثبتة.
+- **موضعا التطوير:** `tools/stage_deda_100377_point12_my_store.py` يحافظ على صورة صف الإطار في المصدر الأصلي عند إعادة التجهيز مستقبلاً. `tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py` يطبق نفس الإضافة على **النسخة Flutter المجمّعة من أرشيف 100380 المحمي**، قبل فحص `--verify-only`، دون تكرار أي صفحة أو متجر.
+- **عدم التكرار:** لا تغيير على `lib/deda_100377_my_store_page_staged.dart` ولا بطاقة «متجري» ولا موضعها البنفسجي؛ واجهة `Image.asset(item.previewAsset!)` كانت موجودة. لا تعديل على محرر الاسم، الآيدي الأصلي، الإطارات المجانية، الأسعار، محفظة الماس، الشارات أو الإدارة.
+- **الاختبار:** توسّعت فحوص `test/test_deda_stage2_profile_owner_2026_11_23.py` إلى 7 حالات، تتضمن 3 حالات جديدة ترفض التكرار وغياب إثبات ملكية Owner18 أو تعديل مسار الفن. رُبط التغيير بمسار الفحص السابق NO DEPLOY.
+- **دليل ناجح نهائي:** [GitHub Actions #45276941961](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/45276941961) عند `1dacdc9225f4035ade76e992492d18660b8a3f49`: **completed/success** للوظيفتين `actual-source-safety` و`assembled-full-app-source`. نجاح `bind_stage2_profile_owner` ثم `--verify-only` وتدقيق البطاقات الست وFlutter test/analyze. تشغيلات وسيطة فاشلة كشفت افتراض بوابة LAB القديمة؛ لم تعتمد ولم تغير الإنتاج. استُخدم مسار Owner18 الصحيح بدلاً من تجاوزه.
+- **الحدود:** تجربة مصدرية وتجميع Flutter فقط؛ لا هاتف/تابلت، ولا APK/AAB، ولا Google Play، ولا Firebase production، ولا منح آيدي أو شراء أو تغيير UID. **لا نزعم اكتمال كل الملف أو تسوية المقتنيات بين أجهزة المستخدمين.**
+- **المتبقي:** إثبات التشغيل الحقيقي للمقتنيات حسب الحساب وحقوقها عبر الأجهزة عند التفعيل النهائي؛ استمرار مراجعة الفجوات الحقيقية الأخرى في الملف دون إعادة عمل ناجح.
+
+**الحالة:** `PROFILE_VERIFIED_OWNER18_PAID_FRAME_ART_QA_SUCCESS / ORIGINAL_MY_STORE_SINGLE_RENDERER / SIX_CARDS_RETAINED / NO_WALLET_OR_PRODUCTION_WRITE / DEVICE_QA_PENDING / RELEASE_HOLD`.
