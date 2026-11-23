@@ -69,6 +69,77 @@ OWNER_MANUAL_NOTICE_CANDIDATE = """      // Candidate only: limit manual owner n
 """
 OWNER_NOTICE_MATCH = "    match /owner_place_notifications/{notificationId} {"
 
+# One narrowly scoped FIRST view fast path. A later place decision, owner edit,
+# reply, or status mutation must still pass the original rules unchanged.
+PLACE_MATCH = "    match /place_requests/{requestId} {"
+PLACE_NEXT_MATCH = "    match /published_places/{placeId} {"
+PLACE_UPDATE_ORIGINAL = "      allow update: if (\n          adminProvinceMatches(resource.data)"
+PLACE_FIRST_VIEW_CANDIDATE = """      // STAGE2 QA CANDIDATE ONLY: first administrative observation.
+      // Avoid the broad approval/owner edit tree for a pure first view.
+      function candidatePlaceFirstViewedOnly() {
+        let a = adminData();
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        return signedIn()
+          && a.keys().hasAll(['role', 'active', 'status'])
+          && a.active == true
+          && a.status == 'active'
+          && a.role in [
+            'general_manager', 'deputy_manager', 'employee', 'province_agent'
+          ]
+          && activeInvitedMemberGateway()
+          && (
+            a.role == 'general_manager'
+            || (
+              a.keys().hasAny(['permissions'])
+              && a.permissions is map
+              && a.permissions.keys().hasAny(['viewPlaceRequests'])
+              && a.permissions.viewPlaceRequests == true
+            )
+          )
+          && (
+            a.role == 'general_manager'
+            || (
+              a.keys().hasAny(['firstLoginCompletedAt'])
+              && a.firstLoginCompletedAt is timestamp
+              && resource.data.keys().hasAny(['createdAt'])
+              && resource.data.createdAt is timestamp
+              && resource.data.createdAt >= a.firstLoginCompletedAt
+            )
+          )
+          && (
+            a.role != 'province_agent'
+            || (
+              a.keys().hasAny(['governorate'])
+              && a.governorate is string
+              && resource.data.keys().hasAny(['governorate'])
+              && a.governorate == resource.data.governorate
+            )
+          )
+          && !resource.data.keys().hasAny(['firstViewedAt'])
+          && changed.hasOnly([
+            'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+            'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+            'lastViewedByName', 'lastViewedByRole'
+          ])
+          && changed.hasAll([
+            'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+            'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+            'lastViewedByName', 'lastViewedByRole'
+          ])
+          && request.resource.data.firstViewedAt == request.time
+          && request.resource.data.lastViewedAt == request.time
+          && request.resource.data.firstViewedByUid == request.auth.uid
+          && request.resource.data.lastViewedByUid == request.auth.uid
+          && request.resource.data.firstViewedByName is string
+          && request.resource.data.firstViewedByName.size() > 0
+          && request.resource.data.lastViewedByName ==
+            request.resource.data.firstViewedByName
+          && request.resource.data.firstViewedByRole == a.role
+          && request.resource.data.lastViewedByRole == a.role;
+      }
+
+"""
+
 GM_ROLE_ORIGINAL = "    function isGeneralManager() {\n      return isAdmin()\n        && (\n          !adminData().keys().hasAny(['role'])\n          || adminData().role in [\n            'general_manager', 'manager', 'director', 'admin'\n          ]\n        );\n    }\n"
 GM_ROLE_HARDENED = "    // QA CANDIDATE: no implicit general manager if role is absent.\n    // Preserve explicit legacy role aliases until deployed accounts audited.\n    function isGeneralManager() {\n      return isAdmin()\n        && adminData().keys().hasAny(['role'])\n        && adminData().role in [\n          'general_manager', 'manager', 'director', 'admin'\n        ]\n        && activeInvitedMemberGateway();\n    }\n"
 
@@ -202,7 +273,34 @@ def candidate(source):
         raise ValueError("FAIL_CANDIDATE_RULES_DUPLICATE_GUARD")
     if result.count("match /admin_gateway_protection/{guardId}") != 1:
         raise ValueError("FAIL_CANDIDATE_RULES_DUPLICATE_ANCHOR")
-    return add_invite_email_reservation(result)
+    return add_invite_email_reservation(add_place_first_view_candidate(result))
+
+
+
+def add_place_first_view_candidate(source):
+    """Candidate-only direct first-view policy; production remains unchanged."""
+    if source.count(PLACE_MATCH) != 1 or source.count(PLACE_NEXT_MATCH) != 1:
+        raise ValueError("FAIL_PLACE_FIRST_VIEW_MATCH_DRIFT")
+    start = source.index(PLACE_MATCH)
+    end = source.index(PLACE_NEXT_MATCH, start)
+    place = source[start:end]
+    if place.count(PLACE_UPDATE_ORIGINAL) != 1:
+        raise ValueError("FAIL_PLACE_FIRST_VIEW_UPDATE_DRIFT")
+    if "candidatePlaceFirstViewedOnly()" in source:
+        raise ValueError("FAIL_PLACE_FIRST_VIEW_DUPLICATE")
+    place = place.replace(
+        PLACE_UPDATE_ORIGINAL,
+        "      allow update: if candidatePlaceFirstViewedOnly()\n"
+        "        || (\n          adminProvinceMatches(resource.data)",
+        1,
+    )
+    place = place.replace(
+        PLACE_MATCH, PLACE_MATCH + "\n" + PLACE_FIRST_VIEW_CANDIDATE, 1
+    )
+    combined = source[:start] + place + source[end:]
+    if combined.count("function candidatePlaceFirstViewedOnly()") != 1:
+        raise ValueError("FAIL_PLACE_FIRST_VIEW_GUARD_MISSING")
+    return combined
 
 
 def add_invite_email_reservation(source):
