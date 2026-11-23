@@ -26,6 +26,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
       _background=Color(0xFFE7F2F3);
   static const _colors=<String>['gold','diamond','royal','pink'];
   final _draft=<String,String>{};
+  final ValueNotifier<bool> _historyAccess=ValueNotifier<bool>(true);
   StreamSubscription<String?>? _adminSub, _publicSub;
   DedaExclusiveAdminSnapshot? _catalog;
   String? _adminUid, _publicUid, _message;
@@ -52,6 +53,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
     if (widget.admin.scopedExclusiveAdminUid != _adminUid ||
         widget.admin.scopedExclusivePublicUid != _publicUid) {
       ++_generation;
+      _historyAccess.value=false;
       setState(() {
         _catalog=null; _adminUid=null; _publicUid=null; _draft.clear();
         _message=t('تغيّرت الجلسة؛ يجب إعادة التحقق من الخادم.',
@@ -72,6 +74,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
   void dispose() {
     ++_generation;
     _adminSub?.cancel(); _publicSub?.cancel();
+    _historyAccess.dispose();
     super.dispose();
   }
   Future<void> _refresh() async {
@@ -79,6 +82,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
     final generation=++_generation;
     final adminUid=widget.admin.scopedExclusiveAdminUid;
     final publicUid=widget.admin.scopedExclusivePublicUid;
+    _historyAccess.value=false;
     setState(() {
       _catalog=null; _adminUid=null; _publicUid=null;
       _draft.clear(); _loading=true; _message=null;
@@ -93,7 +97,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
       if (!mounted || generation != _generation ||
           widget.admin.scopedExclusiveAdminUid != adminUid ||
           widget.admin.scopedExclusivePublicUid != publicUid ||
-          !DedaExclusiveAdminSnapshotVerifier.isSafe(result)) return;
+          !DedaExclusiveAdminSnapshotVerifier.isSafe(result)) { return; }
       setState(() {
         _catalog=result; _adminUid=adminUid; _publicUid=publicUid;
       });
@@ -129,7 +133,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
             TextButton(onPressed:(){
               final original=controller.text.trim().toUpperCase();
               if (DedaExclusiveAdminSnapshotVerifier.originalId
-                  .hasMatch(original)) Navigator.pop(ctx,original);
+                  .hasMatch(original)) { Navigator.pop(ctx,original); }
             },child:Text(t('التالي','Next'))),
           ],
         ),
@@ -143,21 +147,21 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
         !DedaExclusiveAdminBridge.serverReadFlag ||
         !DedaExclusiveAdminBridge.serverActionsFlag ||
         widget.admin.scopedExclusiveAdminUid != _adminUid ||
-        widget.admin.scopedExclusivePublicUid != _publicUid) return;
+        widget.admin.scopedExclusivePublicUid != _publicUid) { return; }
     final id=item.identifier;
     final color=selected(item);
     final recipient=gift?await _recipient():null;
-    if (!mounted || (gift && recipient == null)) return;
+    if (!mounted || (gift && recipient == null)) { return; }
     final title=t('تثبيت اللون نهائياً','Permanently lock color');
     final role=gift ? t('منح إلى','Gift to') : t('استخدام لنفسي','Self use');
     final chosen=colorName(color);
     final target=recipient ?? '';
+    final warning=t('اللون والملكية لا يمكن تغييرهما بعد موافقة الخادم.',
+        'Color and ownership cannot change after server confirmation.');
     final yes=await showDialog<bool>(context:context,
       builder:(ctx)=>AlertDialog(
         title:Text(title),
-        content:Text('$id\n$chosen\n$role $target\n' +
-            t('اللون والملكية لا يمكن تغييرهما بعد موافقة الخادم.',
-              'Color and ownership cannot change after server confirmation.')),
+        content:Text('$id\n$chosen\n$role $target\n$warning'),
         actions:[
           TextButton(onPressed:()=>Navigator.pop(ctx,false),
             child:Text(t('إلغاء','Cancel'))),
@@ -166,14 +170,14 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
         ],
       ),
     );
-    if (!mounted || yes != true || _busy) return;
+    if (!mounted || yes != true || _busy) { return; }
     setState(()=>_busy=true);
     try {
       final fresh=await widget.admin.commitScopedExclusive100(
         dedaPhone:widget.dedaPhone,identifier:id,color:color,
         recipientOriginalId:recipient);
       if (!mounted || widget.admin.scopedExclusiveAdminUid != _adminUid ||
-          widget.admin.scopedExclusivePublicUid != _publicUid) return;
+          widget.admin.scopedExclusivePublicUid != _publicUid) { return; }
       setState(()=>_catalog=fresh);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:Text(t('تأكد المنح واللون والسجل من الخادم.',
@@ -186,16 +190,22 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
           'Result unverified. Re-read server state before claiming success.');
       });
     } finally {
-      if (mounted) setState(()=>_busy=false);
+      if (mounted) { setState(()=>_busy=false); }
     }
   }
   void _history() {
     final snap=_catalog;
     if (snap == null || widget.admin.scopedExclusiveAdminUid != _adminUid ||
         widget.admin.scopedExclusivePublicUid != _publicUid) return;
+    _historyAccess.value=true;
     showModalBottomSheet<void>(context:context,
       isScrollControlled:true,showDragHandle:true,
-      builder:(ctx)=>SafeArea(child:SizedBox(
+      builder:(ctx)=>ValueListenableBuilder<bool>(
+        valueListenable:_historyAccess,
+        builder:(ctx,allowed,child)=>!allowed
+          ? Center(child:Text(t('تغيّرت الجلسة؛ سجل المعرّفات محمي.',
+              'Session changed; identifier history is hidden.')))
+          : SafeArea(child:SizedBox(
         height:MediaQuery.sizeOf(ctx).height * .7,
         child:Column(children:[
           Text(t('📜 سجل المعرّفات الممنوحة','📜 Dated grant history'),
@@ -222,7 +232,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
                   );
                 })),
         ]),
-      )));
+      ))));
   }
   Widget _row(DedaExclusiveAdminId item) {
     final color=selected(item), available=item.available;
@@ -288,6 +298,8 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
   @override
   Widget build(BuildContext context) {
     final snap=_catalog;
+    final available=snap?.identifiers.where((row)=>row.available).length ?? 0;
+    final availableLabel=t('المتاحة','Available');
     return ColoredBox(color:_background,child:Column(children:[
       Container(margin:const EdgeInsets.all(12),
         padding:const EdgeInsets.all(12),
@@ -309,8 +321,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
             : '100 / 100',
             style:const TextStyle(color:Colors.white)),
           if (snap != null)
-            Text(t('المتاحة','Available') + ': ' +
-              snap.identifiers.where((row)=>row.available).length.toString(),
+            Text('$availableLabel: $available',
               style:const TextStyle(color:Colors.white)),
         ])),
       if (_loading) const LinearProgressIndicator(),
