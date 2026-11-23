@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -232,6 +236,295 @@ Future<void> _openIsolatedPlaceMap({
       latitude: latitude.toDouble(), longitude: longitude.toDouble(),
     ),
   ));
+}
+
+// Read-only support images keep the original three-image legacy formats.
+// The viewer uses the EXISTING native saveImage channel, no Firebase writes.
+class _DedaIsolatedSupportAttachment {
+  final String url;
+  final String base64Data;
+  final String mimeType;
+  const _DedaIsolatedSupportAttachment({
+    this.url = '', this.base64Data = '', this.mimeType = 'image/jpeg',
+  });
+  bool get isNetwork => url.isNotEmpty;
+}
+
+List<_DedaIsolatedSupportAttachment> _isolatedSupportAttachments(
+    Map<String, dynamic> data) {
+  final images = <_DedaIsolatedSupportAttachment>[];
+  final seen = <String>{};
+  final urls = data['imageUrls'];
+  final mimeTypes = data['imageMimeTypes'];
+  if (urls is List) {
+    for (var i = 0; i < urls.length && images.length < 3; i++) {
+      final url = (urls[i] ?? '').toString().trim();
+      if (url.isEmpty || !seen.add(url)) continue;
+      final mime = mimeTypes is List && i < mimeTypes.length
+          ? (mimeTypes[i] ?? '').toString().trim() : '';
+      images.add(_DedaIsolatedSupportAttachment(
+        url: url, mimeType: mime.isEmpty ? 'image/jpeg' : mime,
+      ));
+    }
+  }
+  final oldUrl = (data['imageUrl'] ?? '').toString().trim();
+  if (oldUrl.isNotEmpty && images.length < 3 && seen.add(oldUrl)) {
+    final mime = (data['imageMimeType'] ?? '').toString().trim();
+    images.add(_DedaIsolatedSupportAttachment(
+      url: oldUrl, mimeType: mime.isEmpty ? 'image/jpeg' : mime,
+    ));
+  }
+  final oldBase64 = (data['imageBase64'] ?? '').toString().trim();
+  if (images.isEmpty && oldBase64.isNotEmpty) {
+    final mime = (data['imageMimeType'] ?? '').toString().trim();
+    images.add(_DedaIsolatedSupportAttachment(
+      base64Data: oldBase64, mimeType: mime.isEmpty ? 'image/jpeg' : mime,
+    ));
+  }
+  return images;
+}
+
+Widget _isolatedSupportImage(
+  _DedaIsolatedSupportAttachment photo, {
+  required bool isArabic,
+  required BoxFit fit,
+}) {
+  String t(String ar, String en) => isArabic ? ar : en;
+  Widget missing() => Center(child: Text(
+    t('تعذر عرض الصورة.', 'Could not display image.'),
+  ));
+  if (photo.isNetwork) {
+    final uri = Uri.tryParse(photo.url);
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return missing();
+    }
+    return Image.network(
+      photo.url,
+      fit: fit,
+      loadingBuilder: (_, child, progress) => progress == null
+          ? child : const Center(child: CircularProgressIndicator()),
+      errorBuilder: (_, __, ___) => missing(),
+    );
+  }
+  try {
+    return Image.memory(base64Decode(photo.base64Data), fit: fit,
+      errorBuilder: (_, __, ___) => missing());
+  } catch (_) {
+    return missing();
+  }
+}
+
+Widget _isolatedSupportPhotoGallery({
+  required BuildContext context,
+  required bool isArabic,
+  required Map<String, dynamic> data,
+}) {
+  String t(String ar, String en) => isArabic ? ar : en;
+  final photos = _isolatedSupportAttachments(data);
+  if (photos.isEmpty) return const SizedBox.shrink();
+  return Padding(
+    padding: const EdgeInsets.all(12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(photos.length == 1
+              ? t('الصورة المرفقة', 'Attached image')
+              : t('الصور المرفقة', 'Attached images') +
+                  ' (' + photos.length.toString() + '/3)',
+          style: const TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: photos.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: photos.length == 1 ? 1 : 3,
+            childAspectRatio: photos.length == 1 ? 1.8 : 1,
+            crossAxisSpacing: 8, mainAxisSpacing: 8,
+          ),
+          itemBuilder: (_, index) => InkWell(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => _DedaIsolatedSupportAttachmentViewer(
+                images: photos, initialIndex: index, isArabic: isArabic),
+            )),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(fit: StackFit.expand, children: [
+                _isolatedSupportImage(photos[index],
+                    isArabic: isArabic, fit: BoxFit.cover),
+                PositionedDirectional(
+                  bottom: 6, end: 6,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(20)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 3),
+                      child: Text((index + 1).toString() + '/' +
+                          photos.length.toString(),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 11),
+                        textDirection: TextDirection.ltr),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(t('اضغط على الصورة للتكبير أو الحفظ.',
+            'Tap an image to zoom or save.'),
+            textAlign: TextAlign.center),
+      ],
+    ),
+  );
+}
+
+class _DedaIsolatedSupportAttachmentViewer extends StatefulWidget {
+  final List<_DedaIsolatedSupportAttachment> images;
+  final int initialIndex;
+  final bool isArabic;
+  const _DedaIsolatedSupportAttachmentViewer({
+    required this.images, required this.initialIndex, required this.isArabic,
+  });
+  @override
+  State<_DedaIsolatedSupportAttachmentViewer> createState() =>
+      _DedaIsolatedSupportAttachmentViewerState();
+}
+
+class _DedaIsolatedSupportAttachmentViewerState
+    extends State<_DedaIsolatedSupportAttachmentViewer> {
+  static const _mediaChannel = MethodChannel('com.diraq.ludo/media');
+  late final PageController _controller;
+  late int _index;
+  bool _saving = false;
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.images.length - 1).toInt();
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _ext(String mime) => switch (mime.toLowerCase()) {
+    'image/png' => 'png',
+    'image/webp' => 'webp',
+    'image/gif' => 'gif',
+    _ => 'jpg',
+  };
+
+  Future<Uint8List> _photoBytes(
+      _DedaIsolatedSupportAttachment image) async {
+    if (!image.isNetwork) return base64Decode(image.base64Data);
+    final uri = Uri.tryParse(image.url);
+    if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
+      throw const FormatException('unsupported-image-url');
+    }
+    final http = HttpClient();
+    try {
+      final request = await http.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('image-not-available');
+      }
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in response) {
+        builder.add(chunk);
+        if (builder.length > 16 * 1024 * 1024) {
+          throw const FormatException('image-size-cap');
+        }
+      }
+      return builder.takeBytes();
+    } finally {
+      http.close(force: true);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving || widget.images.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final selected = widget.images[_index];
+      final bytes = await _photoBytes(selected);
+      await _mediaChannel.invokeMethod<String>(
+        'saveImage', <String, dynamic>{
+          'bytes': bytes,
+          'fileName': 'DEDA_support_' +
+              DateTime.now().millisecondsSinceEpoch.toString() +
+              '_' + (_index + 1).toString() + '.' + _ext(selected.mimeType),
+          'mimeType': selected.mimeType,
+        },
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم حفظ الصورة في صور الجهاز داخل مجلد DEDA.',
+              'Image saved to the DEDA folder in device pictures.')),
+        ));
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error.code == 'permission_required'
+              ? t('اسمح بحفظ الصور ثم أعد المحاولة.',
+                  'Allow photo storage, then try again.')
+              : t('تعذر حفظ الصورة.', 'Could not save image.')),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر حفظ الصورة.', 'Could not save image.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: Text(t('صورة', 'Image') + ' ' + (_index + 1).toString() +
+          '/' + widget.images.length.toString()),
+      actions: [
+        IconButton(
+          tooltip: t('حفظ الصورة', 'Save image'),
+          onPressed: _saving ? null : _save,
+          icon: _saving ? const SizedBox(
+              height: 20, width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.download_outlined),
+        ),
+      ],
+    ),
+    body: PageView.builder(
+      controller: _controller,
+      itemCount: widget.images.length,
+      onPageChanged: (index) => setState(() => _index = index),
+      itemBuilder: (_, index) => InteractiveViewer(
+        minScale: 0.8,
+        maxScale: 5.0,
+        boundaryMargin: const EdgeInsets.all(48),
+        child: SizedBox.expand(
+          child: Center(child: _isolatedSupportImage(
+            widget.images[index], isArabic: widget.isArabic,
+            fit: BoxFit.contain)),
+        ),
+      ),
+    ),
+  );
 }
 
 /// Stage2 migration bridge, NOT the complete administrative Dashboard.
