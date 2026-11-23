@@ -525,6 +525,41 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       assert.equal((await ref.get()).data().role,"general_manager");
     });
 
+    await t.test("road hazard delete + audit atomic; outsider forbidden",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const hazard="qa_road_hazard_locked_1";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("road_hazards/"+hazard).set({
+          type:"accident",status:"active",reporterUid:"qa_road_reporter",
+          latitude:35.1,longitude:44.2,confirmations:1,resolvedReports:0,
+          expiresAt:Fb.Timestamp.fromDate(new Date(Date.now()+3600000)),
+        });
+      });
+      const ref=manager.doc("road_hazards/"+hazard);
+      const denied=outsider.doc("road_hazards/"+hazard);
+      await assertFails(denied.delete());
+      const audit=manager.doc("admin_audit/qa_road_delete_with_audit");
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const snap=await tx.get(ref);
+        assert.equal(snap.exists,true);
+        tx.delete(ref);
+        tx.set(audit,{
+          action:"road_hazard_deleted",
+          adminUid:managerUid,
+          adminRole:"general_manager",
+          details:{targetId:hazard,reason:"QA deleted by approved manager",
+                   hazardType:"accident",adminUid:managerUid},
+          createdAt:Fb.FieldValue.serverTimestamp(),
+        });
+      }));
+      assert.equal((await ref.get()).exists,false);
+      assert.equal((await audit.get()).data().details.targetId,hazard);
+      await assertFails(outsider.doc("admin_audit/qa_forged_audit").set({
+        action:"road_hazard_deleted",adminUid:managerUid,
+        createdAt:Fb.FieldValue.serverTimestamp(),
+      }));
+    });
+
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
       await env.withSecurityRulesDisabled(async ctx=>{
         await ctx.firestore().doc("admin_gateway_protection/primary").delete();

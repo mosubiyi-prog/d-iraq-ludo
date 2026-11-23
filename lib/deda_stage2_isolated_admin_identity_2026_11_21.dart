@@ -2178,19 +2178,59 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
-  /// Reproduces the legacy Analytics active-hazard count with secondary
-  /// Firestore only. Source policy: status=active, limit=500, ignore expired
-  /// and reports with >=3 resolved votes. Scope comes from fresh server
-  /// proof, not a cached role or a public DEDA session.
-  Future<Map<String, dynamic>> readScopedAdminRoadReportSummary({
+  /// Authorised read for the original Governorates card; the province-agent
+  /// scope MUST come from a fresh server profile, never the dashboard cache.
+  Future<Map<String, dynamic>> readScopedAdminGovernorateScope({
     required String dedaPhone,
   }) async {
     if (!dedaIsolatedAdminIdentityEnabled) {
-      throw StateError('deda-admin-isolated-reports-disabled');
+      throw StateError('deda-admin-isolated-governorates-disabled');
+    }
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('deda-admin-isolated-governorates-session-required');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? profile;
+    final allowed = await _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'viewGovernorates',
+      onAuthorizedAdmin: (admin) => profile = admin,
+    );
+    if (publicUid == null || !allowed || profile == null ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-governorates-scope-denied');
+    }
+    final role = (profile!['role'] ?? '').toString().trim();
+    final province = (profile!['governorate'] ?? '').toString().trim();
+    if (role == 'province_agent' && province.isEmpty) {
+      throw StateError('deda-admin-isolated-governorates-missing-province');
+    }
+    return <String, dynamic>{
+      'role': role,
+      'governorate': province,
+    };
+  }
+
+  /// A single isolated source of the active-hazard filtering used by BOTH
+  /// Analytics and Road Reports, matching the original DedaBackend function.
+  /// The 500-item cap, expiration and 3 resolved votes stay unchanged.
+  Future<({
+    Map<String, dynamic> profile,
+    List<Map<String, dynamic>> rows
+  })> _fetchScopedActiveRoadHazards({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-road-list-disabled');
     }
     final current = _auth.currentUser;
     if (current == null || current.isAnonymous) {
-      throw StateError('deda-admin-isolated-reports-session-required');
+      throw StateError('deda-admin-isolated-road-session-required');
     }
     final uid = current.uid;
     final publicUid = _mainAuth.currentUser?.uid;
@@ -2200,10 +2240,10 @@ class DedaIsolatedAdminIdentity {
       dedaPhone: dedaPhone,
       expectedPublicUid: publicUid,
       requiredPermission: 'viewReports',
-      onAuthorizedAdmin: (profile) => verifiedAdmin = profile,
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
     );
     if (publicUid == null || !await proof()) {
-      throw StateError('deda-admin-isolated-reports-role-denied');
+      throw StateError('deda-admin-isolated-road-role-denied');
     }
     final snapshot = await _firestore.collection('road_hazards')
         .where('status', isEqualTo: 'active')
@@ -2214,10 +2254,10 @@ class DedaIsolatedAdminIdentity {
         _mainAuth.currentUser?.uid != publicUid ||
         !await proof() ||
         verifiedAdmin == null) {
-      throw StateError('deda-admin-isolated-reports-proof-changed');
+      throw StateError('deda-admin-isolated-road-proof-changed');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
-    var count = 0;
+    final rows = <Map<String, dynamic>>[];
     for (final doc in snapshot.docs) {
       final data = doc.data();
       final expiresAt = data['expiresAt'];
@@ -2226,13 +2266,109 @@ class DedaIsolatedAdminIdentity {
       final resolved = (data['resolvedReports'] as num?)?.toInt() ?? 0;
       if (millis > 0 && millis <= now) continue;
       if (resolved >= 3) continue;
-      count++;
+      rows.add(<String, dynamic>{
+        'id': doc.id,
+        ...data,
+        'expiresAtMillis': millis,
+      });
     }
+    return (profile: Map<String, dynamic>.from(verifiedAdmin!), rows: rows);
+  }
+
+  /// Same active-report count and scope as the original Analytics card,
+  /// calling the ONE shared isolated hazard reader.
+  Future<Map<String, dynamic>> readScopedAdminRoadReportSummary({
+    required String dedaPhone,
+  }) async {
+    final result = await _fetchScopedActiveRoadHazards(
+      dedaPhone: dedaPhone,
+    );
     return <String, dynamic>{
-      'activeReports': count,
-      'role': (verifiedAdmin!['role'] ?? '').toString(),
-      'governorate': (verifiedAdmin!['governorate'] ?? '').toString(),
+      'activeReports': result.rows.length,
+      'role': (result.profile['role'] ?? '').toString(),
+      'governorate': (result.profile['governorate'] ?? '').toString(),
     };
+  }
+
+  /// Same active hazard rows as legacy Road Reports, using the SAME shared
+  /// filter as the existing isolated Analytics card (no cloned query).
+  Future<List<Map<String, dynamic>>> readScopedAdminRoadReports({
+    required String dedaPhone,
+  }) async {
+    final result = await _fetchScopedActiveRoadHazards(
+      dedaPhone: dedaPhone,
+    );
+    return result.rows;
+  }
+
+  /// Delete only one road report as the actual authenticated administrator.
+  /// Read document+delete+audit are atomic, with a second fresh server role
+  /// check; Firestore rules remain final authorization at transaction commit.
+  Future<void> deleteScopedRoadHazardAsAdmin({
+    required String dedaPhone,
+    required String id,
+    required String reason,
+  }) async {
+    final cleanId = id.trim();
+    final cleanReason = reason.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(cleanId) ||
+        cleanReason.isEmpty || cleanReason.length > 500) {
+      throw StateError('deda-admin-isolated-road-delete-invalid');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-admin-isolated-road-delete-no-session');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'manageReports',
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (publicUid == null || !await proof() ||
+        verifiedAdmin?['role'] == 'province_agent') {
+      throw StateError('deda-admin-isolated-road-delete-role-denied');
+    }
+    final docRef = _firestore.collection('road_hazards').doc(cleanId);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((transaction) async {
+      final target = await transaction.get(docRef);
+      if (!target.exists) {
+        // Retain the original no-op behavior for an already deleted report.
+        return;
+      }
+      if (target.metadata.isFromCache || target.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await proof() ||
+          verifiedAdmin?['role'] == 'province_agent') {
+        throw StateError('deda-admin-isolated-road-delete-proof-changed');
+      }
+      transaction.delete(docRef);
+      transaction.set(auditRef, <String, dynamic>{
+        'action': 'road_hazard_deleted',
+        'adminUid': uid,
+        'adminName': (verifiedAdmin?['displayName'] ?? actor.email ??
+            'DEDA Admin').toString(),
+        'adminRole': (verifiedAdmin?['role'] ?? '').toString(),
+        'details': <String, dynamic>{
+          'targetId': cleanId,
+          'reason': cleanReason,
+          'hazardType': target.data()?['type'],
+          'adminUid': uid,
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-road-delete-postcommit-session-changed');
+    }
   }
 
   /// Read-only scoped data path, with fresh server permissions before and

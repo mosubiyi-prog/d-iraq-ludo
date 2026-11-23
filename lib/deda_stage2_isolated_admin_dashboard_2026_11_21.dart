@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
 import 'deda_admin_compact_card.dart';
+import 'admin_team_pages.dart' show dedaAdminGovernorates;
 
 /// Stage2 migration bridge, NOT the complete administrative Dashboard.
 /// It never calls DedaBackend, the public Auth, or the public Firestore.
@@ -220,6 +221,35 @@ class _DedaStage2IsolatedDashboardPageState
         ),
       );
     }
+    // Historical Road Reports: list, refresh, and privileged deletion.
+    if (can('viewReports')) {
+      addDestination(
+        title: t('البلاغات', 'Reports'),
+        subtitle: t('بلاغات الطريق الحالية', 'Current road reports'),
+        icon: Icons.report_gmailerrorred_outlined,
+        accentColor: const Color(0xFFB35C00),
+        page: _DedaIsolatedRoadReportsTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          profile: widget.profile,
+        ),
+      );
+    }
+    // Historical Governorates: read-only coverage and account scope.
+    if (can('viewGovernorates')) {
+      addDestination(
+        title: t('المحافظات', 'Governorates'),
+        subtitle: t('نطاق عمل الوكلاء', 'Agent coverage'),
+        icon: Icons.map_outlined,
+        accentColor: const Color(0xFF5F6F2E),
+        page: _DedaIsolatedGovernoratesTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+        ),
+      );
+    }
     // Settings belongs to every server-verified admin, not to viewTeam
     // or another elevated permission. Its destination re-checks Auth + UID.
     addDestination(
@@ -302,6 +332,273 @@ class _DedaStage2IsolatedDashboardPageState
                 ]),
         ),
       ),
+    );
+  }
+}
+
+/// Complete original Governorates card: one fresh permission-scoped
+/// account profile, same canonical province list (not a duplicated list).
+class _DedaIsolatedGovernoratesTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+
+  const _DedaIsolatedGovernoratesTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedGovernoratesTab> createState() =>
+      _DedaIsolatedGovernoratesTabState();
+}
+
+class _DedaIsolatedGovernoratesTabState
+    extends State<_DedaIsolatedGovernoratesTab> {
+  late Future<Map<String, dynamic>> _profile;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _profile = widget.admin.readScopedAdminGovernorateScope(
+      dedaPhone: widget.dedaPhone,
+    );
+  }
+
+  void _refresh() => setState(() => _profile =
+      widget.admin.readScopedAdminGovernorateScope(
+        dedaPhone: widget.dedaPhone,
+      ));
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _profile,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+            label: Text(t('تعذر تأكيد نطاق المحافظة، أعد المحاولة',
+                'Cannot verify governorate scope, retry')),
+          ));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final profile = snapshot.data!;
+        final province = (profile['governorate'] ?? '').toString().trim();
+        final restricted = profile['role'] == 'province_agent';
+        // Fail closed instead of listing every province to a malformed agent.
+        if (restricted && province.isEmpty) {
+          return Center(child: Text(t('نطاق المحافظة غير مثبت.',
+              'Governorate scope is not verified.')));
+        }
+        final names = restricted ? <String>[province] : dedaAdminGovernorates;
+        return ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: t('تحديث من الخادم', 'Refresh from server'),
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+            if (restricted)
+              Card(
+                color: const Color(0xFFE6F1E4),
+                child: ListTile(
+                  leading: const Icon(Icons.location_on_outlined),
+                  title: Text(t('نطاق حسابك', 'Your account scope')),
+                  subtitle: Text(province),
+                ),
+              ),
+            ...names.map((name) => Card(
+              child: ListTile(
+                leading: const Icon(Icons.location_city_outlined),
+                title: Text(name),
+                trailing: restricted && name == province
+                    ? const Icon(Icons.verified, color: Color(0xFF17652F))
+                    : null,
+              ),
+            )),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Complete original Road Reports card: original row counts and reasoned
+/// deletion. All operations use the isolated identity and re-check the
+/// server role; the visible button is never the authorization boundary.
+class _DedaIsolatedRoadReportsTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+  final Map<String, dynamic> profile;
+
+  const _DedaIsolatedRoadReportsTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.isArabic,
+    required this.profile,
+  });
+
+  @override
+  State<_DedaIsolatedRoadReportsTab> createState() =>
+      _DedaIsolatedRoadReportsTabState();
+}
+
+class _DedaIsolatedRoadReportsTabState
+    extends State<_DedaIsolatedRoadReportsTab> {
+  late Future<List<Map<String, dynamic>>> _reports;
+  bool _busy = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _reports = _load();
+  }
+
+  Future<List<Map<String, dynamic>>> _load() =>
+      widget.admin.readScopedAdminRoadReports(
+        dedaPhone: widget.dedaPhone,
+      );
+
+  void _refresh() {
+    if (_busy) return;
+    setState(() => _reports = _load());
+  }
+
+  Future<void> _delete(Map<String, dynamic> item) async {
+    if (_busy) return;
+    final id = (item['id'] ?? '').toString();
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(t('حذف البلاغ', 'Delete report')),
+        content: TextField(
+          controller: controller,
+          maxLength: 500,
+          minLines: 1,
+          maxLines: 4,
+          decoration: InputDecoration(
+            labelText: t('سبب الحذف', 'Reason'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, controller.text),
+            child: Text(t('حذف', 'Delete')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (reason == null || !mounted) return;
+    if (reason.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('سبب الحذف مطلوب.', 'Deletion reason required.')),
+      ));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await widget.admin.deleteScopedRoadHazardAsAdmin(
+        dedaPhone: widget.dedaPhone,
+        id: id,
+        reason: reason,
+      );
+      if (mounted) {
+        setState(() => _reports = _load());
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر حذف البلاغ أو تأكيد الصلاحية.',
+              'Could not delete report or verify permission.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canManage = DedaIsolatedAdminProofPolicy.allowsPermission(
+      admin: widget.profile,
+      permission: 'manageReports',
+    ) && widget.profile['role'] != 'province_agent';
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _reports,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: TextButton.icon(
+            onPressed: _busy ? null : _refresh,
+            icon: const Icon(Icons.refresh),
+            label: Text(t('تعذر تحميل البلاغات، أعد المحاولة',
+                'Could not load reports, retry')),
+          ));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final rows = snapshot.data!;
+        return Column(children: [
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: IconButton(
+              tooltip: t('تحديث', 'Refresh'),
+              onPressed: _busy ? null : _refresh,
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+          Expanded(
+            child: rows.isEmpty
+                ? Center(child: Text(t('لا توجد بلاغات نشطة.',
+                    'No active reports.')))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: rows.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final item = rows[index];
+                      return Card(child: ListTile(
+                        leading: const Icon(Icons.warning_amber_rounded),
+                        title: Text((item['type'] ??
+                            t('بلاغ طريق', 'Road report')).toString()),
+                        subtitle: Text(
+                          t('التأكيدات: ', 'Confirmations: ') +
+                            (item['confirmations'] ?? 0).toString() +
+                            ' • ' + t('طلبات الإلغاء: ', 'Resolve reports: ') +
+                            (item['resolvedReports'] ?? 0).toString(),
+                        ),
+                        trailing: canManage ? IconButton(
+                          tooltip: t('حذف البلاغ', 'Delete report'),
+                          onPressed: _busy ? null : () => _delete(item),
+                          icon: const Icon(Icons.delete_outline),
+                        ) : null,
+                      ));
+                    },
+                  ),
+          ),
+        ]);
+      },
     );
   }
 }

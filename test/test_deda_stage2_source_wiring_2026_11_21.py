@@ -1356,7 +1356,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("'نطاق صلاحياتك'",ui)
         self.assertEqual(service.count("Future<Map<String, dynamic>> readScopedAdminRoadReportSummary("),1)
         self.assertIn("requiredPermission: 'viewReports'",service)
-        summary=service.split("Future<Map<String, dynamic>> readScopedAdminRoadReportSummary(",1)[1].split(
+        summary=service.split("Future<({",1)[1].split(
             "/// Read-only scoped data path",1)[0]
         original=backend.split("static Future<List<Map<String, dynamic>>> roadHazards()",1)[1].split(
             "static Future<String> submitRoadHazard(",1)[0]
@@ -1374,6 +1374,71 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("DedaBackend.",ui)
         self.assertNotIn("FirebaseFirestore.instance",ui)
         self.assertNotIn("FirebaseAuth.instance",ui)
+
+    def test_governorates_reuse_original_province_list_with_fresh_scope(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        legacy=(REPO/'lib/admin_team_pages.dart').read_text()
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertIn("import 'admin_team_pages.dart' show dedaAdminGovernorates;",ui)
+        self.assertIn("const List<String> dedaAdminGovernorates",legacy)
+        self.assertEqual(ui.count("class _DedaIsolatedGovernoratesTab "),1)
+        self.assertIn("if (can('viewGovernorates')) {",ui)
+        self.assertIn("title: t('المحافظات', 'Governorates')",ui)
+        self.assertIn("page: _DedaIsolatedGovernoratesTab(",ui)
+        self.assertIn("widget.admin.readScopedAdminGovernorateScope(",ui)
+        self.assertIn("restricted ? <String>[province] : dedaAdminGovernorates",ui)
+        self.assertIn("restricted && province.isEmpty",ui)
+        self.assertEqual(service.count("Future<Map<String, dynamic>> readScopedAdminGovernorateScope("),1)
+        scope=service.split("Future<Map<String, dynamic>> readScopedAdminGovernorateScope(",1)[1].split(
+            "/// A single isolated source",1)[0]
+        self.assertIn("requiredPermission: 'viewGovernorates'",scope)
+        self.assertIn("_mainAuth.currentUser?.uid != publicUid",scope)
+        self.assertIn("role == 'province_agent' && province.isEmpty",scope)
+        self.assertIn("class DedaGovernoratesPage",legacy)
+        self.assertNotIn("DedaBackend.",ui)
+
+    def test_road_reports_complete_legacy_actions_and_share_analytics_filter(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        legacy=(REPO/'lib/admin_team_pages.dart').read_text()
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        backend=(REPO/'lib/deda_backend.dart').read_text()
+        self.assertIn("if (can('viewReports')) {",ui)
+        self.assertIn("title: t('البلاغات', 'Reports')",ui)
+        self.assertIn("page: _DedaIsolatedRoadReportsTab(",ui)
+        self.assertEqual(ui.count("class _DedaIsolatedRoadReportsTab "),1)
+        self.assertIn("widget.admin.readScopedAdminRoadReports(",ui)
+        self.assertIn("widget.admin.deleteScopedRoadHazardAsAdmin(",ui)
+        self.assertIn("permission: 'manageReports',",ui)
+        self.assertIn("widget.profile['role'] != 'province_agent'",ui)
+        self.assertIn("class DedaAdminRoadReportsPage",legacy)
+        self.assertIn("deleteRoadHazardAsAdmin(",legacy)
+        self.assertEqual(service.count("Future<List<Map<String, dynamic>>> readScopedAdminRoadReports("),1)
+        self.assertEqual(service.count("Future<void> deleteScopedRoadHazardAsAdmin("),1)
+        self.assertEqual(service.count("_fetchScopedActiveRoadHazards("),3)
+        shared=service.split("})> _fetchScopedActiveRoadHazards(",1)[1].split(
+            "/// Same active-report count",1)[0]
+        original=backend.split("static Future<List<Map<String, dynamic>>> roadHazards()",1)[1].split(
+            "static Future<String> submitRoadHazard(",1)[0]
+        for token in ("collection('road_hazards')",
+                      ".where('status', isEqualTo: 'active')",
+                      ".limit(500)", "resolved >= 3", "expiresAt is Timestamp"):
+            self.assertIn(token,shared)
+            self.assertIn(token,original)
+        destroy=service.split("Future<void> deleteScopedRoadHazardAsAdmin(",1)[1].split(
+            "/// Read-only scoped data path",1)[0]
+        self.assertIn("requiredPermission: 'manageReports'",destroy)
+        self.assertIn("verifiedAdmin?['role'] == 'province_agent'",destroy)
+        self.assertIn("await _firestore.runTransaction(",destroy)
+        self.assertIn("transaction.delete(docRef);",destroy)
+        self.assertIn("transaction.set(auditRef,",destroy)
+        self.assertIn("'road_hazard_deleted'",destroy)
+        self.assertIn("!await proof()",destroy)
+        self.assertIn("!DedaIsolatedAdminProofPolicy.validScopedDocumentId(cleanId)",destroy)
+        self.assertIn("allow delete: if hasAdminPermission('manageReports')",rules)
+        self.assertNotIn("DedaBackend.",ui)
+        self.assertNotIn("FirebaseAuth.instance",ui)
+        self.assertNotIn("FirebaseFirestore.instance",ui)
 
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
