@@ -395,6 +395,16 @@ Future<void> main() async {"""
                 'DedaBackend.' in text or
                 'bool.fromEnvironment(' in text):
                 raise ValueError('STAGE2_LEAGUE_MUST_BE_SECONDARY_ONLY')
+        elif name == 'deda_stage2_isolated_tasks_admin_2026_11_23.dart':
+            if ('if(!dedaIsolatedAdminIdentityEnabled)' not in text or
+                'DedaStage2IsolatedTasksAdminPage' not in text or
+                'DedaStage2IsolatedSocialTasksPage' not in text or
+                'FirebaseAuth.instance' in text or
+                'FirebaseFirestore.instance' in text or
+                'FirebaseFunctions.instance' in text or
+                'DedaBackend.' in text or
+                'bool.fromEnvironment(' in text):
+                raise ValueError('STAGE2_TASKS_MUST_BE_SECONDARY_ONLY')
         elif name != 'deda_stage2_google_access_card_2026_11_21.dart':
             if 'defaultValue: false' not in text:
                 raise ValueError('STAGE2_FEATURE_MUST_DEFAULT_OFF:'+name)

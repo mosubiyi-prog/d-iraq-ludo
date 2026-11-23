@@ -4633,7 +4633,7 @@ class DedaIsolatedAdminIdentity {
     await _tasksRecheck(dedaPhone,actor);
   }
 
-  /// Telegram social-task original source, never public FirebaseAuth.instance.
+  /// Telegram social-task source restricted to private admin Auth.
   /// The published-day reward ledger remains disabled by Firestore policy.
   Future<void> saveScopedSocialTaskDraft({
     required String dedaPhone,required int expectedRevision,
