@@ -133,7 +133,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertFails(user.doc(privateRef).get());
       await assertSucceeds(legacy.doc(privateRef).get());
 
-      await assertFails(await user.doc("owner_place_notifications/qa_cand_prebind_notice").set({
+      await assertFails(user.doc("owner_place_notifications/qa_cand_prebind_notice").set({
   type:"admin_alert",accountKey:"9647712345900",
   ownerUid:"qa_private_owner",placeId:"qa_place_1",
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
@@ -144,7 +144,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
   createdByName:"QA Staff",createdByRole:"employee",
   createdAt:F.serverTimestamp(),
 }));
-      await assertSucceeds(await legacy.doc("owner_place_notifications/qa_cand_legacy_notice").set({
+      await assertSucceeds(legacy.doc("owner_place_notifications/qa_cand_legacy_notice").set({
   type:"admin_alert",accountKey:"9647712345900",
   ownerUid:"qa_private_owner",placeId:"qa_place_1",
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
@@ -185,7 +185,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertSucceeds(user.doc(privateRef).get());
       await assertSucceeds(legacy.doc(privateRef).get());
 
-      await assertSucceeds(await user.doc("owner_place_notifications/qa_cand_bound_notice").set({
+      await assertSucceeds(user.doc("owner_place_notifications/qa_cand_bound_notice").set({
   type:"admin_alert",accountKey:"9647712345900",
   ownerUid:"qa_private_owner",placeId:"qa_place_1",
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
@@ -204,7 +204,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
           .update({active:false,status:"disabled"});
       });
       await assertFails(user.doc(privateRef).get());
-      await assertFails(await user.doc("owner_place_notifications/qa_cand_revoked_notice").set({
+      await assertFails(user.doc("owner_place_notifications/qa_cand_revoked_notice").set({
   type:"admin_alert",accountKey:"9647712345900",
   ownerUid:"qa_private_owner",placeId:"qa_place_1",
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",

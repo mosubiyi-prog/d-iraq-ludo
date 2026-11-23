@@ -245,7 +245,7 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       await assertSucceeds(partial.doc("users/"+privateUid).get());
       console.log("RELEASE_HOLD_UNBOUND_INVITEE_ADMIN_DATA_ACCESS_ALLOWED_BY_CURRENT_RULES");
 
-      await assertSucceeds(await partial.doc("owner_place_notifications/qa_prebinding_notice").set({
+      await assertSucceeds(partial.doc("owner_place_notifications/qa_prebinding_notice").set({
   type:"admin_alert",accountKey:"9647712345900",
   ownerUid:"qa_private_owner",placeId:"qa_place_1",
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
