@@ -1512,5 +1512,27 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("defaultValue: false",login)
         self.assertIn("defaultValue: false",probe)
 
+    def test_isolated_account_deletion_queue_gm_atomic_status_only(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        self.assertEqual(service.count('Future<void> reviewScopedAccountDeletionRequest('),1)
+        self.assertEqual(service.count('Future<DedaIsolatedManagerPage> readScopedAccountDeletionPage('),1)
+        self.assertIn("requiredPermission: 'reviewAccountDeletions'",service)
+        section=service.split('Future<void> reviewScopedAccountDeletionRequest(',1)[1].split(
+            '  Future<void> signOutSecondaryAdmin()',1)[0]
+        for required in ('if (!dedaIsolatedAdminIdentityEnabled)',
+                         '_firestore.runTransaction((tx) async {',
+                         'await tx.get(target)', 'tx.update(target,',
+                         'tx.set(audit,', "'statusOnlyNoAccountDeletion': true"):
+            self.assertIn(required,section)
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+                          'DedaBackend.',"collection('users')",'deleteUser(',
+                          'tx.delete('):
+            self.assertNotIn(forbidden,section)
+        self.assertIn("if (can('reviewAccountDeletions')",ui)
+        self.assertEqual(ui.count('class _DedaIsolatedAccountDeletionTabState'),1)
+        self.assertIn('widget.admin.reviewScopedAccountDeletionRequest(',ui)
+        self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
+
 if __name__ == '__main__':
     unittest.main()

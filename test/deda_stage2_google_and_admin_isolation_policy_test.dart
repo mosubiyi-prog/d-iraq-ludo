@@ -1127,5 +1127,24 @@ void main() {
         freshEntryServerRead:true,now:now,
       ), false);
     });
+  });  group('Isolated account deletion status is GM only', () {
+    final manager=<String,dynamic>{'active':true,'status':'active',
+      'role':'general_manager'};
+    final request=<String,dynamic>{'requesterUid':'U','accountKey':'K',
+      'status':'new'};
+    bool allowed(Map<String,dynamic> a, Map<String,dynamic> q,
+        String next, String why) =>
+        DedaIsolatedAdminProofPolicy.accountDeletionReviewAllowed(
+            admin:a,request:q,status:next,reason:why);
+    test('valid GM status review, never user deletion', () {
+      expect(allowed(manager,request,'reviewing','Verified request'),true);
+      expect(allowed(manager,request,'deleted','Status only'),true);
+    });
+    test('unknown role, missing owner or repeated status denied', () {
+      expect(allowed({...manager,'role':'employee'},request,'reviewing','reason'),false);
+      expect(allowed(manager,{...request,'requesterUid':''},'reviewing','reason'),false);
+      expect(allowed(manager,request,'new','reason'),false);
+      expect(allowed(manager,request,'reviewing','  '),false);
+    });
   });
 }

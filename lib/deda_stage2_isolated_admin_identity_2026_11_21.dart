@@ -120,6 +120,7 @@ class DedaIsolatedAdminProofPolicy {
     'reviewPlaceRequests', 'approvePlaces', 'rejectPlaces',
     'viewUsers', 'viewReports', 'manageReports',
     'viewGovernorates', 'viewAudit', 'viewTeam', 'managePlaceArchives',
+    'reviewAccountDeletions',
   };
   static bool allowsPermission({
     required Map<String, dynamic>? admin,
@@ -136,7 +137,8 @@ class DedaIsolatedAdminProofPolicy {
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(normalizedRole)) return false;
     // Only the server-recognized general manager may enumerate admin staff.
-    if (const <String>{'viewTeam', 'managePlaceArchives'}.contains(permission) &&
+    if (const <String>{'viewTeam', 'managePlaceArchives',
+      'reviewAccountDeletions'}.contains(permission) &&
         normalizedRole != 'general_manager') {
       return false;
     }
@@ -152,6 +154,24 @@ class DedaIsolatedAdminProofPolicy {
     final permissions = admin['permissions'];
     return permissions is Map && permissions[permission] == true;
   }
+
+  /// The legacy "deleted" status does NOT delete a Firebase Auth account.
+  static bool accountDeletionReviewAllowed({
+    required Map<String, dynamic>? admin,
+    required Map<String, dynamic>? request,
+    required String status,
+    required String reason,
+  }) => allowsPermission(admin: admin, permission: 'reviewAccountDeletions') &&
+      admin?['role'] == 'general_manager' &&
+      request != null &&
+      (request['requesterUid'] ?? '').toString().trim().isNotEmpty &&
+      (request['accountKey'] ?? '').toString().trim().isNotEmpty &&
+      const <String>{'new','reviewing','deleted','cancelled','rejected'}
+          .contains((request['status'] ?? '').toString()) &&
+      const <String>{'new','reviewing','deleted','cancelled','rejected'}
+          .contains(status) &&
+      request['status'] != status &&
+      reason.trim().length >= 3 && reason.trim().length <= 500;
 
   static bool validScopedDocumentId(String value) =>
       RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
@@ -2509,6 +2529,121 @@ class DedaIsolatedAdminIdentity {
       ).toList(growable: false),
       nextCursor: snapshot.docs.length > pageSize ? visible.last : null,
     );
+  }
+
+  /// Paged fresh-server queue under SECONDARY admin Auth, never the user Auth.
+  Future<DedaIsolatedManagerPage> readScopedAccountDeletionPage({
+    required String dedaPhone,
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) throw StateError('account-queue-off');
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || publicUid == null) {
+      throw StateError('account-queue-auth-required');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'reviewAccountDeletions',
+      onAuthorizedAdmin: (value) => manager = value,
+    );
+    if (!await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('account-queue-gm-required');
+    }
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('account_deletion_requests')
+        .orderBy('createdAt', descending: true);
+    if (startAfter != null) {
+      if (startAfter.reference.parent.path != 'account_deletion_requests' ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfter.id)) {
+        throw StateError('account-queue-cursor-denied');
+      }
+      query = query.startAfterDocument(startAfter);
+    }
+    final snap = await query.limit(51).get(const GetOptions(source: Source.server));
+    if (snap.metadata.isFromCache || snap.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid || _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('account-queue-proof-changed');
+    }
+    final rows = snap.docs.take(50).toList(growable: false);
+    return (
+      rows: rows.map((d) => <String, dynamic>{...d.data(), 'id': d.id})
+          .toList(growable: false),
+      nextCursor: snap.docs.length > 50 ? rows.last : null,
+    );
+  }
+
+  /// Atomic status + audit, with second proof; NEVER deletes users or UIDs.
+  Future<void> reviewScopedAccountDeletionRequest({
+    required String dedaPhone,
+    required String requestId,
+    required String status,
+    required String reason,
+  }) async {
+    final id = requestId.trim();
+    final note = reason.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        note.length < 3 || note.length > 500) {
+      throw StateError('account-queue-invalid-input');
+    }
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || publicUid == null) {
+      throw StateError('account-queue-auth-required');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'reviewAccountDeletions',
+      onAuthorizedAdmin: (value) => manager = value,
+    );
+    if (!await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('account-queue-gm-required');
+    }
+    final target = _firestore.collection('account_deletion_requests').doc(id);
+    final audit = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final doc = await tx.get(target);
+      final before = doc.data();
+      if (!doc.exists || doc.metadata.isFromCache ||
+          doc.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.accountDeletionReviewAllowed(
+              admin: manager, request: before, status: status, reason: note)) {
+        throw StateError('account-queue-review-denied');
+      }
+      final name = (manager?['displayName'] ?? manager?['name'] ??
+          actor.email ?? 'DEDA Admin').toString();
+      tx.update(target, <String, dynamic>{
+        'status': status, 'reviewNote': note, 'reviewedByUid': uid,
+        'reviewedByName': name, 'reviewedByRole': 'general_manager',
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (status == 'deleted') 'completedAt': FieldValue.serverTimestamp(),
+        if (status == 'cancelled' || status == 'rejected')
+          'closedAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(audit, <String, dynamic>{
+        'action': 'account_deletion_status_changed',
+        'adminUid': uid, 'adminName': name, 'adminRole': 'general_manager',
+        'details': <String, dynamic>{
+          'requestId': id, 'targetUserUid': before?['requesterUid'],
+          'oldStatus': before?['status'], 'newStatus': status,
+          'note': note, 'statusOnlyNoAccountDeletion': true,
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('account-queue-postcommit-session-changed');
+    }
   }
 
   Future<void> signOutSecondaryAdmin() => _auth.signOut();

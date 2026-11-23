@@ -250,6 +250,20 @@ class _DedaStage2IsolatedDashboardPageState
         ),
       );
     }
+    // Account deletion requests: review status only, not user deletion.
+    if (can('reviewAccountDeletions') &&
+        widget.profile['role'] == 'general_manager') {
+      addDestination(
+        title: t('طلبات حذف الحساب', 'Account deletion'),
+        subtitle: t('الطلبات والقرارات المسجلة', 'Requests and audited decisions'),
+        icon: Icons.person_remove_alt_1_outlined,
+        accentColor: const Color(0xFFA3463C),
+        page: _DedaIsolatedAccountDeletionTab(
+          admin: widget.admin, dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+        ),
+      );
+    }
     // Settings belongs to every server-verified admin, not to viewTeam
     // or another elevated permission. Its destination re-checks Auth + UID.
     addDestination(
@@ -925,6 +939,169 @@ class _DedaIsolatedAdminSettingsTabState
       },
     );
   }
+}
+
+/// GM queue using only isolated Auth. Does not delete Firebase user accounts.
+class _DedaIsolatedAccountDeletionTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+  const _DedaIsolatedAccountDeletionTab({
+    required this.admin, required this.dedaPhone, required this.isArabic,
+  });
+  @override
+  State<_DedaIsolatedAccountDeletionTab> createState() =>
+      _DedaIsolatedAccountDeletionTabState();
+}
+
+class _DedaIsolatedAccountDeletionTabState
+    extends State<_DedaIsolatedAccountDeletionTab> {
+  late Future<DedaIsolatedManagerPage> _page;
+  QueryDocumentSnapshot<Map<String, dynamic>>? _cursor;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
+  bool _busy = false;
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+  @override
+  void initState() { super.initState(); _page = _load(); }
+  Future<DedaIsolatedManagerPage> _load() =>
+      widget.admin.readScopedAccountDeletionPage(
+        dedaPhone: widget.dedaPhone, startAfter: _cursor);
+  void _refresh() {
+    setState(() { _cursor = null; _back.clear(); _page = _load(); });
+  }
+  Future<void> _review(Map<String, dynamic> row) async {
+    if (_busy) return;
+    final id = (row['id'] ?? '').toString();
+    String status = 'reviewing';
+    final reason = TextEditingController();
+    final confirmation = TextEditingController();
+    final picked = await showDialog<({String status, String reason})>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (dialog, update) => AlertDialog(
+          title: Text(t('مراجعة طلب حذف الحساب', 'Review deletion request')),
+          content: SingleChildScrollView(child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(id),
+              DropdownButtonFormField<String>(
+                initialValue: status,
+                items: const ['new','reviewing','deleted','cancelled','rejected']
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) update(() => status = value);
+                },
+              ),
+              TextField(
+                controller: reason, maxLength: 500,
+                onChanged: (_) => update(() {}),
+                decoration: InputDecoration(labelText:
+                    t('سبب القرار (3 أحرف على الأقل)', 'Reason (3+ characters)')),
+              ),
+              if (status == 'deleted') ...[
+                Text(t('هذا يغيّر حالة الطلب فقط، ولا يحذف حساب المستخدم. '
+                    'اكتب معرّف الطلب للتأكيد.',
+                    'Marks request status only; does not delete the user. '
+                    'Type request ID to confirm.')),
+                TextField(controller: confirmation,
+                  onChanged: (_) => update(() {}),
+                  decoration: InputDecoration(labelText: t(
+                      'تأكيد معرّف الطلب', 'Confirm request ID'))),
+              ],
+            ],
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog),
+              child: Text(t('إلغاء', 'Cancel'))),
+            FilledButton(
+              onPressed: reason.text.trim().length < 3 ||
+                  status == row['status'] ||
+                  (status == 'deleted' && confirmation.text.trim() != id)
+                  ? null : () => Navigator.pop(dialog,
+                      (status: status, reason: reason.text.trim())),
+              child: Text(t('تسجيل القرار', 'Record decision')),
+            ),
+          ],
+        ),
+      ),
+    );
+    reason.dispose();
+    confirmation.dispose();
+    if (!mounted || picked == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.admin.reviewScopedAccountDeletionRequest(
+        dedaPhone: widget.dedaPhone, requestId: id,
+        status: picked.status, reason: picked.reason);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تم تسجيل القرار', 'Decision recorded'))));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تعذر القرار أو تغيرت الصلاحية',
+            'Decision denied or permissions changed'))));
+    } finally {
+      if (mounted) { setState(() => _busy = false); _refresh(); }
+    }
+  }
+  @override
+  Widget build(BuildContext context) => FutureBuilder<DedaIsolatedManagerPage>(
+    future: _page,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError || !snapshot.hasData) {
+        return Center(child: TextButton(onPressed: _busy ? null : _refresh,
+          child: Text(t('تعذر تأكيد الصلاحية، أعد المحاولة',
+              'Access denied, retry'))));
+      }
+      final page = snapshot.data!;
+      return Column(children: [
+        Align(alignment: AlignmentDirectional.centerEnd,
+          child: IconButton(
+            onPressed: _busy ? null : _refresh,
+            icon: const Icon(Icons.refresh))),
+        Expanded(child: ListView.builder(
+          itemCount: page.rows.length,
+          itemBuilder: (context, index) {
+            final row = page.rows[index];
+            return Card(child: ListTile(
+              title: Text((row['name'] ?? '').toString()),
+              subtitle: Text((row['id'] ?? '').toString() + ' • ' +
+                  (row['phone'] ?? '').toString() + ' • ' +
+                  (row['status'] ?? '').toString() + '\n' +
+                  (row['reason'] ?? '').toString()),
+              trailing: IconButton(icon: const Icon(Icons.fact_check_outlined),
+                onPressed: _busy ? null : () => _review(row)),
+            ));
+          },
+        )),
+        Row(children: [
+          Text((_back.length + 1).toString()),
+          const Spacer(),
+          TextButton(
+            onPressed: !_busy && _back.isNotEmpty ? () {
+              setState(() {
+                _cursor = _back.removeLast();
+                _page = _load();
+              });
+            } : null,
+            child: Text(t('السابق', 'Previous'))),
+          TextButton(
+            onPressed: !_busy && page.nextCursor != null ? () {
+              setState(() {
+                _back.add(_cursor);
+                _cursor = page.nextCursor;
+                _page = _load();
+              });
+            } : null,
+            child: Text(t('التالي', 'Next'))),
+        ]),
+      ]);
+    },
+  );
 }
 
 class _DedaIsolatedReadOnlyTab extends StatefulWidget {
