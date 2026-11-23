@@ -183,12 +183,12 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
         content:Text(t('تأكد المنح واللون والسجل من الخادم.',
             'Grant, color and receipt verified on server.'))));
     } catch (_) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _catalog=null; _draft.clear();
         _message=t('تعذر إثبات النتيجة. لا نعلن نجاح المنح '
           'أو فشله دون قراءة جديدة من الخادم.',
           'Result unverified. Re-read server state before claiming success.');
-      });
+      }); }
     } finally {
       if (mounted) { setState(()=>_busy=false); }
     }
@@ -196,7 +196,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
   void _history() {
     final snap=_catalog;
     if (snap == null || widget.admin.scopedExclusiveAdminUid != _adminUid ||
-        widget.admin.scopedExclusivePublicUid != _publicUid) return;
+        widget.admin.scopedExclusivePublicUid != _publicUid) { return; }
     _historyAccess.value=true;
     showModalBottomSheet<void>(context:context,
       isScrollControlled:true,showDragHandle:true,
