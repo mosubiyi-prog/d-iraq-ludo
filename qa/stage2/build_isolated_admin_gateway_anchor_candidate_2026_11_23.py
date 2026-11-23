@@ -153,66 +153,49 @@ def candidate(source):
 
 
 def add_invite_email_reservation(source):
-    """Candidate only: every new invite must atomically claim its email key."""
+    """Candidate: a new invitation must atomically reserve its email."""
     invite = "    match /admin_invites/{inviteId} {"
-    next_section = "    // DEDA administration-entry phone gateway v2."
-    if source.count(invite) != 1 or source.count(next_section) != 1:
-        raise ValueError("FAIL_INVITE_EMAIL_SOURCE_DRIFT")
+    following = "    // DEDA administration-entry phone gateway v2."
+    if source.count(invite) != 1 or source.count(following) != 1:
+        raise ValueError("FAIL_INVITE_EMAIL_MATCH_DRIFT")
     start = source.index(invite)
-    end = source.index(next_section, start)
-    part = source[start:end]
-    email = "        && request.resource.data.email.size() > 3\n"
+    end = source.index(following, start)
+    chunk = source[start:end]
+    email_line = "        && request.resource.data.email.size() > 3\n"
     old_delete = "      allow delete: if isGeneralManager();"
-    if part.count(email) != 1 or part.count(old_delete) != 1:
-        raise ValueError("FAIL_INVITE_EMAIL_VALIDATION_DRIFT")
-    helpers = """      function reservationPath() {
+    if chunk.count(email_line) != 1 or chunk.count(old_delete) != 1:
+        raise ValueError("FAIL_INVITE_EMAIL_SHAPE_DRIFT")
+    helper = """      function reservationForNewEmail() {
         return /databases/$(database)/documents/admin_invite_email_reservations/$(request.resource.data.email);
       }
-      function oldReservationPath() {
+      function reservationForExistingEmail() {
         return /databases/$(database)/documents/admin_invite_email_reservations/$(resource.data.email);
       }
       function atomicEmailReservation(id) {
-        let p = reservationPath();
-        return !exists(p) && existsAfter(p)
-          && getAfter(p).data.email == request.resource.data.email
-          && getAfter(p).data.inviteId == id
-          && getAfter(p).data.createdByUid == request.auth.uid
-          && getAfter(p).data.createdAt == request.time;
+        let path = reservationForNewEmail();
+        return !exists(path) && existsAfter(path)
+          && getAfter(path).data.email == request.resource.data.email
+          && getAfter(path).data.inviteId == id
+          && getAfter(path).data.createdByUid == request.auth.uid
+          && getAfter(path).data.createdAt == request.time;
       }
 """
-    part = part.replace(invite, invite + "\n" + helpers, 1)
-    part = part.replace(email, email +
+    chunk = chunk.replace(invite, invite + "\n" + helper, 1)
+    extra = (
         "        && request.resource.data.email.size() <= 254\n"
         "        && request.resource.data.email.matches("
-        "'^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}
-    p = argparse.ArgumentParser()
-    p.add_argument("--output", required=True)
-    args = p.parse_args()
-    out = Path(args.output).resolve()
-    if out == ROOT or out in ROOT.parents or ROOT in out.parents:
-        raise SystemExit("FAIL_CANDIDATE_MUST_BE_OUTSIDE_GIT_REPOSITORY")
-    source = ORIGINAL.read_text()
-    original_digest = hashlib.sha256(source.encode()).hexdigest()
-    out.write_text(candidate(source))
-    if hashlib.sha256(ORIGINAL.read_bytes()).hexdigest() != original_digest:
-        raise SystemExit("FAIL_CANDIDATE_PRODUCTION_RULES_CHANGED")
-    print("PASS_ISOLATED_GATEWAY_ANCHOR_CANDIDATE_CREATED_OUTSIDE_REPO")
-    print("ORIGINAL_RULES_SHA256", original_digest)
-    print("CANDIDATE_RULES_SHA256", hashlib.sha256(out.read_bytes()).hexdigest())
-    print("NO_FIREBASE_DEPLOY_NO_PRODUCTION_MODIFICATION")
-
-
-if __name__ == "__main__":
-    main()
-)\n"
-        "        && atomicEmailReservation(inviteId)\n", 1)
-    part = part.replace(old_delete,
+        "'^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}$')\n"
+        "        && atomicEmailReservation(inviteId)\n"
+    )
+    chunk = chunk.replace(email_line, email_line + extra, 1)
+    chunk = chunk.replace(old_delete,
         "      allow delete: if isGeneralManager()\n"
-        "        && (!exists(oldReservationPath())\n"
-        "          || get(oldReservationPath()).data.inviteId != inviteId\n"
-        "          || !existsAfter(oldReservationPath()));", 1)
-    index_rule = """    // Stage2-only normalized-email reservation. Older invite records
-    // remain claimable; old random-ID CREATES fail closed until upgraded.
+        "        && (!exists(reservationForExistingEmail())\n"
+        "          || get(reservationForExistingEmail()).data.inviteId != inviteId\n"
+        "          || !existsAfter(reservationForExistingEmail()));", 1)
+    marker = """    // STAGE2 LOCAL CANDIDATE: email reservation cannot be forged alone.
+    // Preexisting random-ID invitations are still readable/claimable; old
+    // random-ID CREATE clients are blocked pending approved migration.
     match /admin_invite_email_reservations/{emailKey} {
       function newInvitePath() {
         return /databases/$(database)/documents/admin_invites/$(request.resource.data.inviteId);
@@ -223,27 +206,7 @@ if __name__ == "__main__":
       allow get, list: if isGeneralManager();
       allow create: if isGeneralManager()
         && emailKey.size() <= 254
-        && emailKey.matches('^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}
-    p = argparse.ArgumentParser()
-    p.add_argument("--output", required=True)
-    args = p.parse_args()
-    out = Path(args.output).resolve()
-    if out == ROOT or out in ROOT.parents or ROOT in out.parents:
-        raise SystemExit("FAIL_CANDIDATE_MUST_BE_OUTSIDE_GIT_REPOSITORY")
-    source = ORIGINAL.read_text()
-    original_digest = hashlib.sha256(source.encode()).hexdigest()
-    out.write_text(candidate(source))
-    if hashlib.sha256(ORIGINAL.read_bytes()).hexdigest() != original_digest:
-        raise SystemExit("FAIL_CANDIDATE_PRODUCTION_RULES_CHANGED")
-    print("PASS_ISOLATED_GATEWAY_ANCHOR_CANDIDATE_CREATED_OUTSIDE_REPO")
-    print("ORIGINAL_RULES_SHA256", original_digest)
-    print("CANDIDATE_RULES_SHA256", hashlib.sha256(out.read_bytes()).hexdigest())
-    print("NO_FIREBASE_DEPLOY_NO_PRODUCTION_MODIFICATION")
-
-
-if __name__ == "__main__":
-    main()
-)
+        && emailKey.matches('^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}$')
         && request.resource.data.keys().hasOnly([
           'email', 'inviteId', 'createdByUid', 'createdAt'
         ])
@@ -255,7 +218,8 @@ if __name__ == "__main__":
         && request.resource.data.inviteId.size() > 0
         && request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.createdAt == request.time
-        && !exists(newInvitePath()) && existsAfter(newInvitePath())
+        && !exists(newInvitePath())
+        && existsAfter(newInvitePath())
         && getAfter(newInvitePath()).data.email == emailKey
         && getAfter(newInvitePath()).data.status == 'pending'
         && getAfter(newInvitePath()).data.createdByUid == request.auth.uid;
@@ -271,12 +235,12 @@ if __name__ == "__main__":
     }
 
 """
-    out = source[:start] + part + index_rule + source[end:]
-    if out.count("match /admin_invite_email_reservations/{emailKey}") != 1:
-        raise ValueError("FAIL_INVITE_EMAIL_DUPLICATE_INDEX")
-    if out.count("atomicEmailReservation(") != 2:
+    result = source[:start] + chunk + marker + source[end:]
+    if result.count("match /admin_invite_email_reservations/{emailKey}") != 1:
+        raise ValueError("FAIL_INVITE_EMAIL_DUPLICATE_MATCH")
+    if result.count("atomicEmailReservation(") != 2:
         raise ValueError("FAIL_INVITE_EMAIL_DUPLICATE_HELPER")
-    return out
+    return result
 
 
 def main():
