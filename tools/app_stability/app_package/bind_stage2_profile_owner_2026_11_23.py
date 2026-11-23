@@ -6,6 +6,7 @@ original source overwrite, Play deployment, checkout or wallet mutation.
 Only the disposable fully reconstructed QA app gets this wrapper.
 """
 import argparse
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -84,8 +85,7 @@ EDITOR_SAVE_OPEN = """  Future<void> _save() async {
         'Account changed. Reopen Edit Profile for the current account.'));
       return;
     }"""
-EDITOR_SAVE_BETWEEN = """      await DedaPreferences.setUserName(cleanName);
-      // Stop before the second (appearance) write when Auth rotated while
+EDITOR_SAVE_AFTER_NAME = """      // Stop before the second (appearance) write if Auth rotated while
       // the original name setter awaited; do not report a stale success.
       if (!_dedaStage2SameEditingAccount()) return;"""
 EDITOR_SAVE_END = """      if (!_dedaStage2SameEditingAccount()) return;
@@ -144,9 +144,6 @@ def patch_original_editor(main: str) -> str:
          EDITOR_DISPOSE),
         ('original-save',
          '  Future<void> _save() async {', EDITOR_SAVE_OPEN),
-        ('name-save',
-         '      await DedaPreferences.setUserName(cleanName);',
-         EDITOR_SAVE_BETWEEN),
         ('before-original-success',
          '      Navigator.pop(context, true);',
          EDITOR_SAVE_END),
@@ -155,6 +152,21 @@ def patch_original_editor(main: str) -> str:
          EDITOR_BUILD),
     ):
         editor = once(editor, old, new, 'editor-' + label)
+    # The protected editor may rename its local clean-name variable; match
+    # the original async name SETTER call, not a guessed argument string.
+    # Require exactly one owner-facing write and preserve its entire call.
+    name_calls = list(re.finditer(
+        r'(?m)^[ \t]*await\s+DedaPreferences\.setUserName\([\s\S]{0,300}?\);[^\n]*\n',
+        editor,
+    ))
+    if len(name_calls) != 1:
+        save_at = editor.find('  Future<void> _save() async {')
+        sample = editor[save_at:save_at + 1600] if save_at >= 0 else ''
+        raise ValueError(
+            'PROFILE_SAFE_STOP:original-name-save-count=' +
+            str(len(name_calls)) + ':editor-save-source=' + repr(sample))
+    saved = name_calls[0]
+    editor = editor[:saved.end()] + EDITOR_SAVE_AFTER_NAME + '\n' + editor[saved.end():]
     # Recheck around the original Point09 account-scoped appearance writer.
     # No new setter is introduced; this guard denies stale save continuation.
     setter = '      await DedaPreferences.setProfileAppearance('
@@ -179,10 +191,10 @@ def verify_original_editor(main: str):
         'auth-listener': 'authStateChanges().listen' in editor,
         'listener-disposed': '_dedaStage2EditAuthSubscription?.cancel();' in editor,
         'guard-before-name': editor.index('if (!_dedaStage2SameEditingAccount())') <
-            editor.index('await DedaPreferences.setUserName(cleanName);'),
-        'guard-between-saves': 'await DedaPreferences.setUserName(cleanName);\n' in editor and
+            editor.index('await DedaPreferences.setUserName('),
+        'guard-between-saves': 'await DedaPreferences.setUserName(' in editor and
             editor.count('if (!_dedaStage2SameEditingAccount()) return;') >= 3,
-        'single-original-name-writer': editor.count('await DedaPreferences.setUserName(cleanName);') == 1,
+        'single-original-name-writer': editor.count('await DedaPreferences.setUserName(') == 1,
         'single-original-appearance-writer': editor.count('await DedaPreferences.setProfileAppearance(') == 1,
         'original-edit-gallery-retained': 'DedaFramedAvatar(' in editor,
         'original-save-page-retained': 'Navigator.pop(context, true);' in editor,
