@@ -2661,10 +2661,11 @@ class DedaIsolatedAdminIdentity {
     var published = <Map<String, dynamic>>[];
     var requests = <Map<String, dynamic>>[];
     var support = <Map<String, dynamic>>[];
-    var relatedMayBeTruncated = false;
+    final truncatedCollections = <String, bool>{};
 
     Future<List<Map<String, dynamic>>> related(String collection) async {
       final byId = <String, Map<String, dynamic>>{};
+      var truncated = false;
       final queries = <Query<Map<String, dynamic>>>[
         _firestore.collection(collection)
             .where('ownerUid', isEqualTo: userUid),
@@ -2679,7 +2680,7 @@ class DedaIsolatedAdminIdentity {
             result.metadata.hasPendingWrites) {
           throw StateError('deda-admin-isolated-user-related-offline');
         }
-        if (result.docs.length == 50) relatedMayBeTruncated = true;
+        if (result.docs.length == 50) truncated = true;
         for (final row in result.docs) {
           final data = row.data();
           // A query must never yield a record belonging to another user.
@@ -2690,6 +2691,7 @@ class DedaIsolatedAdminIdentity {
           byId[row.id] = <String, dynamic>{'id': row.id, ...data};
         }
       }
+      truncatedCollections[collection] = truncated;
       return byId.values.toList(growable: false);
     }
 
@@ -2739,7 +2741,7 @@ class DedaIsolatedAdminIdentity {
       'placeRequests': requests,
       'supportRequests': support,
       'relatedAccessible': generalManager,
-      'relatedMayBeTruncated': relatedMayBeTruncated,
+      'relatedTruncatedCollections': truncatedCollections,
     };
   }
 
