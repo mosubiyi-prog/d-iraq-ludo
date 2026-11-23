@@ -90,7 +90,7 @@ def verify(main: str, old_store: str):
         ('one-wrapper-import', main.count(IMPORT) == 1),
         ('one-wrapped-route', section.count('DedaStage2ProfileOwnerBoundMyStore(') == 1),
         ('old-route-replaced', OLD not in section),
-        ('single-owner-freeze', section.count('_dedaStage2OwnerUidAtEntry =') == 1),
+        ('single-owner-freeze', section.count('final _dedaStage2OwnerUidAtEntry =') == 1),
         ('original-phone-check', 'DedaPreferences.phone == _dedaStage2OwnerPhoneAtEntry' in section),
         ('canonical-id-check', '_dedaId == _dedaStage2OriginalIdAtEntry' in section),
         ('live-uid-check', 'FirebaseAuth.instance.currentUser?.uid ==' in section),
