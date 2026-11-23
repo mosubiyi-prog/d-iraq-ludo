@@ -2556,6 +2556,71 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
+  /// Keep the original Users card's 500-row ceiling without weakening
+  /// the generic admin-list 50-row cap: ten separately bounded server pages.
+  /// This is a read-only directory under secondary Auth and fresh viewUsers.
+  Future<List<Map<String, dynamic>>> readScopedAdminUserDirectory({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-user-directory-off');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-admin-isolated-user-directory-no-session');
+    }
+    final adminUid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verified;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: adminUid, dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'viewUsers',
+      onAuthorizedAdmin: (admin) => verified = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-user-directory-denied');
+    }
+    final scope = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: verified, collection: 'users',
+    );
+    if (scope == null || scope.isNotEmpty) {
+      throw StateError('deda-admin-isolated-user-directory-scope-unknown');
+    }
+    final records = <Map<String, dynamic>>[];
+    QueryDocumentSnapshot<Map<String, dynamic>>? cursor;
+    for (var page = 0; page < 10; page++) {
+      Query<Map<String, dynamic>> query = _firestore
+          .collection('users').orderBy(FieldPath.documentId);
+      if (cursor != null) query = query.startAfterDocument(cursor);
+      final snapshot = await query.limit(50)
+          .get(const GetOptions(source: Source.server));
+      if (snapshot.metadata.isFromCache ||
+          snapshot.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != adminUid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.sameScopedFilters(
+            scope,
+            DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+              admin: verified, collection: 'users',
+            ),
+          ) ||
+          snapshot.docs.any((doc) =>
+              !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+                admin: verified, collection: 'users', data: doc.data(),
+              ))) {
+        throw StateError('deda-admin-isolated-user-directory-scope-changed');
+      }
+      records.addAll(snapshot.docs.map(
+        (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
+      ));
+      if (snapshot.docs.length < 50) break;
+      cursor = snapshot.docs.last;
+    }
+    return records;
+  }
+
   /// Read-only scoped data path, with fresh server permissions before and
   /// after fetch. No write operation or raw Firestore handle is exposed.
   Future<List<Map<String, dynamic>>> readScopedAdminList({
@@ -2567,8 +2632,7 @@ class DedaIsolatedAdminIdentity {
       throw StateError('deda-admin-isolated-list-not-enabled');
     }
     final permission = _scopedReadPermissions[collection];
-    if (permission == null || maxItems < 1 ||
-        maxItems > (collection == 'users' ? 500 : 50)) {
+    if (permission == null || maxItems < 1 || maxItems > 50) {
       throw StateError('deda-admin-isolated-read-scope-denied');
     }
     final current = _auth.currentUser;
