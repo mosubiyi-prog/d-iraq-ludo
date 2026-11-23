@@ -1428,6 +1428,21 @@ class DedaIsolatedAdminIdentity {
       final entryRef = _firestore.collection('admin_entry_access')
           .doc(accountKey);
       final entrySnapshot = await transaction.get(entryRef);
+      final inviteEmail =
+          (invitation?['email'] ?? '').toString().trim().toLowerCase();
+      if (inviteEmail.isEmpty) {
+        throw StateError('deda-admin-isolated-invite-email-missing');
+      }
+      final reservationRef = _firestore
+          .collection('admin_invite_email_reservations').doc(inviteEmail);
+      final reservationSnapshot = await transaction.get(reservationRef);
+      // Historical records can exist without a reservation. Do not invent one
+      // or remove a reservation that belongs to a different invitation.
+      if (reservationSnapshot.exists &&
+          (reservationSnapshot.data()?['email'] != inviteEmail ||
+              reservationSnapshot.data()?['inviteId'] != cleanId)) {
+        throw StateError('deda-admin-isolated-invite-reservation-mismatch');
+      }
       if (!entrySnapshot.exists ||
           !DedaIsolatedAdminProofPolicy.invitationCancellationAllowed(
             actorUid: uid, actor: verifiedAdmin, inviteId: cleanId,
@@ -1449,6 +1464,9 @@ class DedaIsolatedAdminIdentity {
           current.email ?? 'DEDA Admin').toString();
       transaction.delete(entryRef);
       transaction.delete(inviteRef);
+      if (reservationSnapshot.exists) {
+        transaction.delete(reservationRef);
+      }
       transaction.set(auditRef, <String, dynamic>{
         'action': 'admin_invite_cancelled',
         'adminUid': uid,
@@ -1466,7 +1484,8 @@ class DedaIsolatedAdminIdentity {
 
   /// Create an invited subordinate only, never grant a GM or a new UID.
   /// Uses the existing admin counter, invite and phone gateway schemas.
-  /// All four writes and the audit commit atomically as secondary Admin Auth.
+  /// Counter, invite, normalized-email reservation, gateway and audit write
+  /// atomically through secondary Admin Auth; Stage2 remains OFF by default.
   Future<Map<String, dynamic>> createScopedAdminInvitation({
     required String dedaPhone,
     required String displayName,
@@ -1545,6 +1564,9 @@ class DedaIsolatedAdminIdentity {
     );
     final entryRef = _firestore.collection('admin_entry_access')
         .doc(cleanAccount);
+    // Email, not a client SHA label, is the verifiable reservation key.
+    final reservationRef = _firestore
+        .collection('admin_invite_email_reservations').doc(cleanEmail);
     final counterRef = _firestore.collection('system_counters')
         .doc('admin_members');
     final auditRef = _firestore.collection('admin_audit').doc();
@@ -1561,11 +1583,12 @@ class DedaIsolatedAdminIdentity {
       // Reads occur before writes; no inactive/foreign gateway is overwritten.
       final gateway = await transaction.get(entryRef);
       final sameEmailInvite = await transaction.get(inviteRef);
+      final reservation = await transaction.get(reservationRef);
       final counter = await transaction.get(counterRef);
       final counterValue = counter.data()?['value'];
       final previous = counterValue == null ? 0
           : counterValue is int ? counterValue : -1;
-      if (gateway.exists || sameEmailInvite.exists ||
+      if (gateway.exists || sameEmailInvite.exists || reservation.exists ||
           previous < 0 || previous >= 999999999 ||
           !await proof() ||
           _auth.currentUser?.uid != uid ||
@@ -1580,6 +1603,13 @@ class DedaIsolatedAdminIdentity {
       transaction.set(counterRef, <String, dynamic>{
         'value': next, 'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      // The reservation must be created together with its exact invitation.
+      transaction.set(reservationRef, <String, dynamic>{
+        'email': cleanEmail,
+        'inviteId': inviteRef.id,
+        'createdByUid': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
       transaction.set(inviteRef, <String, dynamic>{
         'adminId': adminId,
         'displayName': cleanName,
