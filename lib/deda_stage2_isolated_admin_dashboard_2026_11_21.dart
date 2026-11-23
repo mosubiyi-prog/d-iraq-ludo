@@ -1789,6 +1789,8 @@ class _DedaIsolatedReadOnlyTabState
     extends State<_DedaIsolatedReadOnlyTab> {
   late Future<List<Map<String, dynamic>>> _rows;
   bool _mutating = false;
+  bool _openingUser = false;
+  final _userSearch = TextEditingController();
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -1798,14 +1800,128 @@ class _DedaIsolatedReadOnlyTabState
     _rows = _fetch();
   }
 
+  @override
+  void dispose() {
+    _userSearch.dispose();
+    super.dispose();
+  }
+
   Future<List<Map<String, dynamic>>> _fetch() =>
       widget.admin.readScopedAdminList(
         dedaPhone: widget.dedaPhone,
         collection: widget.collection,
-        maxItems: 25,
+        maxItems: widget.collection == 'users' ? 500 : 25,
       );
 
   void _refresh() => setState(() => _rows = _fetch());
+
+  Widget _userInfoRow(String label, dynamic value, {bool ltr = false}) {
+    final raw = (value ?? '').toString().trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label + ': ', style: const TextStyle(
+          fontWeight: FontWeight.w700)),
+        Expanded(child: Directionality(
+          textDirection: ltr ? TextDirection.ltr : Directionality.of(context),
+          child: Text(raw.isEmpty ? t('غير محدد', 'Not provided') : raw),
+        )),
+      ]),
+    );
+  }
+
+  Future<void> _openUser(String userUid) async {
+    if (widget.collection != 'users' || _openingUser ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(userUid)) return;
+    setState(() => _openingUser = true);
+    try {
+      final snapshot = await widget.admin.readScopedUserAccountSnapshot(
+        dedaPhone: widget.dedaPhone, userUid: userUid,
+      );
+      if (!mounted) return;
+      final profile = Map<String, dynamic>.from(
+        snapshot['profile'] as Map? ?? const <String, dynamic>{},
+      );
+      final places = snapshot['publishedPlaces'] as List? ?? const [];
+      final requests = snapshot['placeRequests'] as List? ?? const [];
+      final support = snapshot['supportRequests'] as List? ?? const [];
+      final relatedAccessible = snapshot['relatedAccessible'] == true;
+      final truncated = snapshot['relatedMayBeTruncated'] == true;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Row(children: [
+            const Icon(Icons.visibility_outlined),
+            const SizedBox(width: 8),
+            Expanded(child: Text(t('حساب المستخدم • قراءة فقط',
+                'User account • read only'))),
+          ]),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _userInfoRow(t('الاسم', 'Name'), profile['name']),
+                  _userInfoRow(t('الهاتف', 'Phone'), profile['phone'], ltr: true),
+                  _userInfoRow(t('نوع الحساب', 'Account type'),
+                      profile['accountType']),
+                  const Divider(),
+                  if (relatedAccessible) ...[
+                    _userInfoRow(t('الأماكن المعتمدة', 'Approved places'),
+                        truncated ? t('50 أو أكثر (قد تكون النتائج محدودة)',
+                            '50 or more possible (bounded result)')
+                            : places.length),
+                    _userInfoRow(t('طلبات الأماكن', 'Place requests'),
+                        truncated ? t('نتائج جزئية', 'Bounded results')
+                            : requests.length),
+                    _userInfoRow(t('رسائل الدعم', 'Support messages'),
+                        truncated ? t('نتائج جزئية', 'Bounded results')
+                            : support.length),
+                    if (places.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(t('أماكن المستخدم', 'User places'),
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                      ...places.take(10).map((entry) {
+                        final place = Map<String, dynamic>.from(entry as Map);
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.storefront_outlined),
+                          title: Text((place['placeName'] ?? '').toString()),
+                          subtitle: Text(
+                            (place['approvalNumber'] ?? '').toString()),
+                        );
+                      }),
+                    ],
+                  ] else
+                    Text(t('تفاصيل الأماكن والطلبات والدعم محجوبة لهذا الدور.',
+                      'Related places, requests and support are restricted for this role.')),
+                  const SizedBox(height: 8),
+                  Text(t('عرض فقط؛ تم تسجيل المشاهدة في سجل الإدارة، '
+                      'ولم تُعدّل بيانات المستخدم.',
+                      'Read only: the view was audited and the user account was not modified.')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إغلاق', 'Close'))),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر فتح تفاصيل المستخدم أو تأكيد صلاحية الإدارة.',
+            'Could not verify permission or load user details.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _openingUser = false);
+    }
+  }
 
   Future<void> _createInvitation() async {
     if (_mutating || widget.collection != 'admin_invites') return;
@@ -2502,6 +2618,13 @@ class _DedaIsolatedReadOnlyTabState
     final canRecover = recovery && data['status'] == 'new';
     return Card(
       child: ListTile(
+        onTap: user && !_openingUser
+            ? () => _openUser((data['id'] ?? '').toString()) : null,
+        leading: user ? Icon(
+          (data['name'] ?? '').toString().trim().isEmpty ||
+                  (data['phone'] ?? '').toString().trim().isEmpty
+              ? Icons.person_off_outlined : Icons.person_outline,
+        ) : null,
         title: Text(title.isEmpty ? '—' : title),
         subtitle: Text(subtitle),
         trailing: (team && subordinate) || canCancel || canRecover
@@ -2578,8 +2701,35 @@ class _DedaIsolatedReadOnlyTabState
           );
         }
         final rows = snapshot.data!;
+        final search = _userSearch.text.trim().toLowerCase();
+        final filtered = widget.collection == 'users'
+            ? (rows.where((user) {
+                final haystack = <String>[
+                  (user['name'] ?? '').toString(),
+                  (user['phone'] ?? '').toString(),
+                  (user['accountType'] ?? '').toString(),
+                ].join(' ').toLowerCase();
+                return search.isEmpty || haystack.contains(search);
+              }).toList()
+                ..sort((a, b) => (a['name'] ?? '').toString()
+                    .compareTo((b['name'] ?? '').toString())))
+            : rows;
         return Column(
           children: [
+            if (widget.collection == 'users')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: TextField(
+                  controller: _userSearch,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: t('بحث بالاسم أو الهاتف',
+                        'Search name or phone'),
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
             Align(
               alignment: AlignmentDirectional.centerEnd,
               child: Wrap(
@@ -2600,12 +2750,12 @@ class _DedaIsolatedReadOnlyTabState
               ),
             ),
             Expanded(
-              child: rows.isEmpty
-                  ? Center(child: Text(t('لا توجد سجلات.', 'No records.')))
+              child: filtered.isEmpty
+                  ? Center(child: Text(t('لا توجد نتائج.', 'No results.')))
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
-                      itemCount: rows.length,
-                      itemBuilder: (context, index) => _record(rows[index]),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) => _record(filtered[index]),
                     ),
             ),
           ],
