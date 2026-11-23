@@ -30,7 +30,12 @@ def audit(main, files=None):
     section = unique_span(main, STATE, "\nclass ", "original-profile")
     grid = unique_span(section, "  Widget _featureGrid() {",
                        "  Widget _featureCard(", "original-card-grid")
-    titles = re.findall(r"title:\s*dedaText\('([^']+)'", grid)
+    titles = re.findall(r"title:\s*dedaText\(\s*'([^']+)'", grid)
+    print("PROFILE_CARD_GRID_TITLES=" + json.dumps(titles, ensure_ascii=False))
+    if set(EXPECTED) - set(titles):
+        anchors = re.findall(r".{0,90}title:.{0,180}", grid.replace("\n", " "))
+        print("PROFILE_CARD_TITLE_EXCERPTS=" +
+              json.dumps(anchors[:18], ensure_ascii=False))
     for name in EXPECTED:
         if titles.count(name) != 1:
             raise ValueError("PROFILE_PARITY_STOP:card:" + name + ":count=" + str(titles.count(name)))
