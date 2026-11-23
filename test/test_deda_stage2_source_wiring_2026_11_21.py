@@ -1519,7 +1519,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(service.count('Future<DedaIsolatedManagerPage> readScopedAccountDeletionPage('),1)
         self.assertIn("requiredPermission: 'reviewAccountDeletions'",service)
         section=service.split('Future<void> reviewScopedAccountDeletionRequest(',1)[1].split(
-            '  Future<void> signOutSecondaryAdmin()',1)[0]
+            '  Future<List<Map<String, dynamic>>> readScopedGeneralManagerGateways(',1)[0]
         for required in ('if (!dedaIsolatedAdminIdentityEnabled ||',
                          '_firestore.runTransaction((tx) async {',
                          'await tx.get(target)', 'tx.update(target,',
