@@ -1915,5 +1915,63 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden,ui,forbidden)
 
+
+    def test_isolated_support_trash_full_gm_route_and_media_hold(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        trash=(REPO/'lib/deda_stage2_isolated_support_trash_2026_11_23.dart').read_text()
+        original=(REPO/'lib/deda_backend.dart').read_text()
+        storage=(REPO/'storage.rules').read_text()
+        for name in ('deletedSupportRequestsForAdmin','trashSupportRequests',
+                     'restoreDeletedSupportRequest','permanentlyDeleteSupportRequest'):
+            self.assertIn(name,original)
+        self.assertEqual(service.count('readScopedSupportTrashPage({'),1)
+        self.assertEqual(service.count('mutateScopedSupportTrash({'),1)
+        paged=service.split('Future<DedaIsolatedManagerPage> readScopedSupportTrashPage({',1)[1].split(
+            'Future<void> mutateScopedSupportTrash({',1)[0]
+        for required in ("collection('admin_trash_support')",
+                         "orderBy(FieldPath.documentId)", "query.limit(51)",
+                         "GetOptions(source: Source.server)",
+                         "gm?['role'] != 'general_manager'",
+                         "requiredPermission: 'supportRead'", "await proof()",
+                         "_mainAuth.currentUser?.uid != publicUid"):
+            self.assertIn(required,paged,required)
+        self.assertNotIn("tx.set(",paged)
+        method=service.split('Future<void> mutateScopedSupportTrash({',1)[1].split(
+            '/// Paged fresh-server queue',1)[0]
+        for required in (
+            "'trash', 'restore', 'permanent'", "permanentConfirmation != id",
+            "gm?['role'] != 'general_manager'",
+            "original.get(", "archived.get(", "GetOptions(source: Source.server)",
+            "originalId", "trashKind", "deletedFromCollection",
+            "beforeArchive.exists", "beforeSource.exists",
+            "safeToDeleteMedia(", "imageUrls", "imageUrl",
+            "_firestore.runTransaction((tx) async", "tx.get(original)",
+            "tx.get(archived)", "tx.set(archived", "tx.set(original",
+            "tx.delete(original)", "tx.delete(archived)",
+            "tx.set(audit", "'support_restored'", "'support_deleted'",
+            "'support_permanently_deleted'", "FieldValue.serverTimestamp()",
+        ):
+            self.assertIn(required,method,required)
+        for forbidden in ("FirebaseFirestore.instance", "FirebaseAuth.instance",
+                          "FirebaseStorage.instance", "DedaBackend.",
+                          "collection('users').doc("):
+            self.assertNotIn(forbidden,method,forbidden)
+        self.assertIn("match /support_uploads/{uid}/{fileName}",storage)
+        self.assertNotIn("allow delete:",storage)
+        self.assertIn("DedaStage2IsolatedSupportTrashPage(",dashboard)
+        self.assertIn("widget.admin.mutateScopedSupportTrash(",dashboard)
+        self.assertIn("action: 'trash'",dashboard)
+        self.assertIn("_canTrashSupport",dashboard)
+        self.assertIn("class DedaStage2IsolatedSupportTrashPage",trash)
+        self.assertIn("readScopedSupportTrashPage(",trash)
+        self.assertIn("mutateScopedSupportTrash(",trash)
+        self.assertIn("_hasRemoteImages(",trash)
+        self.assertIn("onPressed: _busy || remote",trash)
+        self.assertIn("permanentConfirmation: permanent ? id : null",trash)
+        for forbidden in ("DedaBackend.", "FirebaseAuth.instance",
+                          "FirebaseFirestore.instance", "FirebaseStorage.instance"):
+            self.assertNotIn(forbidden,trash,forbidden)
+
 if __name__ == '__main__':
     unittest.main()
