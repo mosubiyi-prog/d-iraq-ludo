@@ -1035,12 +1035,16 @@ class _DedaIsolatedAccountDeletionTabState
       await widget.admin.reviewScopedAccountDeletionRequest(
         dedaPhone: widget.dedaPhone, requestId: id,
         status: picked.status, reason: picked.reason);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('تم تسجيل القرار', 'Decision recorded'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم تسجيل القرار', 'Decision recorded'))));
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('تعذر القرار أو تغيرت الصلاحية',
-            'Decision denied or permissions changed'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر القرار أو تغيرت الصلاحية',
+              'Decision denied or permissions changed'))));
+      }
     } finally {
       if (mounted) { setState(() => _busy = false); _refresh(); }
     }
@@ -1069,10 +1073,10 @@ class _DedaIsolatedAccountDeletionTabState
             final row = page.rows[index];
             return Card(child: ListTile(
               title: Text((row['name'] ?? '').toString()),
-              subtitle: Text((row['id'] ?? '').toString() + ' • ' +
-                  (row['phone'] ?? '').toString() + ' • ' +
-                  (row['status'] ?? '').toString() + '\n' +
-                  (row['reason'] ?? '').toString()),
+              subtitle: Text(
+                '${row['id'] ?? ''} • ${row['phone'] ?? ''} • '
+                '${row['status'] ?? ''}\n${row['reason'] ?? ''}',
+              ),
               trailing: IconButton(icon: const Icon(Icons.fact_check_outlined),
                 onPressed: _busy ? null : () => _review(row)),
             ));
