@@ -12,8 +12,8 @@ from pathlib import Path
 
 STATE = "class _DedaProfilePhase2PageState"
 EXPECTED = (
-    "تعديل الملف", "الصور", "الشارات", "المفضلة",
-    "نشاطاتي", "عرض الملف العام", "متجري",
+    "تعديل الملف", "متجري", "الشارات",
+    "المفضلة", "نشاطاتي", "عرض الملف العام",
 )
 
 def unique_span(source, start, end, label):
@@ -30,7 +30,7 @@ def audit(main, files=None):
     section = unique_span(main, STATE, "\nclass ", "original-profile")
     grid = unique_span(section, "  Widget _featureGrid() {",
                        "  Widget _featureCard(", "original-card-grid")
-    titles = re.findall(r"title:\s*dedaText\(\s*'([^']+)'", grid)
+    titles = re.findall(r"(?<![A-Za-z])title:\s*dedaText\(\s*'([^']+)'", grid)
     print("PROFILE_CARD_GRID_TITLES=" + json.dumps(titles, ensure_ascii=False))
     if set(EXPECTED) - set(titles):
         anchors = re.findall(r".{0,90}title:.{0,180}", grid.replace("\n", " "))
@@ -42,12 +42,11 @@ def audit(main, files=None):
     if titles.count("متجر المعرّفات") != 0:
         raise ValueError("PROFILE_PARITY_STOP:duplicate-identifier-store-tile")
     # Each old card is kept in place. No extra renderer, hidden arbitrary new card
-    # or reordered existing card. This is the approved 6+1 inventory.
+    # or reordered existing card. The approved single-store grid has SIX tiles.
     if tuple(titles) != EXPECTED:
         raise ValueError("PROFILE_PARITY_STOP:card-order-or-unapproved-extra:" + repr(titles))
     route_proofs = {
         "original-account-info": "DedaAccountInfoPage(" in grid,
-        "photos-original-future-slot": "قسم مستقل للصور لاحقًا" in grid,
         "original-favorites-route": "SavedPlacesPage(showFavorites: true)" in grid,
         "original-activity-route": "SavedPlacesPage(showFavorites: false)" in grid,
         "public-profile-preview-route": "DedaPublicProfilePreviewPage(" in grid,
@@ -80,7 +79,7 @@ def audit(main, files=None):
         "visible_diamonds_source_used": "dedaProfileVisibleDiamonds(" in stats,
         "friends_stat_has_literal_zero": bool(re.search(
             r"value:\s*'0'\s*,\s*label:\s*dedaText\('الأصدقاء'", stats)),
-        "photos_uses_deferred_notice": "قسم مستقل للصور لاحقًا" in grid,
+        "separate_photos_tile_absent_by_approved_single_store_design": "الصور" not in titles,
         "achievement_release_deliberately_locked": (
             "verifiedServerLevel: null" in grid and
             "hasVerifiedAccountAndLevel: false" in grid),
@@ -95,12 +94,10 @@ def main():
     if not file.is_file():
         raise SystemExit("PROFILE_PARITY_STOP:assembled-main-required")
     result = audit(file.read_text(encoding="utf-8"))
-    print("PASS_STAGE2_ORIGINAL_PROFILE_7_TILES_ROUTES_ORDER_NO_DUPLICATE")
+    print("PASS_STAGE2_ORIGINAL_PROFILE_6_APPROVED_TILES_ROUTES_ORDER_NO_DUPLICATE")
     print("PROFILE_ASSEMBLED_PARITY=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
     if result["friends_stat_has_literal_zero"]:
         print("PROFILE_DEFERRED:friends-count-is-literal-zero-needs-existing-social-bridge")
-    if result["photos_uses_deferred_notice"]:
-        print("PROFILE_DEFERRED:photos-tile-intentionally-keeps-original-notice")
     print("PROFILE_RELEASE_HOLD_NO_FIREBASE_WRITE_NO_APK_NO_PLAY")
 
 if __name__ == "__main__":
