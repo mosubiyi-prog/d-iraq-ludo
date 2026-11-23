@@ -58,11 +58,11 @@ class DedaPublicProfilePreviewPage {}
 
 
 class ProfileFullAuditTests(unittest.TestCase):
-    def test_seven_original_cards_and_all_routes(self):
+    def test_six_approved_cards_and_all_routes(self):
         result = mod.audit(example())
         self.assertEqual(result["cards_in_order"], list(mod.EXPECTED))
         self.assertTrue(result["friends_stat_has_literal_zero"])
-        self.assertTrue(result["photos_uses_deferred_notice"])
+        self.assertTrue(result["separate_photos_tile_absent_by_approved_single_store_design"])
         self.assertTrue(result["level_xp_from_separate_notifier"])
 
     def test_missing_route_or_fake_unlocked_badge_is_blocked(self):
@@ -79,9 +79,9 @@ class ProfileFullAuditTests(unittest.TestCase):
     def test_card_duplicate_reorder_or_extra_is_blocked(self):
         body = example()
         for broken in (
-            body.replace("title: dedaText('الصور'", "title: dedaText('متجري'"),
-            body.replace("title: dedaText('الصور'", "title: dedaText('هداياي'"),
-            body.replace("title: dedaText('الصور'", "title: dedaText('نشاطاتي'"),
+            body.replace("title: dedaText('متجري'", "title: dedaText('الشارات'"),
+            body.replace("title: dedaText('متجري'", "title: dedaText('هداياي'"),
+            body.replace("title: dedaText('متجري'", "title: dedaText('نشاطاتي'"),
         ):
             with self.assertRaises(ValueError):
                 mod.audit(broken)
