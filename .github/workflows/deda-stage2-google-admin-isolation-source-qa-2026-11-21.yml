@@ -11,6 +11,7 @@ on:
       - 'lib/deda_stage2_google_access_card_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
+      - 'tools/stage_deda_100377_point12_my_store.py'
       - 'test/test_deda_stage2_profile_owner_2026_11_23.py'
       - 'test/test_deda_stage2_profile_assets_2026_11_24.py'
       - 'test/test_deda_stage2_profile_full_audit_2026_11_24.py'
