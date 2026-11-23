@@ -3928,6 +3928,8 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
   int _pageEpoch = 0;
   bool _sending = false;
+  String _section = 'current';
+  final Set<String> _viewing = <String>{};
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -4040,6 +4042,46 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     ));
   }
 
+
+  bool _matchesSection(String status, String section) {
+    if (widget.collection == 'support_requests') {
+      if (section == 'approved') return status == 'replied';
+      if (section == 'rejected') return status == 'closed';
+      return status == 'new' || status == 'in_progress';
+    }
+    if (section == 'approved') return status == 'approved';
+    if (section == 'rejected') return status == 'rejected';
+    return status != 'approved' && status != 'rejected';
+  }
+
+  Widget _sectionChip({
+    required String section,
+    required String arLabel,
+    required String enLabel,
+    required int count,
+  }) => ChoiceChip(
+    selected: _section == section,
+    selectedColor: const Color(0xFFDDEDDD),
+    label: Text(t(arLabel, enLabel) + ' (' + count.toString() + ')'),
+    onSelected: _sending ? null : (_) => setState(() => _section = section),
+  );
+
+  Future<void> _markFirstViewed(String id) async {
+    if (_viewing.contains(id) || !mounted) return;
+    _viewing.add(id);
+    try {
+      await widget.admin.markScopedAdminRequestViewed(
+        dedaPhone: widget.dedaPhone,
+        collection: widget.collection,
+        requestId: id,
+      );
+    } catch (_) {
+      // Keep the original unread marker if the server refuses the write.
+      // The live listener will display the true server-confirmed status.
+    } finally {
+      _viewing.remove(id);
+    }
+  }
 
   Future<void> _viewLinkedUser(String ownerUid) async {
     if (_sending || !DedaIsolatedAdminProofPolicy.validScopedDocumentId(
@@ -4493,6 +4535,26 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         );
     return Card(
       child: ExpansionTile(
+        key: ValueKey(doc.id),
+        onExpansionChanged: (expanded) {
+          if (expanded && data['firstViewedAt'] == null) {
+            _markFirstViewed(doc.id);
+          }
+        },
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(support ? Icons.support_agent : Icons.storefront_outlined,
+                color: const Color(0xFF17652F)),
+            if (data['firstViewedAt'] == null &&
+                status != 'approved' && status != 'rejected')
+              const Positioned(
+                right: -5, top: -5,
+                child: CircleAvatar(
+                  backgroundColor: Color(0xFFD62828), radius: 5),
+              ),
+          ],
+        ),
         title: Text(title),
         subtitle: Text(status),
         children: [
@@ -4723,7 +4785,39 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         final serverPage = snapshot.data!;
         final records = serverPage.docs.take(50).toList(growable: false);
         final hasNext = serverPage.docs.length > 50;
+        int count(String section) => records.where((doc) =>
+          _matchesSection((doc.data()['status'] ?? '').toString(), section))
+          .length;
+        final visible = records.where((doc) => _matchesSection(
+          (doc.data()['status'] ?? '').toString(), _section,
+        )).toList(growable: false);
         return Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+            child: Column(children: [
+              Text(t('إحصائية الصفحة الحالية فقط',
+                  'Counts for this loaded page only'),
+                  style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 4),
+              Wrap(spacing: 8, runSpacing: 4, children: [
+                _sectionChip(section: 'current',
+                    arLabel: 'الحالية', enLabel: 'Current',
+                    count: count('current')),
+                _sectionChip(section: 'approved',
+                    arLabel: widget.collection == 'support_requests'
+                        ? 'تم الرد' : 'المعتمدات',
+                    enLabel: widget.collection == 'support_requests'
+                        ? 'Replied' : 'Approved',
+                    count: count('approved')),
+                _sectionChip(section: 'rejected',
+                    arLabel: widget.collection == 'support_requests'
+                        ? 'المغلقة' : 'المرفوضات',
+                    enLabel: widget.collection == 'support_requests'
+                        ? 'Closed' : 'Rejected',
+                    count: count('rejected')),
+              ]),
+            ]),
+          ),
           if (_canTrashSupport)
             Align(
               alignment: AlignmentDirectional.centerEnd,
@@ -4734,12 +4828,13 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
               ),
             ),
           Expanded(
-            child: records.isEmpty
-                ? Center(child: Text(t('لا توجد طلبات.', 'No requests.')))
+            child: visible.isEmpty
+                ? Center(child: Text(t('لا توجد طلبات في هذه الصفحة.',
+                    'No matching requests on this page.')))
                 : ListView.builder(
                     padding: const EdgeInsets.all(12),
-                    itemCount: records.length,
-                    itemBuilder: (context, index) => _request(records[index]),
+                    itemCount: visible.length,
+                    itemBuilder: (context, index) => _request(visible[index]),
                   ),
           ),
           Padding(
