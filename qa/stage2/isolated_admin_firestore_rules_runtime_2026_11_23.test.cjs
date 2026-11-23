@@ -192,6 +192,31 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       console.log("PASS_PLACE_AUTO_GM_SECONDARY_AUTH_WORKER_MARKER_AND_OFF_FALLBACK_NO_DEPLOY");
     });
 
+    await t.test("header pending staff recovery count is manager-only",async()=>{
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("admin_recovery_requests/qa_badge_new_1").set({
+            status:"new",accountKey:account,targetAdminUid:staffUid,
+            targetRole:"employee",createdAt:sent(),
+          }),
+          db.doc("admin_recovery_requests/qa_badge_ready_2").set({
+            status:"ready",accountKey:account,targetAdminUid:staffUid,
+            targetRole:"employee",createdAt:sent(),
+          }),
+        ]);
+      });
+      const query=(db)=>db.collection("admin_recovery_requests")
+        .where("status", "==", "new");
+      const pending=await assertSucceeds(query(manager).get());
+      assert.equal(pending.docs.length,1);
+      assert.equal(pending.docs[0].id,"qa_badge_new_1");
+      await assertFails(query(staff).get());
+      await assertFails(query(publicDb).get());
+      await assertFails(query(outsider).get());
+      console.log("PASS_PENDING_STAFF_BADGE_SECONDARY_MANAGER_ONLY");
+    });
+
     await t.test("unrelated users cannot read admin team or pending invite", async () => {
       await assertFails(outsider.collection("admins").get());
       await assertFails(outsider.doc("admins/" + staffUid).get());
