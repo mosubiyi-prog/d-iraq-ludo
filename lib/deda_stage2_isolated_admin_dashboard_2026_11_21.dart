@@ -696,6 +696,21 @@ class _DedaStage2IsolatedDashboardPageState
         ),
       );
     }
+    // ORIGINAL public-user recovery, distinct from staff recovery requests.
+    if (profile['role'] == 'general_manager') {
+      addDestination(
+        title: t('استرجاع الدخول', 'Recovery'),
+        subtitle: t('طلبات استرجاع الحساب الحساسة',
+            'Sensitive account recovery requests'),
+        icon: Icons.lock_reset,
+        accentColor: const Color(0xFF9A6700),
+        page: _DedaIsolatedUserRecoveryTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+        ),
+      );
+    }
     if (can('viewUsers')) {
       addDestination(
         title: t('المستخدمون', 'Users'),
@@ -2400,6 +2415,354 @@ class _DedaIsolatedPrizeWinnerReviewDialogState
           child:Text(t('حفظ وإرسال التحديث','Save and update'))),
       ],
     );
+  }
+}
+
+/// User recovery (recovery_requests), not staff recovery. Original card
+/// colors and manually reviewed workflow, with credential mutation blocked.
+class _DedaIsolatedUserRecoveryTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+
+  const _DedaIsolatedUserRecoveryTab({
+    required this.admin, required this.dedaPhone, required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedUserRecoveryTab> createState() =>
+      _DedaIsolatedUserRecoveryTabState();
+}
+
+class _DedaIsolatedUserRecoveryTabState
+    extends State<_DedaIsolatedUserRecoveryTab> {
+  late Future<DedaIsolatedManagerPage> _page;
+  QueryDocumentSnapshot<Map<String, dynamic>>? _cursor;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
+  bool _busy = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = _load();
+  }
+
+  Future<DedaIsolatedManagerPage> _load() =>
+      widget.admin.readScopedUserRecoveryPage(
+        dedaPhone: widget.dedaPhone, startAfter: _cursor,
+      );
+
+  void _refresh() {
+    if (_busy) return;
+    setState(() => _page = _load());
+  }
+
+  void _next(DedaIsolatedManagerPage page) {
+    if (_busy || page.nextCursor == null) return;
+    setState(() {
+      _back.add(_cursor);
+      _cursor = page.nextCursor;
+      _page = _load();
+    });
+  }
+
+  void _previous() {
+    if (_busy || _back.isEmpty) return;
+    setState(() {
+      _cursor = _back.removeLast();
+      _page = _load();
+    });
+  }
+
+  String _status(String status) {
+    switch (status) {
+      case 'new': return t('بانتظار المراجعة', 'Pending review');
+      case 'review': return t('قيد التدقيق', 'Under review');
+      case 'ready': return t('تم إصدار رمز سابقاً', 'Previously processed');
+      case 'rejected': return t('مرفوض', 'Rejected');
+      case 'error': return t('تحتاج معالجة', 'Needs reconciliation');
+      default: return status;
+    }
+  }
+
+  String _date(dynamic value) {
+    if (value is! Timestamp) return '';
+    final at = value.toDate().toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return two(at.day) + '/' + two(at.month) + '/' +
+        at.year.toString() + ' ' + two(at.hour) + ':' + two(at.minute);
+  }
+
+  Future<void> _check(Map<String, dynamic> request) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final info = await widget.admin.readScopedUserRecoveryAccountCheck(
+        dedaPhone: widget.dedaPhone,
+        accountKey: (request['accountKey'] ?? '').toString(),
+        requestedName: (request['fullName'] ?? '').toString(),
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(t('تدقيق حساب المستخدم', 'Check user account')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(info.directoryActive
+                  ? t('الحساب مسجل وفعّال', 'Directory: active')
+                  : t('الحساب غير مؤكد', 'Directory: unverified')),
+              Text(info.profileExists
+                  ? t('الملف القديم موجود', 'Old profile: found')
+                  : t('ملف الحساب القديم مفقود', 'Old profile: missing')),
+              Text(info.nameMatches
+                  ? t('الاسم مطابق', 'Name matches')
+                  : t('الاسم يحتاج تدقيق', 'Name needs review')),
+              const SizedBox(height: 12),
+              Text(t(
+                'مطابقة الاسم ليست إثبات ملكية UID. لا إصدار رمز جديد '
+                'بدون تحقق مستقل يحفظ الحساب وتقدمه.',
+                'A matching name is NOT proof of UID ownership. No PIN '
+                'issuance without independent identity and progress proof.',
+              )),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إغلاق', 'Close'))),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر تدقيق بيانات الحساب والصلاحية.',
+              'Account verification unavailable or permission denied.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _decide(String id, String action) async {
+    if (_busy || !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) {
+      return;
+    }
+    final controller = TextEditingController();
+    try {
+      final reason = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(action == 'review'
+              ? t('تسجيل مراجعة', 'Mark for review')
+              : t('رفض طلب الاسترجاع', 'Reject recovery request')),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(action == 'review'
+                ? t('المراجعة لا تصدر رمزاً ولا تغير حساب المستخدم.',
+                    'Review never issues a PIN or changes a user account.')
+                : t('سيُرفض هذا الطلب فقط دون تغيير الحساب.',
+                    'Only this request is rejected, not the account.')),
+            TextField(
+              controller: controller,
+              minLines: 2, maxLines: 4, maxLength: 250,
+              decoration: InputDecoration(
+                labelText: t('السبب (5 أحرف على الأقل)',
+                    'Reason (at least 5 characters)'),
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إلغاء', 'Cancel'))),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.length >= 5 && value.length <= 250) {
+                  Navigator.pop(dialogContext, value);
+                }
+              },
+              child: Text(t('تأكيد القرار', 'Confirm decision')),
+            ),
+          ],
+        ),
+      );
+      if (reason == null || !mounted) return;
+      setState(() => _busy = true);
+      try {
+        await widget.admin.decideScopedUserRecoveryReview(
+          dedaPhone: widget.dedaPhone,
+          requestId: id, action: action, reason: reason,
+        );
+        if (mounted) {
+          setState(() => _page = _load());
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('تم تدقيق القرار دون تعديل الحساب.',
+                'Decision audited; user account unchanged.')),
+          ));
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('تعذر القرار؛ تحقق من حالة الطلب والصلاحية.',
+                'Decision denied; check request and permission.')),
+          ));
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Card(
+        color: const Color(0xFFEAF4EA),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF9FBDA3)),
+        ),
+        child: SwitchListTile.adaptive(
+          value: false, onChanged: null,
+          title: Text(t('استرجاع الرمز تلقائياً بعد 10 ثوانٍ',
+              'Auto-reissue PIN after 10 seconds')),
+          subtitle: Text(t('الخدمة مؤجلة حتى إثبات توافق UID والرمز بالخادم.',
+              'Disabled until original UID/PIN compatibility is verified.')),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(children: [
+          Expanded(child: Text(t(
+            'المراجعة والرفض فقط؛ إصدار رمز جديد محجوب لحماية المستخدم.',
+            'Review/reject only; PIN issuance blocked to protect users.',
+          ), style: const TextStyle(fontSize: 12))),
+          IconButton(
+            onPressed: _busy ? null : _refresh,
+            tooltip: t('تحديث من الخادم', 'Refresh from server'),
+            icon: const Icon(Icons.refresh),
+          ),
+        ]),
+      ),
+      Expanded(child: FutureBuilder<DedaIsolatedManagerPage>(
+        future: _page,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text(t(
+              'تعذرت قراءة طلبات الاسترجاع بالصلاحية الحالية.',
+              'Recovery requests unavailable with current privileges.',
+            )));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final page = snapshot.data!;
+          return Column(children: [
+            Expanded(
+              child: page.rows.isEmpty
+                  ? Center(child: Text(t('لا توجد طلبات استرجاع.',
+                      'No recovery requests.')))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: page.rows.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final item = page.rows[index];
+                        final id = (item['id'] ?? '').toString();
+                        final status = (item['status'] ?? 'new').toString();
+                        final review = status == 'new';
+                        final reject = const <String>{'new', 'review'}
+                            .contains(status);
+                        return Card(child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(children: [
+                                const Icon(Icons.lock_reset,
+                                    color: Color(0xFF17652F)),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(
+                                  (item['fullName'] ?? '').toString(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 16,
+                                  ),
+                                )),
+                                Text(_status(status)),
+                              ]),
+                              const SizedBox(height: 8),
+                              SelectableText(
+                                t('الهاتف: ', 'Phone: ') +
+                                (item['phone'] ?? '').toString(),
+                                textDirection: TextDirection.ltr,
+                              ),
+                              Text(t('وقت الطلب: ', 'Requested: ') +
+                                  _date(item['createdAt'])),
+                              const SizedBox(height: 10),
+                              Wrap(spacing: 8, children: [
+                                OutlinedButton.icon(
+                                  onPressed: _busy ? null : () => _check(item),
+                                  icon: const Icon(Icons.fact_check_outlined),
+                                  label: Text(t('تدقيق الحساب',
+                                      'Check account')),
+                                ),
+                                if (review)
+                                  OutlinedButton.icon(
+                                    onPressed: _busy
+                                        ? null : () => _decide(id, 'review'),
+                                    icon: const Icon(Icons.visibility_outlined),
+                                    label: Text(t('قيد المراجعة', 'Review')),
+                                  ),
+                                if (reject)
+                                  OutlinedButton.icon(
+                                    onPressed: _busy
+                                        ? null : () => _decide(id, 'reject'),
+                                    icon: const Icon(Icons.close),
+                                    label: Text(t('رفض', 'Reject')),
+                                  ),
+                                if (reject)
+                                  Tooltip(
+                                    message: t('بانتظار إثبات ملكية UID '
+                                        'وتوافق الرمز بالخادم.',
+                                        'Awaiting server UID/PIN proof.'),
+                                    child: FilledButton.icon(
+                                      onPressed: null,
+                                      icon: const Icon(Icons.key_off_outlined),
+                                      label: Text(t('إصدار الرمز محجوب',
+                                          'PIN issuance locked')),
+                                    ),
+                                  ),
+                              ]),
+                            ],
+                          ),
+                        ));
+                      },
+                    ),
+            ),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              TextButton.icon(
+                onPressed: !_busy && _back.isNotEmpty ? _previous : null,
+                icon: const Icon(Icons.chevron_left),
+                label: Text(t('السابق', 'Previous')),
+              ),
+              TextButton.icon(
+                onPressed: !_busy && page.nextCursor != null
+                    ? () => _next(page) : null,
+                icon: const Icon(Icons.chevron_right),
+                label: Text(t('التالي', 'Next')),
+              ),
+            ]),
+          ]);
+        },
+      )),
+    ]);
   }
 }
 
