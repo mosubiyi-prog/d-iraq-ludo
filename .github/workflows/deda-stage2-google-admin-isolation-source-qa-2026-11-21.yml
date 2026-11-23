@@ -51,7 +51,7 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_assets_2026_11_24.py -v
       - name: Verify complete original profile card, route and duplicate-safety audit
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_full_audit_2026_11_24.py -v
-      - name: Protect original 13 paid frames, manager IDs, wallets and six level badges
+      - name: Protect 13 paid and 3 free frame labels, owner IDs, balances and six level badges
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_entitlement_parity_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
