@@ -1440,8 +1440,13 @@ class _DedaIsolatedAdminReportsTabState
               leading: const Icon(Icons.report_outlined,
                   color: Color(0xFF17652F)),
               title: Text(t('البلاغات النشطة', 'Active road reports')),
+              subtitle: summary['activeReportsLimited'] == true
+                ? Text(t('العدد الأدنى فقط؛ القراءة بلغت حد 500 بلاغ.',
+                    'Lower bound only: the 500-row read cap was reached.'))
+                : null,
               trailing: Text(
-                (summary['activeReports'] ?? 0).toString(),
+                (summary['activeReportsLimited'] == true ? '≥' : '') +
+                    (summary['activeReports'] ?? 0).toString(),
                 style: const TextStyle(
                     fontWeight: FontWeight.w900, fontSize: 22),
               ),

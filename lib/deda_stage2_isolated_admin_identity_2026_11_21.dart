@@ -2515,7 +2515,8 @@ class DedaIsolatedAdminIdentity {
   /// The 500-item cap, expiration and 3 resolved votes stay unchanged.
   Future<({
     Map<String, dynamic> profile,
-    List<Map<String, dynamic>> rows
+    List<Map<String, dynamic>> rows,
+    bool truncated,
   })> _fetchScopedActiveRoadHazards({
     required String dedaPhone,
   }) async {
@@ -2566,7 +2567,13 @@ class DedaIsolatedAdminIdentity {
         'expiresAtMillis': millis,
       });
     }
-    return (profile: Map<String, dynamic>.from(verifiedAdmin!), rows: rows);
+    return (
+      profile: Map<String, dynamic>.from(verifiedAdmin!),
+      rows: rows,
+      // 500 fetched documents may include expired reports, so the filtered
+      // count is only a lower bound when the ORIGINAL query cap is reached.
+      truncated: snapshot.docs.length >= 500,
+    );
   }
 
   /// Same active-report count and scope as the original Analytics card,
@@ -2579,6 +2586,7 @@ class DedaIsolatedAdminIdentity {
     );
     return <String, dynamic>{
       'activeReports': result.rows.length,
+      'activeReportsLimited': result.truncated,
       'role': (result.profile['role'] ?? '').toString(),
       'governorate': (result.profile['governorate'] ?? '').toString(),
     };

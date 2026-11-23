@@ -1513,6 +1513,24 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("FirebaseFirestore.instance",ui)
         self.assertNotIn("FirebaseAuth.instance",ui)
 
+    def test_reports_original_500_cap_never_claims_complete_census(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/deda_backend.dart').read_text()
+        shared=service.split('})> _fetchScopedActiveRoadHazards({',1)[1].split(
+            '/// Same active-report count',1)[0]
+        summary=service.split(
+            'Future<Map<String, dynamic>> readScopedAdminRoadReportSummary({',1
+        )[1].split('/// Same active hazard rows',1)[0]
+        self.assertIn(".limit(500)",shared)
+        self.assertIn("truncated: snapshot.docs.length >= 500",shared)
+        self.assertIn("'activeReportsLimited': result.truncated",summary)
+        self.assertIn("'activeReports': result.rows.length",summary)
+        self.assertIn("summary['activeReportsLimited'] == true",ui)
+        self.assertIn("Lower bound only: the 500-row read cap was reached.",ui)
+        self.assertIn("collection('road_hazards')",original)
+        self.assertEqual(service.count("_fetchScopedActiveRoadHazards("),3)
+
     def test_governorates_reuse_original_province_list_with_fresh_scope(self):
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         legacy=(REPO/'lib/admin_team_pages.dart').read_text()
