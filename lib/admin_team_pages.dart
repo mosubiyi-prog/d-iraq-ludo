@@ -1927,7 +1927,14 @@ class _DedaAdminMemberEditorPageState
   }
 }
 
-String dedaAdminAuditActionLabel(bool isArabic, String value) {
+class DedaAdminAuditPage extends StatelessWidget {
+  final bool isArabic;
+
+  const DedaAdminAuditPage({super.key, required this.isArabic});
+
+  String t(String a, String e) => isArabic ? a : e;
+
+  String _actionLabel(String value) {
     const ar = <String, String>{
       'admin_member_created': 'إضافة عضو إداري',
       'admin_member_updated': 'تعديل عضو/صلاحيات',
@@ -1970,46 +1977,6 @@ String dedaAdminAuditActionLabel(bool isArabic, String value) {
         ? (ar[value] ?? value)
         : value.replaceAll('_', ' ');
   }
-String dedaAdminAuditTargetLabel(bool isArabic,
-    Map<String, dynamic> data) {
-  final action = (data['action'] ?? '').toString();
-  String target;
-              if (action == 'read_user_account') {
-                final targetName =
-                    (data['targetUserName'] ?? '').toString().trim();
-                final targetPhone =
-                    (data['targetUserPhone'] ?? '').toString().trim();
-                if (targetName.isNotEmpty && targetPhone.isNotEmpty) {
-                  target = '$targetName • \u200E$targetPhone\u200E';
-                } else if (targetName.isNotEmpty) {
-                  target = targetName;
-                } else if (targetPhone.isNotEmpty) {
-                  target = '\u200E$targetPhone\u200E';
-                } else {
-                  target = isArabic ? 'بيانات غير مكتملة' : 'Incomplete profile';
-                }
-              } else {
-                target = (data['targetAdminName'] ??
-                        data['targetUserName'] ??
-                        data['targetUserPhone'] ??
-                        data['targetId'] ??
-                        data['sourceId'] ??
-                        '')
-                    .toString()
-                    .trim();
-              }
-  return target;
-}
-
-class DedaAdminAuditPage extends StatelessWidget {
-  final bool isArabic;
-
-  const DedaAdminAuditPage({super.key, required this.isArabic});
-
-  String t(String a, String e) => isArabic ? a : e;
-
-  String _actionLabel(String value) =>
-      dedaAdminAuditActionLabel(isArabic, value);
 
   @override
   Widget build(BuildContext context) {
@@ -2044,7 +2011,35 @@ class DedaAdminAuditPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final data = docs[index].data();
               final reason = (data['reason'] ?? '').toString().trim();
-              final target = dedaAdminAuditTargetLabel(isArabic, data);
+              final action = (data['action'] ?? '').toString();
+              String target;
+              if (action == 'read_user_account') {
+                final targetName =
+                    (data['targetUserName'] ?? '').toString().trim();
+                final targetPhone =
+                    (data['targetUserPhone'] ?? '').toString().trim();
+                if (targetName.isNotEmpty && targetPhone.isNotEmpty) {
+                  target = '$targetName • \u200E$targetPhone\u200E';
+                } else if (targetName.isNotEmpty) {
+                  target = targetName;
+                } else if (targetPhone.isNotEmpty) {
+                  target = '\u200E$targetPhone\u200E';
+                } else {
+                  target = t(
+                    'بيانات غير مكتملة',
+                    'Incomplete profile',
+                  );
+                }
+              } else {
+                target = (data['targetAdminName'] ??
+                        data['targetUserName'] ??
+                        data['targetUserPhone'] ??
+                        data['targetId'] ??
+                        data['sourceId'] ??
+                        '')
+                    .toString()
+                    .trim();
+              }
               return Card(
                 child: ListTile(
                   leading: const Icon(

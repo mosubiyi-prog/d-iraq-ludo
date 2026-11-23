@@ -16,8 +16,7 @@ import 'deda_stage2_isolated_support_trash_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
 import 'admin_place_map.dart';
 import 'admin_team_pages.dart' show dedaAdminGovernorates,
-    dedaAdminRoleLabel, dedaAdminTimestamp,
-    dedaAdminAuditActionLabel, dedaAdminAuditTargetLabel;
+    dedaAdminRoleLabel, dedaAdminTimestamp;
 
 /// Reuses the original three manual owner-notice choices, but the sender
 /// is the verified secondary admin session. No public Firebase objects.
@@ -3593,6 +3592,68 @@ class _DedaIsolatedReadOnlyTabState
     }
   }
 
+  String _isolatedAuditActionLabel(String value) {
+    const ar = <String, String>{
+      'admin_member_created': 'إضافة عضو إداري',
+      'admin_member_updated': 'تعديل عضو/صلاحيات',
+      'admin_member_deleted': 'حذف عضو إداري',
+      'admin_invite_created': 'إنشاء دعوة عضو إداري',
+      'admin_invite_shared': 'مشاركة دعوة إدارية',
+      'support_deleted': 'حذف رسالة دعم',
+      'support_bulk_deleted': 'حذف مجموعة رسائل دعم',
+      'support_restored': 'استرجاع رسالة دعم',
+      'support_permanently_deleted': 'حذف رسالة دعم نهائيًا',
+      'published_place_hidden': 'إخفاء مكان من الخريطة',
+      'published_place_restored': 'إظهار مكان على الخريطة',
+      'published_place_deleted': 'حذف مكان من الخريطة',
+      'published_place_restored_from_trash': 'استرجاع مكان محذوف',
+      'published_place_permanently_deleted': 'حذف مكان نهائيًا',
+      'admin_invite_cancelled': 'إلغاء دعوة إدارية',
+      'admin_invite_accepted': 'تفعيل دعوة إدارية',
+      'admin_access_suspended': 'إيقاف وصول عضو مؤقتًا',
+      'admin_password_reset_sent': 'إرسال رابط إعادة تعيين كلمة المرور',
+      'admin_member_access_removed': 'إزالة صلاحية عضو إداري',
+      'admin_sessions_revoked': 'تسجيل خروج من جميع الأجهزة',
+      'admin_temporary_password_reset': 'إنشاء رمز دخول مؤقت',
+      'admin_first_login_completed': 'اكتمال أول دخول',
+      'admin_signed_in': 'تسجيل دخول إداري',
+      'admin_signed_out': 'تسجيل خروج إداري',
+      'admin_profile_normalized': 'تهيئة بيانات الحساب الإداري',
+      'admin_display_name_updated': 'تعديل الاسم الإداري',
+      'recovery_approved': 'اعتماد استرجاع الدخول',
+      'recovery_rejected': 'رفض استرجاع الدخول',
+      'read_user_account': 'مشاهدة حساب مستخدم',
+      'account_deletion_status_changed': 'تحديث طلب حذف حساب',
+      'road_hazard_deleted': 'حذف بلاغ طريق',
+      'request_viewed': 'مشاهدة طلب',
+      'support_replied': 'الرد على الدعم',
+      'support_status_changed': 'تغيير حالة الدعم',
+      'place_status_changed': 'تغيير حالة طلب مكان',
+      'place_approved': 'اعتماد مكان',
+    };
+    return isArabic
+        ? (ar[value] ?? value)
+        : value.replaceAll('_', ' ');
+  }
+
+
+  String _isolatedAuditTargetLabel(Map<String, dynamic> data) {
+    final action = (data['action'] ?? '').toString();
+    if (action == 'read_user_account') {
+      final name = (data['targetUserName'] ?? '').toString().trim();
+      final phone = (data['targetUserPhone'] ?? '').toString().trim();
+      if (name.isNotEmpty && phone.isNotEmpty) {
+        return '$name • \u200E$phone\u200E';
+      }
+      if (name.isNotEmpty) return name;
+      if (phone.isNotEmpty) return '\u200E$phone\u200E';
+      return t('بيانات غير مكتملة', 'Incomplete profile');
+    }
+    return (data['targetAdminName'] ?? data['targetUserName'] ??
+        data['targetUserPhone'] ?? data['targetId'] ??
+        data['sourceId'] ?? '').toString().trim();
+  }
+
   String _timestamp(dynamic value) {
     if (value is! Timestamp) return '';
     final date = value.toDate().toLocal();
@@ -3610,7 +3671,7 @@ class _DedaIsolatedReadOnlyTabState
     // using existing server-scoped read and shared original formatters.
     // Never show raw audit maps, internal tokens, or credentials.
     if (widget.collection == 'admin_audit') {
-      final target = dedaAdminAuditTargetLabel(widget.isArabic, data);
+      final target = _isolatedAuditTargetLabel(data);
       final reason = (data['reason'] ?? '').toString().trim();
       final actor = (data['adminName'] ??
           t('الإدارة', 'Administration')).toString();
@@ -3618,8 +3679,7 @@ class _DedaIsolatedReadOnlyTabState
         child: ListTile(
           leading: const Icon(Icons.fact_check_outlined,
               color: Color(0xFF17652F)),
-          title: Text(dedaAdminAuditActionLabel(
-            widget.isArabic, (data['action'] ?? '').toString()),
+          title: Text(_isolatedAuditActionLabel((data['action'] ?? '').toString()),
             style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(
             actor + ' • ' +
