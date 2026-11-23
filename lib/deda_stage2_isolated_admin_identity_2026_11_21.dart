@@ -137,11 +137,12 @@ class DedaIsolatedAdminProofPolicy {
       'general_manager', 'deputy_manager', 'employee', 'province_agent',
     }.contains(normalizedRole)) return false;
     // Only the server-recognized general manager may enumerate admin staff.
-    if (const <String>{'viewTeam', 'managePlaceArchives',
-      'reviewAccountDeletions'}.contains(permission) &&
+    if (const <String>{'viewTeam', 'managePlaceArchives'}.contains(permission) &&
         normalizedRole != 'general_manager') {
       return false;
     }
+    if (permission == 'reviewAccountDeletions' &&
+        normalizedRole != 'general_manager') { return false; }
     if (normalizedRole == 'general_manager') { return true; }
     // Firestore rules deny these four actions to province agents even if
     // a legacy permissions map accidentally contains a true value.
@@ -2531,6 +2532,8 @@ class DedaIsolatedAdminIdentity {
     );
   }
 
+  Future<void> signOutSecondaryAdmin() => _auth.signOut();
+
   /// Paged fresh-server queue under SECONDARY admin Auth, never the user Auth.
   Future<DedaIsolatedManagerPage> readScopedAccountDeletionPage({
     required String dedaPhone,
@@ -2646,7 +2649,6 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
-  Future<void> signOutSecondaryAdmin() => _auth.signOut();
 
   /// Display no more than 50 gateway records and never expose public Auth.
   /// The manager's secondary login is re-proved before and after server reads.

@@ -1520,7 +1520,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("requiredPermission: 'reviewAccountDeletions'",service)
         section=service.split('Future<void> reviewScopedAccountDeletionRequest(',1)[1].split(
             '  Future<void> signOutSecondaryAdmin()',1)[0]
-        for required in ('if (!dedaIsolatedAdminIdentityEnabled)',
+        for required in ('if (!dedaIsolatedAdminIdentityEnabled ||',
                          '_firestore.runTransaction((tx) async {',
                          'await tx.get(target)', 'tx.update(target,',
                          'tx.set(audit,', "'statusOnlyNoAccountDeletion': true"):
