@@ -593,6 +593,141 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       console.log("PASS_PRIZE_NEEDS_INFO_REPLY_OWNER_ONLY_ADMIN_NOT_INTERCEPTED");
     });
 
+    await t.test("weekly league GM pause/freeze/notice and increasing plan are atomic; XP and gifts untouched", async () => {
+      const week="2026-11-21";
+      const id="@DEDA-QA1234";
+      const scorePath="deda_weekly_direct_weeks/"+week+"/scores/"+id;
+      const control="deda_weekly_direct_control/active";
+      const reviewPath="deda_weekly_direct_reviews/"+week+"/users/"+id;
+      const noticePath="deda_weekly_direct_notices/"+week+"/users/"+id;
+      const planPath="deda_weekly_direct_prize_plans/"+week;
+      const why="QA verified league pause and participant review";
+      const base=[150,100,50,10,10,10,10,10,10,10];
+      const raised=[160,100,50,10,10,10,10,10,10,10];
+      const notice="Your weekly league points are held for review only.";
+      const freed="Your weekly league review has been completed.";
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db=ctx.firestore();
+        await db.doc("users/"+publicUid).set({
+          accountKey:account,sharePersonalId:id,
+        });
+        await db.doc("deda_weekly_direct_accounts/"+id).set({
+          accountKey:account,publicId:id,createdByUid:publicUid,
+          createdAt:sent(),
+        });
+        await db.doc(scorePath).set({
+          weekId:week,weekStart:firebase.firestore.Timestamp.fromDate(
+            new Date("2026-11-21T03:00:00.000Z")),
+          publicId:id,displayName:"QA League Participant",
+          claimedKeys:[week+"|open_map"],lastClaimKey:week+"|open_map",
+          completedTasks:1,weeklyXp:20,updatedAt:sent(),
+        });
+      });
+      await assertFails(staff.doc(control).set({
+        weekId:week,paused:true,reason:why,updatedAt:sent(),
+        updatedBy:staffUid,
+      }));
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const c=manager.doc(control);
+        const ev=manager.doc("deda_weekly_direct_admin_events/qa_league_pause");
+        const old=await tx.get(c);
+        assert.equal(old.exists,false);
+        tx.set(c,{weekId:week,paused:true,reason:why,
+          updatedAt:sent(),updatedBy:managerUid});
+        tx.set(ev,{action:"pause",weekId:week,publicId:"",
+          reason:why,createdAt:sent(),createdBy:managerUid});
+      }));
+      await assertFails(staff.doc(reviewPath).set({
+        weekId:week,publicId:id,frozen:true,notice,reason:why,
+        updatedAt:sent(),updatedBy:staffUid,
+      }));
+      await assertFails(manager.doc(noticePath).set({
+        weekId:week,publicId:id,frozen:true,notice,
+        updatedAt:sent(),updatedBy:managerUid,
+      }));
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const score=await tx.get(manager.doc(scorePath));
+        const previous=await tx.get(manager.doc(reviewPath));
+        assert.equal(score.data().weeklyXp,20);
+        assert.equal(previous.exists,false);
+        tx.set(manager.doc(reviewPath),{
+          weekId:week,publicId:id,frozen:true,reason:why,notice,
+          updatedAt:sent(),updatedBy:managerUid,
+        });
+        tx.set(manager.doc(noticePath),{
+          weekId:week,publicId:id,frozen:true,notice,
+          updatedAt:sent(),updatedBy:managerUid,
+        });
+        tx.set(manager.doc("deda_weekly_direct_admin_events/qa_league_freeze"),{
+          action:"freeze",weekId:week,publicId:id,
+          reason:why,createdAt:sent(),createdBy:managerUid,
+        });
+      }));
+      await assertSucceeds(publicDb.doc(noticePath).get());
+      await assertFails(outsider.doc(noticePath).get());
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const controlState=await tx.get(manager.doc(control));
+        const existing=await tx.get(manager.doc(planPath));
+        assert.equal(controlState.data().paused,true);
+        assert.equal(existing.exists,false);
+        tx.set(manager.doc(planPath),{
+          weekId:week,amounts:raised,reason:why,
+          updatedAt:sent(),updatedBy:managerUid,
+        });
+        tx.set(manager.doc("deda_weekly_direct_admin_events/qa_league_prizes"),{
+          action:"prizes_increase",weekId:week,publicId:"",
+          reason:why,createdAt:sent(),createdBy:managerUid,
+        });
+      }));
+      await assertFails(manager.doc(planPath).set({
+        weekId:week,amounts:base,reason:why,
+        updatedAt:sent(),updatedBy:managerUid,
+      }));
+      await assertFails(staff.doc(planPath).update({
+        amounts:raised,reason:why,updatedAt:sent(),updatedBy:staffUid,
+      }));
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const r=await tx.get(manager.doc(reviewPath));
+        assert.equal(r.data().frozen,true);
+        tx.set(manager.doc(reviewPath),{
+          weekId:week,publicId:id,frozen:false,reason:why,notice:freed,
+          updatedAt:sent(),updatedBy:managerUid,
+        });
+        tx.set(manager.doc(noticePath),{
+          weekId:week,publicId:id,frozen:false,notice:freed,
+          updatedAt:sent(),updatedBy:managerUid,
+        });
+        tx.set(manager.doc("deda_weekly_direct_admin_events/qa_league_release"),{
+          action:"unfreeze",weekId:week,publicId:id,reason:why,
+          createdAt:sent(),createdBy:managerUid,
+        });
+      }));
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const c=manager.doc(control);
+        const old=await tx.get(c);
+        assert.equal(old.data().paused,true);
+        tx.set(c,{weekId:week,paused:false,reason:why,
+          updatedAt:sent(),updatedBy:managerUid});
+        tx.set(manager.doc("deda_weekly_direct_admin_events/qa_league_resume"),{
+          action:"resume",weekId:week,publicId:"",
+          reason:why,createdAt:sent(),createdBy:managerUid,
+        });
+      }));
+      await assertFails(manager.doc(planPath).set({
+        weekId:week,amounts:[170,100,50,10,10,10,10,10,10,10],
+        reason:why,updatedAt:sent(),updatedBy:managerUid,
+      }));
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db=ctx.firestore();
+        assert.equal((await db.doc(scorePath).get()).data().weeklyXp,20);
+        assert.equal((await db.collection("deda_diamond_gifts").get()).empty,true);
+        assert.deepEqual((await db.doc(planPath).get()).data().amounts,raised);
+        assert.equal((await db.doc(reviewPath).get()).data().frozen,false);
+        assert.equal((await db.doc(noticePath).get()).data().frozen,false);
+      });
+      console.log("PASS_LEAGUE_GM_ATOMIC_PAUSE_FREEZE_NOTICE_PLAN_RESUME_NO_WALLET_OR_XP");
+    });
+
     await t.test("release hold: active roleless admin is treated as general manager",async()=>{
       const missingUid="qa_roleless_legacy_account";
       await env.withSecurityRulesDisabled(async ctx=>{
