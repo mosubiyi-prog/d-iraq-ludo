@@ -5,6 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
+import 'deda_exclusive_ids_admin_page.dart' show DedaExclusiveAdminBridge,
+    DedaExclusiveAdminId, DedaExclusiveAdminGrant,
+    DedaExclusiveAdminSnapshot, DedaExclusiveAdminSnapshotVerifier;
 
 import 'deda_backend.dart';
 
@@ -217,6 +222,25 @@ class DedaIsolatedAdminProofPolicy {
         (published['approvalNumber'] ?? '').toString().trim() ==
             request['approvalNumber'].toString().trim();
   }
+
+
+  /// Owner-private group001 must be authenticated and an exact 100-row read.
+  static bool exclusive100CanAssign({
+    required Map<String, dynamic>? admin,
+    required DedaExclusiveAdminSnapshot? snapshot,
+    required String identifier,
+    required String color,
+    String? recipient,
+  }) =>
+    allowsPermission(admin:admin, permission:'managePlaceArchives') &&
+    admin?['role'] == 'general_manager' &&
+    DedaExclusiveAdminSnapshotVerifier.colors.contains(color) &&
+    (recipient == null ||
+      DedaExclusiveAdminSnapshotVerifier.originalId.hasMatch(recipient)) &&
+    snapshot != null &&
+    DedaExclusiveAdminSnapshotVerifier.isSafe(snapshot) &&
+    snapshot.identifiers.any((id) =>
+      id.identifier == identifier && id.available);
 
   /// The legacy "deleted" status does NOT delete a Firebase Auth account.
   static bool accountDeletionReviewAllowed({
@@ -4278,6 +4302,197 @@ class DedaIsolatedAdminIdentity {
         _mainAuth.currentUser?.uid != publicUid) {
       throw StateError('place-deletion-postcommit-session-changed');
     }
+  }
+
+
+  /// Only identity-change events; never exposes user credentials or catalogs.
+  Stream<String?> watchScopedExclusiveAdminUid() =>
+      _auth.authStateChanges().map((user) => user?.uid);
+  Stream<String?> watchScopedExclusivePublicUid() =>
+      _mainAuth.authStateChanges().map((user) => user?.uid);
+  String? get scopedExclusiveAdminUid => _auth.currentUser?.uid;
+  String? get scopedExclusivePublicUid => _mainAuth.currentUser?.uid;
+
+  /// One private callable transport. The original Stage19 flags are OFF.
+  /// Auth tokens come ONLY from the secondary administrator FirebaseApp.
+  Future<dynamic> _exclusive100ServerCall({
+    required String dedaPhone, required String name,
+    required Map<String, dynamic> data, required bool mutation,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaExclusiveAdminBridge.serverReadFlag ||
+        (mutation && !DedaExclusiveAdminBridge.serverActionsFlag)) {
+      throw StateError('exclusive100-private-server-off');
+    }
+    if (!const <String>{
+      'dedaStage19Exclusive100Read','dedaStage19Exclusive100SelfUse',
+      'dedaStage19Exclusive100Grant',
+    }.contains(name) ||
+        mutation == (name == 'dedaStage19Exclusive100Read')) {
+      throw StateError('exclusive100-call-name-denied');
+    }
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || publicUid == null ||
+        _auth.app.name != isolatedAppName ||
+        _auth.app.name == _mainAuth.app.name) {
+      throw StateError('exclusive100-independent-session-required');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid:uid, dedaPhone:dedaPhone, expectedPublicUid:publicUid,
+      requiredPermission:'managePlaceArchives',
+      onAuthorizedAdmin:(value) => manager = value,
+    );
+    if (!await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('exclusive100-general-manager-only');
+    }
+    // FirebaseFunctions.instance would use PUBLIC Auth and is prohibited.
+    final callable = FirebaseFunctions.instanceFor(app:_auth.app)
+        .httpsCallable(name,
+          options: HttpsCallableOptions(timeout: const Duration(seconds:40)));
+    final result = await callable.call(data);
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('exclusive100-server-session-changed');
+    }
+    return result.data;
+  }
+
+  /// Parse only the real owner private catalog, never an APK seed or a
+  /// synthetic 100-ID list. Exact fields and dated history are verified.
+  DedaExclusiveAdminSnapshot _decodeScopedExclusive100(dynamic result) {
+    if (result is! Map) throw StateError('exclusive100-malformed-response');
+    final data=Map<String,dynamic>.from(result);
+    if (data['serverConfirmed'] != true || data['total'] != 100 ||
+        data['identifiers'] is! List || data['history'] is! List) {
+      throw StateError('exclusive100-not-server-confirmed');
+    }
+    final ids=<DedaExclusiveAdminId>[];
+    for (final raw in data['identifiers'] as List) {
+      if (raw is! Map) throw StateError('exclusive100-invalid-row');
+      final row=Map<String,dynamic>.from(raw);
+      if (row['sequence'] is! int || row['identifier'] is! String ||
+          row['status'] is! String ||
+          row['permanentColor'] != null && row['permanentColor'] is! String ||
+          row['ownerOriginalId'] != null && row['ownerOriginalId'] is! String) {
+        throw StateError('exclusive100-invalid-row');
+      }
+      ids.add(DedaExclusiveAdminId(
+        sequence:row['sequence'] as int,
+        identifier:row['identifier'] as String,
+        status:row['status'] as String,
+        permanentColor:row['permanentColor'] as String?,
+        ownerOriginalId:row['ownerOriginalId'] as String?,
+      ));
+    }
+    final grants=<DedaExclusiveAdminGrant>[];
+    for (final raw in data['history'] as List) {
+      if (raw is! Map) throw StateError('exclusive100-invalid-receipt');
+      final row=Map<String,dynamic>.from(raw);
+      if (row['identifier'] is! String ||
+          row['recipientOriginalId'] is! String ||
+          row['color'] is! String || row['kind'] is! String ||
+          row['grantedAt'] is! String) {
+        throw StateError('exclusive100-invalid-receipt');
+      }
+      final date=DateTime.tryParse(row['grantedAt'] as String);
+      if (date == null) throw StateError('exclusive100-invalid-receipt-date');
+      grants.add(DedaExclusiveAdminGrant(
+        identifier:row['identifier'] as String,
+        recipientOriginalId:row['recipientOriginalId'] as String,
+        color:row['color'] as String,
+        kind:row['kind'] as String, grantedAt:date,
+      ));
+    }
+    final snapshot=DedaExclusiveAdminSnapshot(
+      serverConfirmed:true,total:100,identifiers:ids,history:grants);
+    if (!DedaExclusiveAdminSnapshotVerifier.isSafe(snapshot)) {
+      throw StateError('exclusive100-invalid-catalog-ownership');
+    }
+    return snapshot;
+  }
+
+  Future<DedaExclusiveAdminSnapshot> readScopedExclusive100({
+    required String dedaPhone,
+  }) async => _decodeScopedExclusive100(await _exclusive100ServerCall(
+    dedaPhone:dedaPhone, name:'dedaStage19Exclusive100Read',
+    data:<String,dynamic>{}, mutation:false,
+  ));
+
+  /// Self-use or gift: no direct Firestore/UID/wallet/alias writes. Actions
+  /// remain disabled until a separately approved, AppCheck-guarded server.
+  Future<DedaExclusiveAdminSnapshot> commitScopedExclusive100({
+    required String dedaPhone, required String identifier,
+    required String color, String? recipientOriginalId,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaExclusiveAdminBridge.serverReadFlag ||
+        !DedaExclusiveAdminBridge.serverActionsFlag) {
+      throw StateError('exclusive100-server-actions-not-approved');
+    }
+    final actor=_auth.currentUser;
+    final userUid=_mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || userUid == null) {
+      throw StateError('exclusive100-session-required');
+    }
+    final adminUid=actor.uid;
+    Map<String,dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid:adminUid,dedaPhone:dedaPhone,expectedPublicUid:userUid,
+      requiredPermission:'managePlaceArchives',
+      onAuthorizedAdmin:(value)=>manager=value,
+    );
+    if (!await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('exclusive100-gm-only');
+    }
+    final previous=await readScopedExclusive100(dedaPhone:dedaPhone);
+    if (!DedaIsolatedAdminProofPolicy.exclusive100CanAssign(
+          admin:manager,snapshot:previous,identifier:identifier,color:color,
+          recipient:recipientOriginalId,
+        ) ||
+        !await proof() ||
+        _auth.currentUser?.uid != adminUid ||
+        _mainAuth.currentUser?.uid != userUid) {
+      throw StateError('exclusive100-owner-or-color-invalid');
+    }
+    final gift=recipientOriginalId != null;
+    final result=await _exclusive100ServerCall(
+      dedaPhone:dedaPhone,
+      name:gift ? 'dedaStage19Exclusive100Grant'
+          : 'dedaStage19Exclusive100SelfUse',
+      data:<String,dynamic>{
+        'identifier':identifier,'color':color,
+        if (gift) 'recipientOriginalId':recipientOriginalId,
+      },mutation:true,
+    );
+    if (result is! Map) throw StateError('exclusive100-receipt-missing');
+    final reply=Map<String,dynamic>.from(result);
+    if (reply['serverConfirmed'] != true ||
+        reply['identifier'] != identifier ||
+        reply['permanentColor'] != color ||
+        (gift && reply['recipientOriginalId'] != recipientOriginalId) ||
+        (!gift && reply['activeId'] != identifier)) {
+      throw StateError('exclusive100-receipt-unverified');
+    }
+    final verified=await readScopedExclusive100(dedaPhone:dedaPhone);
+    if (_auth.currentUser?.uid != adminUid ||
+        _mainAuth.currentUser?.uid != userUid ||
+        !verified.identifiers.any((id) =>
+          id.identifier == identifier &&
+          id.status == (gift ? 'gifted' : 'self_used') &&
+          id.permanentColor == color &&
+          (!gift || id.ownerOriginalId == recipientOriginalId)) ||
+        !verified.history.any((h) =>
+          h.identifier == identifier &&
+          h.kind == (gift ? 'gifted' : 'self_used') &&
+          h.color == color &&
+          (!gift || h.recipientOriginalId == recipientOriginalId))) {
+      throw StateError('exclusive100-server-readback-not-confirmed');
+    }
+    return verified;
   }
 
 }

@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:d_iraq_ludo/deda_exclusive_ids_admin_page.dart' show
+    DedaExclusiveAdminBridge, DedaExclusiveAdminId, DedaExclusiveAdminSnapshot;
 import 'package:d_iraq_ludo/deda_stable_google_login_2026_11_21.dart';
 import 'package:d_iraq_ludo/deda_stage2_isolated_admin_identity_2026_11_21.dart';
 
@@ -1192,6 +1194,39 @@ void main() {
           ['deleted','rejected']);
       expect(DedaIsolatedAdminProofPolicy.placeDeletionAllowedTransitions('rejected'),
           isEmpty);
+    });
+  });  group('Stage2 exclusive 100 IDs fail-closed permissions', () {
+    final gm=<String,dynamic>{'active':true,'status':'active',
+      'role':'general_manager'};
+    final complete=DedaExclusiveAdminSnapshot(
+      serverConfirmed:true,total:100,
+      identifiers:List.generate(100,(i)=>DedaExclusiveAdminId(
+        sequence:i+1,identifier:'@DEDA-QATEST$i',status:'available')),
+      history:const [],
+    );
+    bool can(Map<String,dynamic> actor,DedaExclusiveAdminSnapshot snap,
+      String id,String color,{String? recipient}) =>
+        DedaIsolatedAdminProofPolicy.exclusive100CanAssign(
+          admin:actor,snapshot:snap,identifier:id,color:color,
+          recipient:recipient);
+    test('GM, verified original 100 and valid colors only', () {
+      expect(can(gm,complete,'@DEDA-QATEST0','gold'),true);
+      expect(can(gm,complete,'@DEDA-QATEST0','royal',
+          recipient:'@DEDA-ABC123'),true);
+      expect(can({...gm,'role':'employee'},complete,'@DEDA-QATEST0','gold'),false);
+      expect(can(gm,complete,'@DEDA-FAKE00','gold'),false);
+      expect(can(gm,complete,'@DEDA-QATEST0','green'),false);
+      expect(can(gm,complete,'@DEDA-QATEST0','gold',recipient:'someone'),false);
+    });
+    test('no fake or unverified server catalog may enable actions', () {
+      expect(can(gm,DedaExclusiveAdminSnapshot(serverConfirmed:false,
+        total:100,identifiers:complete.identifiers,history:const []),
+        '@DEDA-QATEST0','gold'),false);
+      expect(can(gm,DedaExclusiveAdminSnapshot(serverConfirmed:true,
+        total:100,identifiers:complete.identifiers.take(99).toList(),
+        history:const []),'@DEDA-QATEST0','gold'),false);
+      expect(DedaExclusiveAdminBridge.serverReadFlag,false);
+      expect(DedaExclusiveAdminBridge.serverActionsFlag,false);
     });
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
+import 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
 import 'admin_team_pages.dart' show dedaAdminGovernorates;
 
@@ -248,6 +249,20 @@ class _DedaStage2IsolatedDashboardPageState
           dedaPhone: widget.dedaPhone,
           isArabic: widget.isArabic,
         ),
+      );
+    }
+    // Private owner 100-ID card: no public Auth or local catalog.
+    if (can('managePlaceArchives') &&
+        widget.profile['role'] == 'general_manager') {
+      addDestination(
+        title: t('إدارة المعرّفات الحصرية', 'Exclusive ID management'),
+        subtitle: t('الـ100 • الألوان • المنح • السجل',
+            '100 IDs • colors • grants • history'),
+        icon: Icons.verified_user_outlined,
+        accentColor: const Color(0xFF125D67),
+        page: DedaStage2IsolatedExclusiveIdsAdminPage(
+          admin:widget.admin,dedaPhone:widget.dedaPhone,
+          isArabic:widget.isArabic),
       );
     }
     // Original owner place deletion: archive, removal, notice and audit.

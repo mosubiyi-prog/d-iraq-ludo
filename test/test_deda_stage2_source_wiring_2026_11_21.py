@@ -1574,5 +1574,44 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("admin?['role'] != 'general_manager'",policy)
         self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
 
+    def test_stage2_owner_exclusive_100_secondary_auth_private_only(self):
+        ident=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart').read_text()
+        original=(REPO/'lib/deda_exclusive_ids_admin_page.dart').read_text()
+        private=(REPO/'functions/stage19_private/stage19_owner100_readonly_NOT_EXPORTED.js').read_text()
+        self.assertIn('NOT DEPLOYED',private)
+        self.assertIn('defaultValue: false',original)
+        self.assertIn('DedaExclusiveAdminBridge.serverActionsFlag',ident)
+        self.assertIn('DedaExclusiveAdminBridge.serverReadFlag',ident)
+        self.assertIn('FirebaseFunctions.instanceFor(app:_auth.app)',ident)
+        self.assertIn("requiredPermission:'managePlaceArchives'",ident)
+        self.assertIn("name:'dedaStage19Exclusive100Read'",ident)
+        self.assertIn("'dedaStage19Exclusive100Grant'",ident)
+        self.assertIn("'dedaStage19Exclusive100SelfUse'",ident)
+        self.assertIn('DedaExclusiveAdminSnapshotVerifier.isSafe(snapshot)',ident)
+        self.assertIn('exclusive100-server-readback-not-confirmed',ident)
+        self.assertEqual(ident.count('Future<DedaExclusiveAdminSnapshot> readScopedExclusive100('),1)
+        self.assertEqual(ident.count('Future<DedaExclusiveAdminSnapshot> commitScopedExclusive100('),1)
+        self.assertIn('watchScopedExclusiveAdminUid()',ui)
+        self.assertIn('watchScopedExclusivePublicUid()',ui)
+        self.assertIn('widget.admin.readScopedExclusive100(',ui)
+        self.assertIn('widget.admin.commitScopedExclusive100(',ui)
+        self.assertIn('DedaVerifiedIdentifierText(',ui)
+        self.assertIn('height:50',ui)
+        self.assertIn("['gold','diamond','royal','pink']",ui)
+        self.assertIn('deda_stage2_exclusive_grant_log_top_left',ui)
+        self.assertIn('DedaStage2IsolatedExclusiveIdsAdminPage(',dashboard)
+        self.assertIn("if (can('managePlaceArchives')",dashboard)
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+                'DedaBackend.', 'DedaExclusiveAdminBridge.readRemote',
+                'DedaExclusiveIdsAdminPage('):
+            self.assertNotIn(forbidden,ui)
+        last=ident.split('  Stream<String?> watchScopedExclusiveAdminUid()',1)[1]
+        for forbidden in ('FirebaseFunctions.instance.',"collection('users')",
+                          'tx.set(',"collection('exclusive_identifiers')"):
+            self.assertNotIn(forbidden,last)
+        self.assertEqual(dashboard.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
+
 if __name__ == '__main__':
     unittest.main()
