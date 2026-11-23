@@ -5991,16 +5991,34 @@ class DedaIsolatedAdminIdentity {
     ];
   }
 
-  Future<List<DedaAdminLeagueRow>> _leagueScores(String week) async {
-    final snap=await _firestore.collection('deda_weekly_direct_weeks')
-      .doc(week).collection('scores').limit(100)
-      .get(const GetOptions(source:Source.server));
-    if (snap.metadata.isFromCache || snap.metadata.hasPendingWrites) {
-      throw StateError('league-score-unverified');
+  /// Page the ORIGINAL week scores, never rank the first 100 document IDs
+  /// as if they were all competitors. No alternate XP ledger or new writer.
+  /// Null means the safety cap was reached: never show a partial ranking.
+  Future<List<DedaAdminLeagueRow>?> _leagueScores(String week) async {
+    const pageSize=100;
+    const maxPages=20; // Bounded reads for Spark; cap is NOT a verified rank.
+    final records=<MapEntry<String,Map<String,dynamic>>>[];
+    DocumentSnapshot<Map<String,dynamic>>? cursor;
+    for(var page=0;page<maxPages;page++) {
+      Query<Map<String,dynamic>> query=_firestore
+        .collection('deda_weekly_direct_weeks')
+        .doc(week).collection('scores')
+        .orderBy(FieldPath.documentId).limit(pageSize);
+      if(cursor!=null) query=query.startAfterDocument(cursor);
+      final snap=await query.get(const GetOptions(source:Source.server));
+      if(snap.metadata.isFromCache || snap.metadata.hasPendingWrites) {
+        throw StateError('league-score-unverified');
+      }
+      records.addAll([
+        for(final doc in snap.docs) MapEntry(doc.id,doc.data()),
+      ]);
+      if(snap.docs.length<pageSize) {
+        return DedaAdminLeagueProjection.fromRecords(records);
+      }
+      cursor=snap.docs.last;
     }
-    return DedaAdminLeagueProjection.fromRecords([
-      for(final doc in snap.docs) MapEntry(doc.id,doc.data()),
-    ]);
+    // At the read cap a partial page sequence is not a complete standings.
+    return null;
   }
 
   /// Mirrors league controls, top ten, podium, review and Hadaya status.
@@ -6077,6 +6095,8 @@ class DedaIsolatedAdminIdentity {
       // A denied read is UNKNOWN, never interpreted as no payout.
     }
     await _leagueRecheck(dedaPhone,actor);
+    // A capped holds read cannot prove whether an unlisted user is frozen.
+    final holdsVerified=holds.docs.length<100;
     final frozen={for(final d in holds.docs)d.id:d.data()['frozen']==true};
     List<Map<String,dynamic>> view(List<DedaAdminLeagueRow> rows) => [
       for(final r in rows) <String,dynamic>{
@@ -6089,7 +6109,11 @@ class DedaIsolatedAdminIdentity {
       'paused':control.data()?['paused']==true &&
           control.data()?['weekId']==currentWeek,
       'weekFrozen':clock.phase==DedaWeeklyPhase.frozen,
-      'currentRows':view(current),'reviewRows':view(other),
+      'currentRows':view(current??const <DedaAdminLeagueRow>[]),
+      'reviewRows':view(other??const <DedaAdminLeagueRow>[]),
+      'currentStandingsVerified':current!=null,
+      'reviewStandingsVerified':other!=null,
+      'reviewHoldsVerified':holdsVerified,
       'amounts':List<int>.unmodifiable(amounts),
       'prizePlanVerified':prizePlanVerified && amounts.length==10,
       'receipts':receipts,
@@ -6108,8 +6132,9 @@ class DedaIsolatedAdminIdentity {
       final week=DedaAdminLeagueLiveData.weekId(start);
       final data=await _leagueScores(week);
       out.add({
-        'week':week,'rows':<Map<String,dynamic>>[
-          for(final r in data.take(10))
+        'week':week,'standingsVerified':data!=null,
+        'rows':<Map<String,dynamic>>[
+          for(final r in (data??const <DedaAdminLeagueRow>[]).take(10))
             {'name':r.name,'id':r.publicId,'place':r.place,'xp':r.xp},
         ],
       });

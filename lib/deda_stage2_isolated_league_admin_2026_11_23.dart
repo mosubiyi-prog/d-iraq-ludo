@@ -179,6 +179,11 @@ class _DedaStage2IsolatedLeagueAdminPageState
         ),
     ]);
   }
+  Widget _scoresLimited() => Text(t(
+    'ترتيب الدوري غير معتمد: تجاوزت قراءة النتائج حد الحماية (2000). '
+    'لا نعرض مراكز جزئية على أنها نهائية؛ راجع مصدر النتائج من الخادم.',
+    'League scores exceeded the 2000-document safety cap. '
+    'Partial rankings are not verified; review the server records.'));
   @override
   Widget build(BuildContext context) {
     if (!dedaIsolatedAdminIdentityEnabled) {
@@ -199,6 +204,9 @@ class _DedaStage2IsolatedLeagueAdminPageState
         final v = snap.data!;
         final current = v['currentRows'] as List<Map<String,dynamic>>;
         final review = v['reviewRows'] as List<Map<String,dynamic>>;
+        final currentVerified = v['currentStandingsVerified'] == true;
+        final reviewVerified = v['reviewStandingsVerified'] == true;
+        final holdsVerified = v['reviewHoldsVerified'] == true;
         final week = v['reviewWeek'] as String;
         final amounts = v['amounts'] as List<int>;
         final prizePlanVerified = v['prizePlanVerified'] == true &&
@@ -230,9 +238,12 @@ class _DedaStage2IsolatedLeagueAdminPageState
               ]),
             ],
           )),
-          _panel(t('المتصدرون العشرة', 'Top ten'), _rows(current)),
+          _panel(t('المتصدرون العشرة', 'Top ten'),
+            currentVerified ? _rows(current) : _scoresLimited()),
           _panel(t('المراكز الثلاثة الأولى', 'Top three'),
-            _rows(current.take(3).toList(growable: false))),
+            currentVerified
+              ? _rows(current.take(3).toList(growable: false))
+              : _scoresLimited()),
           _panel(t('مراجعة نقاط الدوري', 'League XP review'),
             Column(children: [
               if (weeks.isNotEmpty) DropdownButton<String>(
@@ -247,7 +258,14 @@ class _DedaStage2IsolatedLeagueAdminPageState
               ),
               Text(t('التجميد لا يؤثر على نقاط المستوى.',
                 'Freeze never affects level XP.')),
-              _rows(review, editable: true, week: week),
+              if (!reviewVerified) _scoresLimited(),
+              if (reviewVerified && !holdsVerified) Text(t(
+                'تعذّر إثبات حالات التجميد كاملة؛ أزرار التجميد محجوبة '
+                'حتى فحص السجل من الخادم.',
+                'Freeze statuses reached the read cap; freeze controls '
+                'are disabled pending a complete server check.')),
+              if (reviewVerified) _rows(review,
+                editable: holdsVerified, week: week),
             ]),
           ),
           _panel(t('جوائز الدوري وهداياي — قراءة فقط',
@@ -365,7 +383,9 @@ class _DedaStage2IsolatedLeagueAdminPageState
                       title: Text(t('الأسبوع ', 'Week ') +
                         item['week'].toString()),
                       children: [
-                        _rows(item['rows'] as List<Map<String,dynamic>>),
+                        item['standingsVerified'] == true
+                          ? _rows(item['rows'] as List<Map<String,dynamic>>)
+                          : _scoresLimited(),
                       ]),
                 ]);
               },

@@ -1900,6 +1900,44 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("collection('deda_diamond_gift_balances')",ui)
         self.assertNotIn('FirebaseFirestore.instance',ui)
 
+    def test_stage2_league_scores_paginate_original_records_and_fail_closed(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()
+        source=service.split(
+            'Future<List<DedaAdminLeagueRow>?> _leagueScores(String week) async {',1
+        )[1].split('/// Mirrors league controls',1)[0]
+        self.assertIn("collection('deda_weekly_direct_weeks')",source)
+        self.assertIn(".doc(week).collection('scores')",source)
+        self.assertIn('const pageSize=100;',source)
+        self.assertIn('const maxPages=20;',source)
+        self.assertIn('orderBy(FieldPath.documentId).limit(pageSize)',source)
+        self.assertIn('query=query.startAfterDocument(cursor)',source)
+        self.assertIn('snap.metadata.isFromCache',source)
+        self.assertIn('snap.metadata.hasPendingWrites',source)
+        self.assertIn('if(snap.docs.length<pageSize)',source)
+        self.assertIn('DedaAdminLeagueProjection.fromRecords(records)',source)
+        self.assertIn('return null;',source)
+        self.assertNotIn('.limit(100).get(',source)
+        read=service.split('Future<Map<String,dynamic>> readScopedLeague(',1)[1].split(
+            'Future<List<Map<String,dynamic>>> readScopedLeagueArchive(',1)[0]
+        archive=service.split('Future<List<Map<String,dynamic>>> readScopedLeagueArchive(',1)[1].split(
+            'Future<void> setScopedLeaguePaused(',1)[0]
+        for token in ("'currentStandingsVerified':current!=null",
+                      "'reviewStandingsVerified':other!=null",
+                      "'reviewHoldsVerified':holdsVerified",
+                      'holds.docs.length<100'):
+            self.assertIn(token,read)
+        self.assertIn("'standingsVerified':data!=null",archive)
+        self.assertIn('currentVerified ? _rows(current) : _scoresLimited()',ui)
+        self.assertIn('if (!reviewVerified) _scoresLimited()',ui)
+        self.assertIn('editable: holdsVerified',ui)
+        self.assertIn("item['standingsVerified'] == true",ui)
+        self.assertIn('Partial rankings are not verified;',ui)
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+                          'FirebaseFunctions.instance','DedaBackend.',
+                          "collection('users')",'tx.set('):
+            self.assertNotIn(forbidden,source)
+
     def test_league_hadaya_census_100_cap_does_not_claim_complete_gift_counts(self):
         service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()
