@@ -2885,6 +2885,8 @@ class DedaIsolatedAdminIdentity {
     );
   }
 
+  Future<void> signOutSecondaryAdmin() => _auth.signOut();
+
   /// The existing support-trash collection under SECONDARY manager Auth.
   /// The stored rows remain private and can never be read by public users.
   Future<DedaIsolatedManagerPage> readScopedSupportTrashPage({
@@ -3075,8 +3077,6 @@ class DedaIsolatedAdminIdentity {
       });
     });
   }
-
-  Future<void> signOutSecondaryAdmin() => _auth.signOut();
 
   /// Paged fresh-server queue under SECONDARY admin Auth, never the user Auth.
   Future<DedaIsolatedManagerPage> readScopedAccountDeletionPage({
