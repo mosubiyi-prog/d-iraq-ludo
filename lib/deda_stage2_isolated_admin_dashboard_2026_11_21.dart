@@ -4053,6 +4053,92 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
                 ' • ${(data['address'] ?? '').toString()}',
               ),
             ),
+          if (!support) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _isolatedPlaceField(t('نوع الطلب', 'Request type'),
+                      data['requestType']),
+                  _isolatedPlaceField(t('نوع المكان', 'Place type'),
+                      data['category']),
+                  _isolatedPlaceField(t('الهاتف', 'Phone'),
+                      data['phone'], ltr: true),
+                  _isolatedPlaceField(t('أوقات العمل', 'Opening hours'),
+                      data['openingHours']),
+                  _isolatedPlaceField(t('حالة التواجد', 'Availability'),
+                    data['isAvailableNow'] == true
+                        ? t('متواجد الآن', 'Available now')
+                        : t('غير متواجد حاليًا', 'Not available now')),
+                  _isolatedPlaceField(t('رقم الاعتماد', 'Approval number'),
+                      data['approvalNumber']),
+                  _isolatedPlaceField(t('ملاحظات الإدارة', 'Admin note'),
+                      data['decisionNote']),
+                  if (_isolatedValidPlaceCoords(
+                      data['latitude'], data['longitude']))
+                    OutlinedButton.icon(
+                      onPressed: _sending ? null : () => _openIsolatedPlaceMap(
+                        context: context, isArabic: widget.isArabic,
+                        placeName: title,
+                        latitude: data['latitude'] as num,
+                        longitude: data['longitude'] as num,
+                      ),
+                      icon: const Icon(Icons.map_outlined),
+                      label: Text(t('فتح الموقع على الخريطة',
+                          'Open location on map')),
+                    ),
+                  if ((data['accountKey'] ?? '').toString().trim().isNotEmpty &&
+                      DedaIsolatedAdminProofPolicy.allowsPermission(
+                        admin: widget.profile, permission: 'viewPlaceRequests'))
+                    OutlinedButton.icon(
+                      onPressed: _sending ? null :
+                          () => _showIsolatedOwnerNoticeComposer(
+                        context: context, isArabic: widget.isArabic,
+                        admin: widget.admin, dedaPhone: widget.dedaPhone,
+                        sourceCollection: 'place_requests',
+                        sourceId: doc.id, placeName: title,
+                        accountKey: (data['accountKey'] ?? '').toString().trim(),
+                      ),
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: Text(t('إرسال إشعار لصاحب المكان',
+                          'Notify place owner')),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (support) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _isolatedPlaceField(t('نوع التواصل', 'Contact type'),
+                      data['type']),
+                  _isolatedPlaceField(t('الاسم', 'Name'), data['name']),
+                  _isolatedPlaceField(t('الهاتف', 'Phone'),
+                      data['phone'], ltr: true),
+                  _isolatedPlaceField(t('رد الإدارة', 'Admin reply'),
+                      data['adminReply']),
+                  _isolatedPlaceField(t('المكان المرتبط', 'Linked place'),
+                      data['linkedPlaceName'] ?? data['linkedPlaceId']),
+                  if (_isolatedValidPlaceCoords(
+                      data['linkedLatitude'], data['linkedLongitude']))
+                    OutlinedButton.icon(
+                      onPressed: _sending ? null : () => _openIsolatedPlaceMap(
+                        context: context, isArabic: widget.isArabic,
+                        placeName: (data['linkedPlaceName'] ?? '').toString(),
+                        latitude: data['linkedLatitude'] as num,
+                        longitude: data['linkedLongitude'] as num,
+                      ),
+                      icon: const Icon(Icons.map_outlined),
+                      label: Text(t('فتح المكان المرتبط', 'Open linked place')),
+                    ),
+                ],
+              ),
+            ),
+          ],
           if (!support &&
               (canApprove || canReview('reviewing') ||
                canReview('needs_changes') ||
