@@ -95,16 +95,16 @@ class _UnrelatedNextState {}
         return """class _DedaProfilePhase2PageState {
   Future<void> _openDedaMyStore() async {
     // DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED
-    if (DedaLabFrameSecureCheckout.live) {
+    if (DedaOwner18FrameCheckout.live) {
       final ownedFrames =
-          await DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(originalId);
+          await DedaOwner18FrameCheckout.verifiedOwnedFrameIds(originalId);
       for (var style = 6; style <= 18; style++) {
         final frame = DedaLabPremiumFrameStyles.byProfileStyle(style);
         if (frame == null || !ownedFrames.contains(frame.id)) continue;
         items.add(DedaMyStoreItem(
           id: frame.id, label: frame.nameAr,
           section: DedaMyStoreSection.frames,
-          proof: DedaMyStoreProof.serverVerified,
+          proof: DedaMyStoreProof.accountSaved,
           receiptKind: 'purchase', active: frameStyle == style,
         ));
       }
@@ -116,7 +116,7 @@ class _UnrelatedNextState {}
 class DedaOtherPage {}
 """
 
-    def test_original_server_verified_frame_art_is_appended_once_without_grant(self):
+    def test_original_account_saved_paid_frame_art_is_appended_once_without_grant(self):
         src = self._verified_paid_frame_example()
         patched = mod.add_verified_owned_frame_art(src)
         mod.verify_verified_owned_frame_art(patched)
@@ -136,11 +136,11 @@ class DedaOtherPage {}
     def test_premium_frame_preview_fails_closed_without_verified_original_gate(self):
         src = self._verified_paid_frame_example()
         for old, new in (
-            ('if (DedaLabFrameSecureCheckout.live)', 'if (true)'),
-            ('proof: DedaMyStoreProof.serverVerified', 'proof: DedaMyStoreProof.deviceSaved'),
+            ('if (DedaOwner18FrameCheckout.live)', 'if (true)'),
+            ('proof: DedaMyStoreProof.accountSaved', 'proof: DedaMyStoreProof.deviceSaved'),
             ("receiptKind: 'purchase',", "receiptKind: null,"),
             ('id: frame.id,', 'id: another.id,'),
-            ('DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(originalId)',
+            ('DedaOwner18FrameCheckout.verifiedOwnedFrameIds(originalId)',
              'DedaDiamondsWallet.balanceNotifier.value'),
         ):
             with self.subTest(old=old), self.assertRaises(ValueError):
@@ -150,7 +150,7 @@ class DedaOtherPage {}
         src = mod.add_verified_owned_frame_art(self._verified_paid_frame_example())
         for changed in (
             src.replace('previewAsset: frame.assetPath,', 'previewAsset: item.previewAsset,'),
-            src.replace('proof: DedaMyStoreProof.serverVerified', 'proof: DedaMyStoreProof.deviceSaved'),
+            src.replace('proof: DedaMyStoreProof.accountSaved', 'proof: DedaMyStoreProof.deviceSaved'),
         ):
             with self.assertRaises(ValueError):
                 mod.verify_verified_owned_frame_art(changed)
