@@ -7,6 +7,7 @@ on:
     paths:
       - 'qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs'
       - 'qa/stage2/build_isolated_admin_gateway_anchor_candidate_2026_11_23.py'
+      - 'qa/stage2/isolated_admin_invite_preflight_2026_11_23.py'
       - 'qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
       - 'qa/stage2/isolated_admin_secondary_auth_activation_emulator_2026_11_23.test.cjs'
       - '.github/workflows/deda-stage2-isolated-admin-firestore-emulator-no-deploy.yml'
@@ -46,6 +47,8 @@ jobs:
           node --check qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs
           test "$GOOGLE_CLOUD_PROJECT" = demo-deda-stage2-isolated-admin-private-qa
           echo 'PASS_PROTECTED_RULES_AND_BASE_APP_UNCHANGED'
+      - name: Test legacy-invite preflight with fake local records, no Firebase
+        run: python3 qa/stage2/isolated_admin_invite_preflight_2026_11_23.py --self-test
       - name: Install throwaway emulator tooling in runner temp only
         shell: bash
         run: |
