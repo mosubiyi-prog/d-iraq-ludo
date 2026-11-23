@@ -15,6 +15,7 @@ on:
       - 'qa/stage2/isolated_admin_invite_preflight_2026_11_23.py'
       - 'qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
       - 'qa/stage2/isolated_admin_secondary_auth_activation_emulator_2026_11_23.test.cjs'
+      - 'qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs'
       - 'functions/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.js'
       - 'functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js'
       - 'functions/deda_pin_manual_recovery_compat_private_v1.js'
@@ -90,7 +91,7 @@ jobs:
           root="$RUNNER_TEMP/deda-stage2-admin-runtime"
           mkdir -p "$root"
           npm install --prefix "$root" --no-save --no-audit --no-fund \
-            firebase-tools@13.35.1 firebase@11.10.0 \
+            firebase-tools@13.35.1 firebase@11.10.0 firebase-admin@13.4.0 \
             @firebase/rules-unit-testing@4.0.0
           echo "NODE_PATH=$root/node_modules" >> "$GITHUB_ENV"
           python3 - <<'PY'
@@ -218,6 +219,18 @@ jobs:
             --only auth,firestore --non-interactive \
             'node --test qa/stage2/isolated_admin_secondary_auth_activation_emulator_2026_11_23.test.cjs'
           echo 'PASS_TWO_FIREBASE_APPS_AUTH_EMULATOR_NO_PRODUCTION_ACCOUNT'
+      - name: Test canonical manual PIN worker against REAL local Auth plus Firestore emulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/deda-stage2-admin-runtime"
+          node --check qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs
+          "$root/node_modules/.bin/firebase" emulators:exec \
+            --project demo-deda-stage2-isolated-admin-anchor-qa \
+            --config "$root/candidate-firebase.json" \
+            --only auth,firestore --non-interactive \
+            'node --test qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs'
+          echo 'PASS_CANONICAL_PIN_DUAL_SYNC_AUTH_FIRESTORE_EMULATOR_NO_DEPLOY'
       - name: Verify no writes to source, production or build outputs
         if: always()
         shell: bash
