@@ -223,6 +223,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Scope the project override to this throwaway dual-emulator test.
+          export GOOGLE_CLOUD_PROJECT=demo-deda-stage2-isolated-admin-anchor-qa
           root="$RUNNER_TEMP/deda-stage2-admin-runtime"
           node --check qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs
           "$root/node_modules/.bin/firebase" emulators:exec \
