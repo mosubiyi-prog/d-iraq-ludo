@@ -3078,6 +3078,100 @@ class DedaIsolatedAdminIdentity {
     });
   }
 
+  /// The first opening of a support/place request matches the old
+  /// firstViewed/lastViewed fields. The request AND audit commit atomically
+  /// as the SECONDARY administrator, with role/province/time scope checked.
+  Future<void> markScopedAdminRequestViewed({
+    required String dedaPhone,
+    required String collection,
+    required String requestId,
+  }) async {
+    final id = requestId.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !const <String>{'support_requests', 'place_requests'}
+            .contains(collection) ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id)) {
+      throw StateError('deda-isolated-request-view-input-denied');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-isolated-request-view-session-required');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    final permission = collection == 'support_requests'
+        ? 'supportRead' : 'viewPlaceRequests';
+    Map<String, dynamic>? admin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: permission,
+      onAuthorizedAdmin: (current) => admin = current,
+    );
+    if (!await proof()) {
+      throw StateError('deda-isolated-request-view-permission-denied');
+    }
+    final initial = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: admin, collection: collection,
+    );
+    if (initial == null) {
+      throw StateError('deda-isolated-request-view-scope-denied');
+    }
+    final request = _firestore.collection(collection).doc(id);
+    final audit = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final record = await tx.get(request);
+      final data = record.data();
+      if (!record.exists || data == null ||
+          record.metadata.isFromCache ||
+          record.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+            admin: admin, collection: collection, data: data,
+          ) ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.sameScopedFilters(
+            initial,
+            DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+              admin: admin, collection: collection,
+            ),
+          ) ||
+          !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+            admin: admin, collection: collection, data: data,
+          )) {
+        throw StateError('deda-isolated-request-view-proof-changed');
+      }
+      if (data['firstViewedAt'] != null) return;
+      final name = (admin?['displayName'] ?? admin?['name'] ??
+          actor.email ?? 'DEDA Admin').toString().trim();
+      final role = DedaBackend.normalizeAdminRole(
+        admin?['role'] ?? admin?['jobTitle'],
+      );
+      if (name.isEmpty || role.isEmpty) {
+        throw StateError('deda-isolated-request-view-admin-invalid');
+      }
+      tx.update(request, <String, dynamic>{
+        'firstViewedAt': FieldValue.serverTimestamp(),
+        'firstViewedByUid': uid,
+        'firstViewedByName': name,
+        'firstViewedByRole': role,
+        'lastViewedAt': FieldValue.serverTimestamp(),
+        'lastViewedByUid': uid,
+        'lastViewedByName': name,
+        'lastViewedByRole': role,
+      });
+      tx.set(audit, <String, dynamic>{
+        'action': 'request_viewed',
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': role,
+        'sourceCollection': collection,
+        'sourceId': id,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// Paged fresh-server queue under SECONDARY admin Auth, never the user Auth.
   Future<DedaIsolatedManagerPage> readScopedAccountDeletionPage({
     required String dedaPhone,
