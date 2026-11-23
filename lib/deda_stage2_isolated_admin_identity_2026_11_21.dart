@@ -4404,6 +4404,132 @@ class DedaIsolatedAdminIdentity {
     );
   }
 
+  /// Full legacy manual owner notice, now ONE atomic secondary-admin action.
+  /// No public Auth, public user update, external notifications or wallet.
+  /// A newly changed owner/account linkage invalidates the confirmation.
+  Future<void> sendScopedOwnerPlaceNotification({
+    required String dedaPhone,
+    required String sourceCollection,
+    required String sourceId,
+    required String expectedAccountKey,
+    required String type,
+    required String title,
+    required String body,
+  }) async {
+    final id = sourceId.trim();
+    final key = expectedAccountKey.trim();
+    final subject = title.trim();
+    final message = body.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !const <String>{'place_requests', 'published_places'}
+            .contains(sourceCollection) ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        key.isEmpty || key.length > 120 ||
+        !const <String>{'place_report', 'admin_alert', 'custom'}
+            .contains(type) ||
+        subject.isEmpty || subject.length > 180 ||
+        message.isEmpty || message.length > 4000) {
+      throw StateError('deda-isolated-owner-notification-input-denied');
+    }
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-isolated-owner-notification-no-session');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? admin;
+    final requiredPermission = sourceCollection == 'published_places'
+        ? 'managePlaceArchives' : 'viewPlaceRequests';
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: requiredPermission,
+      onAuthorizedAdmin: (current) => admin = current,
+    );
+    if (!await proof() ||
+        (sourceCollection == 'published_places' &&
+            admin?['role'] != 'general_manager')) {
+      throw StateError('deda-isolated-owner-notification-role-denied');
+    }
+    final source = _firestore.collection(sourceCollection).doc(id);
+    final notice = _firestore.collection('owner_place_notifications').doc();
+    final audit = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(source);
+      final data = snapshot.data();
+      if (!snapshot.exists || data == null ||
+          snapshot.metadata.isFromCache ||
+          snapshot.metadata.hasPendingWrites ||
+          (data['accountKey'] ?? '').toString().trim() != key ||
+          !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+            admin: admin, collection: sourceCollection, data: data,
+          ) ||
+          !await proof() ||
+          !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+            admin: admin, collection: sourceCollection, data: data,
+          ) ||
+          (sourceCollection == 'published_places' &&
+              admin?['role'] != 'general_manager') ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-isolated-owner-notification-source-changed');
+      }
+      final role = (admin?['role'] ?? '').toString();
+      final name = (admin?['displayName'] ?? admin?['name'] ??
+          actor.email ?? 'DEDA Admin').toString().trim();
+      final ownerUid = (data['ownerUid'] ?? '').toString().trim();
+      final placeName = (data['placeName'] ?? data['name'] ?? '')
+          .toString().trim();
+      final originalPlaceId = (data['originalPlaceId'] ?? '')
+          .toString().trim();
+      if (placeName.isEmpty || role.isEmpty || name.isEmpty) {
+        throw StateError('deda-isolated-owner-notification-missing-link');
+      }
+      final placeId = sourceCollection == 'published_places'
+          ? id : (originalPlaceId.isNotEmpty ? originalPlaceId : id);
+      final governorate = (data['governorate'] ?? '').toString().trim();
+      tx.set(notice, <String, dynamic>{
+        'type': type,
+        'accountKey': key,
+        'ownerUid': ownerUid,
+        'placeId': placeId,
+        'placeName': placeName,
+        'approvalNumber': (data['approvalNumber'] ?? '').toString().trim(),
+        'governorate': governorate,
+        'titleAr': subject,
+        'titleEn': subject,
+        'bodyAr': message,
+        'bodyEn': message,
+        'sourceType': sourceCollection,
+        'sourceId': id,
+        'createdByUid': uid,
+        'createdByName': name,
+        'createdByRole': role,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(audit, <String, dynamic>{
+        'action': 'owner_notification_sent',
+        'adminUid': uid,
+        'adminName': name,
+        'adminRole': role,
+        'notificationType': type,
+        'sourceType': sourceCollection,
+        'sourceId': id,
+        'placeId': placeId,
+        'placeName': placeName,
+        'accountKey': key,
+        'title': subject,
+        'message': message,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-isolated-owner-notification-session-changed');
+    }
+  }
+
   /// One payload schema for both owner notifications, matching the original.
   Map<String, dynamic> _placeDeletionNotice({
     required Map<String, dynamic> request,
