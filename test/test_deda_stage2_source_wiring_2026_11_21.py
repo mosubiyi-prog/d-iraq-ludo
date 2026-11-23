@@ -1622,5 +1622,46 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart',
             (REPO/'.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml').read_text())
 
+    def test_original_prize_winners_complete_isolated_admin_no_payout(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/prize_winner_pages.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        self.assertIn('class DedaAdminPrizeWinnersPage',original)
+        self.assertIn('class DedaAdminPrizeWinnerDetailPage',original)
+        self.assertIn('match /prize_winner_requests/{requestId}',rules)
+        self.assertEqual(src.count('Future<List<Map<String,dynamic>>> readScopedPrizeWinnerRequests('),1)
+        self.assertEqual(src.count('Future<void> reviewScopedPrizeWinnerRequest('),1)
+        self.assertEqual(src.count('static List<String> prizeWinnerAllowedTransitions('),1)
+        self.assertIn("permission == 'reviewPrizeWinners'",src)
+        self.assertIn("requiredPermission:'reviewPrizeWinners'",src)
+        self.assertIn("collection('prize_winner_requests')",src)
+        self.assertIn("_firestore.runTransaction((tx) async {",src)
+        self.assertIn('tx.update(requestRef,',src)
+        self.assertIn('tx.set(auditRef,',src)
+        self.assertIn("'statusOnlyNoDiamondTransfer':true",src)
+        self.assertIn("status == 'approved' && details.isNotEmpty",src)
+        self.assertIn("if (finalStatus == 'prize_sent' && previous != 'prize_sent')",src)
+        self.assertIn("if (can('reviewPrizeWinners')",ui)
+        self.assertEqual(ui.count('class _DedaIsolatedPrizeWinnersTabState'),1)
+        self.assertIn('class _DedaIsolatedPrizeWinnerReviewDialogState',ui)
+        self.assertIn('widget.admin.readScopedPrizeWinnerRequests(',ui)
+        self.assertIn('widget.admin.reviewScopedPrizeWinnerRequest(',ui)
+        self.assertIn('prizeWinnerAllowedTransitions(',ui)
+        self.assertIn("item['winnerConfirmedAt']",ui)
+        self.assertIn("item['rewardCode']",ui)
+        self.assertIn("item['finalReservedPoints']",ui)
+        self.assertIn("item['userReply']",ui)
+        self.assertIn("item['prizeSentAt']",ui)
+        self.assertIn("item['pointsAtCompletion']",ui)
+        part=src.split('  /// Original GM-only 500 newest prize_v1 submissions',1)[1]
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+            "collection('users')","collection('deda_diamond_gifts')",
+            'tx.delete(','deleteUser(', 'tx.set(prize','DedaBackend.'):
+            self.assertNotIn(forbidden,part)
+        self.assertNotIn('DedaBackend.',ui)
+        self.assertNotIn('FirebaseFirestore.instance',ui)
+        self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
+
 if __name__ == '__main__':
     unittest.main()

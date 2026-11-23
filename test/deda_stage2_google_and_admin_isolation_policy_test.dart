@@ -1228,5 +1228,41 @@ void main() {
       expect(DedaExclusiveAdminBridge.serverReadFlag,false);
       expect(DedaExclusiveAdminBridge.serverActionsFlag,false);
     });
+  });  group('Stage2 prize_v1 winner decisions match original card', () {
+    final gm=<String,dynamic>{'active':true,'status':'active',
+      'role':'general_manager'};
+    final request=<String,dynamic>{
+      'ownerUid':'u1','accountKey':'9647712345678','cycleId':'prize_v1',
+      'dedaId':'@DEDA-ABC123','rewardCode':'ABCDEF1234567890',
+      'finalReservedPoints':25000,'status':'new',
+    };
+    bool can(Map<String,dynamic> actor,Map<String,dynamic> row,
+        String status,{String note='',String details=''}) =>
+      DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
+        admin:actor,request:row,requestId:'prize_v1_9647712345678',
+        status:status,adminMessage:note,prizeDetails:details);
+    test('approve and message require GM, valid cycle and 16-char code', () {
+      expect(can(gm,request,'reviewing'),true);
+      expect(can(gm,request,'needs_info',note:'Share prize proof'),true);
+      expect(can(gm,request,'approved',details:'Externally dispatched'),true);
+      expect(can(gm,request,'needs_info'),false);
+      expect(can({...gm,'role':'employee'},request,'approved'),false);
+      expect(can(gm,{...request,'rewardCode':'bad'},'approved'),false);
+      expect(can(gm,{...request,'accountKey':'changed'},'approved'),false);
+      expect(can(gm,request,'prize_sent',details:'Sent'),false);
+    });
+    test('only winner may confirm delivered, admin cannot reopen it', () {
+      expect(DedaIsolatedAdminProofPolicy.prizeWinnerAllowedTransitions(
+          'approved'),['approved','prize_sent','rejected']);
+      expect(DedaIsolatedAdminProofPolicy.prizeWinnerAllowedTransitions(
+          'prize_sent'),['prize_sent']);
+      expect(DedaIsolatedAdminProofPolicy.prizeWinnerAllowedTransitions(
+          'delivered'),isEmpty);
+      expect(can(gm,request,'delivered'),false);
+      expect(can(gm,{...request,'status':'delivered'},'approved'),false);
+      expect(can(gm,{...request,'status':'approved'},
+          'prize_sent',details:'Externally sent'),true);
+      expect(can(gm,{...request,'status':'rejected'},'reviewing'),true);
+    });
   });
 }
