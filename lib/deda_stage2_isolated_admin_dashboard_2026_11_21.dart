@@ -2792,7 +2792,6 @@ class _DedaIsolatedReadOnlyTabState
   bool _openingUser = false;
   String? _pageStartId;
   final List<String?> _pageHistory = <String?>[];
-  final _userSearch = TextEditingController();
   bool get _isStaffPaged => const <String>{
     'admins', 'admin_invites', 'admin_recovery_requests',
   }.contains(widget.collection);
