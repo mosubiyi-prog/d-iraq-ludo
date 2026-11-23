@@ -11,6 +11,7 @@ import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
 import 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_league_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_tasks_admin_2026_11_23.dart';
+import 'deda_stage2_isolated_support_trash_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
 import 'admin_place_map.dart';
 import 'admin_team_pages.dart' show dedaAdminGovernorates;
@@ -3977,6 +3978,69 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         admin: widget.profile, permission: 'managePlaceArchives',
       );
 
+  bool get _canTrashSupport => widget.collection == 'support_requests' &&
+      widget.profile['role'] == 'general_manager' &&
+      DedaIsolatedAdminProofPolicy.allowsPermission(
+        admin: widget.profile, permission: 'supportRead',
+      );
+
+  Future<void> _archiveSupportRequest(String id) async {
+    if (!_canTrashSupport || _sending) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('نقل رسالة الدعم إلى المحذوفات',
+            'Move support message to trash')),
+        content: Text(t('ستبقى الرسالة ومرفقاتها محفوظة ويمكن استرجاعها.',
+            'Message and attachments remain safely restorable.')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('نقل للمحذوفات', 'Move to trash')),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await widget.admin.mutateScopedSupportTrash(
+        dedaPhone: widget.dedaPhone,
+        requestId: id, action: 'trash',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم حفظ رسالة الدعم في المحذوفات مع سجل التدقيق.',
+              'Support message archived with its audit.')),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذرت الأرشفة. تحقق من صلاحية المدير العام.',
+              'Archive denied; verify GM permission.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _openSupportTrash() async {
+    if (!_canTrashSupport || _sending) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => DedaStage2IsolatedSupportTrashPage(
+        admin: widget.admin, dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+      ),
+    ));
+  }
+
+
   Future<void> _viewLinkedUser(String ownerUid) async {
     if (_sending || !DedaIsolatedAdminProofPolicy.validScopedDocumentId(
             ownerUid) ||
@@ -4597,6 +4661,20 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
                 ),
               ),
             ),
+          if (support && _canTrashSupport)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: _sending ? null :
+                      () => _archiveSupportRequest(doc.id),
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(t('نقل رسالة الدعم إلى المحذوفات',
+                      'Move support to trash')),
+                ),
+              ),
+            ),
           if (support && _canReply)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -4646,6 +4724,15 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         final records = serverPage.docs.take(50).toList(growable: false);
         final hasNext = serverPage.docs.length > 50;
         return Column(children: [
+          if (_canTrashSupport)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: _sending ? null : _openSupportTrash,
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: Text(t('محذوفات الدعم', 'Support trash')),
+              ),
+            ),
           Expanded(
             child: records.isEmpty
                 ? Center(child: Text(t('لا توجد طلبات.', 'No requests.')))
