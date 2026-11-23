@@ -217,6 +217,88 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       console.log("PASS_PENDING_STAFF_BADGE_SECONDARY_MANAGER_ONLY");
     });
 
+    await t.test("original user recovery review/reject never changes PIN or UID",async()=>{
+      const request="recovery_requests/qa_original_user_recovery";
+      const accountKey="9647700000123";
+      const credentials="deda_credentials/"+accountKey;
+      const accountProfile="deda_account_profiles/"+accountKey;
+      const details={
+        accountKey,phone:"07700000123",fullName:"QA Original Owner",
+        requesterUid:publicUid,requesterInstallId:"qa_old_device",
+        status:"new",createdAt:sent(),updatedAt:sent(),
+      };
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc(request).set(details),
+          db.doc(credentials).set({
+            accountKey,pin:"111222",active:true,createdUid:publicUid,
+          }),
+          db.doc(accountProfile).set({
+            accountKey,name:"QA Original Owner",phone:"07700000123",
+            accountType:"user",trustedInstallIds:["qa_old_device"],
+          }),
+          db.doc("deda_account_directory/"+accountKey).set({
+            accountKey,active:true,createdUid:publicUid,
+          }),
+        ]);
+      });
+      const gmList=await assertSucceeds(manager.collection(
+        "recovery_requests").orderBy("createdAt","desc").limit(51).get());
+      assert.ok(gmList.docs.some(doc=>doc.id==="qa_original_user_recovery"));
+      await assertFails(staff.doc(request).get());
+      await assertFails(outsider.doc(request).get());
+      await assertSucceeds(publicDb.doc(request).get());
+      await assertFails(publicDb.doc(request).update({status:"approved"}));
+      await assertFails(staff.doc(request).update({status:"rejected"}));
+      await assertFails(outsider.doc(credentials).get());
+      await assertFails(manager.doc(credentials).get());
+      await assertSucceeds(manager.doc(accountProfile).get());
+      const event=(action,note)=>({
+        action,adminUid:managerUid,adminName:"QA General Manager",
+        adminRole:"general_manager",
+        sourceCollection:"recovery_requests",sourceId:"qa_original_user_recovery",
+        reason:note,createdAt:sent(),
+      });
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const doc=await tx.get(manager.doc(request));
+        assert.equal(doc.data().status,"new");
+        tx.update(manager.doc(request),{
+          status:"review",reviewNote:"Verify UID separately",
+          reviewedBy:managerUid,updatedAt:sent(),
+        });
+        tx.set(manager.doc("admin_audit/qa_recovery_review"),
+          event("recovery_reviewed","Verify UID separately"));
+      }));
+      assert.equal((await manager.doc(request).get()).data().status,"review");
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const doc=await tx.get(manager.doc(request));
+        assert.equal(doc.data().status,"review");
+        tx.update(manager.doc(request),{
+          status:"rejected",rejectionReason:"Ownership not proven",
+          rejectedBy:managerUid,rejectedAt:sent(),updatedAt:sent(),
+        });
+        tx.set(manager.doc("admin_audit/qa_recovery_rejected"),
+          event("recovery_rejected","Ownership not proven"));
+      }));
+      const result=await manager.doc(request).get();
+      assert.equal(result.data().status,"rejected");
+      assert.equal(result.data().requesterUid,publicUid);
+      assert.equal((await manager.doc(
+        "admin_audit/qa_recovery_rejected").get()).data().action,
+        "recovery_rejected");
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        assert.equal((await db.doc(credentials).get()).data().pin,"111222");
+        assert.equal((await db.doc(credentials).get()).data().createdUid,publicUid);
+        assert.equal((await db.doc(accountProfile).get()).data().name,
+          "QA Original Owner");
+        assert.equal((await db.doc(accountProfile).get())
+          .data().trustedInstallIds[0],"qa_old_device");
+      });
+      console.log("PASS_USER_RECOVERY_REVIEW_REJECT_NO_PIN_UID_ACCOUNT_CHANGES");
+    });
+
     await t.test("unrelated users cannot read admin team or pending invite", async () => {
       await assertFails(outsider.collection("admins").get());
       await assertFails(outsider.doc("admins/" + staffUid).get());
