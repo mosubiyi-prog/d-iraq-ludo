@@ -2621,79 +2621,6 @@ class DedaIsolatedAdminIdentity {
     return records;
   }
 
-  /// Read-only scoped data path, with fresh server permissions before and
-  /// after fetch. No write operation or raw Firestore handle is exposed.
-  Future<List<Map<String, dynamic>>> readScopedAdminList({
-    required String dedaPhone,
-    required String collection,
-    int maxItems = 25,
-  }) async {
-    if (!dedaIsolatedAdminIdentityEnabled) {
-      throw StateError('deda-admin-isolated-list-not-enabled');
-    }
-    final permission = _scopedReadPermissions[collection];
-    if (permission == null || maxItems < 1 || maxItems > 50) {
-      throw StateError('deda-admin-isolated-read-scope-denied');
-    }
-    final current = _auth.currentUser;
-    if (current == null || current.isAnonymous) {
-      throw StateError('deda-admin-isolated-session-required');
-    }
-    final uid = current.uid;
-    final publicUid = _mainAuth.currentUser?.uid;
-    Map<String, dynamic>? verifiedAdmin;
-    Future<bool> proof() => _serverAuthorizedAdmin(
-      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
-      requiredPermission: permission,
-      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
-    );
-    if (!await proof()) {
-      throw StateError('deda-admin-isolated-read-permission-denied');
-    }
-    final filters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
-      admin: verifiedAdmin, collection: collection,
-    );
-    if (filters == null) {
-      throw StateError('deda-admin-isolated-query-scope-unverified');
-    }
-    Query<Map<String, dynamic>> query = _firestore.collection(collection);
-    final since = filters['createdAtMin'];
-    final province = filters['governorate'];
-    if (since is Timestamp) {
-      query = query.where('createdAt', isGreaterThanOrEqualTo: since);
-    }
-    if (province is String) {
-      query = query.where('governorate', isEqualTo: province);
-    }
-    if (collection == 'admin_recovery_requests') {
-      query = query.orderBy('createdAt', descending: true);
-    }
-    final rows = await query
-        .limit(maxItems).get(const GetOptions(source: Source.server));
-    if (rows.metadata.isFromCache || rows.metadata.hasPendingWrites ||
-        _auth.currentUser?.uid != uid ||
-        _mainAuth.currentUser?.uid != publicUid ||
-        !await proof()) {
-      throw StateError('deda-admin-isolated-read-session-or-proof-changed');
-    }
-    // The second proof must not authorize a different query scope. Never
-    // return documents outside the final fresh server role.
-    if (!DedaIsolatedAdminProofPolicy.sameScopedFilters(
-          filters,
-          DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
-            admin: verifiedAdmin, collection: collection,
-          ),
-        ) ||
-        rows.docs.any((doc) => !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
-          admin: verifiedAdmin, collection: collection, data: doc.data(),
-        ))) {
-      throw StateError('deda-admin-isolated-list-scope-changed');
-    }
-    return rows.docs.map(
-      (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
-    ).toList(growable: false);
-  }
-
   /// Original Users card: only a fresh secondary administrator may inspect
   /// the selected user. A read audit is mandatory; no public-user write.
   /// Related places/requests/support are visible only to a verified GM:
@@ -2814,6 +2741,79 @@ class DedaIsolatedAdminIdentity {
       'relatedAccessible': generalManager,
       'relatedMayBeTruncated': relatedMayBeTruncated,
     };
+  }
+
+  /// Read-only scoped data path, with fresh server permissions before and
+  /// after fetch. No write operation or raw Firestore handle is exposed.
+  Future<List<Map<String, dynamic>>> readScopedAdminList({
+    required String dedaPhone,
+    required String collection,
+    int maxItems = 25,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-list-not-enabled');
+    }
+    final permission = _scopedReadPermissions[collection];
+    if (permission == null || maxItems < 1 || maxItems > 50) {
+      throw StateError('deda-admin-isolated-read-scope-denied');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: permission,
+      onAuthorizedAdmin: (admin) => verifiedAdmin = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-read-permission-denied');
+    }
+    final filters = DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+      admin: verifiedAdmin, collection: collection,
+    );
+    if (filters == null) {
+      throw StateError('deda-admin-isolated-query-scope-unverified');
+    }
+    Query<Map<String, dynamic>> query = _firestore.collection(collection);
+    final since = filters['createdAtMin'];
+    final province = filters['governorate'];
+    if (since is Timestamp) {
+      query = query.where('createdAt', isGreaterThanOrEqualTo: since);
+    }
+    if (province is String) {
+      query = query.where('governorate', isEqualTo: province);
+    }
+    if (collection == 'admin_recovery_requests') {
+      query = query.orderBy('createdAt', descending: true);
+    }
+    final rows = await query
+        .limit(maxItems).get(const GetOptions(source: Source.server));
+    if (rows.metadata.isFromCache || rows.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof()) {
+      throw StateError('deda-admin-isolated-read-session-or-proof-changed');
+    }
+    // The second proof must not authorize a different query scope. Never
+    // return documents outside the final fresh server role.
+    if (!DedaIsolatedAdminProofPolicy.sameScopedFilters(
+          filters,
+          DedaIsolatedAdminProofPolicy.scopedReadQueryFilters(
+            admin: verifiedAdmin, collection: collection,
+          ),
+        ) ||
+        rows.docs.any((doc) => !DedaIsolatedAdminProofPolicy.scopedDocumentMatches(
+          admin: verifiedAdmin, collection: collection, data: doc.data(),
+        ))) {
+      throw StateError('deda-admin-isolated-list-scope-changed');
+    }
+    return rows.docs.map(
+      (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
+    ).toList(growable: false);
   }
 
   /// Stable Firestore document-ID keyset pagination. A 51st record proves
