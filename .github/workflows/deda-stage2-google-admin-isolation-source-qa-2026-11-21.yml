@@ -13,6 +13,8 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
       - 'test/test_deda_stage2_profile_owner_2026_11_23.py'
       - 'test/test_deda_stage2_profile_assets_2026_11_24.py'
+      - 'test/test_deda_stage2_profile_full_audit_2026_11_24.py'
+      - 'tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py'
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
       - 'lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart'
       - 'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
@@ -45,6 +47,8 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_owner_2026_11_23.py -v
       - name: Verify profile frames, IDs, balances, badges and Hadaya account rotation without writes
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_assets_2026_11_24.py -v
+      - name: Verify complete original profile card, route and duplicate-safety audit
+        run: python3 -m unittest discover -s test -p test_deda_stage2_profile_full_audit_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
           python3 - <<'PY'
@@ -149,6 +153,8 @@ jobs:
           python3 tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py "$project" --verify-only
           python3 tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py "$project"
           python3 tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py "$project" --verify-only
+          # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
+          python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
           echo "DEDA_STAGE1_SOURCE=$project" >> "$GITHUB_ENV"
           echo 'PASS_PROTECTED_FULL_APPLICATION_SOURCE_SESSION_PATCH_APPLIED'
       - name: Analyze real assembled Flutter backend, entry, admin, map and PIN paths
