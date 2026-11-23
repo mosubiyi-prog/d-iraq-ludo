@@ -304,6 +304,55 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertSucceeds(manager.collection("deda_weekly_direct_admin_events").get());
     });
 
+    await t.test("migration guard defaults deny and cannot be enabled by any client",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const email="qa.preflight@example.invalid";
+      const reservation=manager.doc("admin_invite_email_reservations/"+email);
+      const invitation=manager.doc("admin_invites/qa_preflight_invite");
+      const inviteData={
+        adminId:"DEDA-ADM-PREFLIGHT",displayName:"QA Staff",
+        email,phone:"9647712345808",department:"Support",
+        role:"employee",governorate:"",permissions:{viewUsers:true},
+        status:"pending",activationCode:"12345678",
+        createdByUid:managerUid,createdByName:"QA Manager",
+        createdAt:Fb.FieldValue.serverTimestamp(),
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+        expiresAt:Fb.Timestamp.fromDate(new Date(Date.now()+3600000)),
+      };
+      const reservationData={
+        email,inviteId:"qa_preflight_invite",createdByUid:managerUid,
+        createdAt:Fb.FieldValue.serverTimestamp(),
+      };
+      const attempt=()=>manager.runTransaction(async tx=>{
+        const [r,i]=await Promise.all([tx.get(reservation),tx.get(invitation)]);
+        assert.equal(r.exists,false);assert.equal(i.exists,false);
+        tx.set(reservation,reservationData);tx.set(invitation,inviteData);
+      });
+      // Without any trusted migration marker, NO new invitations can start.
+      await assertFails(attempt());
+      const marker=manager.doc("admin_invite_migration_control/primary");
+      await assertFails(outsider.doc("admin_invite_migration_control/primary").get());
+      await assertFails(manager.doc("admin_invite_migration_control/primary").set({
+        state:"ready",schemaVersion:1,legacyInvitationsReviewed:true,
+        reservationsSeeded:true,verifiedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admin_invite_migration_control/primary").set({
+          state:"pending",schemaVersion:1,legacyInvitationsReviewed:true,
+          reservationsSeeded:true,verifiedAt:Fb.Timestamp.now(),
+        });
+      });
+      await assertFails(attempt());
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admin_invite_migration_control/primary")
+          .update({state:"ready"});
+      });
+      await assertSucceeds(manager.doc("admin_invite_migration_control/primary").get());
+      await assertFails(manager.doc("admin_invite_migration_control/primary")
+        .update({state:"pending"}));
+      await assertSucceeds(attempt());
+    });
+
     await t.test("unique email requires atomic reservation; legacy writes fail closed",async()=>{
       const Fb=require("firebase/compat/app").firestore;
       const email="qa.reservation@example.invalid";
@@ -335,6 +384,20 @@ test("candidate rules protect one immutable GM gateway against all clients",{
         tx.set(inviteRef,doc("DEDA-ADM-R1","9647712345801"));
       }));
       assert.equal((await marker.get()).data().inviteId,"reservation_one");
+      // Managers cannot rewrite the immutable invitation identity to dodge
+      // email locks; benign metadata updates still work for old UI flows.
+      await assertFails(inviteRef.update({
+        email:"qa.swap@example.invalid",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(inviteRef.update({
+        adminId:"DEDA-ADM-REWRITTEN",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertSucceeds(inviteRef.update({
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+
       await assertFails(manager.doc("admin_invites/reservation_two")
         .set(doc("DEDA-ADM-R2","9647712345802")));
       await assertFails(marker.update({inviteId:"reservation_two"}));

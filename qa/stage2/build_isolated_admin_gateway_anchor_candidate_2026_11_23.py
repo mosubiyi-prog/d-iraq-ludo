@@ -165,7 +165,17 @@ def add_invite_email_reservation(source):
     old_delete = "      allow delete: if isGeneralManager();"
     if chunk.count(email_line) != 1 or chunk.count(old_delete) != 1:
         raise ValueError("FAIL_INVITE_EMAIL_SHAPE_DRIFT")
-    helper = """      function reservationForNewEmail() {
+    helper = """      function emailMigrationReady() {
+        let path = /databases/$(database)/documents/admin_invite_migration_control/primary;
+        let readiness = get(path).data;
+        return exists(path)
+          && readiness.state == 'ready'
+          && readiness.schemaVersion == 1
+          && readiness.legacyInvitationsReviewed == true
+          && readiness.reservationsSeeded == true
+          && readiness.verifiedAt is timestamp;
+      }
+      function reservationForNewEmail() {
         return /databases/$(database)/documents/admin_invite_email_reservations/$(request.resource.data.email);
       }
       function reservationForExistingEmail() {
@@ -173,7 +183,8 @@ def add_invite_email_reservation(source):
       }
       function atomicEmailReservation(id) {
         let path = reservationForNewEmail();
-        return !exists(path) && existsAfter(path)
+        return emailMigrationReady()
+          && !exists(path) && existsAfter(path)
           && getAfter(path).data.email == request.resource.data.email
           && getAfter(path).data.inviteId == id
           && getAfter(path).data.createdByUid == request.auth.uid
@@ -188,6 +199,18 @@ def add_invite_email_reservation(source):
         "        && atomicEmailReservation(inviteId)\n"
     )
     chunk = chunk.replace(email_line, email_line + extra, 1)
+    manager_original = "      allow update: if isGeneralManager()\n        || ("
+    manager_locked = (
+        "      allow update: if (isGeneralManager()\n"
+        "        && request.resource.data.diff(resource.data).affectedKeys().hasNone([\n"
+        "          'email', 'adminId', 'phone', 'createdAt', 'createdByUid',\n"
+        "          'claimedUid', 'claimedAt', 'acceptedAt'\n"
+        "        ]))\n"
+        "        || ("
+    )
+    if chunk.count(manager_original) != 1:
+        raise ValueError("FAIL_INVITE_MANAGER_IMMUTABLE_DRIFT")
+    chunk = chunk.replace(manager_original, manager_locked, 1)
     chunk = chunk.replace(old_delete,
         "      allow delete: if isGeneralManager()\n"
         "        && (!exists(reservationForExistingEmail())\n"
@@ -235,9 +258,21 @@ def add_invite_email_reservation(source):
     }
 
 """
-    result = source[:start] + chunk + marker + source[end:]
+    migration_guard = """    // Trusted-migration readiness must be provisioned by an approved
+    // offline administrator audit. Clients cannot set readiness themselves.
+    match /admin_invite_migration_control/{controlId} {
+      allow get: if controlId == 'primary' && isGeneralManager();
+      allow list, create, update, delete: if false;
+    }
+
+"""
+    result = source[:start] + chunk + migration_guard + marker + source[end:]
     if result.count("match /admin_invite_email_reservations/{emailKey}") != 1:
         raise ValueError("FAIL_INVITE_EMAIL_DUPLICATE_MATCH")
+    if result.count("match /admin_invite_migration_control/{controlId}") != 1:
+        raise ValueError("FAIL_INVITE_MIGRATION_GUARD_DUPLICATE")
+    if result.count("emailMigrationReady()") != 2:
+        raise ValueError("FAIL_INVITE_MIGRATION_READINESS_MISSING")
     if result.count("atomicEmailReservation(") != 2:
         raise ValueError("FAIL_INVITE_EMAIL_DUPLICATE_HELPER")
     return result
