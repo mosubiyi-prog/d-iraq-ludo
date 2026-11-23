@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
+import 'deda_launch_feature_gates.dart';
 import 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_league_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_tasks_admin_2026_11_23.dart';
@@ -3903,6 +3904,169 @@ class _DedaIsolatedManagerPlacesTabState
   }
 }
 
+/// Uses the same original green card and place-request position.
+/// No automatic approval runs on the phone. ON stays disabled until BOTH
+/// owner build gate and trusted backend worker actually confirm readiness.
+class _DedaIsolatedPlaceAutoApprovalToggle extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+
+  const _DedaIsolatedPlaceAutoApprovalToggle({
+    required this.admin,
+    required this.dedaPhone,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedPlaceAutoApprovalToggle> createState() =>
+      _DedaIsolatedPlaceAutoApprovalToggleState();
+}
+
+class _DedaIsolatedPlaceAutoApprovalToggleState
+    extends State<_DedaIsolatedPlaceAutoApprovalToggle> {
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+  DedaIsolatedAutomationState _state = (
+    enabled: false, backendReady: false, revision: 0,
+  );
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    try {
+      final status = await widget.admin.readScopedPlaceAutoApproval(
+        dedaPhone: widget.dedaPhone,
+      );
+      if (!mounted) return;
+      setState(() {
+        _state = status;
+        _error = null;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = t('تعذر التحقق من إعداد الاعتماد التلقائي.',
+            'Could not verify the auto-approval setting.');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _change(bool enabled) async {
+    if (_saving || _loading || _error != null ||
+        (enabled && (!_state.backendReady ||
+            !DedaLaunchFeatureGates.serverFeaturesEnabled))) return;
+    setState(() => _saving = true);
+    try {
+      await widget.admin.setScopedPlaceAutoApproval(
+        dedaPhone: widget.dedaPhone,
+        enabled: enabled,
+        expectedRevision: _state.revision,
+      );
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم تحديث إعداد الاعتماد بعد التحقق من الخادم.',
+              'Auto-approval setting updated after server verification.')),
+        ));
+      }
+    } catch (_) {
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('لم يتغير الإعداد؛ راجع صلاحية المدير وجاهزية الخادم.',
+              'Setting unchanged; verify manager role and worker readiness.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final note = !DedaLaunchFeatureGates.serverFeaturesEnabled
+        ? t('الاعتماد التلقائي مؤجّل؛ تبقى مراجعة الطلبات يدوية.',
+            'Auto-approval is deferred; requests stay manually reviewed.')
+        : !_state.backendReady
+            ? _state.enabled
+                ? t('الخدمة لم تتأكد؛ يمكن إيقافها بأمان.',
+                    'Worker not confirmed; OFF remains available.')
+                : t('خادم الاعتماد لم يثبت جاهزيته؛ التشغيل محجوب.',
+                    'Worker readiness not verified; ON is blocked.')
+            : t(_state.enabled ? 'مفعّل للطلبات الجديدة' : 'مطفأ — مراجعة يدوية',
+                _state.enabled ? 'ON for new requests' : 'OFF — manual review');
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 6),
+      child: Card(
+        color: const Color(0xFFEAF4EA),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF9FBDA3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: _loading
+              ? const Center(child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(),
+                ))
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        t('الاعتماد التلقائي للطلبات الجديدة فقط',
+                            'Auto-approve NEW place requests only'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 15,
+                        ),
+                      ),
+                      subtitle: Text(t(
+                        'الطلبات الجديدة المكتملة تُنشر تلقائياً بعد 30 ثانية؛ '
+                        'القديمة تبقى يدوية.',
+                        'New complete requests publish after 30 seconds; '
+                        'old requests stay manual.',
+                      ), style: const TextStyle(fontSize: 12.5)),
+                      value: _state.enabled,
+                      onChanged: _saving || _error != null ||
+                          (!_state.backendReady && !_state.enabled)
+                          ? null : _change,
+                    ),
+                    Text(_error ?? note,
+                      style: TextStyle(fontSize: 12,
+                          color: _error == null
+                              ? const Color(0xFF3B6043)
+                              : const Color(0xFF9C3324))),
+                    if (_error != null)
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: TextButton.icon(
+                          onPressed: _refresh,
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: Text(t('إعادة المحاولة', 'Retry')),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DedaIsolatedRequestTab extends StatefulWidget {
   final DedaIsolatedAdminIdentity admin;
   final String dedaPhone;
@@ -4889,6 +5053,13 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
           (doc.data()['status'] ?? '').toString(), _section,
         )).toList(growable: false);
         return Column(children: [
+          if (widget.collection == 'place_requests' &&
+              widget.profile['role'] == 'general_manager')
+            _DedaIsolatedPlaceAutoApprovalToggle(
+              admin: widget.admin,
+              dedaPhone: widget.dedaPhone,
+              isArabic: widget.isArabic,
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
             child: Column(children: [
