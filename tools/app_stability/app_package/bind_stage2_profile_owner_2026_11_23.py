@@ -140,6 +140,79 @@ def verify(main: str, old_store: str):
             raise ValueError('PROFILE_VERIFY_FAILED:' + label)
 
 
+
+# Add ONLY the missing original asset path to the already RECEIPT-VERIFIED
+# paid frame row of the existing original personal My Store. This is not a
+# second renderer, item, purchase, or entitlement reader.
+PAID_FRAME_ART_MARK = 'DEDA_STAGE2_PROFILE_VERIFIED_PAID_FRAME_ART_ONLY'
+
+
+def _paid_frame_row(main: str):
+    start, stop = original_profile_span(main)
+    section = main[start:stop]
+    if section.count(METHOD) != 1 or section.count('  Widget _featureGrid() {') != 1:
+        raise ValueError('PROFILE_FRAME_ART_STOP:original-store-method')
+    mstart = section.index(METHOD)
+    mend = section.index('  Widget _featureGrid() {', mstart)
+    method = section[mstart:mend]
+    if (method.count('DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED') != 1 or
+            method.count('if (DedaLabFrameSecureCheckout.live)') != 1 or
+            method.count('id: frame.id,') != 1):
+        raise ValueError('PROFILE_FRAME_ART_STOP:original-receipt-gate-or-item')
+    entry = method.index('id: frame.id,')
+    row_start = method.rfind('items.add(DedaMyStoreItem(', 0, entry)
+    row_end = method.find('));', entry)
+    if row_start < 0 or row_end < 0 or row_end > method.find('for (var i = 0;', entry):
+        raise ValueError('PROFILE_FRAME_ART_STOP:paid-frame-row-bounds')
+    row = method[row_start:row_end + 3]
+    for required in (
+        'id: frame.id,', 'label: frame.nameAr,',
+        'section: DedaMyStoreSection.frames,',
+        'proof: DedaMyStoreProof.serverVerified,',
+        "receiptKind: 'purchase',", 'active: frameStyle == style,',
+    ):
+        if required not in row:
+            raise ValueError('PROFILE_FRAME_ART_STOP:paid-row-drift:' + required)
+    return section, method, row, row_start, row_end
+
+
+def add_verified_owned_frame_art(main: str) -> str:
+    import re
+    if PAID_FRAME_ART_MARK in main:
+        raise ValueError('PROFILE_FRAME_ART_STOP:duplicate-stage')
+    section, method, row, row_start, row_end = _paid_frame_row(main)
+    if 'previewAsset:' in row:
+        raise ValueError('PROFILE_FRAME_ART_STOP:original-paid-preview-already-exists')
+    revised, count = re.subn(
+        r'active:\s*frameStyle\s*==\s*style,',
+        lambda m: m.group(0) +
+                  '\n            // ' + PAID_FRAME_ART_MARK +
+                  '\n            previewAsset: frame.assetPath,',
+        row,
+        count=1,
+    )
+    if count != 1:
+        raise ValueError('PROFILE_FRAME_ART_STOP:active-frame-anchor')
+    updated_section = section.replace(row, revised, 1)
+    if updated_section == section or updated_section.count(PAID_FRAME_ART_MARK) != 1:
+        raise ValueError('PROFILE_FRAME_ART_STOP:single-source-replacement')
+    first, end = original_profile_span(main)
+    updated = main[:first] + updated_section + main[end:]
+    verify_verified_owned_frame_art(updated)
+    return updated
+
+
+def verify_verified_owned_frame_art(main: str):
+    section, method, row, start, end = _paid_frame_row(main)
+    if (row.count(PAID_FRAME_ART_MARK) != 1 or
+            row.count('previewAsset: frame.assetPath,') != 1 or
+            main.count(PAID_FRAME_ART_MARK) != 1 or
+            method.index('if (DedaLabFrameSecureCheckout.live)') >
+                method.index('id: frame.id,') or
+            method.index('verifiedOwnedFrameIds(originalId)') >
+                method.index('id: frame.id,')):
+        raise ValueError('PROFILE_FRAME_ART_VERIFY:proven-original-only')
+
 def bind(project: Path, verify_only: bool = False):
     project = project.resolve()
     if project == REPO or project in REPO.parents or REPO in project.parents:
@@ -157,12 +230,14 @@ def bind(project: Path, verify_only: bool = False):
     audit_original_editor(main)
     if verify_only:
         verify(main, old_store)
+        verify_verified_owned_frame_art(main)
         if module_path.read_bytes() != expected.read_bytes():
             raise ValueError('PROFILE_GUARD_MODULE_CHANGED')
     else:
         if module_path.exists():
             raise ValueError('PROFILE_GUARD_MODULE_ALREADY_PRESENT')
         new_main = proposed(main, old_store)
+        new_main = add_verified_owned_frame_art(new_main)
         # Check all originals before mutating only a disposable build directory.
         main_path.write_text(new_main)
         module_path.write_bytes(expected.read_bytes())
