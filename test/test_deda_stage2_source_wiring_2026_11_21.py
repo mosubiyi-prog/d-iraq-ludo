@@ -1803,6 +1803,44 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('DedaBackend.',page)
         self.assertIn("class DedaAdminTaskManagementPage",original)
 
+    def test_isolated_league_uses_existing_approved_payout_floor_not_older_editor(self):
+        import re
+        worker=(REPO/'functions/deda_weekly_direct_prize_worker.cjs').read_text()
+        runner=(REPO/'functions/deda_weekly_payout_approved_runner_100438.cjs').read_text()
+        original=(REPO/'lib/deda_admin_league_winners_prizes_100439.dart').read_text()
+        legacy=(REPO/'lib/deda_weekly_prize_plan_100408.dart').read_text()
+        isolated=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        def values(source,pattern):
+            match=re.search(pattern,source)
+            self.assertIsNotNone(match,pattern)
+            return tuple(int(x.strip()) for x in match.group(1).split(','))
+        approved=values(worker,r'const APPROVED_DEFAULT=Object.freeze\\(\\[([0-9, ]+)\\]\\)')
+        scheduled=values(runner,r'const OWNER_DEFAULT=Object.freeze\\(\\[([0-9, ]+)\\]\\)')
+        display=values(original,r'static const minimum=\\[([0-9, ]+)\\];')
+        old=values(legacy,r'static const minimum = <int>\\[([0-9, ]+)\\];')
+        self.assertEqual(approved,scheduled)
+        self.assertEqual(approved,display)
+        self.assertEqual(approved,(250,200,150,100,100,100,100,100,100,100))
+        self.assertEqual(old,(150,100,50,10,10,10,10,10,10,10))
+        self.assertNotEqual(old,approved)
+        read=isolated.split('Future<Map<String,dynamic>> readScopedLeague(',1)[1].split(
+            'Future<List<Map<String,dynamic>>> readScopedLeagueArchive(',1)[0]
+        report=isolated.split('Future<Map<String,dynamic>> readScopedLeaguePrizeRegister(',1)[1].split(
+            'Future<void> increaseScopedLeaguePrizePlan(',1)[0]
+        increase=isolated.split('Future<void> increaseScopedLeaguePrizePlan(',1)[1].split(
+            'Future<List<Map<String,dynamic>>> readScopedPrizeWinnerRequests(',1)[0]
+        for segment in (read,report,increase):
+            self.assertIn('DedaWeeklyPrizeProjection.',segment)
+            self.assertNotIn('DedaWeeklyPrizePlan.minimum',segment)
+        self.assertIn('DedaWeeklyPrizeProjection.amounts(',read)
+        self.assertIn('league-prize-saved-plan-invalid',read)
+        self.assertIn('league-prize-saved-plan-invalid',report)
+        self.assertIn('minimumOverride:DedaWeeklyPrizeProjection.minimum',report)
+        self.assertIn('final floor=DedaWeeklyPrizeProjection.minimum;',increase)
+        self.assertIn('league-prize-previous-invalid',increase)
+        self.assertNotIn("collection('deda_diamond_gift_balances')",increase)
+        self.assertNotIn("collection('users')",increase)
+
     def test_league_card_isolated_original_functions_and_no_wallet_mutation(self):
         service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()
@@ -1849,8 +1887,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertEqual(service.count('Future<Map<String,dynamic>> readScopedLeaguePrizeRegister('),1)
         self.assertEqual(service.count('Future<void> increaseScopedLeaguePrizePlan('),1)
         self.assertIn('DedaWeeklyPrizeProjection.merge(',service)
-        self.assertIn('minimumOverride:DedaWeeklyPrizePlan.minimum',service)
-        self.assertIn("import 'deda_weekly_prize_plan.dart' show DedaWeeklyPrizePlan;",service)
+        self.assertIn('minimumOverride:DedaWeeklyPrizeProjection.minimum',service)
+        self.assertNotIn("import 'deda_weekly_prize_plan.dart'",service)
         projection=(REPO/'lib/deda_admin_league_winners_prizes_100439.dart').read_text()
         self.assertIn('List<int>? minimumOverride',projection)
         self.assertIn('floor=minimumOverride??minimum',projection)

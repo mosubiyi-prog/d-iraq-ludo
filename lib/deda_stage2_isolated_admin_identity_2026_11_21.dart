@@ -16,7 +16,6 @@ import 'deda_admin_league_winners_prizes.dart'
     show DedaWeeklyPrizeProjection;
 import 'deda_admin_league_live_data.dart';
 import 'deda_weekly_league_clock.dart';
-import 'deda_weekly_prize_plan.dart' show DedaWeeklyPrizePlan;
 import 'deda_admin_task_drafts.dart' show DedaAdminTaskDraft;
 import 'deda_daily_task_slots.dart';
 import 'deda_daily_schedule_policy.dart';
@@ -6003,20 +6002,18 @@ class DedaIsolatedAdminIdentity {
         plan.metadata.isFromCache || plan.metadata.hasPendingWrites) {
       throw StateError('league-meta-unverified');
     }
-    final defaults=<int>[150,100,50,10,10,10,10,10,10,10];
+    // The existing payout runner's approved CURRENT baseline is
+    // 250/200/150/100x7, not the earlier 100408 editor floor.
+    // Reuse the original 100439 projection validator, never invent a
+    // second prize schedule or silently downgrade a saved amount.
     final raw=plan.data()?['amounts'];
-    final amounts=<int>[];
-    if(raw==null) {
-      amounts.addAll(defaults);
-    }else{
-      if(raw is! List || raw.length!=10)throw StateError('prize-plan-invalid');
-      for(var i=0;i<10;i++) {
-        if(raw[i] is! int || raw[i]<defaults[i] || raw[i]>1000000) {
-          throw StateError('prize-plan-unverified');
-        }
-        amounts.add(raw[i] as int);
-      }
+    if (plan.exists && raw is! List) {
+      // A present but malformed plan must NOT be mistaken for no plan.
+      throw StateError('league-prize-saved-plan-invalid');
     }
+    final amounts=DedaWeeklyPrizeProjection.amounts(
+      plan.exists ? List<dynamic>.from(raw as List) : null,
+    );
     Map<String,dynamic> receipts={'verified':false};
     try {
       final gifts=await _firestore.collection('deda_diamond_gifts')
@@ -6201,14 +6198,19 @@ class DedaIsolatedAdminIdentity {
        reviews.docs.length>=100) {
       throw StateError('league-prizes-unverified-or-truncated');
     }
+    final savedPlan=plan.data()?['amounts'];
+    if (plan.exists && savedPlan is! List) {
+      throw StateError('league-prize-saved-plan-invalid');
+    }
     final report=DedaWeeklyPrizeProjection.merge(
       week:weekId,
-      minimumOverride:DedaWeeklyPrizePlan.minimum,
+      // Same approved floor as the existing 100438 payout runner.
+      minimumOverride:DedaWeeklyPrizeProjection.minimum,
       scores:[for(final d in scores.docs)MapEntry(d.id,d.data())],
       gifts:{for(final d in gifts.docs)d.id:d.data()},
       frozen:{for(final d in reviews.docs)
         if(d.data()['frozen']==true)d.id},
-      plan:plan.data()?['amounts'] as List<dynamic>?,
+      plan:plan.exists ? List<dynamic>.from(savedPlan as List) : null,
     );
     await _leagueRecheck(dedaPhone,actor);
     return {
@@ -6232,7 +6234,7 @@ class DedaIsolatedAdminIdentity {
     final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
     final current=DedaAdminLeagueLiveData.weekId(clock.weekStart);
     final why=reason.trim();
-    const floor=<int>[150,100,50,10,10,10,10,10,10,10];
+    final floor=DedaWeeklyPrizeProjection.minimum;
     if(weekId!=current || !clock.canAccumulate ||
        !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
          admin:actor.gm,weekId:weekId,reason:why) ||
@@ -6262,20 +6264,14 @@ class DedaIsolatedAdminIdentity {
       }
       final saved=old.data()?['amounts'];
       final prior=<int>[];
-      if(saved==null) {
-        prior.addAll(floor);
-      }else{
-        if(saved is! List || saved.length!=10) {
-          throw StateError('league-prize-previous-invalid');
-        }
-        for(var i=0;i<10;i++) {
-          final n=saved[i];
-          if(n is! int || n<floor[i] || n>1000000) {
-            throw StateError('league-prize-previous-unverified');
-          }
-          prior.add(n);
-        }
+      if(old.exists && saved is! List) {
+        throw StateError('league-prize-previous-invalid');
       }
+      // A historical plan below the approved payout minimum is not
+      // silently raised or rewritten. Stop for explicit manager review.
+      prior.addAll(DedaWeeklyPrizeProjection.amounts(
+        old.exists ? List<dynamic>.from(saved as List) : null,
+      ));
       var increased=false;
       for(var i=0;i<10;i++) {
         if(amounts[i]<prior[i])throw StateError('league-prize-decrease-denied');
