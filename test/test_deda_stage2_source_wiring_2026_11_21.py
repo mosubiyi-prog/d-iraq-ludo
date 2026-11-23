@@ -1852,5 +1852,65 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("FirebaseAuth.instance",card)
         self.assertNotIn("FirebaseFirestore.instance",card)
 
+
+    def test_isolated_place_related_manual_notices_photos_and_maps(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/admin_pages.dart').read_text()
+        self.assertIn('showDedaOwnerNotificationComposer(',original)
+        self.assertIn("'place_report'",original)
+        self.assertIn("'admin_alert'",original)
+        self.assertIn("'custom'",original)
+        self.assertIn("class _DedaSupportImageViewer",original)
+        self.assertEqual(service.count("Future<void> sendScopedOwnerPlaceNotification("),1)
+        notice=service.split("Future<void> sendScopedOwnerPlaceNotification(",1)[1].split(
+            "/// One payload schema for both owner notifications",1)[0]
+        for needed in (
+            "'place_requests', 'published_places'",
+            "'place_report', 'admin_alert', 'custom'",
+            "expectedAccountKey",
+            "requiredPermission: requiredPermission",
+            "scopedDocumentMatches(",
+            "await proof()",
+            "_firestore.runTransaction((tx) async {",
+            "tx.get(source)",
+            "tx.set(notice,",
+            "tx.set(audit,",
+            "'action': 'owner_notification_sent'",
+            "_auth.currentUser?.uid != uid",
+            "_mainAuth.currentUser?.uid != publicUid",
+        ):
+            self.assertIn(needed,notice,needed)
+        for forbidden in (
+            "FirebaseAuth.instance", "FirebaseFirestore.instance",
+            "FirebaseFunctions.instance", "DedaBackend.",
+            "collection('users').doc(", "tx.update(source,",
+            "tx.delete(", "signOut(",
+        ):
+            self.assertNotIn(forbidden,notice,forbidden)
+
+        self.assertEqual(ui.count("Future<void> _showIsolatedOwnerNoticeComposer("),1)
+        self.assertEqual(ui.count("class _DedaIsolatedSupportAttachmentViewer"),1)
+        self.assertIn("await admin.sendScopedOwnerPlaceNotification(",ui)
+        self.assertIn("sourceCollection: 'place_requests'",ui)
+        self.assertIn("sourceCollection: 'published_places'",ui)
+        self.assertIn("DedaAdminPlaceMapPage(",ui)
+        self.assertIn("package:flutter/services.dart",ui)
+        self.assertIn("MethodChannel('com.diraq.ludo/media')",ui)
+        self.assertIn("base64Decode(",ui)
+        self.assertIn("Image.network(",ui)
+        self.assertIn("InteractiveViewer(",ui)
+        self.assertIn("imageUrls",ui)
+        self.assertIn("imageUrl",ui)
+        self.assertIn("imageBase64",ui)
+        self.assertIn("_isolatedSupportPhotoGallery(",ui)
+        self.assertIn("_isolatedValidPlaceCoords(",ui)
+        self.assertNotIn("showDedaOwnerNotificationComposer(",ui)
+        for forbidden in (
+            "DedaBackend.", "FirebaseAuth.instance",
+            "FirebaseFirestore.instance", "FirebaseFunctions.instance",
+        ):
+            self.assertNotIn(forbidden,ui,forbidden)
+
 if __name__ == '__main__':
     unittest.main()
