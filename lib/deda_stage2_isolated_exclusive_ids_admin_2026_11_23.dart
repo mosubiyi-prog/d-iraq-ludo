@@ -282,7 +282,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
             ]),
           ] else Text('${t('مثبت','Locked')}: $chosen • $recipient',
             style:const TextStyle(fontWeight:FontWeight.bold)),
-        ]))),
+        ])),
     );
   }
   @override
