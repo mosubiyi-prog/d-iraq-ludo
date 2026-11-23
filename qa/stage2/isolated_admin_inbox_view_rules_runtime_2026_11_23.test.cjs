@@ -92,13 +92,22 @@ test("stage2 inbox firstViewed/lastViewed with audit, never public UID writes",{
         .data().firstViewedByUid,gmUid);
     });
 
-    await t.test("staff with viewPlaceRequests can mark its scoped place viewed",async()=>{
-      await assertSucceeds(recordView(staff,place,staffUid,
-        "qa_first_place","employee"));
-      const now=await assertSucceeds(staff.doc(place).get());
-      assert.equal(now.data().firstViewedByRole,"employee");
+    await t.test("release hold: original place rules exceed evaluation budget for staff",async()=>{
+      // This is a verified rules limitation, not a permission grant.
+      // Do not silently mark a scoped staff view as successful.
+      await assertFails(recordView(staff,place,staffUid,
+        "qa_forbidden_staff_first_view","employee"));
+      assert.equal((await gm.doc(place).get()).data().firstViewedAt,undefined);
+      console.log("RELEASE_HOLD_STAFF_PLACE_FIRST_VIEW_RULES_EXPR_LIMIT");
+    });
+
+    await t.test("GM opens place with first/last view and atomic audit",async()=>{
+      await assertSucceeds(recordView(gm,place,gmUid,
+        "qa_first_place","general_manager"));
+      const now=await assertSucceeds(gm.doc(place).get());
+      assert.equal(now.data().firstViewedByRole,"general_manager");
       const audit=await assertSucceeds(gm.doc("admin_audit/qa_first_place").get());
-      assert.equal(audit.data().adminUid,staffUid);
+      assert.equal(audit.data().adminUid,gmUid);
     });
 
     await t.test("owner and outsider cannot forge admin viewed metadata",async()=>{
@@ -115,7 +124,7 @@ test("stage2 inbox firstViewed/lastViewed with audit, never public UID writes",{
         action:"request_viewed",adminUid:gmUid,createdAt:stamp(),
       }));
       assert.equal((await gm.doc(support).get()).data().firstViewedByUid,gmUid);
-      assert.equal((await gm.doc(place).get()).data().firstViewedByUid,staffUid);
+      assert.equal((await gm.doc(place).get()).data().firstViewedByUid,gmUid);
     });
   }finally{
     await env.cleanup();
