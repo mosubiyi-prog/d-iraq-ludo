@@ -106,7 +106,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
         await Promise.all([
           db.doc("admins/"+uid).set({
             role:"employee",status:"active",active:true,
-            inviteId,adminId,phone,email:mail,permissions:{viewUsers:true},
+            inviteId,adminId,phone,email:mail,permissions:{viewUsers:true,viewPlaceRequests:true},
           }),
           db.doc("admins/"+legacyUid).set({
             role:"employee",status:"active",active:true,
@@ -126,6 +126,11 @@ test("candidate rules protect one immutable GM gateway against all clients",{
           db.doc("users/"+privateUid).set({
             accountKey:"9647712345900",name:"Synthetic private user",
           }),
+          db.doc("place_requests/qa_alert").set({
+            placeName:"QA place",accountKey:"9647712345900",
+            ownerUid:"qa_private_owner",governorate:"Baghdad",
+            status:"pending",
+          }),
         ]);
       });
       const privateRef="users/"+privateUid;
@@ -139,18 +144,18 @@ test("candidate rules protect one immutable GM gateway against all clients",{
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
   titleAr:"تنبيه اختبار",titleEn:"Synthetic QA alert",
   bodyAr:"اختبار وهمي",bodyEn:"Synthetic QA only",
-  sourceType:"admin",sourceId:"qa_alert",
+  sourceType:"place_requests",sourceId:"qa_alert",
   createdByUid:uid,
   createdByName:"QA Staff",createdByRole:"employee",
   createdAt:F.serverTimestamp(),
 }));
-      await assertSucceeds(legacy.doc("owner_place_notifications/qa_cand_legacy_notice").set({
+      await assertFails(legacy.doc("owner_place_notifications/qa_cand_legacy_notice").set({
   type:"admin_alert",accountKey:"9647712345900",
   ownerUid:"qa_private_owner",placeId:"qa_place_1",
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
   titleAr:"تنبيه اختبار",titleEn:"Synthetic QA alert",
   bodyAr:"اختبار وهمي",bodyEn:"Synthetic QA only",
-  sourceType:"admin",sourceId:"qa_alert",
+  sourceType:"place_requests",sourceId:"qa_alert",
   createdByUid:legacyUid,
   createdByName:"QA Staff",createdByRole:"employee",
   createdAt:F.serverTimestamp(),
@@ -226,11 +231,23 @@ test("candidate rules protect one immutable GM gateway against all clients",{
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
   titleAr:"تنبيه اختبار",titleEn:"Synthetic QA alert",
   bodyAr:"اختبار وهمي",bodyEn:"Synthetic QA only",
-  sourceType:"admin",sourceId:"qa_alert",
+  sourceType:"place_requests",sourceId:"qa_alert",
   createdByUid:uid,
   createdByName:"QA Staff",createdByRole:"employee",
   createdAt:F.serverTimestamp(),
 }));
+
+      // A valid linked owner is mandatory even after the invite is activated.
+      await assertFails(user.doc("owner_place_notifications/qa_cand_forged_owner").set({
+        type:"admin_alert",accountKey:"9647712345900",
+        ownerUid:"qa_wrong_owner",placeId:"qa_place_1",
+        placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
+        titleAr:"تنبيه اختبار",titleEn:"Synthetic QA alert",
+        bodyAr:"اختبار وهمي",bodyEn:"Synthetic QA only",
+        sourceType:"place_requests",sourceId:"qa_alert",
+        createdByUid:uid,createdByName:"QA Staff",
+        createdByRole:"employee",createdAt:F.serverTimestamp(),
+      }));
 
       await assertSucceeds(manager.doc(privateRef).get());
       // A later access revocation must immediately close privileged reads.
@@ -245,7 +262,7 @@ test("candidate rules protect one immutable GM gateway against all clients",{
   placeName:"QA place",approvalNumber:"",governorate:"Baghdad",
   titleAr:"تنبيه اختبار",titleEn:"Synthetic QA alert",
   bodyAr:"اختبار وهمي",bodyEn:"Synthetic QA only",
-  sourceType:"admin",sourceId:"qa_alert",
+  sourceType:"place_requests",sourceId:"qa_alert",
   createdByUid:uid,
   createdByName:"QA Staff",createdByRole:"employee",
   createdAt:F.serverTimestamp(),
