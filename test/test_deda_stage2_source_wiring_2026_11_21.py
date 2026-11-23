@@ -2119,5 +2119,58 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("(!_state.backendReady && !_state.enabled)",dashboard)
 
 
+
+    def test_isolated_admin_header_refresh_and_staff_badge(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/admin_pages.dart').read_text()
+        backend=(REPO/'lib/deda_backend.dart').read_text()
+        self.assertIn('pendingAdminRecoveryCountStream()',original)
+        self.assertIn("where('status', isEqualTo: 'new')",backend)
+        self.assertEqual(service.count(
+            'Stream<int> watchScopedPendingStaffRecoveryCount({'),1)
+        source=service.split(
+            'Stream<int> watchScopedPendingStaffRecoveryCount({',1)[1].split(
+            '/// Read-only scoped data path',1)[0]
+        for required in (
+            'dedaIsolatedAdminIdentityEnabled',
+            'requiredPermission: \'viewTeam\'',
+            "gm?['role'] != 'general_manager'",
+            "_firestore", "collection('admin_recovery_requests')",
+            "where('status', isEqualTo: 'new')",
+            'snapshots(includeMetadataChanges: true)',
+            'snapshot.metadata.isFromCache',
+            'snapshot.metadata.hasPendingWrites',
+            'if (!await proof()', 'snapshot.docs.length',
+        ):
+            self.assertIn(required,source,required)
+        for forbidden in (
+            'FirebaseFirestore.instance', 'FirebaseAuth.instance',
+            'DedaBackend.', "collection('users')",
+            'tx.set(', 'tx.update(',
+        ):
+            self.assertNotIn(forbidden,source,forbidden)
+        state=dashboard.split('class _DedaStage2IsolatedDashboardPageState',1)[1].split(
+            '/// Complete original Governorates card',1)[0]
+        for required in (
+            '_refreshDashboard() async', "readVerifiedAdminProfile(",
+            '_freshVerifiedProfile = verified',
+            '_refreshEpoch++', '_refreshProofFailed = true',
+            "watchScopedPendingStaffRecoveryCount(",
+            'staffRecoveryTabIndex = tabs.length + 1',
+            "profile['role'] == 'general_manager'",
+            "DefaultTabController.of(",
+            'animateTo(staffRecoveryTabIndex!)',
+            "count > 99 ? '99+' : count.toString()",
+            "Color(0xFFB3261E)",
+            "tooltip: t('تحديث', 'Refresh')",
+            'onPressed: _refreshing ? null : _refreshDashboard',
+            "key: ValueKey('deda_stage2_admin_refresh_$_refreshEpoch')",
+        ):
+            self.assertIn(required,state,required)
+        self.assertNotIn("DedaBackend.pendingAdminRecoveryCountStream(",state)
+        self.assertNotIn("FirebaseFirestore.instance",state)
+        self.assertNotIn("FirebaseAuth.instance",state)
+
 if __name__ == '__main__':
     unittest.main()
