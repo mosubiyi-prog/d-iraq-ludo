@@ -202,7 +202,7 @@ def add_invite_email_reservation(source):
     manager_original = "      allow update: if isGeneralManager()\n        || ("
     manager_locked = (
         "      allow update: if (isGeneralManager()\n"
-        "        && request.resource.data.diff(resource.data).affectedKeys().hasNone([\n"
+        "        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([\n"
         "          'email', 'adminId', 'phone', 'createdAt', 'createdByUid',\n"
         "          'claimedUid', 'claimedAt', 'acceptedAt'\n"
         "        ]))\n"
