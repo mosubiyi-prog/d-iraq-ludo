@@ -1863,6 +1863,28 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("collection('deda_diamond_gift_balances')",ui)
         self.assertNotIn('FirebaseFirestore.instance',ui)
 
+    def test_league_hadaya_census_100_cap_does_not_claim_complete_gift_counts(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()
+        read=service.split('Future<Map<String,dynamic>> readScopedLeague(',1)[1].split(
+            'Future<List<Map<String,dynamic>>> readScopedLeagueArchive(',1)[0]
+        self.assertEqual(read.count("collection('deda_diamond_gifts')"),1)
+        self.assertIn(".where('sourceType',isEqualTo:'weekly_league').limit(100)",read)
+        self.assertIn("if (gifts.docs.length>=100) {",read)
+        self.assertIn("receipts={'verified':false,'limited':true};",read)
+        self.assertIn("'verified':true,'count':accepted.length",read)
+        self.assertIn("'limited':false,",read)
+        self.assertIn("!gifts.metadata.isFromCache",read)
+        self.assertIn("!gifts.metadata.hasPendingWrites",read)
+        self.assertIn("'pending':accepted.where(",read)
+        self.assertIn("'received':accepted.where(",read)
+        self.assertIn("receipts['limited'] == true",ui)
+        self.assertIn("Partial counts are unverified;",ui)
+        self.assertIn("receipts['verified'] == true",ui)
+        self.assertNotIn('FirebaseFirestore.instance',ui)
+        self.assertNotIn("collection('deda_diamond_gift_balances')",read)
+        self.assertNotIn("tx.set(",read)
+
     def test_league_card_isolated_original_functions_and_no_wallet_mutation(self):
         service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()

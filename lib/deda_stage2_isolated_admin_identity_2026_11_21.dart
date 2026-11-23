@@ -6027,18 +6027,25 @@ class DedaIsolatedAdminIdentity {
       final gifts=await _firestore.collection('deda_diamond_gifts')
         .where('sourceType',isEqualTo:'weekly_league').limit(100).get(opts);
       if (!gifts.metadata.isFromCache && !gifts.metadata.hasPendingWrites) {
-        final accepted=gifts.docs.where((d){
-          final x=d.data();
-          return x['sourceType']=='weekly_league' && x['giftId'] is String &&
-            x['targetPublicId'] is String && x['amount'] is int &&
-            (x['status']=='pending' || x['status']=='received');
-        }).toList(growable:false);
-        receipts={
-          'verified':true,'count':accepted.length,
-          'pending':accepted.where((d)=>d.data()['status']=='pending').length,
-          'received':accepted.where((d)=>d.data()['status']=='received').length,
-          'limited':gifts.docs.length>=100,
-        };
+        // At the query cap a partial census must NEVER look like a
+        // complete, verified count of real pending/received Hadaya gifts.
+        // This does not change the original source, claims or user wallet.
+        if (gifts.docs.length>=100) {
+          receipts={'verified':false,'limited':true};
+        } else {
+          final accepted=gifts.docs.where((d){
+            final x=d.data();
+            return x['sourceType']=='weekly_league' && x['giftId'] is String &&
+              x['targetPublicId'] is String && x['amount'] is int &&
+              (x['status']=='pending' || x['status']=='received');
+          }).toList(growable:false);
+          receipts={
+            'verified':true,'count':accepted.length,
+            'pending':accepted.where((d)=>d.data()['status']=='pending').length,
+            'received':accepted.where((d)=>d.data()['status']=='received').length,
+            'limited':false,
+          };
+        }
       }
     } catch (_) {
       // A denied read is UNKNOWN, never interpreted as no payout.

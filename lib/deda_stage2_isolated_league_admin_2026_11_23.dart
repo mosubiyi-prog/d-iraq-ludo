@@ -267,16 +267,20 @@ class _DedaStage2IsolatedLeagueAdminPageState
                     trailing: Text(amounts[i].toString() + ' ' +
                       t('ماسة', 'diamonds'))),
               const Divider(),
-              Text(receipts['verified'] == true
-                ? t('هدايا مسجلة: ', 'Created gifts: ') +
-                  receipts['count'].toString() +
-                  t('، معلّقة: ', ', pending: ') +
-                  receipts['pending'].toString() +
-                  t('، مستلمة: ', ', received: ') +
-                  receipts['received'].toString() +
-                  (receipts['limited'] == true ? ' (100+)' : '')
-                : t('تعذّر إثبات إيصالات هداياي.',
-                    'Hadaya receipts cannot be verified.')),
+              Text(receipts['limited'] == true
+                ? t('عدد إيصالات هداياي تجاوز حد القراءة (100). '
+                    'الأعداد الجزئية غير معتمدة؛ راجع السجل الكامل من الخادم.',
+                    'Weekly Hadaya receipts reached the 100-row read cap. '
+                    'Partial counts are unverified; review the full server register.')
+                : receipts['verified'] == true
+                    ? t('هدايا مسجلة: ', 'Created gifts: ') +
+                      receipts['count'].toString() +
+                      t('، معلّقة: ', ', pending: ') +
+                      receipts['pending'].toString() +
+                      t('، مستلمة: ', ', received: ') +
+                      receipts['received'].toString()
+                    : t('تعذّر إثبات إيصالات هداياي.',
+                        'Hadaya receipts cannot be verified.')),
               Text(t('الجوائز المخططة لا تثبت الصرف ولا تحوّل ماسات.',
                 'Planned prizes never prove payout or transfer diamonds.')),
               if (prizePlanVerified)
