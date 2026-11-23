@@ -176,6 +176,21 @@ test("candidate rules protect one immutable GM gateway against all clients",{
         updatedAt:F.serverTimestamp(),
       }));
 
+      // An invitation already marked completed is NOT a substitute for
+      // the claimed-to-completed transition in the SAME transaction.
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admin_invites/"+inviteId)
+          .update({status:"completed"});
+      });
+      await assertFails(user.doc("admin_entry_access/"+phone).update({
+        adminUid:uid, adminId, status:"active", active:true,
+        updatedAt:F.serverTimestamp(),
+      }));
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admin_invites/"+inviteId)
+          .update({status:"claimed"});
+      });
+
       // Exact client completion writes are allowed even while privilege
       // queries remain CLOSED; admin_entry_access.update uses isAdmin()
       // for the scoped self-bind, not hasAdminPermission().
