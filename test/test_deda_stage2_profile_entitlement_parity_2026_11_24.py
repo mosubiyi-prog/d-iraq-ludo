@@ -64,7 +64,7 @@ class ProfileEntitlementParity(unittest.TestCase):
         self.assertIn("index == 3", owner_editor)
         self.assertIn("index == 4", owner_editor)
         self.assertIn("previewAsset: style >= 3", inventory)
-        self.assertIn("royal_frame_\${style - 3}.webp", inventory)
+        self.assertIn("royal_frame_${style - 3}.webp", inventory)
 
     def test_no_display_balance_masquerades_as_paid_frame_purchase_proof(self):
         checkout = source("lib/deda_lab_frame_secure_checkout.dart")
