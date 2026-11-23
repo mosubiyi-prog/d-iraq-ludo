@@ -20,6 +20,10 @@ on:
       - 'functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js'
       - 'functions/index.js'
       - 'functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs'
+      - 'functions/deda_weekly_direct_prize_plan.js'
+      - 'functions/deda_weekly_direct_prize_worker.cjs'
+      - 'functions/deda_weekly_payout_approved_runner_100438.cjs'
+      - 'functions/tests/deda_weekly_direct_prize_custom_plan_100438.test.cjs'
       - 'functions/deda_pin_manual_recovery_compat_private_v1.js'
       - 'functions/deda_pin_auto_recovery_worker.js'
       - 'functions/test/deda_pin_manual_recovery_compat_private_v1.test.js'
@@ -118,6 +122,25 @@ jobs:
           }))
           print('PASS_USE_CHECKED_IN_RULES_LOCAL_ONLY')
           PY
+      - name: Recheck ORIGINAL approved weekly prize worker and Saturday runner on throwaway Firestore
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This executes the EXISTING 100438 test. No new payout writer.
+          # Project/env are demo-only, and Admin SDK points at the emulator.
+          export GOOGLE_CLOUD_PROJECT=demo-deda-100405-worker
+          export GCLOUD_PROJECT=demo-deda-100405-worker
+          root="$RUNNER_TEMP/deda-stage2-admin-runtime"
+          node --check functions/deda_weekly_direct_prize_plan.js
+          node --check functions/deda_weekly_direct_prize_worker.cjs
+          node --check functions/deda_weekly_payout_approved_runner_100438.cjs
+          node --check functions/tests/deda_weekly_direct_prize_custom_plan_100438.test.cjs
+          "$root/node_modules/.bin/firebase" emulators:exec \
+            --project demo-deda-100405-worker \
+            --config "$root/firebase.json" \
+            --only firestore --non-interactive \
+            'node --test functions/tests/deda_weekly_direct_prize_custom_plan_100438.test.cjs'
+          echo 'PASS_ORIGINAL_APPROVED_WEEKLY_PRIZE_WORKER_EMULATOR_ONLY_NO_DEPLOY'
       - name: Exercise actual Firestore security rules on fake staff, invite, and recovery records
         shell: bash
         run: |
