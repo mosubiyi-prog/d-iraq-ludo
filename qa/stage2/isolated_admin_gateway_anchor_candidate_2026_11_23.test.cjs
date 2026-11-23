@@ -495,6 +495,36 @@ test("candidate rules protect one immutable GM gateway against all clients",{
         .data().status,"claimed");
     });
 
+    await t.test("verified manager self name change keeps role and scope immutable",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const ref=manager.doc("admins/"+managerUid);
+      const outsiderRef=outsider.doc("admins/"+managerUid);
+      await assertSucceeds(ref.update({
+        displayName:"QA Verified Manager",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      const current=await assertSucceeds(ref.get());
+      assert.equal(current.data().displayName,"QA Verified Manager");
+      assert.equal(current.data().role,"general_manager");
+      await assertFails(outsiderRef.update({
+        displayName:"QA Forged Name",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(ref.update({
+        role:"employee",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(ref.update({
+        active:false,
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(ref.update({
+        displayName:"",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      assert.equal((await ref.get()).data().role,"general_manager");
+    });
+
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
       await env.withSecurityRulesDisabled(async ctx=>{
         await ctx.firestore().doc("admin_gateway_protection/primary").delete();

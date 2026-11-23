@@ -206,6 +206,20 @@ class _DedaStage2IsolatedDashboardPageState
         );
       }
     }
+    // Settings belongs to every server-verified admin, not to viewTeam
+    // or another elevated permission. Its destination re-checks Auth + UID.
+    addDestination(
+      title: t('الإعدادات', 'Settings'),
+      subtitle: t('بيانات الحساب الإداري وتعديل الاسم',
+          'Admin profile and name'),
+      icon: Icons.settings_outlined,
+      accentColor: const Color(0xFF5B6770),
+      page: _DedaIsolatedAdminSettingsTab(
+        admin: widget.admin,
+        dedaPhone: widget.dedaPhone,
+        isArabic: widget.isArabic,
+      ),
+    );
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -274,6 +288,223 @@ class _DedaStage2IsolatedDashboardPageState
                 ]),
         ),
       ),
+    );
+  }
+}
+
+/// Faithful isolated counterpart of the existing Admin Settings tile:
+/// name edit + email/role/status/last-login, without public Auth/Firestore or
+/// SharedPreferences writes. All reads and writes re-check secondary Auth.
+class _DedaIsolatedAdminSettingsTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+
+  const _DedaIsolatedAdminSettingsTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedAdminSettingsTab> createState() =>
+      _DedaIsolatedAdminSettingsTabState();
+}
+
+class _DedaIsolatedAdminSettingsTabState
+    extends State<_DedaIsolatedAdminSettingsTab> {
+  late Future<Map<String, dynamic>> _freshProfile;
+  bool _busy = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _freshProfile = _read();
+  }
+
+  Future<Map<String, dynamic>> _read() =>
+      widget.admin.readVerifiedAdminProfile(dedaPhone: widget.dedaPhone);
+
+  void _refresh() {
+    if (_busy) return;
+    setState(() => _freshProfile = _read());
+  }
+
+  String _role(dynamic role) {
+    switch ((role ?? '').toString()) {
+      case 'general_manager':
+        return t('المدير العام', 'General manager');
+      case 'deputy_manager':
+        return t('معاون المدير', 'Deputy manager');
+      case 'province_agent':
+        return t('وكيل محافظة', 'Province agent');
+      case 'employee':
+        return t('موظف', 'Employee');
+      default:
+        return (role ?? '').toString();
+    }
+  }
+
+  String _status(dynamic status) {
+    switch ((status ?? '').toString()) {
+      case 'active':
+        return t('نشط', 'Active');
+      case 'temporarily_stopped':
+        return t('متوقف مؤقتاً', 'Temporarily stopped');
+      case 'disabled':
+        return t('معطّل', 'Disabled');
+      default:
+        return (status ?? '').toString();
+    }
+  }
+
+  String _timestamp(dynamic raw) {
+    final DateTime? value = raw is Timestamp ? raw.toDate()
+        : raw is DateTime ? raw : null;
+    return value == null
+        ? '—' : value.toLocal().toString().split('.').first;
+  }
+
+  void _message(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _editName(Map<String, dynamic> verified) async {
+    if (_busy) return;
+    final name = (verified['displayName'] ??
+        verified['name'] ?? '').toString().trim();
+    final controller = TextEditingController(text: name);
+    final candidate = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(t('تعديل الاسم الإداري', 'Edit admin name')),
+        content: TextField(
+          controller: controller,
+          maxLength: 100,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: t('الاسم الكامل', 'Full name'),
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.of(dialog).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialog).pop(),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialog).pop(controller.text),
+            child: Text(t('حفظ', 'Save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || candidate == null) return;
+    final clean = candidate.trim();
+    if (clean.length < 2 || clean.length > 100) {
+      _message(t('اكتب اسماً واضحاً من حرفين إلى 100 حرف.',
+          'Use a name of 2 to 100 characters.'));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await widget.admin.updateScopedOwnAdminDisplayName(
+        dedaPhone: widget.dedaPhone,
+        displayName: clean,
+      );
+      if (!mounted) return;
+      // Do not persist a local optimistic profile. Fetch fresh proof again.
+      setState(() => _freshProfile = _read());
+      _message(t('تم تحديث الاسم الإداري.', 'Admin name updated.'));
+    } catch (_) {
+      _message(t('تعذر تحديث الاسم أو التحقق من صلاحية الإدارة.',
+          'Could not update name or verify admin access.'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      return const SizedBox.shrink();
+    }
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _freshProfile,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: TextButton.icon(
+            onPressed: _busy ? null : _refresh,
+            icon: const Icon(Icons.refresh),
+            label: Text(t('تعذر تأكيد الحساب، أعد المحاولة',
+                'Profile verification failed, retry')),
+          ));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final profile = snapshot.data!;
+        final email = (profile['email'] ?? '').toString().trim();
+        final name = (profile['displayName'] ??
+            profile['name'] ?? '').toString().trim();
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: t('تحديث من الخادم', 'Refresh from server'),
+                onPressed: _busy ? null : _refresh,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+            Card(child: Column(children: [
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(t('الاسم', 'Name')),
+                subtitle: Text(name.isEmpty ? '—' : name),
+                trailing: IconButton(
+                  tooltip: t('تعديل الاسم', 'Edit name'),
+                  onPressed: _busy ? null : () => _editName(profile),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.email_outlined),
+                title: Text(t('البريد', 'Email')),
+                subtitle: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(email.isEmpty ? '—' : email),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(t('الدور', 'Role')),
+                subtitle: Text(_role(profile['role'])),
+              ),
+              ListTile(
+                leading: const Icon(Icons.toggle_on_outlined),
+                title: Text(t('حالة الحساب', 'Account status')),
+                subtitle: Text(_status(profile['status'])),
+              ),
+              ListTile(
+                leading: const Icon(Icons.schedule),
+                title: Text(t('آخر دخول', 'Last sign-in')),
+                subtitle: Text(_timestamp(profile['lastLoginAt'] ??
+                    profile['lastSeenAt'])),
+              ),
+            ])),
+          ],
+        );
+      },
     );
   }
 }

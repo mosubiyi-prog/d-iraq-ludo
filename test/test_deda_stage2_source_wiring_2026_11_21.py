@@ -1315,6 +1315,32 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("DedaExclusiveIdsAdminPage(",header)
         self.assertNotIn("DedaBackend.",header)
 
+    def test_isolated_admin_settings_card_has_full_original_functions(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        original=(REPO/'lib/admin_team_pages.dart').read_text()
+        self.assertEqual(ui.count("class _DedaIsolatedAdminSettingsTab "),1)
+        self.assertEqual(ui.count("class _DedaIsolatedAdminSettingsTabState"),1)
+        self.assertEqual(ui.count("title: t('الإعدادات', 'Settings')"),1)
+        self.assertIn("page: _DedaIsolatedAdminSettingsTab(",ui)
+        self.assertIn("widget.admin.readVerifiedAdminProfile(",ui)
+        self.assertIn("widget.admin.updateScopedOwnAdminDisplayName(",ui)
+        self.assertIn("await widget.admin.updateScopedOwnAdminDisplayName(",ui)
+        self.assertIn("setState(() => _freshProfile = _read());",ui)
+        self.assertEqual(service.count("Future<void> updateScopedOwnAdminDisplayName("),1)
+        self.assertIn("await _firestore.collection('admins').doc(uid).update({",service)
+        self.assertIn("'updatedAt': FieldValue.serverTimestamp(),",service)
+        self.assertIn("final refreshed = await readVerifiedAdminProfile(",service)
+        self.assertIn("Future<bool> proof() => _serverAuthorizedAdmin(",service)
+        self.assertIn("class DedaAdminSettingsPage",original)
+        for field in ("'الاسم'", "'البريد'", "'الدور'", "'حالة الحساب'", "'آخر دخول'"):
+            self.assertIn(field,original)
+            self.assertIn(field,ui)
+        self.assertNotIn("DedaBackend.",ui)
+        self.assertNotIn("FirebaseAuth.instance",ui)
+        self.assertNotIn("FirebaseFirestore.instance",ui)
+        self.assertNotIn("SharedPreferences",ui)
+
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn('return PopScope(',source)

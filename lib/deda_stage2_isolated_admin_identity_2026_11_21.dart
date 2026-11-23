@@ -2131,6 +2131,53 @@ class DedaIsolatedAdminIdentity {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
+  /// Edit only the current secondary-auth admin's display name. The server
+  /// re-proves DEDA phone ownership and admin privileges, while Firestore
+  /// rules restrict self-updates to displayName/updatedAt. No new UID,
+  /// SharedPreferences identity, or production rule modification.
+  Future<void> updateScopedOwnAdminDisplayName({
+    required String dedaPhone,
+    required String displayName,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-name-stage-disabled');
+    }
+    final clean = displayName.trim();
+    if (clean.length < 2 || clean.length > 100 ||
+        clean.contains(RegExp(r'[\u0000-\u001f]'))) {
+      throw StateError('deda-admin-isolated-name-invalid');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-name-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+    );
+    if (publicUid == null || !await proof() ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-name-not-authorized');
+    }
+    await _firestore.collection('admins').doc(uid).update({
+      'displayName': clean,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    // Confirm the committed identity after a new fresh server proof. The
+    // old main-app session must remain exactly the same throughout.
+    final refreshed = await readVerifiedAdminProfile(dedaPhone: dedaPhone);
+    if (refreshed['uid'] != uid ||
+        refreshed['displayName'] != clean ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-name-postwrite-proof-failed');
+    }
+  }
+
   /// Read-only scoped data path, with fresh server permissions before and
   /// after fetch. No write operation or raw Firestore handle is exposed.
   Future<List<Map<String, dynamic>>> readScopedAdminList({
