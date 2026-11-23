@@ -583,10 +583,10 @@ class _DedaIsolatedRoadReportsTabState
                         title: Text((item['type'] ??
                             t('بلاغ طريق', 'Road report')).toString()),
                         subtitle: Text(
-                          t('التأكيدات: ', 'Confirmations: ') +
-                            (item['confirmations'] ?? 0).toString() +
-                            ' • ' + t('طلبات الإلغاء: ', 'Resolve reports: ') +
-                            (item['resolvedReports'] ?? 0).toString(),
+                          '${t('التأكيدات: ', 'Confirmations: ')}'
+                          '${item['confirmations'] ?? 0}'
+                          ' • ${t('طلبات الإلغاء: ', 'Resolve reports: ')}'
+                          '${item['resolvedReports'] ?? 0}',
                         ),
                         trailing: canManage ? IconButton(
                           tooltip: t('حذف البلاغ', 'Delete report'),
