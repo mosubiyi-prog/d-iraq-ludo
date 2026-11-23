@@ -1904,6 +1904,9 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("imageUrl",ui)
         self.assertIn("imageBase64",ui)
         self.assertIn("_isolatedSupportPhotoGallery(",ui)
+        self.assertIn("Future<void> _viewLinkedUser(",ui)
+        self.assertIn("widget.admin.readScopedUserAccountSnapshot(",ui)
+        self.assertIn("() => _viewLinkedUser(",ui)
         self.assertIn("_isolatedValidPlaceCoords(",ui)
         self.assertNotIn("showDedaOwnerNotificationComposer(",ui)
         for forbidden in (
