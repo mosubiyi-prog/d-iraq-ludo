@@ -619,7 +619,8 @@ class DedaIsolatedAdminProofPolicy {
         actor?['role'] != 'general_manager' ||
         actor?['status'] != 'active' ||
         target == null || target['active'] != false ||
-        target['status'] != 'temporarily_stopped') return false;
+        !const <String>{'temporarily_stopped', 'disabled'}
+            .contains((target['status'] ?? '').toString())) return false;
     return const <String>{
       'deputy_manager', 'employee', 'province_agent',
     }.contains((target['role'] ?? '').toString());
@@ -2207,8 +2208,12 @@ class DedaIsolatedAdminIdentity {
       final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(
         (member?['phone'] ?? '').toString(),
       );
-      if (!memberSnap.exists || phone.isEmpty) {
-        throw StateError('deda-admin-isolated-team-remove-gateway-unknown');
+      if (!memberSnap.exists || phone.isEmpty ||
+          member?['active'] != false ||
+          !const <String>{'temporarily_stopped', 'disabled'}
+              .contains((member?['status'] ?? '').toString())) {
+        // A live administrator cannot be removed before suspension.
+        throw StateError('deda-admin-isolated-team-remove-not-suspended');
       }
       final gatewayRef = _firestore.collection('admin_entry_access').doc(phone);
       final gatewaySnap = await transaction.get(gatewayRef);

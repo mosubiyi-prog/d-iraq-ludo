@@ -1016,7 +1016,7 @@ exports.revokeAdminMemberSessions = onCall(async (request) => {
   const member = target.data() || {};
   if (input.stage2Isolated === true &&
       (member.active !== false ||
-       member.status !== "temporarily_stopped" ||
+       !["temporarily_stopped", "disabled"].includes(member.status) ||
        !["deputy_manager", "employee", "province_agent"]
            .includes(member.role))) {
     throw new HttpsError("failed-precondition",

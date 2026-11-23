@@ -104,13 +104,17 @@ test("stage2 refuses active staff, GM, or already disabled/non-suspended identit
   for (const target of [
     {active:true,status:"active"},
     {role:"general_manager"},
-    {active:false,status:"disabled"},
     {role:""},
   ]) {
     const f=fixture({target});
     await assert.rejects(()=>f.handler({data:f.data}),/suspend-bound-subordinate/);
     assert.equal(f.changes.revokes.length,0);
   }
+});
+test("disabled subordinate also has refresh tokens revoked before removal",async()=>{
+  const f=fixture({target:{active:false,status:"disabled"}});
+  assert.equal((await f.handler({data:f.data})).success,true);
+  assert.deepEqual(f.changes.revokes,["synthetic-employee"]);
 });
 test("actor cannot revoke self or unknown target; failures never forge audit",async()=>{
   const f=fixture();f.data.uid=f.actor.uid;

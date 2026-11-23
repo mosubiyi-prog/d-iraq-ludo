@@ -251,14 +251,14 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                       'actor.data.status !== "active"',
                       'input.stage2Isolated === true',
                       'manager-gateway-unverified',
-                      'member.status !== "temporarily_stopped"',
+                      '["temporarily_stopped", "disabled"].includes(member.status)',
                       'await getAuth().revokeRefreshTokens(targetUid)',
                       'await writeAdminAudit(actor, "admin_sessions_revoked"'):
             self.assertIn(guard,handler,guard)
         policy=service.split('static bool memberSessionRevocationAllowed(',1)[1].split(
             '/// Only an unclaimed subordinate invitation',1)[0]
         self.assertIn("target['active'] != false",policy)
-        self.assertIn("target['status'] != 'temporarily_stopped'",policy)
+        self.assertIn("'temporarily_stopped', 'disabled'",policy)
         self.assertIn("actor?['role'] != 'general_manager'",policy)
         self.assertEqual(service.count('Future<void> revokeScopedSuspendedMemberSessions('),1)
         caller=service.split('Future<void> revokeScopedSuspendedMemberSessions(',1)[1].split(
@@ -277,8 +277,35 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('var tokensRevoked = false;',ui)
         self.assertIn("case 'revokeSessions':",ui)
         self.assertIn("canRetryRevocation",ui)
-        self.assertIn("'temporarily_stopped' && subordinate",ui)
+        self.assertIn("'temporarily_stopped', 'disabled'",ui)
         self.assertIn('access remains suspended.',ui.lower())
+
+    def test_existing_team_edit_and_remove_use_stop_revoke_remove_order(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        edit=src.split('Future<void> _editMember(',1)[1].split('Future<void> _removeMemberAccess(',1)[0]
+        removal=src.split('Future<void> _removeMemberAccess(',1)[1].split('Future<void> _resetMemberPassword(',1)[0]
+        for phrase in ("values['status'] == 'temporarily_stopped'",
+                       "values['status'] == 'disabled'",
+                       'revokeScopedSuspendedMemberSessions(',
+                       'token revocation unconfirmed.'):
+            self.assertIn(phrase,edit)
+        self.assertIn('suspendScopedAdminMember(',removal)
+        self.assertIn('revokeScopedSuspendedMemberSessions(',removal)
+        self.assertIn('removeScopedAdminMemberAccess(',removal)
+        self.assertLess(removal.index('suspendScopedAdminMember('),
+                        removal.index('revokeScopedSuspendedMemberSessions('))
+        self.assertLess(removal.index('revokeScopedSuspendedMemberSessions('),
+                        removal.index('removeScopedAdminMemberAccess('))
+        self.assertIn('var tokensRevoked = false;',removal)
+        self.assertIn('var removed = false;',removal)
+        method=backend.split('Future<void> removeScopedAdminMemberAccess(',1)[1].split(
+            'Future<void> decideScopedStaffRecovery(',1)[0]
+        self.assertIn('deda-admin-isolated-team-remove-not-suspended',method)
+        self.assertIn("member?['active'] != false",method)
+        self.assertIn("'temporarily_stopped', 'disabled'",method)
+        self.assertEqual(backend.count('Future<void> revokeScopedSuspendedMemberSessions('),1)
+        self.assertNotIn('FirebaseAuth.instance',removal)
 
     def test_isolated_invitation_create_single_atomic_secondary_auth(self):
         backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()

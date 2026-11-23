@@ -3205,7 +3205,8 @@ class _DedaIsolatedReadOnlyTabState
       Map<String, dynamic> member) async {
     if (_mutating || widget.collection != 'admins' ||
         member['active'] != false ||
-        member['status'] != 'temporarily_stopped' ||
+        !const <String>{'temporarily_stopped', 'disabled'}
+            .contains((member['status'] ?? '').toString()) ||
         !const <String>{
           'deputy_manager', 'employee', 'province_agent',
         }.contains((member['role'] ?? '').toString())) return;
@@ -3386,8 +3387,32 @@ class _DedaIsolatedReadOnlyTabState
           status: values['status'] as String,
           permissions: values['permissions'] as Map<String, bool>, reason: reason,
         );
-        if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(t('تم تعديل الموظف وبوابته.', 'Staff and gateway updated.')))); }
+        // Edits to stopped/disabled status must also revoke refresh tokens.
+        // A failure is a partial success, never a silent full success.
+        var revoked = true;
+        if (values['status'] == 'temporarily_stopped' ||
+            values['status'] == 'disabled') {
+          revoked = false;
+          try {
+            await widget.admin.revokeScopedSuspendedMemberSessions(
+              dedaPhone: widget.dedaPhone, targetUid: id, reason: reason,
+            );
+            revoked = true;
+          } catch (_) {
+            // The server status write is already committed; do not revert.
+          }
+        }
+        if (mounted) {
+          _refresh();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(revoked
+                ? t('تم تعديل الموظف وبوابته.', 'Staff and gateway updated.')
+                : t('تغيّرت حالة الموظف، لكن إبطال رموز التحديث غير مؤكد. '
+                    'أعد الإبطال من قائمة الموظف الموقوف.',
+                    'Staff status changed; token revocation unconfirmed. '
+                    'Retry from the stopped member menu.')),
+          ));
+        }
       } catch (_) {
         if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(t('فشل التعديل: راجع الصلاحيات وربط الهاتف.',
@@ -3422,17 +3447,55 @@ class _DedaIsolatedReadOnlyTabState
     );
     if (confirm != true || !mounted) return;
     setState(() => _mutating = true);
+    var suspensionAttempted = false;
+    var tokensRevoked = false;
+    var removed = false;
     try {
+      // Same existing suspension, same existing server revocation, and
+      // same audited removal. Never delete an active administrator first.
+      if (member['active'] == true) {
+        await widget.admin.suspendScopedAdminMember(
+          dedaPhone: widget.dedaPhone, targetUid: id, reason: reason,
+        );
+        suspensionAttempted = true;
+      } else if (member['active'] == false &&
+          const <String>{'temporarily_stopped', 'disabled'}
+              .contains((member['status'] ?? '').toString())) {
+        suspensionAttempted = true;
+      } else {
+        throw StateError('deda-admin-team-remove-unknown-status');
+      }
+      await widget.admin.revokeScopedSuspendedMemberSessions(
+        dedaPhone: widget.dedaPhone, targetUid: id, reason: reason,
+      );
+      tokensRevoked = true;
       await widget.admin.removeScopedAdminMemberAccess(
         dedaPhone: widget.dedaPhone, targetUid: id, reason: reason,
       );
-      if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('أُزيل وصول الإدارة فقط.', 'Admin access removed.')))); }
+      removed = true;
     } catch (_) {
-      if (mounted) { _refresh(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('تعذرت الإزالة: لم يثبت ربط الموظف وبوابة الهاتف.',
-          'Removal denied: staff gateway binding unverified.')))); }
-    } finally { if (mounted) setState(() => _mutating = false); }
+      // Do not reverse a committed suspension or claim removed access.
+    } finally {
+      if (mounted) {
+        setState(() => _mutating = false);
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(removed
+              ? t('أُبطلت رموز التحديث وأُزيل وصول الإدارة وبوابة الموظف.',
+                  'Refresh tokens revoked and staff admin access removed.')
+              : suspensionAttempted && !tokensRevoked
+                  ? t('الحذف متوقف: إبطال الرموز غير مؤكد. '
+                      'تحقق من حالة التعليق وأعد الإبطال.',
+                      'Removal stopped: token revocation unconfirmed. '
+                      'Verify suspended status and retry.')
+                  : tokensRevoked
+                      ? t('أُبطلت الرموز، لكن إزالة وصول الإدارة لم تكتمل.',
+                          'Tokens revoked; admin access removal incomplete.')
+                      : t('لم تثبت حالة الموظف؛ لم تُحذف صلاحياته.',
+                          'Staff status unverified; access not deleted.')),
+        ));
+      }
+    }
   }
 
   Future<void> _resetMemberPassword(Map<String, dynamic> member) async {
@@ -3773,7 +3836,8 @@ class _DedaIsolatedReadOnlyTabState
     }.contains((data['role'] ?? '').toString().trim().toLowerCase());
     final canSuspend = team && data['active'] == true && subordinate;
     final canRetryRevocation = team && data['active'] == false &&
-        data['status'] == 'temporarily_stopped' && subordinate;
+        const <String>{'temporarily_stopped', 'disabled'}
+            .contains((data['status'] ?? '').toString()) && subordinate;
     final canCancel = invite && data['status'] == 'pending' && subordinate;
     final canRecover = recovery && data['status'] == 'new';
     return Card(
