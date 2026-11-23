@@ -105,7 +105,7 @@ EDITOR_BUILD = """  @override
         ), textAlign: TextAlign.center)),
       );
     }
-    return Scaffold("""
+"""
 
 
 def editor_span(main: str) -> tuple[int, int]:
@@ -148,7 +148,7 @@ def patch_original_editor(main: str) -> str:
          '      Navigator.pop(context, true);',
          EDITOR_SAVE_END),
         ('original-build',
-         '  @override\n  Widget build(BuildContext context) {\n    return Scaffold(',
+         '  @override\n  Widget build(BuildContext context) {\n',
          EDITOR_BUILD),
     ):
         editor = once(editor, old, new, 'editor-' + label)
