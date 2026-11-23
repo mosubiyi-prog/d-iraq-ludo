@@ -15,6 +15,8 @@ on:
       - 'qa/stage2/isolated_admin_invite_preflight_2026_11_23.py'
       - 'qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
       - 'qa/stage2/isolated_admin_secondary_auth_activation_emulator_2026_11_23.test.cjs'
+      - 'functions/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.js'
+      - 'functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js'
       - 'functions/deda_pin_manual_recovery_compat_private_v1.js'
       - 'functions/deda_pin_auto_recovery_worker.js'
       - 'functions/test/deda_pin_manual_recovery_compat_private_v1.test.js'
@@ -73,6 +75,14 @@ jobs:
           node --test functions/test/deda_pin_manual_recovery_compat_private_v1.test.js \
             functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
           echo 'PASS_EXISTING_PRIVATE_PIN_DUAL_SYNC_WORKER_TESTS_OFF_NO_DEPLOY'
+      - name: Verify independent original-owner session PIN preflight is read-only and not deployed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.js
+          node --check functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js
+          node --test functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js
+          echo 'PASS_PRIVATE_ORIGINAL_UID_REAUTH_PREFLIGHT_NO_PIN_WRITES_NO_DEPLOY'
       - name: Install throwaway emulator tooling in runner temp only
         shell: bash
         run: |
