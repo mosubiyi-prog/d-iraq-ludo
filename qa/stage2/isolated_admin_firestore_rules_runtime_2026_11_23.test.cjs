@@ -487,6 +487,112 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       console.log("PASS_OWNER_PLACE_REJECTION_ATOMIC_REQUEST_NOTICE_AND_AUDIT_NO_REMOVAL");
     });
 
+    await t.test("GM winner request review + prize_sent audit atomic, never credits gifts", async () => {
+      const id="prize_v1_"+account;
+      const managerRef=manager.doc("prize_winner_requests/"+id);
+      const staffRef=staff.doc("prize_winner_requests/"+id);
+      const publicRef=publicDb.doc("prize_winner_requests/"+id);
+      const auditRef=manager.doc("admin_audit/qa_prize_v1_review_atomic");
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db=ctx.firestore();
+        await db.doc("prize_winner_requests/"+id).set({
+          ownerUid:publicUid,cycleId:"prize_v1",accountKey:account,
+          name:"QA Winner",phone:"07712345678",dedaId:"@DEDA-QA1234",
+          rewardCode:"DEDA123456789012",pointsAtCompletion:25000,
+          completedThresholds:[5000,10000,15000,20000,25000],
+          finalReservedPoints:25000,status:"new",adminMessage:"",
+          prizeDetails:"",userReply:"",createdAt:sent(),updatedAt:sent(),
+        });
+      });
+      await assertSucceeds(manager.collection("prize_winner_requests")
+        .orderBy("updatedAt","desc").limit(500).get());
+      await assertFails(staff.collection("prize_winner_requests").get());
+      await assertFails(outsider.collection("prize_winner_requests").get());
+      await assertFails(staffRef.update({
+        status:"approved",adminMessage:"Unapproved staff action",prizeDetails:"",
+        adminByUid:staffUid,adminByName:"QA Staff Member",
+        adminByRole:"employee",adminUpdatedAt:sent(),updatedAt:sent(),
+      }));
+      await assertSucceeds(manager.runTransaction(async tx => {
+        const request=await tx.get(managerRef);
+        assert.equal(request.data().status,"new");
+        tx.update(managerRef,{
+          status:"prize_sent",adminMessage:"Proof checked",
+          prizeDetails:"External prize instructions delivered",
+          adminByUid:managerUid,adminByName:"QA General Manager",
+          adminByRole:"general_manager",adminUpdatedAt:sent(),
+          updatedAt:sent(),prizeSentAt:sent(),
+        });
+        tx.set(auditRef,{
+          action:"prize_winner_status_changed",
+          adminUid:managerUid,adminName:"QA General Manager",
+          adminRole:"general_manager",createdAt:sent(),
+          details:{sourceCollection:"prize_winner_requests",sourceId:id,
+            targetAccountKey:account,targetDedaId:"@DEDA-QA1234",
+            oldStatus:"new",newStatus:"prize_sent",
+            statusOnlyNoDiamondTransfer:true},
+        });
+      }));
+      assert.equal((await assertSucceeds(managerRef.get())).data().status,"prize_sent");
+      assert.equal((await assertSucceeds(auditRef.get())).data()
+        .details.statusOnlyNoDiamondTransfer,true);
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db=ctx.firestore();
+        assert.equal((await db.collection("deda_diamond_gifts").get()).empty,true);
+        assert.equal((await db.doc("deda_sessions/"+publicUid).get())
+          .data().accountKey,account);
+      });
+      await assertFails(managerRef.update({
+        status:"delivered",winnerConfirmedAt:sent(),deliveredAt:sent(),
+        updatedAt:sent(),
+      }));
+      await assertFails(outsider.doc("prize_winner_requests/"+id).update({
+        status:"delivered",winnerConfirmedAt:sent(),deliveredAt:sent(),
+        updatedAt:sent(),
+      }));
+      await assertSucceeds(publicRef.update({
+        status:"delivered",winnerConfirmedAt:sent(),deliveredAt:sent(),
+        updatedAt:sent(),
+      }));
+      assert.equal((await assertSucceeds(managerRef.get())).data().status,"delivered");
+      console.log("PASS_PRIZE_WINNER_REVIEW_ATOMIC_AUDIT_ZERO_DIAMONDS_WINNER_ONLY_CONFIRM");
+    });
+
+    await t.test("winner's answer to needs_info is owner-only, no admin spoof", async () => {
+      const id="prize_v1_"+secondaryAccount;
+      const owner=env.authenticatedContext("qa_other_prize_owner").firestore();
+      await env.withSecurityRulesDisabled(async ctx => {
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("deda_sessions/qa_other_prize_owner").set({
+            uid:"qa_other_prize_owner",accountKey:secondaryAccount}),
+          db.doc("prize_winner_requests/"+id).set({
+            ownerUid:"qa_other_prize_owner",cycleId:"prize_v1",
+            accountKey:secondaryAccount,name:"QA Second Winner",
+            phone:"07712345679",dedaId:"@DEDA-QA1235",
+            rewardCode:"DEDA123456789013",pointsAtCompletion:25000,
+            completedThresholds:[5000,10000,15000,20000,25000],
+            finalReservedPoints:25000,status:"needs_info",
+            adminMessage:"Proof requested",prizeDetails:"",userReply:"",
+            createdAt:sent(),updatedAt:sent(),
+          }),
+        ]);
+      });
+      const userUpdate={status:"reviewing",
+        userReply:"Proof submitted by account owner",
+        userReplyAt:sent(),updatedAt:sent()};
+      await assertFails(publicDb.doc("prize_winner_requests/"+id)
+        .update(userUpdate));
+      await assertFails(outsider.doc("prize_winner_requests/"+id)
+        .update(userUpdate));
+      await assertSucceeds(owner.doc("prize_winner_requests/"+id)
+        .update(userUpdate));
+      assert.equal((await assertSucceeds(
+        manager.doc("prize_winner_requests/"+id).get()))
+        .data().status,"reviewing");
+      console.log("PASS_PRIZE_NEEDS_INFO_REPLY_OWNER_ONLY_ADMIN_NOT_INTERCEPTED");
+    });
+
     await t.test("release hold: active roleless admin is treated as general manager",async()=>{
       const missingUid="qa_roleless_legacy_account";
       await env.withSecurityRulesDisabled(async ctx=>{
