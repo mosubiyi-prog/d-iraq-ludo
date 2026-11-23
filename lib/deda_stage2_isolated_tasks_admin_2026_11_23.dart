@@ -6,6 +6,7 @@ import 'deda_admin_task_drafts.dart' show DedaAdminTaskDraft;
 import 'deda_daily_task_slots.dart';
 import 'deda_daily_login_offer_preview_page.dart';
 import 'deda_daily_schedule_policy.dart';
+import 'deda_social_task_preview.dart' show DedaSocialTaskCatalog;
 
 /// Same original admin task categories, entirely on secondary Auth.
 /// Private task previews do not activate user tasks or spend rewards.
@@ -289,8 +290,9 @@ class DedaStage2IsolatedSocialTasksPage extends StatefulWidget {
 }
 class _DedaStage2IsolatedSocialTasksPageState
     extends State<DedaStage2IsolatedSocialTasksPage> {
-  late final TextEditingController title,url,amount;
+  late final TextEditingController title,url,amount,otherPlatform,otherAction;
   late String unit;
+  String platform='telegram',action='follow';
   late bool doubleWithAd;
   late int revision;
   late String status;
@@ -302,13 +304,15 @@ class _DedaStage2IsolatedSocialTasksPageState
     title=TextEditingController(text:(widget.initial['title']??'').toString());
     url=TextEditingController(text:(widget.initial['url']??'').toString());
     amount=TextEditingController(text:(widget.initial['rewardAmount']??5).toString());
+    otherPlatform=TextEditingController();
+    otherAction=TextEditingController();
     unit=(widget.initial['rewardUnit']??'points').toString();
     if(!const {'points','coins','diamonds'}.contains(unit))unit='points';
     doubleWithAd=widget.initial['doubleWithRewardedAd']==true;
     revision=(widget.initial['revision'] as int?)??0;
     status=(widget.initial['status']??'new').toString();
   }
-  @override void dispose(){title.dispose();url.dispose();amount.dispose();super.dispose();}
+  @override void dispose(){title.dispose();url.dispose();amount.dispose();otherPlatform.dispose();otherAction.dispose();super.dispose();}
   Future<void> run(Future<void> Function() f) async {
     if(busy)return;
     setState(()=>busy=true);
@@ -340,8 +344,44 @@ class _DedaStage2IsolatedSocialTasksPageState
       firstDate:tomorrow,lastDate:tomorrow.add(const Duration(days:30)));
     if(selected!=null && mounted)setState(()=>date=selected);
   }
+  void previewOnly() {
+    final reward=int.tryParse(amount.text.trim())??0;
+    final link=Uri.tryParse(url.text.trim());
+    if(date==null || reward<1 || reward>5000 ||
+       title.text.trim().length<3 || title.text.trim().length>80 ||
+       link==null || link.scheme!='https' || link.host.isEmpty ||
+       link.userInfo.isNotEmpty ||
+       (platform=='other' && otherPlatform.text.trim().length<3) ||
+       (action=='other' && otherAction.text.trim().length<3)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(t(
+        'راجع العنوان والرابط والمبلغ والتاريخ قبل المعاينة.',
+        'Check task title, link, amount and date.'))));
+      return;
+    }
+    final label=platform=='other'?otherPlatform.text.trim():
+      DedaSocialTaskCatalog.platformLabel(platform,widget.isArabic);
+    final actionLabel=action=='other'?otherAction.text.trim():
+      DedaSocialTaskCatalog.actionLabel(action,widget.isArabic);
+    showDialog<void>(context:context,builder:(c)=>AlertDialog(
+      title:Text(t('معاينة غير منشورة','Unpublished preview')),
+      content:Text([
+        label,actionLabel,title.text.trim(),url.text.trim(),
+        reward.toString()+' '+unit,
+        if(doubleWithAd)t('المجموع الافتراضي بعد الإعلان: ',
+          'Simulated total after rewarded ad: ')+(reward*2).toString(),
+        date!.day.toString()+'/'+date!.month.toString()+'/'+date!.year.toString(),
+        t('معاينة محلية فقط؛ لا نشر، لا حفظ، ولا صرف للمكافآت.',
+          'Local-only preview: no publishing, saving or payout.'),
+      ].join('\n')),
+      actions:[TextButton(onPressed:()=>Navigator.pop(c),
+        child:Text(t('إغلاق','Close')))],
+    ));
+  }
+
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(t('مهام التواصل الاجتماعي','Social tasks'))),
+    appBar:AppBar(title:Text(t('مهام التواصل الاجتماعي','Social tasks')),
+      backgroundColor:const Color(0xFF0B3156),
+      foregroundColor:Colors.white),
     body:ListView(padding:const EdgeInsets.all(14),children:[
       Card(color:const Color(0xFF0B3156),
         child:Padding(padding:const EdgeInsets.all(14),
@@ -354,12 +394,37 @@ class _DedaStage2IsolatedSocialTasksPageState
       const SizedBox(height:12),
       Text(t('الحالة الحالية: ','Current status: ')+status),
       const SizedBox(height:8),
+      DropdownButtonFormField<String>(
+        initialValue:platform,isExpanded:true,
+        decoration:InputDecoration(
+          labelText:t('المنصة','Platform'),border:const OutlineInputBorder()),
+        items:[for(final key in DedaSocialTaskCatalog.platforms)
+          DropdownMenuItem<String>(value:key,child:Text(
+            DedaSocialTaskCatalog.platformLabel(key,widget.isArabic)))],
+        onChanged:(v)=>setState(()=>platform=v??platform)),
+      if(platform=='other')TextField(controller:otherPlatform,
+        decoration:InputDecoration(labelText:t('اسم المنصة','Platform name'),
+          border:const OutlineInputBorder())),
+      const SizedBox(height:8),
+      DropdownButtonFormField<String>(
+        initialValue:action,isExpanded:true,
+        decoration:InputDecoration(
+          labelText:t('نوع التفاعل','Interaction'),border:const OutlineInputBorder()),
+        items:[for(final key in DedaSocialTaskCatalog.actions)
+          DropdownMenuItem<String>(value:key,child:Text(
+            DedaSocialTaskCatalog.actionLabel(key,widget.isArabic)))],
+        onChanged:(v)=>setState(()=>action=v??action)),
+      if(action=='other')TextField(controller:otherAction,
+        decoration:InputDecoration(labelText:t('وصف التفاعل','Interaction name'),
+          border:const OutlineInputBorder())),
+      const SizedBox(height:8),
+
       TextField(controller:title,decoration:InputDecoration(
         labelText:t('عنوان المهمة','Task title'),
         border:const OutlineInputBorder())),
       const SizedBox(height:8),
       TextField(controller:url,decoration:InputDecoration(
-        labelText:t('رابط قناة تيليجرام','Telegram channel URL'),
+        labelText:t('رابط الصفحة أو قناة تيليجرام','Page or Telegram URL'),
         border:const OutlineInputBorder())),
       const SizedBox(height:8),
       DropdownButtonFormField<String>(initialValue:unit,
@@ -379,17 +444,19 @@ class _DedaStage2IsolatedSocialTasksPageState
       const SizedBox(height:8),
       Wrap(spacing:8,runSpacing:8,children:[
         FilledButton(
-          onPressed:busy?null:()=>run(()=>widget.admin.saveScopedSocialTaskDraft(
+          onPressed:busy||platform!='telegram'||action!='follow'?null:
+              ()=>run(()=>widget.admin.saveScopedSocialTaskDraft(
             dedaPhone:widget.dedaPhone,expectedRevision:revision,
             title:title.text,url:url.text,rewardUnit:unit,
             rewardAmount:int.tryParse(amount.text.trim())??0,
             doubleWithAd:doubleWithAd)),
           child:Text(t('حفظ مسودة','Save draft'))),
-        OutlinedButton(onPressed:busy||status!='draft'?null:chooseDate,
+        OutlinedButton(onPressed:busy?null:chooseDate,
           child:Text(date==null?t('اختيار يوم','Select day'):
             date!.year.toString()+'-'+date!.month.toString()+'-'+date!.day.toString())),
         OutlinedButton(
-          onPressed:busy||status!='draft'||date==null?null:()=>run(()=>
+          onPressed:busy||status!='draft'||date==null||
+              platform!='telegram'||action!='follow'?null:()=>run(()=>
             widget.admin.scheduleScopedSocialTask(
               dedaPhone:widget.dedaPhone,
               expectedRevision:revision,calendarDay:date!)),
@@ -400,6 +467,12 @@ class _DedaStage2IsolatedSocialTasksPageState
               dedaPhone:widget.dedaPhone,expectedRevision:revision)),
           child:Text(t('إلغاء الجدولة','Cancel schedule'))),
       ]),
+      const SizedBox(height:12),
+      FilledButton.icon(onPressed:busy?null:previewOnly,
+        icon:const Icon(Icons.visibility_outlined),
+        label:Text(t('عرض المعاينة فقط','Preview only')),
+        style:FilledButton.styleFrom(
+          backgroundColor:const Color(0xFF0B3156))),
       const SizedBox(height:12),
       Text(t(
         'الجوائز الموثوقة وتفعيل بوت تيليجرام ليسا جزءاً من هذه الخطوة. '

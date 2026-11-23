@@ -1677,6 +1677,10 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("'deda_stage2_isolated_tasks_admin_2026_11_23.dart',",binder)
         self.assertIn('lib/deda_stage2_isolated_tasks_admin_2026_11_23.dart',workflow)
         self.assertIn('DedaDailyTaskSlot.slots',page)
+        self.assertIn('DedaSocialTaskCatalog.platforms',page)
+        self.assertIn('DedaSocialTaskCatalog.actions',page)
+        self.assertIn('previewOnly()',page)
+        self.assertIn("platform!='telegram'||action!='follow'",page)
         self.assertIn('DedaDailyLoginOfferPreviewPage(',page)
         self.assertIn('DedaAdminTaskDraft(',page)
         for method in (
