@@ -45,6 +45,13 @@ def audit(main, files=None):
     # or reordered existing card. The approved single-store grid has SIX tiles.
     if tuple(titles) != EXPECTED:
         raise ValueError("PROFILE_PARITY_STOP:card-order-or-unapproved-extra:" + repr(titles))
+    badge_at = grid.find("title: dedaText('الشارات'")
+    print("PROFILE_BADGE_ROUTE_EXCERPT=" +
+          json.dumps(grid[badge_at:badge_at + 1350], ensure_ascii=False))
+    print("PROFILE_BADGE_GLOBAL_PAGE_IMPORT=" +
+          str("deda_100377_level_achievements_page_staged.dart" in main))
+    print("PROFILE_BADGE_GLOBAL_PAGE_ROUTE=" +
+          str("DedaLevelAchievementsPage(" in section))
     route_proofs = {
         "original-account-info": "DedaAccountInfoPage(" in grid,
         "original-favorites-route": "SavedPlacesPage(showFavorites: true)" in grid,
