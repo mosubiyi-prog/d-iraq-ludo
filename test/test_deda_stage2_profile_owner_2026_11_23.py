@@ -90,6 +90,71 @@ class _UnrelatedNextState {}
             with self.assertRaises(ValueError):
                 mod.audit_original_editor(editor.replace(required,'BROKEN'))
 
+    @staticmethod
+    def _verified_paid_frame_example():
+        return """class _DedaProfilePhase2PageState {
+  Future<void> _openDedaMyStore() async {
+    // DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED
+    if (DedaLabFrameSecureCheckout.live) {
+      final ownedFrames =
+          await DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(originalId);
+      for (var style = 6; style <= 18; style++) {
+        final frame = DedaLabPremiumFrameStyles.byProfileStyle(style);
+        if (frame == null || !ownedFrames.contains(frame.id)) continue;
+        items.add(DedaMyStoreItem(
+          id: frame.id, label: frame.nameAr,
+          section: DedaMyStoreSection.frames,
+          proof: DedaMyStoreProof.serverVerified,
+          receiptKind: 'purchase', active: frameStyle == style,
+        ));
+      }
+    }
+    for (var i = 0; i < dedaStyleBadgeIds.length; i++) {}
+  }
+  Widget _featureGrid() { return Column(); }
+}
+class DedaOtherPage {}
+"""
+
+    def test_original_server_verified_frame_art_is_appended_once_without_grant(self):
+        src = self._verified_paid_frame_example()
+        patched = mod.add_verified_owned_frame_art(src)
+        mod.verify_verified_owned_frame_art(patched)
+        self.assertEqual(patched.count(mod.PAID_FRAME_ART_MARK), 1)
+        self.assertIn('previewAsset: frame.assetPath,', patched)
+        self.assertEqual(src.count('previewAsset:'), 0)
+        store = (ROOT/'lib/deda_100377_my_store_page_staged.dart').read_text()
+        self.assertIn('Image.asset(', store)
+        self.assertIn('item.previewAsset!', store)
+        original = (ROOT/'tools/stage_deda_100377_point12_my_store.py').read_text()
+        self.assertIn('previewAsset: frame.assetPath,', original)
+        for forbidden in ('buyOnce(', '.spend(', 'signInAnonymously(', 'FieldValue.increment('):
+            self.assertNotIn(forbidden, patched)
+        with self.assertRaises(ValueError):
+            mod.add_verified_owned_frame_art(patched)
+
+    def test_premium_frame_preview_fails_closed_without_verified_original_gate(self):
+        src = self._verified_paid_frame_example()
+        for old, new in (
+            ('if (DedaLabFrameSecureCheckout.live)', 'if (true)'),
+            ('proof: DedaMyStoreProof.serverVerified', 'proof: DedaMyStoreProof.deviceSaved'),
+            ("receiptKind: 'purchase',", "receiptKind: null,"),
+            ('id: frame.id,', 'id: another.id,'),
+            ('DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(originalId)',
+             'DedaDiamondsWallet.balanceNotifier.value'),
+        ):
+            with self.subTest(old=old), self.assertRaises(ValueError):
+                mod.add_verified_owned_frame_art(src.replace(old, new))
+
+    def test_premium_frame_preview_verification_rejects_changed_art(self):
+        src = mod.add_verified_owned_frame_art(self._verified_paid_frame_example())
+        for changed in (
+            src.replace('previewAsset: frame.assetPath,', 'previewAsset: item.previewAsset,'),
+            src.replace('proof: DedaMyStoreProof.serverVerified', 'proof: DedaMyStoreProof.deviceSaved'),
+        ):
+            with self.assertRaises(ValueError):
+                mod.verify_verified_owned_frame_art(changed)
+
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
