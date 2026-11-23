@@ -304,6 +304,134 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       await assertSucceeds(manager.collection("deda_weekly_direct_admin_events").get());
     });
 
+    await t.test("unique email requires atomic reservation; legacy writes fail closed",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const email="qa.reservation@example.invalid";
+      const marker=manager.doc("admin_invite_email_reservations/"+email);
+      const inviteRef=manager.doc("admin_invites/reservation_one");
+      const doc=(id,phone)=>({
+        adminId:id,displayName:"QA Staff",email,phone,department:"Support",
+        role:"employee",governorate:"",permissions:{supportRead:true},
+        status:"pending",activationCode:"12345678",
+        createdByUid:managerUid,createdByName:"QA Manager",
+        createdAt:Fb.FieldValue.serverTimestamp(),
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+        expiresAt:Fb.Timestamp.fromDate(new Date(Date.now()+3600000)),
+      });
+      const key=(id)=>({
+        email,inviteId:id,createdByUid:managerUid,
+        createdAt:Fb.FieldValue.serverTimestamp(),
+      });
+      // A random-ID legacy writer cannot bypass the reserved-email policy.
+      await assertFails(inviteRef.set(doc("DEDA-ADM-R1","9647712345801")));
+      await assertFails(marker.set(key("reservation_one")));
+      await assertFails(outsider.doc("admin_invite_email_reservations/"+email).get());
+      await assertFails(outsider.doc("admin_invite_email_reservations/"+email)
+        .set(key("reservation_one")));
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        assert.equal((await tx.get(marker)).exists,false);
+        assert.equal((await tx.get(inviteRef)).exists,false);
+        tx.set(marker,key("reservation_one"));
+        tx.set(inviteRef,doc("DEDA-ADM-R1","9647712345801"));
+      }));
+      assert.equal((await marker.get()).data().inviteId,"reservation_one");
+      await assertFails(manager.doc("admin_invites/reservation_two")
+        .set(doc("DEDA-ADM-R2","9647712345802")));
+      await assertFails(marker.update({inviteId:"reservation_two"}));
+      await assertFails(inviteRef.delete());
+      await assertFails(marker.delete());
+      // Cancelling one pending invite must delete its own reservation too.
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const a=await tx.get(inviteRef);
+        const b=await tx.get(marker);
+        assert.equal(a.data().email,email);
+        assert.equal(b.data().inviteId,"reservation_one");
+        tx.delete(inviteRef);tx.delete(marker);
+      }));
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        assert.equal((await tx.get(marker)).exists,false);
+        tx.set(marker,key("reservation_one"));
+        tx.set(inviteRef,doc("DEDA-ADM-R3","9647712345803"));
+      }));
+    });
+
+    await t.test("concurrent same-email writers yield one server-side winner",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const email="qa.reservation.race@example.invalid";
+      const marker=manager.doc("admin_invite_email_reservations/"+email);
+      const attempt=(id,phone)=>manager.runTransaction(async tx=>{
+        const inviteRef=manager.doc("admin_invites/"+id);
+        const [oldMarker,oldInvite]=await Promise.all([
+          tx.get(marker),tx.get(inviteRef),
+        ]);
+        if(oldMarker.exists||oldInvite.exists)throw Error("duplicate-email");
+        tx.set(marker,{
+          email,inviteId:id,createdByUid:managerUid,
+          createdAt:Fb.FieldValue.serverTimestamp(),
+        });
+        tx.set(inviteRef,{
+          adminId:"DEDA-ADM-"+id,displayName:"QA Staff",email,phone,
+          department:"Support",role:"employee",governorate:"",
+          permissions:{viewUsers:true},status:"pending",
+          activationCode:"12345678",createdByUid:managerUid,
+          createdByName:"QA Manager",
+          createdAt:Fb.FieldValue.serverTimestamp(),
+          updatedAt:Fb.FieldValue.serverTimestamp(),
+          expiresAt:Fb.Timestamp.fromDate(new Date(Date.now()+3600000)),
+        });
+        return id;
+      });
+      const outcomes=await Promise.allSettled([
+        attempt("reservation_race_a","9647712345804"),
+        attempt("reservation_race_b","9647712345805"),
+      ]);
+      assert.equal(outcomes.filter(x=>x.status==="fulfilled").length,1);
+      assert.equal(outcomes.filter(x=>x.status==="rejected").length,1);
+      assert.ok(["reservation_race_a","reservation_race_b"]
+        .includes((await marker.get()).data().inviteId));
+    });
+
+    await t.test("historical random-ID invitation remains claimable, not duplicated",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const email="qa.historical@example.invalid",id="historical_original";
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await db.doc("admin_invites/"+id).set({
+          adminId:"DEDA-ADM-HIST",displayName:"QA Existing Staff",
+          email,phone:"9647712345806",department:"Support",
+          role:"employee",governorate:"",permissions:{supportRead:true},
+          status:"pending",activationCode:"12345678",
+          createdByUid:managerUid,createdByName:"QA Manager",
+          createdAt:Fb.Timestamp.now(),updatedAt:Fb.Timestamp.now(),
+          expiresAt:Fb.Timestamp.fromDate(new Date(Date.now()+3600000)),
+        });
+      });
+      const historical=env.authenticatedContext("qa_historical_staff",{email}).firestore();
+      await assertSucceeds(historical.doc("admin_invites/"+id).update({
+        status:"claimed",claimedUid:"qa_historical_staff",
+        claimCode:"12345678",claimedAt:Fb.FieldValue.serverTimestamp(),
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      // Migration to reserve historical emails needs trusted AdminSDK; this
+      // is ONLY a synthetic seed to prove compatibility and no extra invite.
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc("admin_invite_email_reservations/"+email).set({
+          email,inviteId:id,createdByUid:managerUid,createdAt:Fb.Timestamp.now(),
+        });
+      });
+      await assertFails(manager.doc("admin_invites/historical_duplicate").set({
+        adminId:"DEDA-ADM-HIST2",displayName:"QA Staff",email,
+        phone:"9647712345807",department:"Support",role:"employee",
+        governorate:"",permissions:{supportRead:true},status:"pending",
+        activationCode:"12345678",createdByUid:managerUid,
+        createdByName:"QA Manager",createdAt:Fb.FieldValue.serverTimestamp(),
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+        expiresAt:Fb.Timestamp.fromDate(new Date(Date.now()+3600000)),
+      }));
+      assert.equal((await historical.doc("admin_invites/"+id).get())
+        .data().status,"claimed");
+    });
+
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
       await env.withSecurityRulesDisabled(async ctx=>{
         await ctx.firestore().doc("admin_gateway_protection/primary").delete();
