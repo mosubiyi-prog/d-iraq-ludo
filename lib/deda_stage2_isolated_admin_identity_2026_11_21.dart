@@ -2885,6 +2885,197 @@ class DedaIsolatedAdminIdentity {
     );
   }
 
+  /// The existing support-trash collection under SECONDARY manager Auth.
+  /// The stored rows remain private and can never be read by public users.
+  Future<DedaIsolatedManagerPage> readScopedSupportTrashPage({
+    required String dedaPhone,
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-support-trash-stage-off');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-admin-support-trash-session-required');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'supportRead',
+      onAuthorizedAdmin: (value) => gm = value,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-admin-support-trash-gm-required');
+    }
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('admin_trash_support').orderBy(FieldPath.documentId);
+    if (startAfter != null) {
+      if (startAfter.reference.parent.path != 'admin_trash_support' ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfter.id)) {
+        throw StateError('deda-admin-support-trash-cursor-denied');
+      }
+      query = query.startAfterDocument(startAfter);
+    }
+    final result = await query.limit(51)
+        .get(const GetOptions(source: Source.server));
+    if (result.metadata.isFromCache ||
+        result.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-admin-support-trash-proof-changed');
+    }
+    final visible = result.docs.take(50).toList(growable: false);
+    return (
+      rows: visible.map((doc) => <String, dynamic>{
+        ...doc.data(), 'id': doc.id,
+      }).toList(growable: false),
+      nextCursor: result.docs.length > 50 ? visible.last : null,
+    );
+  }
+
+  /// Restore/trash one support ticket with audit IN THE SAME transaction.
+  /// Irreversible deletion is refused for externally stored images because
+  /// storage.rules authorize owner uploads but no privileged admin cleanup.
+  /// No public UID/account/write and never overwrites an existing ticket.
+  Future<void> mutateScopedSupportTrash({
+    required String dedaPhone,
+    required String requestId,
+    required String action,
+    String? permanentConfirmation,
+  }) async {
+    final id = requestId.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !const <String>{'trash', 'restore', 'permanent'}.contains(action) ||
+        (action == 'permanent' && permanentConfirmation != id) ||
+        (action != 'permanent' && permanentConfirmation != null)) {
+      throw StateError('deda-admin-support-trash-input-denied');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-admin-support-trash-no-session');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'supportRead',
+      onAuthorizedAdmin: (value) => gm = value,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-admin-support-trash-gm-required');
+    }
+    final original = _firestore.collection('support_requests').doc(id);
+    final archived = _firestore.collection('admin_trash_support').doc(id);
+    final audit = _firestore.collection('admin_audit').doc();
+
+    bool safeToDeleteMedia(Map<String, dynamic> data) {
+      final urls = data['imageUrls'];
+      final url = (data['imageUrl'] ?? '').toString().trim();
+      return url.isEmpty && (urls is! List ||
+          urls.every((item) => (item ?? '').toString().trim().isEmpty));
+    }
+
+    bool validArchivedRecord(Map<String, dynamic>? archivedData) {
+      return archivedData != null &&
+          archivedData['originalId'] == id &&
+          archivedData['trashKind'] == 'support_request' &&
+          archivedData['deletedFromCollection'] == 'support_requests';
+    }
+
+    final beforeSource = await original.get(
+        const GetOptions(source: Source.server));
+    final beforeArchive = await archived.get(
+        const GetOptions(source: Source.server));
+    if (beforeSource.metadata.isFromCache ||
+        beforeArchive.metadata.isFromCache ||
+        beforeSource.metadata.hasPendingWrites ||
+        beforeArchive.metadata.hasPendingWrites ||
+        (action == 'trash' &&
+            (!beforeSource.exists || beforeArchive.exists)) ||
+        (action != 'trash' &&
+            (beforeSource.exists || !validArchivedRecord(
+                beforeArchive.data()))) ||
+        (action == 'permanent' &&
+            !safeToDeleteMedia(beforeArchive.data()!))) {
+      throw StateError('deda-admin-support-trash-record-denied');
+    }
+    if (!await proof() || gm?['role'] != 'general_manager' ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-support-trash-proof-changed');
+    }
+    final name = (gm?['displayName'] ?? gm?['name'] ??
+        actor.email ?? 'DEDA Admin').toString().trim();
+    if (name.isEmpty) throw StateError('deda-admin-support-trash-admin-name');
+    await _firestore.runTransaction((tx) async {
+      final source = await tx.get(original);
+      final trash = await tx.get(archived);
+      final data = action == 'trash' ? source.data() : trash.data();
+      if (data == null ||
+          source.metadata.isFromCache || trash.metadata.isFromCache ||
+          source.metadata.hasPendingWrites ||
+          trash.metadata.hasPendingWrites ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await proof() || gm?['role'] != 'general_manager' ||
+          (action == 'trash' && (!source.exists || trash.exists)) ||
+          (action != 'trash' && (source.exists ||
+              !validArchivedRecord(trash.data()))) ||
+          (action == 'permanent' && !safeToDeleteMedia(data))) {
+        throw StateError('deda-admin-support-trash-conflict');
+      }
+      if (action == 'trash') {
+        tx.set(archived, <String, dynamic>{
+          ...data,
+          'originalId': id,
+          'trashKind': 'support_request',
+          'deletedFromCollection': 'support_requests',
+          'deletedAt': FieldValue.serverTimestamp(),
+          'deletedByUid': uid,
+          'deletedByName': name,
+          'deletedByRole': 'general_manager',
+        });
+        tx.delete(original);
+      } else if (action == 'restore') {
+        final restored = Map<String, dynamic>.from(data);
+        for (final key in <String>[
+          'originalId', 'trashKind', 'deletedFromCollection',
+          'deletedAt', 'deletedByUid', 'deletedByName', 'deletedByRole',
+        ]) {
+          restored.remove(key);
+        }
+        restored['updatedAt'] = FieldValue.serverTimestamp();
+        tx.set(original, restored);
+        tx.delete(archived);
+      } else {
+        // No cloud-storage deletion is attempted through public credentials.
+        // Documents with external URLs must be cleaned up by a trusted path.
+        tx.delete(archived);
+      }
+      tx.set(audit, <String, dynamic>{
+        'action': action == 'trash' ? 'support_deleted'
+            : action == 'restore' ? 'support_restored'
+            : 'support_permanently_deleted',
+        'adminUid': uid, 'adminName': name,
+        'adminRole': 'general_manager',
+        'sourceCollection': 'support_requests', 'sourceId': id,
+        if (action == 'trash') 'deletedByUid': uid,
+        if (action == 'restore') 'restoredByUid': uid,
+        if (action == 'permanent') ...<String, dynamic>{
+          'targetUserName': data['name'] ?? '',
+          'targetUserPhone': data['phone'] ?? '',
+          'externalMediaAbsent': true,
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   Future<void> signOutSecondaryAdmin() => _auth.signOut();
 
   /// Paged fresh-server queue under SECONDARY admin Auth, never the user Auth.
