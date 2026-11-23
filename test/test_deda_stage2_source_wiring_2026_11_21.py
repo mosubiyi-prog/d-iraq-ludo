@@ -1995,5 +1995,52 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                           "FirebaseFirestore.instance", "FirebaseStorage.instance"):
             self.assertNotIn(forbidden,trash,forbidden)
 
+
+    def test_isolated_support_bulk_checked_selection(self):
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        self.assertEqual(dashboard.count(
+            'Future<void> _archiveSelectedSupportRequests() async {'),1)
+        bulk=dashboard.split(
+            'Future<void> _archiveSelectedSupportRequests() async {',1)[1].split(
+            '  Future<void> _openSupportTrash() async {',1)[0]
+        select=dashboard.split(
+            'void _selectVisibleSupportRequests(',1)[1].split(
+            'Future<void> _archiveSelectedSupportRequests()',1)[0]
+        for required in (
+            'metadata.isFromCache', 'metadata.hasPendingWrites',
+            'doc.metadata.isFromCache', 'doc.metadata.hasPendingWrites',
+            'validScopedDocumentId(doc.id)',
+            '_selectedSupportIds.union(ids).length > 100',
+        ):
+            self.assertIn(required,select,required)
+        for required in (
+            '_canTrashSupport', '_selectedSupportIds.toList(growable: false)',
+            'targets.length > 100', 'validScopedDocumentId(id)',
+            'showDialog<bool>', 'targets.length', "action: 'trash'",
+            'await widget.admin.mutateScopedSupportTrash(',
+            'completed.add(id)', 'interrupted = true',
+            'break; // Do not continue after revoked access/conflict.',
+            '_selectedSupportIds.removeAll(completed)',
+        ):
+            self.assertIn(required,bulk,required)
+        self.assertIn('onPressed: _sending ? null : _archiveSelectedSupportRequests',
+                      dashboard)
+        self.assertIn('serverPage.metadata.isFromCache',dashboard)
+        self.assertIn('serverPage.metadata.hasPendingWrites',dashboard)
+        for forbidden in ('DedaBackend.trashSupportRequests(',
+                          'FirebaseFirestore.instance',
+                          'FirebaseAuth.instance',
+                          'FirebaseStorage.instance',
+                          "collection('users')"):
+            self.assertNotIn(forbidden,bulk,forbidden)
+        # Every selected message must go through the previously audited,
+        # individually transactional manager method, not a new write engine.
+        single=service.split('Future<void> mutateScopedSupportTrash({',1)[1].split(
+            '/// The first opening of a support/place request',1)[0]
+        self.assertIn('_firestore.runTransaction((tx) async',single)
+        self.assertIn('tx.set(audit,',single)
+        self.assertIn("gm?['role'] != 'general_manager'",single)
+
 if __name__ == '__main__':
     unittest.main()
