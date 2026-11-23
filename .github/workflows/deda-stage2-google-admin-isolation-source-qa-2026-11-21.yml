@@ -16,6 +16,8 @@ on:
       - 'test/test_deda_stage2_profile_assets_2026_11_24.py'
       - 'test/test_deda_stage2_profile_full_audit_2026_11_24.py'
       - 'test/test_deda_stage2_profile_entitlement_parity_2026_11_24.py'
+      - 'test/test_deda_stage2_profile_visual_parity_2026_11_24.py'
+      - 'tools/app_stability/app_package/audit_stage2_profile_visual_parity_2026_11_24.py'
       - 'lib/deda_100377_profile_free_inventory.dart'
       - 'tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py'
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
@@ -54,6 +56,8 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_full_audit_2026_11_24.py -v
       - name: Protect 13 paid and 3 free frame labels, owner IDs, balances and six level badges
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_entitlement_parity_2026_11_24.py -v
+      - name: Protect six original profile colors, royal backgrounds, frames and owner avatar hashes
+        run: python3 -m unittest discover -s test -p test_deda_stage2_profile_visual_parity_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
           python3 - <<'PY'
@@ -160,6 +164,8 @@ jobs:
           python3 tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py "$project" --verify-only
           # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
           python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
+          # Read-only check against the actual reconstructed profile appearance and bundled art.
+          python3 tools/app_stability/app_package/audit_stage2_profile_visual_parity_2026_11_24.py "$project"
           echo "DEDA_STAGE1_SOURCE=$project" >> "$GITHUB_ENV"
           echo 'PASS_PROTECTED_FULL_APPLICATION_SOURCE_SESSION_PATCH_APPLIED'
       - name: Analyze real assembled Flutter backend, entry, admin, map and PIN paths
