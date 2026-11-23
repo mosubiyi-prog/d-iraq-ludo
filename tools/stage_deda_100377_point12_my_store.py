@@ -57,6 +57,8 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
             section: DedaMyStoreSection.frames,
             proof: DedaMyStoreProof.serverVerified,
             receiptKind: 'purchase', active: frameStyle == style,
+            // Only a server-confirmed owned original LAB frame has art here.
+            previewAsset: frame.assetPath,
           ));
         }
       } catch (_) {
