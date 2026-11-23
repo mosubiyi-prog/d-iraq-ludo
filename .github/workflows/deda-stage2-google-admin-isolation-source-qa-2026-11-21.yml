@@ -12,6 +12,8 @@ on:
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
       - 'test/test_deda_stage2_profile_owner_2026_11_23.py'
+      - 'test/test_deda_stage2_profile_assets_2026_11_24.py'
+      - 'lib/deda_stage74_hadaya_identifier_section.dart'
       - 'lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart'
       - 'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart'
@@ -41,6 +43,8 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_source_wiring_2026_11_21.py -v
       - name: Verify original profile owner fence binder without new store or UID
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_owner_2026_11_23.py -v
+      - name: Verify profile frames, IDs, balances, badges and Hadaya account rotation without writes
+        run: python3 -m unittest discover -s test -p test_deda_stage2_profile_assets_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
           python3 - <<'PY'
@@ -167,6 +171,7 @@ jobs:
             lib/deda_stage2_isolated_support_trash_2026_11_23.dart \
             lib/deda_100377_my_store_page_staged.dart \
             lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart \
+            lib/deda_stage74_hadaya_identifier_section.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path
