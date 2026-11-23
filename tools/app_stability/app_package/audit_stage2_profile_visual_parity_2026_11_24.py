@@ -39,16 +39,10 @@ def visual_palette(main):
     if start < 0 or stop < start:
         raise ValueError("PROFILE_VISUAL_STOP:original-six-card-grid-not-found")
     grid = main[start:stop]
-    pair_re = re.compile(
-        r"title:\\s*dedaText\\('([^']+)'[^)]*\\),"
-        r"[\\s\\S]*?colors:\\s*const\\s*<Color>\\["
-        r"Color\\((0x[0-9A-Fa-f]{8})\\),\\s*"
-        r"Color\\((0x[0-9A-Fa-f]{8})\\)\\]",
-    )
     # Individual per-card sections prevent accidentally borrowing a neighbor's
     # palette or counting a subtitle as a card.
     all_titles = re.findall(
-        r"title:\\s*dedaText\\('([^']+)'", grid)
+        r"title:\s*dedaText\('([^']+)'", grid)
     expected = [name for name, _, _ in PALETTE]
     if all_titles != expected:
         raise ValueError("PROFILE_VISUAL_STOP:card-order-or-count-drift:" + repr(all_titles))
@@ -59,8 +53,8 @@ def visual_palette(main):
         b = grid.find("title: dedaText('", a + len(mark))
         card = grid[a:b if b >= 0 else len(grid)]
         m = re.search(
-            r"colors:\\s*const\\s*<Color>\\[Color\\((0x[0-9A-Fa-f]{8})\\),"
-            r"\\s*Color\\((0x[0-9A-Fa-f]{8})\\)\\]", card)
+            r"colors:\s*const\s*<Color>\[Color\((0x[0-9A-Fa-f]{8})\),"
+            r"\s*Color\((0x[0-9A-Fa-f]{8})\)\]", card)
         if not m:
             raise ValueError("PROFILE_VISUAL_STOP:missing-original-gradient:" + name)
         rows.append((name, *m.groups()))
