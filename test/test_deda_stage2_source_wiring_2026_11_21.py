@@ -2042,5 +2042,82 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('tx.set(audit,',single)
         self.assertIn("gm?['role'] != 'general_manager'",single)
 
+
+    def test_place_auto_approval_isolated_worker_ready_gate(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        legacy=(REPO/'lib/deda_admin_automation_toggle.dart').read_text()
+        flags=(REPO/'lib/deda_launch_feature_gates.dart').read_text()
+        original=(REPO/'lib/admin_pages.dart').read_text()
+        assert "defaultValue: false" in flags
+        self.assertIn("kind: 'place_auto_approval'",original)
+        self.assertIn("dedaAutomationReadiness",legacy)
+        self.assertIn("DedaLaunchFeatureGates.serverFeaturesEnabled",legacy)
+        self.assertIn("0xFFEAF4EA",legacy)
+        self.assertEqual(service.count(
+            'Future<DedaIsolatedAutomationState> readScopedPlaceAutoApproval({'),1)
+        self.assertEqual(service.count(
+            'Future<void> setScopedPlaceAutoApproval({'),1)
+        read=service.split(
+            'Future<DedaIsolatedAutomationState> readScopedPlaceAutoApproval({',1)[1].split(
+            '/// No device-side automatic approvals',1)[0]
+        change=service.split(
+            'Future<void> setScopedPlaceAutoApproval({',1)[1].split(
+            '/// The existing support-trash collection',1)[0]
+        confirm=service.split(
+            'Future<bool> _confirmScopedPlaceWorker({',1)[1].split(
+            '/// Parity with the original green place switch',1)[0]
+        for key in (
+            'DedaLaunchFeatureGates.serverFeaturesEnabled',
+            'return (enabled: false, backendReady: false, revision: 0);',
+            "gm?['role'] != 'general_manager'",
+            "doc('place_auto_approval')",
+            "GetOptions(source: Source.server)",
+            "config.metadata.isFromCache", "marker.metadata.isFromCache",
+            'workerReady', "marker.data()?['ready'] == true",
+            'age <= const Duration(minutes: 5)',
+        ):
+            self.assertIn(key,read,key)
+        for key in (
+            "FirebaseFunctions.instanceFor(app: _auth.app)",
+            "dedaAutomationReadiness",
+            "response.data['ready'] == true",
+            "gm?['role'] != 'general_manager'",
+        ):
+            self.assertIn(key,confirm,key)
+        for key in (
+            'DedaLaunchFeatureGates.serverFeaturesEnabled',
+            'expectedRevision < 0',
+            'if (enabled && !await _confirmScopedPlaceWorker(',
+            "gm?['role'] != 'general_manager'",
+            "_firestore.runTransaction((tx) async",
+            "tx.get(config)", "tx.get(marker)",
+            "currentRevision != expectedRevision",
+            "age > const Duration(minutes: 5)",
+            "'enabledAt': enabled ? FieldValue.serverTimestamp() : null",
+            "tx.update(config, fields)",
+            "tx.set(config, fields)",
+            "tx.set(audit,",
+            "adminUid': uid",
+        ):
+            self.assertIn(key,change,key)
+        for forbidden in (
+            'FirebaseAuth.instance', 'FirebaseFirestore.instance',
+            'FirebaseFunctions.instance.', 'FirebaseStorage.instance',
+            "collection('users')", "collection('place_requests').doc(",
+            "collection('published_places')",
+            'DedaBackend.'):
+            self.assertNotIn(forbidden,confirm + read + change,forbidden)
+        self.assertIn("class _DedaIsolatedPlaceAutoApprovalToggle",dashboard)
+        self.assertIn("widget.admin.readScopedPlaceAutoApproval(",dashboard)
+        self.assertIn("widget.admin.setScopedPlaceAutoApproval(",dashboard)
+        self.assertIn("widget.collection == 'place_requests'",dashboard)
+        self.assertIn("widget.profile['role'] == 'general_manager'",dashboard)
+        self.assertIn("0xFFEAF4EA",dashboard)
+        self.assertIn("0xFF9FBDA3",dashboard)
+        self.assertIn("الطلبات الجديدة المكتملة تُنشر تلقائياً بعد 30 ثانية",dashboard)
+        self.assertIn("(!_state.backendReady && !_state.enabled)",dashboard)
+
+
 if __name__ == '__main__':
     unittest.main()
