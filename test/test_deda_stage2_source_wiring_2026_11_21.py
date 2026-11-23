@@ -226,7 +226,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseFirestore.instance',method)
         self.assertNotIn('FirebaseAuth.instance',method)
         policy=backend.split('static bool memberSuspensionAllowed(',1)[1].split(
-            '  /// Explicitly scoped to existing support-ticket status/reply fields.',1)[0]
+            '  /// Used by the EXISTING server revocation callable after suspension.',1)[0]
         for required in ("actorUid == targetUid", "'viewTeam'",
                          "'active'", "'general_manager'"):
             if required=="'general_manager'":
@@ -825,7 +825,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('GetOptions(source: Source.server)',reader)
         self.assertIn('sameScopedFilters(',reader)
         self.assertIn('scopedDocumentMatches(',reader)
-        self.assertIn('Firebase tokens were not revoked;',ui)
+        self.assertIn('refresh-token revocation is NOT',ui)
         self.assertIn('This suspends admin access; it does not revoke Firebase Auth tokens.',backend)
 
     def test_team_enumeration_is_general_manager_only(self):
