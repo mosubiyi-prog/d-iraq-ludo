@@ -3930,6 +3930,8 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
   bool _sending = false;
   String _section = 'current';
   final Set<String> _viewing = <String>{};
+  // Explicit selection across fresh server pages; never selects unseen rows.
+  final Set<String> _selectedSupportIds = <String>{};
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -4030,6 +4032,101 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Stage2 OFF: select only fresh, visible support IDs across pages.
+  /// The bulk action reuses the existing individual GM transaction/audit.
+  void _selectVisibleSupportRequests(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> visible,
+    SnapshotMetadata metadata,
+  ) {
+    if (!_canTrashSupport || _sending ||
+        metadata.isFromCache || metadata.hasPendingWrites) return;
+    final ids = visible.where((doc) =>
+        !doc.metadata.isFromCache &&
+        !doc.metadata.hasPendingWrites &&
+        DedaIsolatedAdminProofPolicy.validScopedDocumentId(doc.id))
+        .map((doc) => doc.id).toSet();
+    if (ids.isEmpty) return;
+    if (_selectedSupportIds.union(ids).length > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('الحد الأعلى 100 رسالة، ألغِ بعض التحديد أولاً.',
+            'Maximum 100 messages; clear some selections first.')),
+      ));
+      return;
+    }
+    setState(() => _selectedSupportIds.addAll(ids));
+  }
+
+  Future<void> _archiveSelectedSupportRequests() async {
+    if (!_canTrashSupport || _sending || _selectedSupportIds.isEmpty) return;
+    final targets = _selectedSupportIds.toList(growable: false);
+    if (targets.length > 100 || targets.any((id) =>
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id))) {
+      throw StateError('deda-isolated-support-bulk-selection-denied');
+    }
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('نقل رسائل الدعم المحددة',
+            'Move selected support messages to trash')),
+        content: Text(t(
+          'عدد الرسائل المحددة: ${targets.length}. سيتم نقل كل رسالة '
+          'بمعاملة مستقلة وتدقيق إداري، ويمكن استرجاعها. '
+          'إذا فشلت إحداها يتوقف النقل وتبقى البقية دون تغيير.',
+          'Selected messages: ${targets.length}. Every message uses its '
+          'own checked transaction and admin audit and can be restored. '
+          'If one fails, the remaining messages will not be changed.',
+        )),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('تأكيد النقل', 'Confirm move')),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted || _sending) return;
+    setState(() => _sending = true);
+    final completed = <String>[];
+    var interrupted = false;
+    try {
+      for (final id in targets) {
+        if (!mounted) { interrupted = true; break; }
+        try {
+          // Revalidates secondary Auth, GM permission, server documents,
+          // original/archive conflict and audit atomically for EACH ID.
+          await widget.admin.mutateScopedSupportTrash(
+            dedaPhone: widget.dedaPhone, requestId: id, action: 'trash',
+          );
+          completed.add(id);
+        } catch (_) {
+          interrupted = true;
+          break; // Do not continue after revoked access/conflict.
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _selectedSupportIds.removeAll(completed);
+          _sending = false;
+        });
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(interrupted
+          ? t('تم نقل ${completed.length} من ${targets.length}. '
+              'توقفت الدفعة عند أول تعارض؛ تحقق من البقية.',
+              'Moved ${completed.length} of ${targets.length}; stopped at '
+              'first conflict. Review the remaining selection.')
+          : t('تم نقل ${completed.length} رسالة مع سجل تدقيق لكل رسالة.',
+              'Moved ${completed.length} messages, each with its own audit.')),
+    ));
   }
 
   Future<void> _openSupportTrash() async {
@@ -4819,12 +4916,43 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
             ]),
           ),
           if (_canTrashSupport)
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: TextButton.icon(
-                onPressed: _sending ? null : _openSupportTrash,
-                icon: const Icon(Icons.delete_sweep_outlined),
-                label: Text(t('محذوفات الدعم', 'Support trash')),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                alignment: WrapAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: _sending || visible.isEmpty ||
+                            serverPage.metadata.isFromCache ||
+                            serverPage.metadata.hasPendingWrites
+                        ? null : () => _selectVisibleSupportRequests(
+                            visible, serverPage.metadata),
+                    icon: const Icon(Icons.select_all),
+                    label: Text(t('تحديد رسائل هذه الصفحة',
+                        'Select this page')),
+                  ),
+                  if (_selectedSupportIds.isNotEmpty) ...[
+                    TextButton.icon(
+                      onPressed: _sending ? null : () =>
+                          setState(() => _selectedSupportIds.clear()),
+                      icon: const Icon(Icons.clear),
+                      label: Text(t('إلغاء التحديد', 'Clear selection')),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _sending ? null : _archiveSelectedSupportRequests,
+                      icon: const Icon(Icons.delete_outline),
+                      label: Text(t('نقل المحدد', 'Move selected') +
+                          ' (${_selectedSupportIds.length}/100)'),
+                    ),
+                  ],
+                  TextButton.icon(
+                    onPressed: _sending ? null : _openSupportTrash,
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    label: Text(t('محذوفات الدعم', 'Support trash')),
+                  ),
+                ],
               ),
             ),
           Expanded(
