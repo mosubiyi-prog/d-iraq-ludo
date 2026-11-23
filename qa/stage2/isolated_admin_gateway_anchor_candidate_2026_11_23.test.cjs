@@ -156,6 +156,19 @@ test("candidate rules protect one immutable GM gateway against all clients",{
   createdAt:F.serverTimestamp(),
 }));
 
+
+      await assertFails(user.doc("admin_audit/qa_cand_unbound_forged_audit").set({
+        action:"admin_invite_accepted",inviteId,
+        adminUid:uid,adminRole:"employee",
+        createdAt:F.serverTimestamp(),
+      }));
+      // Even explicitly shaped audit fields are refused unless gateway and
+      // invitation are committed together. Legacy staff remain compatible.
+      await assertSucceeds(legacy.doc("admin_audit/qa_cand_legacy_audit").set({
+        action:"support_checked",adminUid:legacyUid,
+        createdAt:F.serverTimestamp(),
+      }));
+
       // Exact client completion writes are allowed even while privilege
       // queries remain CLOSED; admin_entry_access.update uses isAdmin()
       // for the scoped self-bind, not hasAdminPermission().

@@ -258,6 +258,14 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
 }));
       console.log("RELEASE_HOLD_UNBOUND_INVITEE_CAN_CREATE_OWNER_ALERT_CURRENT_RULES");
 
+      await assertSucceeds(partial.doc("admin_audit/qa_unbound_forged_audit").set({
+        action:"admin_invite_accepted",inviteId:"not-the-claimed-invite",
+        adminUid:partialUid,adminRole:"employee",
+        createdAt:sent(),
+      }));
+      console.log("RELEASE_HOLD_UNBOUND_INVITEE_CAN_FORGE_ADMIN_AUDIT");
+
+
     });
 
 
