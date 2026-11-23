@@ -27,6 +27,38 @@ PERMISSION_HARDENED = "\n    // STAGE2 QA CANDIDATE: newly invited staff have no
 NOTIFICATION_CREATE_ORIGINAL = "      allow create: if isAdmin()\n        && adminProvinceMatches(request.resource.data)"
 NOTIFICATION_CREATE_HARDENED = "      allow create: if isAdmin()\n        && activeInvitedMemberGateway()\n        && adminProvinceMatches(request.resource.data)"
 
+OWNER_MANUAL_NOTICE_CANDIDATE = """    // Emulator candidate only: manual notices must be tied to the current
+    // source place owner and authorized for this kind of admin operation.
+    // Existing automatic deletion/edit notice types keep their old paths.
+      function candidateManualOwnerNoticeScope() {
+        let sourceCollection = request.resource.data.sourceType;
+        let sourceId = request.resource.data.sourceId;
+        return !(request.resource.data.type in [
+            'place_report', 'admin_alert', 'custom'
+          ])
+          || (
+            sourceCollection in ['place_requests', 'published_places']
+            && sourceId is string
+            && exists(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
+            && get(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
+                .data.accountKey == request.resource.data.accountKey
+            && get(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
+                .data.ownerUid == request.resource.data.ownerUid
+            && get(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
+                .data.governorate == request.resource.data.governorate
+            && (
+              (sourceCollection == 'published_places'
+                && isGeneralManager()
+                && adminData().role == 'general_manager')
+              || (sourceCollection == 'place_requests'
+                && hasAdminPermission('viewPlaceRequests'))
+            )
+          );
+      }
+
+"""
+OWNER_NOTICE_MATCH = "    match /owner_place_notifications/{notificationId} {"
+
 GM_ROLE_ORIGINAL = "    function isGeneralManager() {\n      return isAdmin()\n        && (\n          !adminData().keys().hasAny(['role'])\n          || adminData().role in [\n            'general_manager', 'manager', 'director', 'admin'\n          ]\n        );\n    }\n"
 GM_ROLE_HARDENED = "    // QA CANDIDATE: no implicit general manager if role is absent.\n    // Preserve explicit legacy role aliases until deployed accounts audited.\n    function isGeneralManager() {\n      return isAdmin()\n        && adminData().keys().hasAny(['role'])\n        && adminData().role in [\n          'general_manager', 'manager', 'director', 'admin'\n        ]\n        && activeInvitedMemberGateway();\n    }\n"
 
@@ -104,6 +136,17 @@ def candidate(source):
     result = result.replace(
         NOTIFICATION_CREATE_ORIGINAL, NOTIFICATION_CREATE_HARDENED, 1
     )
+    if result.count(OWNER_NOTICE_MATCH) != 1 or result.count(NOTIFICATION_CREATE_HARDENED) != 1:
+        raise ValueError("FAIL_CANDIDATE_OWNER_NOTICE_BLOCK_DRIFT")
+    result = result.replace(
+        OWNER_NOTICE_MATCH, OWNER_NOTICE_MATCH + "\n" + OWNER_MANUAL_NOTICE_CANDIDATE, 1
+    )
+    result = result.replace(
+        NOTIFICATION_CREATE_HARDENED,
+        NOTIFICATION_CREATE_HARDENED + "\n        && candidateManualOwnerNoticeScope()", 1
+    )
+    if result.count("function candidateManualOwnerNoticeScope()") != 1:
+        raise ValueError("FAIL_CANDIDATE_OWNER_NOTICE_GUARD_DUPLICATE")
     if result.count("activeInvitedMemberGateway()") != 4:
         raise ValueError("FAIL_CANDIDATE_INVITEE_GUARD_MISSING")
     if result.count(AUDIT_ORIGINAL) != 1:
