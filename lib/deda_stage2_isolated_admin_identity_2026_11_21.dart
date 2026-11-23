@@ -156,6 +156,22 @@ class DedaIsolatedAdminProofPolicy {
     return permissions is Map && permissions[permission] == true;
   }
 
+  /// Exact actions exposed by the original account deletion requests card.
+  /// The status "deleted" is a post-deletion administrative record only.
+  static List<String> accountDeletionAllowedTransitions(String currentStatus) {
+    switch (currentStatus) {
+      case 'new':
+        return const <String>['reviewing', 'deleted', 'rejected'];
+      case 'reviewing':
+        return const <String>['deleted', 'rejected'];
+      case 'cancelled':
+      case 'rejected':
+        return const <String>['deleted'];
+      default:
+        return const <String>[];
+    }
+  }
+
   /// The legacy "deleted" status does NOT delete a Firebase Auth account.
   static bool accountDeletionReviewAllowed({
     required Map<String, dynamic>? admin,
@@ -169,9 +185,8 @@ class DedaIsolatedAdminProofPolicy {
       (request['accountKey'] ?? '').toString().trim().isNotEmpty &&
       const <String>{'new','reviewing','deleted','cancelled','rejected'}
           .contains((request['status'] ?? '').toString()) &&
-      const <String>{'new','reviewing','deleted','cancelled','rejected'}
-          .contains(status) &&
-      request['status'] != status &&
+      accountDeletionAllowedTransitions(
+        (request['status'] ?? '').toString()).contains(status) &&
       reason.trim().length >= 3 && reason.trim().length <= 500;
 
   static bool validScopedDocumentId(String value) =>

@@ -960,7 +960,25 @@ class _DedaIsolatedAccountDeletionTabState
   QueryDocumentSnapshot<Map<String, dynamic>>? _cursor;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
   bool _busy = false;
+  String _filter = 'all';
   String t(String ar, String en) => widget.isArabic ? ar : en;
+  String _statusLabel(String status) => switch (status) {
+    'new' => t('جديد', 'New'),
+    'reviewing' => t('قيد المراجعة', 'Under review'),
+    'deleted' => t('تم تسجيل الحذف', 'Deletion recorded'),
+    'cancelled' => t('ملغي', 'Cancelled'),
+    'rejected' => t('مرفوض', 'Rejected'),
+    _ => t('حالة غير معروفة', 'Unknown status'),
+  };
+  bool _matchesStatus(String status) =>
+      _filter == 'all' ||
+      (_filter == 'closed' &&
+        (status == 'cancelled' || status == 'rejected')) ||
+      _filter == status;
+  Widget _filterChip(String value, String ar, String en) => ChoiceChip(
+    label: Text(t(ar, en)), selected: _filter == value,
+    onSelected: _busy ? null : (_) => setState(() => _filter = value),
+  );
   @override
   void initState() { super.initState(); _page = _load(); }
   Future<DedaIsolatedManagerPage> _load() =>
@@ -972,7 +990,11 @@ class _DedaIsolatedAccountDeletionTabState
   Future<void> _review(Map<String, dynamic> row) async {
     if (_busy) return;
     final id = (row['id'] ?? '').toString();
-    String status = 'reviewing';
+    final choices = DedaIsolatedAdminProofPolicy
+        .accountDeletionAllowedTransitions(
+          (row['status'] ?? '').toString());
+    if (choices.isEmpty) return;
+    String status = choices.first;
     final reason = TextEditingController();
     final confirmation = TextEditingController();
     final picked = await showDialog<({String status, String reason})>(
@@ -987,9 +1009,9 @@ class _DedaIsolatedAccountDeletionTabState
               Text(id),
               DropdownButtonFormField<String>(
                 initialValue: status,
-                items: const ['new','reviewing','deleted','cancelled','rejected']
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
+                items: choices.map((s) => DropdownMenuItem(
+                  value: s, child: Text(_statusLabel(s)),
+                )).toList(),
                 onChanged: (value) {
                   if (value != null) update(() => status = value);
                 },
@@ -1001,10 +1023,13 @@ class _DedaIsolatedAccountDeletionTabState
                     t('سبب القرار (3 أحرف على الأقل)', 'Reason (3+ characters)')),
               ),
               if (status == 'deleted') ...[
-                Text(t('هذا يغيّر حالة الطلب فقط، ولا يحذف حساب المستخدم. '
-                    'اكتب معرّف الطلب للتأكيد.',
-                    'Marks request status only; does not delete the user. '
-                    'Type request ID to confirm.')),
+                Text(t(
+                    'سجّل «تم الحذف» فقط بعد تنفيذ حذف الحساب فعلياً '
+                    'خارج هذه الشاشة. هنا نسجّل حالة الطلب فقط ولا نحذف '
+                    'المستخدم. اكتب معرّف الطلب للتأكيد.',
+                    'Only mark Deleted after actual account deletion outside '
+                    'this screen. This records request status only and does '
+                    'not delete the user. Type request ID to confirm.')),
                 TextField(controller: confirmation,
                   onChanged: (_) => update(() {}),
                   decoration: InputDecoration(labelText: t(
@@ -1062,23 +1087,45 @@ class _DedaIsolatedAccountDeletionTabState
               'Access denied, retry'))));
       }
       final page = snapshot.data!;
+      final visible = page.rows.where((record) => _matchesStatus(
+          (record['status'] ?? 'new').toString())).toList(growable: false);
       return Column(children: [
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: Text(t(
+            'تنبيه: لا تسجّل «تم الحذف» إلا بعد تنفيذ حذف الحساب '
+            'فعلياً. هذه البطاقة للمراجعة والتوثيق فقط.',
+            'Only mark Deleted after the account was actually removed. '
+            'This card records review decisions only.',
+          )),
+        ),
+        Wrap(spacing: 6, children: [
+          _filterChip('all', 'الكل', 'All'),
+          _filterChip('new', 'جديد', 'New'),
+          _filterChip('reviewing', 'قيد المراجعة', 'Reviewing'),
+          _filterChip('deleted', 'تم الحذف', 'Deleted'),
+          _filterChip('closed', 'مغلق/مرفوض', 'Closed'),
+        ]),
         Align(alignment: AlignmentDirectional.centerEnd,
           child: IconButton(
             onPressed: _busy ? null : _refresh,
             icon: const Icon(Icons.refresh))),
         Expanded(child: ListView.builder(
-          itemCount: page.rows.length,
+          itemCount: visible.length,
           itemBuilder: (context, index) {
-            final row = page.rows[index];
+            final row = visible[index];
             return Card(child: ListTile(
               title: Text((row['name'] ?? '').toString()),
               subtitle: Text(
                 '${row['id'] ?? ''} • ${row['phone'] ?? ''} • '
-                '${row['status'] ?? ''}\n${row['reason'] ?? ''}',
+                '${_statusLabel((row['status'] ?? '').toString())}\n'
+                '${row['reason'] ?? ''}\n${row['reviewNote'] ?? ''}',
               ),
               trailing: IconButton(icon: const Icon(Icons.fact_check_outlined),
-                onPressed: _busy ? null : () => _review(row)),
+                onPressed: _busy || DedaIsolatedAdminProofPolicy
+                    .accountDeletionAllowedTransitions(
+                      (row['status'] ?? '').toString()).isEmpty
+                    ? null : () => _review(row)),
             ));
           },
         )),

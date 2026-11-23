@@ -1145,6 +1145,13 @@ void main() {
       expect(allowed(manager,{...request,'requesterUid':''},'reviewing','reason'),false);
       expect(allowed(manager,request,'new','reason'),false);
       expect(allowed(manager,request,'reviewing','  '),false);
+      expect(allowed(manager,request,'cancelled','reason'),false);
+      expect(allowed(manager,{...request,'status':'deleted'},
+          'reviewing','reason'),false);
+      expect(allowed(manager,{...request,'status':'rejected'},
+          'reviewing','reason'),false);
+      expect(allowed(manager,{...request,'status':'rejected'},
+          'deleted','Status after real deletion'),true);
     });
   });
 }

@@ -1529,6 +1529,9 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                           'DedaBackend.',"collection('users')",'deleteUser(',
                           'tx.delete('):
             self.assertNotIn(forbidden,section)
+        self.assertIn('accountDeletionAllowedTransitions(',service)
+        self.assertIn('accountDeletionAllowedTransitions(',ui)
+        self.assertNotIn("items: const ['new'",ui)
         self.assertIn("if (can('reviewAccountDeletions')",ui)
         self.assertEqual(ui.count('class _DedaIsolatedAccountDeletionTabState'),1)
         self.assertIn('widget.admin.reviewScopedAccountDeletionRequest(',ui)
