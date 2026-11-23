@@ -1413,7 +1413,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         legacy=(REPO/'lib/admin_team_pages.dart').read_text()
         service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
-        self.assertIn("import 'admin_team_pages.dart' show dedaAdminGovernorates;",ui)
+        self.assertIn("import 'admin_team_pages.dart' show dedaAdminGovernorates,",ui)
         self.assertIn("const List<String> dedaAdminGovernorates",legacy)
         self.assertEqual(ui.count("class _DedaIsolatedGovernoratesTab "),1)
         self.assertIn("if (can('viewGovernorates')) {",ui)
