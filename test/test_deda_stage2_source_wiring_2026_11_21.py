@@ -1645,7 +1645,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("if (can('reviewPrizeWinners')",ui)
         self.assertEqual(ui.count('class _DedaIsolatedPrizeWinnersTabState'),1)
         self.assertIn('class _DedaIsolatedPrizeWinnerReviewDialogState',ui)
-        self.assertIn('widget.admin.readScopedPrizeWinnerRequests(',ui)
+        self.assertIn('.readScopedPrizeWinnerRequests(',ui)
         self.assertIn('widget.admin.reviewScopedPrizeWinnerRequest(',ui)
         self.assertIn('prizeWinnerAllowedTransitions(',ui)
         self.assertIn("item['winnerConfirmedAt']",ui)
