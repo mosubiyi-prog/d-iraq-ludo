@@ -155,6 +155,7 @@ jobs:
             lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart \
             lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart \
             lib/deda_stage2_isolated_league_admin_2026_11_23.dart \
+            lib/deda_stage2_isolated_tasks_admin_2026_11_23.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path

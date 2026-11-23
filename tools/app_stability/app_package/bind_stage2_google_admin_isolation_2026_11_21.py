@@ -18,6 +18,7 @@ MODULES = (
     'deda_stage2_isolated_admin_dashboard_2026_11_21.dart',
     'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart',
     'deda_stage2_isolated_league_admin_2026_11_23.dart',
+    'deda_stage2_isolated_tasks_admin_2026_11_23.dart',
 )
 GOOGLE_TEST = 'deda_stage2_google_and_admin_isolation_policy_test.dart'
 GOOGLE_DEPENDENCY = '  google_sign_in: ^6.2.2'

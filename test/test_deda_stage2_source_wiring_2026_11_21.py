@@ -1663,6 +1663,42 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseFirestore.instance',ui)
         self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
 
+    def test_tasks_card_original_scoped_drafts_schedule_social_and_palette(self):
+        source=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        page=(REPO/'lib/deda_stage2_isolated_tasks_admin_2026_11_23.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/deda_admin_task_management_page.dart').read_text()
+        binder=(REPO/'tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py').read_text()
+        workflow=(REPO/'.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml').read_text()
+        self.assertEqual(dashboard.count("title:t('إدارة المهام والمكافآت'"),1)
+        self.assertIn('accentColor:const Color(0xFF1D7690)',dashboard)
+        self.assertIn('accentColor: const Color(0xFF1D7690)',(REPO/'lib/admin_pages.dart').read_text())
+        self.assertIn('DedaStage2IsolatedTasksAdminPage(',dashboard)
+        self.assertIn("'deda_stage2_isolated_tasks_admin_2026_11_23.dart',",binder)
+        self.assertIn('lib/deda_stage2_isolated_tasks_admin_2026_11_23.dart',workflow)
+        self.assertIn('DedaDailyTaskSlot.slots',page)
+        self.assertIn('DedaDailyLoginOfferPreviewPage(',page)
+        self.assertIn('DedaAdminTaskDraft(',page)
+        for method in (
+            'readScopedTaskManagement','saveScopedDailyTaskDraft',
+            'prepareScopedDailyTaskPreview','cancelScopedDailyTaskPreview',
+            'saveScopedSocialTaskDraft','scheduleScopedSocialTask',
+            'cancelScopedSocialTask'):
+            self.assertEqual(source.count(method+'({'),1)
+        for collection in ('admin_task_drafts','admin_daily_schedule_previews',
+            'deda_social_direct_drafts','deda_social_direct_days'):
+            self.assertIn("collection('"+collection+"')",source)
+        self.assertIn("DedaDailySchedulePolicy.validatePreview(",source)
+        self.assertIn("'rewardsEnabled':false",source)
+        self.assertIn("'rewardClaimMode':'blocked-until-trusted-proof-and-ssv-ledger'",source)
+        self.assertIn("_firestore.runTransaction((tx) async {",source)
+        self.assertIn("await _tasksRecheck(dedaPhone,actor);",source)
+        self.assertNotIn('FirebaseAuth.instance',page)
+        self.assertNotIn('FirebaseFirestore.instance',page)
+        self.assertNotIn('FirebaseFunctions.instance',page)
+        self.assertNotIn('DedaBackend.',page)
+        self.assertIn("class DedaAdminTaskManagementPage",original)
+
     def test_league_card_isolated_original_functions_and_no_wallet_mutation(self):
         service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()

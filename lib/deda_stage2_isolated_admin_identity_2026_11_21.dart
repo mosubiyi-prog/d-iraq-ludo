@@ -17,6 +17,10 @@ import 'deda_admin_league_winners_prizes.dart'
 import 'deda_admin_league_live_data.dart';
 import 'deda_weekly_league_clock.dart';
 import 'deda_weekly_prize_plan.dart' show DedaWeeklyPrizePlan;
+import 'deda_admin_task_drafts.dart' show DedaAdminTaskDraft;
+import 'deda_daily_task_slots.dart';
+import 'deda_daily_schedule_policy.dart';
+import 'deda_social_task_live_service.dart' show DedaLiveSocialTaskService;
 
 const bool dedaIsolatedAdminIdentityEnabled = bool.fromEnvironment(
   'DEDA_STABILITY_ADMIN_ISOLATED_AUTH', defaultValue: false,
@@ -4379,6 +4383,1082 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
+
+
+  // The original eight daily task slots and PRIVATE draft/preview collections.
+  // Authorization is always the secondary Firebase Auth principal.
+  Future<({String uid,String publicUid,Map<String,dynamic> gm})>
+      _tasksManager(String dedaPhone) async {
+    if (!dedaIsolatedAdminIdentityEnabled) throw StateError('tasks-off');
+    final actor=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    Map<String,dynamic>? verified;
+    if (actor==null || actor.isAnonymous || publicUid==null ||
+        !await _serverAuthorizedAdmin(
+          uid:actor.uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
+          requiredPermission:'viewTeam',onAuthorizedAdmin:(row)=>verified=row) ||
+        verified?['role']!='general_manager' ||
+        verified?['status']!='active') {
+      throw StateError('task-manager-required');
+    }
+    return (uid:actor.uid,publicUid:publicUid,gm:verified!);
+  }
+
+  Future<void> _tasksRecheck(String dedaPhone,
+      ({String uid,String publicUid,Map<String,dynamic> gm}) actor) async {
+    if (_auth.currentUser?.uid!=actor.uid ||
+        _mainAuth.currentUser?.uid!=actor.publicUid ||
+        !await _serverAuthorizedAdmin(
+          uid:actor.uid,dedaPhone:dedaPhone,
+          expectedPublicUid:actor.publicUid,requiredPermission:'viewTeam')) {
+      throw StateError('tasks-auth-or-role-changed');
+    }
+  }
+
+  /// One manager card; no public user's task ledger or wallet ever queried.
+  Future<Map<String,dynamic>> readScopedTaskManagement({
+    required String dedaPhone,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    const opts=GetOptions(source:Source.server);
+    final draftsFuture=_firestore.collection('admin_task_drafts')
+      .limit(100).get(opts);
+    final previewsFuture=_firestore.collection('admin_daily_schedule_previews')
+      .limit(20).get(opts);
+    final socialFuture=_firestore.collection('deda_social_direct_drafts')
+      .doc('featured').get(opts);
+    final drafts=await draftsFuture;
+    final previews=await previewsFuture;
+    final social=await socialFuture;
+    if (drafts.metadata.isFromCache || drafts.metadata.hasPendingWrites ||
+        previews.metadata.isFromCache || previews.metadata.hasPendingWrites ||
+        social.metadata.isFromCache || social.metadata.hasPendingWrites ||
+        drafts.docs.length>=100 || previews.docs.length>=20) {
+      throw StateError('tasks-server-read-incomplete');
+    }
+    await _tasksRecheck(dedaPhone,actor);
+    return <String,dynamic>{
+      'drafts':<Map<String,dynamic>>[
+        for(final d in drafts.docs) <String,dynamic>{...d.data(),'id':d.id},
+      ],
+      'previews':<Map<String,dynamic>>[
+        for(final d in previews.docs) <String,dynamic>{...d.data(),'id':d.id},
+      ],
+      'social':<String,dynamic>{
+        'exists':social.exists,'revision':0,'status':'new',
+        ...?social.data(),
+      },
+    };
+  }
+
+  /// The ORIGINAL 100408 task draft shape/validation; no payout writer.
+  Future<void> saveScopedDailyTaskDraft({
+    required String dedaPhone,
+    required String dailySlotId,
+    required DedaAdminTaskDraft draft,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    final slot=DedaDailyTaskSlot.byId(dailySlotId);
+    if(slot==null || draft.cycle!='daily' ||
+       (draft.id.isNotEmpty && draft.id!=slot.draftId)) {
+      throw StateError('task-slot-invalid');
+    }
+    final editable=draft.toEditableMap();
+    final ref=_firestore.collection('admin_task_drafts').doc(slot.draftId);
+    final audit=_firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final snap=await tx.get(ref);
+      final previous=snap.data();
+      if(snap.metadata.isFromCache || snap.metadata.hasPendingWrites) {
+        throw StateError('task-draft-server-required');
+      }
+      if(snap.exists) {
+        if(draft.id!=slot.draftId ||
+           previous?['status']!='draft' ||
+           previous?['cycle']!='daily' ||
+           previous?['revision']!=draft.revision) {
+          throw StateError('task-draft-stale');
+        }
+      }else if(draft.id.isNotEmpty || draft.revision!=0) {
+        throw StateError('task-draft-create-conflict');
+      }
+      await _tasksRecheck(dedaPhone,actor);
+      final revision=(previous?['revision'] as int?)??0;
+      if(snap.exists) {
+        tx.update(ref,{
+          ...editable,'revision':revision+1,
+          'updatedByUid':actor.uid,
+          'updatedAt':FieldValue.serverTimestamp(),
+        });
+      }else {
+        tx.set(ref,{
+          ...editable,'revision':1,
+          'createdByUid':actor.uid,'updatedByUid':actor.uid,
+          'createdAt':FieldValue.serverTimestamp(),
+          'updatedAt':FieldValue.serverTimestamp(),
+        });
+      }
+      tx.set(audit,{
+        'action':snap.exists?'task_draft_updated':'task_draft_created',
+        'adminUid':actor.uid,
+        'adminName':(actor.gm['displayName']??'').toString(),
+        'adminRole':'general_manager',
+        'sourceCollection':'admin_task_drafts',
+        'sourceId':ref.id,
+        if(snap.exists)'before':<String,dynamic>{
+          'titleAr':previous?['titleAr'],
+          'cycle':previous?['cycle'],
+          'action':previous?['action'],
+          'targetCount':previous?['targetCount'],
+          'rewardUnit':previous?['rewardUnit'],
+          'rewardAmount':previous?['rewardAmount'],
+        },
+        'after':editable,
+        'createdAt':FieldValue.serverTimestamp(),
+      });
+    });
+    await _tasksRecheck(dedaPhone,actor);
+  }
+
+  /// A private preview at next Baghdad midnight. It is NOT publication.
+  Future<void> prepareScopedDailyTaskPreview({
+    required String dedaPhone,required String dailySlotId,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    final slot=DedaDailyTaskSlot.byId(dailySlotId);
+    if(slot==null)throw StateError('preview-slot-invalid');
+    final draftRef=_firestore.collection('admin_task_drafts')
+      .doc(slot.draftId);
+    final ref=_firestore.collection('admin_daily_schedule_previews')
+      .doc(DedaDailySchedulePolicy.previewId(dailySlotId));
+    final audit=_firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final draftDoc=await tx.get(draftRef);
+      final previous=await tx.get(ref);
+      final draft=draftDoc.data();
+      if(!draftDoc.exists || draft?['status']!='draft' ||
+         draft?['cycle']!='daily' ||
+         !DedaAdminTaskDraft.actions.contains(draft?['action'])) {
+        throw StateError('preview-draft-unverified');
+      }
+      final model=DedaAdminTaskDraft(
+        id:draftRef.id,revision:(draft?['revision'] as int?)??0,
+        cycle:(draft?['cycle']??'').toString(),
+        action:(draft?['action']??'').toString(),
+        titleAr:(draft?['titleAr']??'').toString(),
+        titleEn:(draft?['titleEn']??'').toString(),
+        targetCount:(draft?['targetCount'] as int?)??0,
+        rewardUnit:(draft?['rewardUnit']??'').toString(),
+        rewardAmount:(draft?['rewardAmount'] as int?)??0,
+        url:(draft?['url']??'').toString(),
+      );
+      model.validate();
+      final now=DateTime.now().toUtc();
+      final when=DedaDailySchedulePolicy.nextActivationUtc(now);
+      DedaDailySchedulePolicy.validatePreview(
+        slotId:slot.id,status:DedaDailySchedulePolicy.pending,
+        effectiveAt:when,trustedNow:now);
+      final old=previous.data();
+      final revision=(old?['revision'] as int?)??0;
+      await _tasksRecheck(dedaPhone,actor);
+      final editable=model.toEditableMap();
+      final values=<String,dynamic>{
+        'slotId':slot.id,
+        'action':model.action,
+        'titleAr':model.titleAr.trim(),
+        'titleEn':model.titleAr.trim(),
+        'targetCount':model.targetCount,
+        'rewardUnit':model.rewardUnit,
+        'rewardAmount':model.rewardAmount,
+        'url':model.url.trim(),
+        'status':DedaDailySchedulePolicy.pending,
+        'revision':revision+1,
+        'effectiveAt':Timestamp.fromDate(when),
+        'updatedByUid':actor.uid,
+        'updatedAt':FieldValue.serverTimestamp(),
+        if(!previous.exists)...{
+          'createdByUid':actor.uid,
+          'createdAt':FieldValue.serverTimestamp(),
+        },
+      };
+      if(previous.exists){tx.update(ref,values);}else{tx.set(ref,values);}
+      tx.set(audit,{
+        'action':'daily_schedule_preview_prepared',
+        'adminUid':actor.uid,
+        'adminName':(actor.gm['displayName']??'').toString(),
+        'adminRole':'general_manager',
+        'sourceCollection':'admin_daily_schedule_previews',
+        'sourceId':ref.id,
+        'slotId':slot.id,'revision':revision+1,
+        'after':editable,'createdAt':FieldValue.serverTimestamp(),
+      });
+    });
+    await _tasksRecheck(dedaPhone,actor);
+  }
+
+  Future<void> cancelScopedDailyTaskPreview({
+    required String dedaPhone,required String dailySlotId,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    final ref=_firestore.collection('admin_daily_schedule_previews')
+      .doc(DedaDailySchedulePolicy.previewId(dailySlotId));
+    final audit=_firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final snap=await tx.get(ref);
+      final old=snap.data();
+      final when=old?['effectiveAt'];
+      if(!snap.exists || when is! Timestamp ||
+         !DedaDailySchedulePolicy.canCancel(
+           status:(old?['status']??'').toString(),
+           effectiveAt:when.toDate(),trustedNow:DateTime.now().toUtc())) {
+        throw StateError('task-preview-cancel-invalid');
+      }
+      await _tasksRecheck(dedaPhone,actor);
+      final rev=(old?['revision'] as int?)??0;
+      tx.update(ref,{
+        'status':DedaDailySchedulePolicy.cancelled,
+        'revision':rev+1,'updatedByUid':actor.uid,
+        'updatedAt':FieldValue.serverTimestamp(),
+      });
+      tx.set(audit,{
+        'action':'daily_schedule_preview_cancelled',
+        'adminUid':actor.uid,
+        'adminName':(actor.gm['displayName']??'').toString(),
+        'adminRole':'general_manager',
+        'sourceCollection':'admin_daily_schedule_previews',
+        'sourceId':ref.id,'slotId':dailySlotId,
+        'revision':rev+1,'createdAt':FieldValue.serverTimestamp(),
+      });
+    });
+    await _tasksRecheck(dedaPhone,actor);
+  }
+
+  /// Telegram social-task original source, never public FirebaseAuth.instance.
+  /// The published-day reward ledger remains disabled by Firestore policy.
+  Future<void> saveScopedSocialTaskDraft({
+    required String dedaPhone,required int expectedRevision,
+    required String title,required String url,
+    required String rewardUnit,required int rewardAmount,
+    required bool doubleWithAd,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    if(title.trim().length<3 || title.trim().length>80 ||
+       !DedaLiveSocialTaskService.allowedTelegramLink(url.trim()) ||
+       !const {'points','coins','diamonds'}.contains(rewardUnit) ||
+       rewardAmount<1 || rewardAmount>5000) {
+      throw StateError('social-task-invalid');
+    }
+    final ref=_firestore.collection('deda_social_direct_drafts')
+      .doc('featured');
+    await _firestore.runTransaction((tx) async {
+      final doc=await tx.get(ref);
+      final old=doc.data();
+      final revision=(old?['revision'] as int?)??0;
+      if(revision!=expectedRevision)throw StateError('social-task-stale');
+      final status=(old?['status']??'new').toString();
+      if(status=='scheduled') {
+        final when=old?['activateAt'];
+        if(when is! Timestamp || when.toDate().isAfter(DateTime.now().toUtc())){
+          throw StateError('social-schedule-cancel-first');
+        }
+      }
+      await _tasksRecheck(dedaPhone,actor);
+      final values=<String,dynamic>{
+        'platform':'telegram','action':'follow',
+        'title':title.trim(),'url':url.trim(),
+        'rewardUnit':rewardUnit,'rewardAmount':rewardAmount,
+        'doubleWithRewardedAd':doubleWithAd,
+        'otherPlatform':'','otherAction':'',
+        'status':'draft','revision':revision+1,
+        'scheduledDay':'','activateAt':null,'rewardsEnabled':false,
+        'updatedByUid':actor.uid,
+        'updatedAt':FieldValue.serverTimestamp(),
+        if(!doc.exists)...{
+          'createdByUid':actor.uid,
+          'createdAt':FieldValue.serverTimestamp(),
+        },
+      };
+      if(doc.exists){tx.update(ref,values);}else{tx.set(ref,values);}
+    });
+    await _tasksRecheck(dedaPhone,actor);
+  }
+
+  /// Social schedule writes original Firestore 2-doc transaction with
+  /// rewardsEnabled=false and blocked claim mode; no diamond settlement.
+  Future<void> scheduleScopedSocialTask({
+    required String dedaPhone,required int expectedRevision,
+    required DateTime calendarDay,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    final y=calendarDay.year,m=calendarDay.month,d=calendarDay.day;
+    final date=DateTime.utc(y,m,d);
+    final day=DedaLiveSocialTaskService.dayId(date);
+    final baghdad=DedaLiveSocialTaskService.iraqNow;
+    if(y<2026 || y>2100 || day.compareTo(
+        DedaLiveSocialTaskService.dayId(baghdad))<=0 ||
+        date.isAfter(DateTime.utc(baghdad.year,baghdad.month,baghdad.day+32))) {
+      throw StateError('social-day-invalid');
+    }
+    final when=DedaLiveSocialTaskService.midnightUtc(y,m,d);
+    final draftRef=_firestore.collection('deda_social_direct_drafts')
+      .doc('featured');
+    final dayRef=_firestore.collection('deda_social_direct_days').doc(day);
+    await _firestore.runTransaction((tx) async {
+      final draft=await tx.get(draftRef);
+      final scheduled=await tx.get(dayRef);
+      final raw=draft.data();
+      if(!draft.exists || raw?['status']!='draft' ||
+         raw?['revision']!=expectedRevision || scheduled.exists ||
+         raw?['platform']!='telegram' || raw?['action']!='follow' ||
+         raw?['rewardsEnabled']!=false) {
+        throw StateError('social-schedule-not-authorized');
+      }
+      await _tasksRecheck(dedaPhone,actor);
+      if(!when.isAfter(DateTime.now().toUtc())) {
+        throw StateError('social-schedule-outdated');
+      }
+      tx.set(dayRef,<String,dynamic>{
+        'dayId':day,'year':y,'month':m,'day':d,
+        'activateAt':Timestamp.fromDate(when),
+        'status':'scheduled','revision':1,
+        'platform':'telegram','action':'follow',
+        'title':raw!['title'],'url':raw['url'],
+        'rewardUnit':raw['rewardUnit'],'rewardAmount':raw['rewardAmount'],
+        'doubleWithRewardedAd':raw['doubleWithRewardedAd'],
+        'rewardsEnabled':false,
+        'rewardClaimMode':'blocked-until-trusted-proof-and-ssv-ledger',
+        'createdByUid':actor.uid,'updatedByUid':actor.uid,
+        'createdAt':FieldValue.serverTimestamp(),
+        'updatedAt':FieldValue.serverTimestamp(),
+      });
+      tx.update(draftRef,{
+        'status':'scheduled','revision':expectedRevision+1,
+        'scheduledDay':day,'activateAt':Timestamp.fromDate(when),
+        'updatedByUid':actor.uid,
+        'updatedAt':FieldValue.serverTimestamp(),
+      });
+    });
+    await _tasksRecheck(dedaPhone,actor);
+  }
+
+  Future<void> cancelScopedSocialTask({
+    required String dedaPhone,required int expectedRevision,
+  }) async {
+    final actor=await _tasksManager(dedaPhone);
+    final draftRef=_firestore.collection('deda_social_direct_drafts')
+      .doc('featured');
+    await _firestore.runTransaction((tx) async {
+      final doc=await tx.get(draftRef);
+      final raw=doc.data();
+      final day=(raw?['scheduledDay']??'').toString();
+      if(raw?['status']!='scheduled' ||
+         raw?['revision']!=expectedRevision ||
+         !RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}
+  Future<({String uid,String publicUid,Map<String,dynamic> gm})>
+      _leagueManager(String phone) async {
+    if (!dedaIsolatedAdminIdentityEnabled) throw StateError('league-off');
+    final user=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    Map<String,dynamic>? gm;
+    if (user==null || user.isAnonymous || publicUid==null ||
+        !await _serverAuthorizedAdmin(
+          uid:user.uid,dedaPhone:phone,expectedPublicUid:publicUid,
+          requiredPermission:'manageLeague',
+          onAuthorizedAdmin:(row)=>gm=row) ||
+        gm?['role']!='general_manager') {
+      throw StateError('league-manager-required');
+    }
+    return (uid:user.uid,publicUid:publicUid,gm:gm!);
+  }
+
+  Future<void> _leagueRecheck(String phone,
+      ({String uid,String publicUid,Map<String,dynamic> gm}) actor) async {
+    if (_auth.currentUser?.uid!=actor.uid ||
+        _mainAuth.currentUser?.uid!=actor.publicUid ||
+        !await _serverAuthorizedAdmin(
+          uid:actor.uid,dedaPhone:phone,expectedPublicUid:actor.publicUid,
+          requiredPermission:'manageLeague')) {
+      throw StateError('league-session-or-rights-changed');
+    }
+  }
+
+  static List<String> _leagueReviewWeeks() {
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    if (clock.phase==DedaWeeklyPhase.beforeFirstWeek) return const [];
+    return [
+      for(var i=0;i<=12;i++)
+        if(!clock.weekStart.subtract(Duration(days:i*7))
+          .isBefore(DedaWeeklyLeagueClock.origin))
+          DedaAdminLeagueLiveData.weekId(
+            clock.weekStart.subtract(Duration(days:i*7))),
+    ];
+  }
+
+  Future<List<DedaAdminLeagueRow>> _leagueScores(String week) async {
+    final snap=await _firestore.collection('deda_weekly_direct_weeks')
+      .doc(week).collection('scores').limit(100)
+      .get(const GetOptions(source:Source.server));
+    if (snap.metadata.isFromCache || snap.metadata.hasPendingWrites) {
+      throw StateError('league-score-unverified');
+    }
+    return DedaAdminLeagueProjection.fromRecords([
+      for(final doc in snap.docs) MapEntry(doc.id,doc.data()),
+    ]);
+  }
+
+  /// Mirrors league controls, top ten, podium, review and Hadaya status.
+  Future<Map<String,dynamic>> readScopedLeague({
+    required String dedaPhone,String? weekForReview,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final currentWeek=DedaAdminLeagueLiveData.weekId(clock.weekStart);
+    final week=weekForReview??currentWeek;
+    if (week!=currentWeek && !_leagueReviewWeeks().contains(week)) {
+      throw StateError('league-week-invalid');
+    }
+    final current=await _leagueScores(currentWeek);
+    final other=week==currentWeek?current:await _leagueScores(week);
+    const opts=GetOptions(source:Source.server);
+    final holds=await _firestore.collection('deda_weekly_direct_reviews')
+      .doc(week).collection('users').limit(100).get(opts);
+    final control=await _firestore.collection('deda_weekly_direct_control')
+      .doc('active').get(opts);
+    final plan=await _firestore.collection('deda_weekly_direct_prize_plans')
+      .doc(currentWeek).get(opts);
+    if (holds.metadata.isFromCache || holds.metadata.hasPendingWrites ||
+        control.metadata.isFromCache || control.metadata.hasPendingWrites ||
+        plan.metadata.isFromCache || plan.metadata.hasPendingWrites) {
+      throw StateError('league-meta-unverified');
+    }
+    final defaults=<int>[150,100,50,10,10,10,10,10,10,10];
+    final raw=plan.data()?['amounts'];
+    final amounts=<int>[];
+    if(raw==null) {
+      amounts.addAll(defaults);
+    }else{
+      if(raw is! List || raw.length!=10)throw StateError('prize-plan-invalid');
+      for(var i=0;i<10;i++) {
+        if(raw[i] is! int || raw[i]<defaults[i] || raw[i]>1000000) {
+          throw StateError('prize-plan-unverified');
+        }
+        amounts.add(raw[i] as int);
+      }
+    }
+    Map<String,dynamic> receipts={'verified':false};
+    try {
+      final gifts=await _firestore.collection('deda_diamond_gifts')
+        .where('sourceType',isEqualTo:'weekly_league').limit(100).get(opts);
+      if (!gifts.metadata.isFromCache && !gifts.metadata.hasPendingWrites) {
+        final accepted=gifts.docs.where((d){
+          final x=d.data();
+          return x['sourceType']=='weekly_league' && x['giftId'] is String &&
+            x['targetPublicId'] is String && x['amount'] is int &&
+            (x['status']=='pending' || x['status']=='received');
+        }).toList(growable:false);
+        receipts={
+          'verified':true,'count':accepted.length,
+          'pending':accepted.where((d)=>d.data()['status']=='pending').length,
+          'received':accepted.where((d)=>d.data()['status']=='received').length,
+          'limited':gifts.docs.length>=100,
+        };
+      }
+    } catch (_) {
+      // A denied read is UNKNOWN, never interpreted as no payout.
+    }
+    await _leagueRecheck(dedaPhone,actor);
+    final frozen={for(final d in holds.docs)d.id:d.data()['frozen']==true};
+    List<Map<String,dynamic>> view(List<DedaAdminLeagueRow> rows) => [
+      for(final r in rows) <String,dynamic>{
+        'name':r.name,'id':r.publicId,'place':r.place,'xp':r.xp,
+        'frozen':frozen[r.publicId]==true,
+      },
+    ];
+    return {
+      'currentWeek':currentWeek,'reviewWeek':week,
+      'paused':control.data()?['paused']==true &&
+          control.data()?['weekId']==currentWeek,
+      'weekFrozen':clock.phase==DedaWeeklyPhase.frozen,
+      'currentRows':view(current),'reviewRows':view(other),
+      'amounts':List<int>.unmodifiable(amounts),'receipts':receipts,
+    };
+  }
+
+  /// Only original completed-week score docs; never a shadow XP database.
+  Future<List<Map<String,dynamic>>> readScopedLeagueArchive({
+    required String dedaPhone,required String month,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final starts=DedaAdminLeagueLiveData.completedWeekStartsForMonth(
+      DateTime.now().toUtc(),month);
+    final out=<Map<String,dynamic>>[];
+    for(final start in starts) {
+      final week=DedaAdminLeagueLiveData.weekId(start);
+      final data=await _leagueScores(week);
+      out.add({
+        'week':week,'rows':<Map<String,dynamic>>[
+          for(final r in data.take(10))
+            {'name':r.name,'id':r.publicId,'place':r.place,'xp':r.xp},
+        ],
+      });
+    }
+    await _leagueRecheck(dedaPhone,actor);
+    return List.unmodifiable(out);
+  }
+
+  /// Atomic pause and original immutable admin event (no user XP edits).
+  Future<void> setScopedLeaguePaused({
+    required String dedaPhone,required bool paused,required String reason,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final week=DedaAdminLeagueLiveData.weekId(clock.weekStart);
+    final why=reason.trim();
+    if(clock.phase==DedaWeeklyPhase.beforeFirstWeek ||
+        !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+          admin:actor.gm,weekId:week,reason:why)) {
+      throw StateError('league-pause-invalid');
+    }
+    final control=_firestore.collection('deda_weekly_direct_control')
+      .doc('active');
+    final event=_firestore.collection('deda_weekly_direct_admin_events').doc();
+    await _firestore.runTransaction((tx) async {
+      final old=await tx.get(control);
+      await _leagueRecheck(dedaPhone,actor);
+      if(DedaAdminLeagueLiveData.weekId(DedaWeeklyLeagueClock.at(
+          DateTime.now().toUtc()).weekStart)!=week ||
+         (old.data()?['weekId']==week && old.data()?['paused']==paused)) {
+        throw StateError('league-paused-or-week-shift');
+      }
+      tx.set(control,{
+        'weekId':week,'paused':paused,'reason':why,
+        'updatedAt':FieldValue.serverTimestamp(),'updatedBy':actor.uid,
+      });
+      tx.set(event,{
+        'action':paused?'pause':'resume','weekId':week,'publicId':'',
+        'reason':why,'createdAt':FieldValue.serverTimestamp(),
+        'createdBy':actor.uid,
+      });
+    });
+    await _leagueRecheck(dedaPhone,actor);
+  }
+
+  /// Original freeze/release + private reason + neutral notice in ONE commit.
+  Future<void> setScopedLeagueFrozen({
+    required String dedaPhone,required String weekId,
+    required String publicId,required bool frozen,required String reason,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final why=reason.trim();
+    if(!_leagueReviewWeeks().contains(weekId) ||
+       !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+         admin:actor.gm,weekId:weekId,publicId:publicId,reason:why)) {
+      throw StateError('league-freeze-invalid');
+    }
+    final score=_firestore.collection('deda_weekly_direct_weeks')
+      .doc(weekId).collection('scores').doc(publicId);
+    final review=_firestore.collection('deda_weekly_direct_reviews')
+      .doc(weekId).collection('users').doc(publicId);
+    final notice=_firestore.collection('deda_weekly_direct_notices')
+      .doc(weekId).collection('users').doc(publicId);
+    final event=_firestore.collection('deda_weekly_direct_admin_events').doc();
+    const frozenText='تم تعليق اعتماد نقاطك في الدوري الأسبوعي مؤقتاً لغرض المراجعة. '
+      'تستمر المهام ونقاط المستوى بصورة طبيعية.';
+    const releasedText='اكتملت مراجعة نقاط الدوري ورفعت الإدارة التجميد عن مشاركتك.';
+    await _firestore.runTransaction((tx) async {
+      final player=await tx.get(score);
+      final old=await tx.get(review);
+      if(!player.exists || player.data()?['publicId']!=publicId ||
+         player.data()?['weekId']!=weekId ||
+         (old.exists && old.data()?['frozen']==frozen)) {
+        throw StateError('league-review-row-changed');
+      }
+      await _leagueRecheck(dedaPhone,actor);
+      tx.set(review,{
+        'weekId':weekId,'publicId':publicId,'frozen':frozen,
+        'notice':frozen?frozenText:releasedText,'reason':why,
+        'updatedAt':FieldValue.serverTimestamp(),'updatedBy':actor.uid,
+      });
+      tx.set(notice,{
+        'weekId':weekId,'publicId':publicId,'frozen':frozen,
+        'notice':frozen?frozenText:releasedText,
+        'updatedAt':FieldValue.serverTimestamp(),'updatedBy':actor.uid,
+      });
+      tx.set(event,{
+        'action':frozen?'freeze':'unfreeze','weekId':weekId,
+        'publicId':publicId,'reason':why,
+        'createdAt':FieldValue.serverTimestamp(),'createdBy':actor.uid,
+      });
+    });
+    await _leagueRecheck(dedaPhone,actor);
+  }
+
+
+  /// The 100439 original winners-and-prizes register: four independent
+  /// server sources and the ONE existing pure projection; never a payout.
+  Future<Map<String,dynamic>> readScopedLeaguePrizeRegister({
+    required String dedaPhone,required String weekId,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final valid={
+      for(var n=1;n<=12;n++)
+        if(!clock.weekStart.subtract(Duration(days:7*n))
+            .isBefore(DedaWeeklyLeagueClock.origin))
+          DedaAdminLeagueLiveData.weekId(
+            clock.weekStart.subtract(Duration(days:7*n))),
+    };
+    if(!valid.contains(weekId))throw StateError('league-prize-week-incomplete');
+    const opts=GetOptions(source:Source.server);
+    final scores=await _firestore.collection('deda_weekly_direct_weeks')
+      .doc(weekId).collection('scores').limit(100).get(opts);
+    final prefix='deda-weekly-'+weekId+'-';
+    final gifts=await _firestore.collection('deda_diamond_gifts')
+      .orderBy(FieldPath.documentId)
+      .startAt([prefix]).endAt([prefix+'\uf8ff'])
+      .limit(100).get(opts);
+    final reviews=await _firestore.collection('deda_weekly_direct_reviews')
+      .doc(weekId).collection('users').limit(100).get(opts);
+    final plan=await _firestore.collection('deda_weekly_direct_prize_plans')
+      .doc(weekId).get(opts);
+    if(scores.metadata.isFromCache || scores.metadata.hasPendingWrites ||
+       gifts.metadata.isFromCache || gifts.metadata.hasPendingWrites ||
+       reviews.metadata.isFromCache || reviews.metadata.hasPendingWrites ||
+       plan.metadata.isFromCache || plan.metadata.hasPendingWrites ||
+       scores.docs.length>=100 || gifts.docs.length>=100 ||
+       reviews.docs.length>=100) {
+      throw StateError('league-prizes-unverified-or-truncated');
+    }
+    final report=DedaWeeklyPrizeProjection.merge(
+      week:weekId,
+      minimumOverride:DedaWeeklyPrizePlan.minimum,
+      scores:[for(final d in scores.docs)MapEntry(d.id,d.data())],
+      gifts:{for(final d in gifts.docs)d.id:d.data()},
+      frozen:{for(final d in reviews.docs)
+        if(d.data()['frozen']==true)d.id},
+      plan:plan.data()?['amounts'] as List<dynamic>?,
+    );
+    await _leagueRecheck(dedaPhone,actor);
+    return {
+      'week':weekId,
+      'rows':<Map<String,dynamic>>[
+        for(final r in report.rows){
+          'place':r.place,'name':r.name,'id':r.originalId,
+          'amount':r.amount,'status':r.status.name,
+        },
+      ],
+    };
+  }
+
+  /// Original 100408 GM-only increase editor, NEVER a diamond settlement.
+  /// Current week, paused status and monotonic amounts are checked atomically.
+  Future<void> increaseScopedLeaguePrizePlan({
+    required String dedaPhone,required String weekId,
+    required List<int> amounts,required String reason,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final current=DedaAdminLeagueLiveData.weekId(clock.weekStart);
+    final why=reason.trim();
+    const floor=<int>[150,100,50,10,10,10,10,10,10,10];
+    if(weekId!=current || !clock.canAccumulate ||
+       !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+         admin:actor.gm,weekId:weekId,reason:why) ||
+       amounts.length!=10) {
+      throw StateError('league-prize-input-or-week-invalid');
+    }
+    for(var i=0;i<10;i++) {
+      if(amounts[i]<floor[i] || amounts[i]>1000000) {
+        throw StateError('league-prize-amount-outside-rules');
+      }
+    }
+    final control=_firestore.collection('deda_weekly_direct_control')
+      .doc('active');
+    final plan=_firestore.collection('deda_weekly_direct_prize_plans')
+      .doc(weekId);
+    final event=_firestore.collection('deda_weekly_direct_admin_events').doc();
+    await _firestore.runTransaction((tx) async {
+      final pause=await tx.get(control);
+      final old=await tx.get(plan);
+      await _leagueRecheck(dedaPhone,actor);
+      final now=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+      if(!now.canAccumulate ||
+         DedaAdminLeagueLiveData.weekId(now.weekStart)!=weekId ||
+         pause.data()?['weekId']!=weekId ||
+         pause.data()?['paused']!=true) {
+        throw StateError('league-prizes-require-current-paused-week');
+      }
+      final saved=old.data()?['amounts'];
+      final prior=<int>[];
+      if(saved==null) {
+        prior.addAll(floor);
+      }else{
+        if(saved is! List || saved.length!=10) {
+          throw StateError('league-prize-previous-invalid');
+        }
+        for(var i=0;i<10;i++) {
+          final n=saved[i];
+          if(n is! int || n<floor[i] || n>1000000) {
+            throw StateError('league-prize-previous-unverified');
+          }
+          prior.add(n);
+        }
+      }
+      var increased=false;
+      for(var i=0;i<10;i++) {
+        if(amounts[i]<prior[i])throw StateError('league-prize-decrease-denied');
+        if(amounts[i]>prior[i])increased=true;
+      }
+      if(!increased)throw StateError('league-prize-no-increase');
+      tx.set(plan,{
+        'weekId':weekId,'amounts':List<int>.from(amounts),
+        'reason':why,'updatedBy':actor.uid,
+        'updatedAt':FieldValue.serverTimestamp(),
+      });
+      tx.set(event,{
+        'action':'prizes_increase','weekId':weekId,'publicId':'',
+        'reason':why,'createdAt':FieldValue.serverTimestamp(),
+        'createdBy':actor.uid,
+      });
+    });
+    await _leagueRecheck(dedaPhone,actor);
+  }
+
+  /// Original 500 newest winner requests. Secondary Auth, server only.
+  Future<List<Map<String,dynamic>>> readScopedPrizeWinnerRequests({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('prize-winners-isolated-off');
+    }
+    final actor=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    if (actor==null || actor.isAnonymous || publicUid==null) {
+      throw StateError('prize-winners-isolated-session-required');
+    }
+    final uid=actor.uid;
+    Map<String,dynamic>? gm;
+    Future<bool> proof()=>_serverAuthorizedAdmin(
+      uid:uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
+      requiredPermission:'reviewPrizeWinners',
+      onAuthorizedAdmin:(value)=>gm=value,
+    );
+    if (!await proof() || gm?['role']!='general_manager') {
+      throw StateError('prize-winners-gm-required');
+    }
+    final result=await _firestore.collection('prize_winner_requests')
+        .orderBy('updatedAt',descending:true).limit(500)
+        .get(const GetOptions(source:Source.server));
+    if (result.metadata.isFromCache || result.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid ||
+        !await proof() || gm?['role']!='general_manager') {
+      throw StateError('prize-winners-proof-changed');
+    }
+    return result.docs.map((doc)=>
+      <String,dynamic>{...doc.data(),'id':doc.id}).toList(growable:false);
+  }
+
+  /// Records administrative decisions only. Never transfers diamonds or
+  /// confirms delivery; the owner must confirm through their own account.
+  Future<void> reviewScopedPrizeWinnerRequest({
+    required String dedaPhone,
+    required String requestId,
+    required String status,
+    required String adminMessage,
+    required String prizeDetails,
+  }) async {
+    final id=requestId.trim();
+    final msg=adminMessage.trim();
+    final prize=prizeDetails.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !const <String>{'new','reviewing','needs_info','approved',
+          'prize_sent','rejected'}.contains(status) ||
+        msg.length>800 || prize.length>800) {
+      throw StateError('prize-winner-invalid-input');
+    }
+    final actor=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    if (actor==null || actor.isAnonymous || publicUid==null) {
+      throw StateError('prize-winner-isolated-session-required');
+    }
+    final uid=actor.uid;
+    Map<String,dynamic>? gm;
+    Future<bool> proof()=>_serverAuthorizedAdmin(
+      uid:uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
+      requiredPermission:'reviewPrizeWinners',
+      onAuthorizedAdmin:(value)=>gm=value,
+    );
+    if (!await proof() || gm?['role']!='general_manager') {
+      throw StateError('prize-winner-general-manager-only');
+    }
+    final ref=_firestore.collection('prize_winner_requests').doc(id);
+    final audit=_firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final snap=await tx.get(ref);
+      final before=snap.data();
+      if (!snap.exists || snap.metadata.isFromCache ||
+          snap.metadata.hasPendingWrites ||
+          !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
+            admin:gm,request:before,requestId:id,status:status,
+            adminMessage:msg,prizeDetails:prize,
+          ) || !await proof() || gm?['role']!='general_manager' ||
+          _auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid ||
+          !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
+            admin:gm,request:before,requestId:id,status:status,
+            adminMessage:msg,prizeDetails:prize,
+          )) {
+        throw StateError('prize-winner-request-or-proof-changed');
+      }
+      final previous=(before?['status'] ?? 'new').toString();
+      // The legacy UI automatically records approved+prize as prize_sent.
+      final finalStatus=status=='approved' && prize.isNotEmpty
+          ? 'prize_sent' : status;
+      final name=(gm?['displayName'] ?? gm?['name'] ??
+          actor.email ?? 'DEDA Admin').toString();
+      tx.update(ref,<String,dynamic>{
+        'status':finalStatus,'adminMessage':msg,'prizeDetails':prize,
+        'adminByUid':uid,'adminByName':name,
+        'adminByRole':'general_manager',
+        'adminUpdatedAt':FieldValue.serverTimestamp(),
+        'updatedAt':FieldValue.serverTimestamp(),
+        if (finalStatus=='prize_sent' && previous!='prize_sent')
+          'prizeSentAt':FieldValue.serverTimestamp(),
+      });
+      tx.set(audit,<String,dynamic>{
+        'action':'prize_winner_status_changed',
+        'adminUid':uid,'adminName':name,'adminRole':'general_manager',
+        'details':<String,dynamic>{
+          'sourceCollection':'prize_winner_requests',
+          'sourceId':id,'targetAccountKey':before?['accountKey'],
+          'targetDedaId':before?['dedaId'],
+          'oldStatus':previous,'newStatus':finalStatus,
+          'statusOnlyNoDiamondTransfer':true,
+        },
+        'createdAt':FieldValue.serverTimestamp(),
+      });
+    });
+    if (_auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid) {
+      throw StateError('prize-winner-postcommit-session-changed');
+    }
+  }
+
+  /// Only identity-change events; never exposes user credentials or catalogs.
+  Stream<String?> watchScopedExclusiveAdminUid() =>
+      _auth.authStateChanges().map((user) => user?.uid);
+  Stream<String?> watchScopedExclusivePublicUid() =>
+      _mainAuth.authStateChanges().map((user) => user?.uid);
+  String? get scopedExclusiveAdminUid => _auth.currentUser?.uid;
+  String? get scopedExclusivePublicUid => _mainAuth.currentUser?.uid;
+
+  /// One private callable transport. The original Stage19 flags are OFF.
+  /// Auth tokens come ONLY from the secondary administrator FirebaseApp.
+  Future<dynamic> _exclusive100ServerCall({
+    required String dedaPhone, required String name,
+    required Map<String, dynamic> data, required bool mutation,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaExclusiveAdminBridge.serverReadFlag ||
+        (mutation && !DedaExclusiveAdminBridge.serverActionsFlag)) {
+      throw StateError('exclusive100-private-server-off');
+    }
+    if (!const <String>{
+      'dedaStage19Exclusive100Read','dedaStage19Exclusive100SelfUse',
+      'dedaStage19Exclusive100Grant',
+    }.contains(name) ||
+        mutation == (name == 'dedaStage19Exclusive100Read')) {
+      throw StateError('exclusive100-call-name-denied');
+    }
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || publicUid == null ||
+        _auth.app.name != isolatedAppName ||
+        _auth.app.name == _mainAuth.app.name) {
+      throw StateError('exclusive100-independent-session-required');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid:uid, dedaPhone:dedaPhone, expectedPublicUid:publicUid,
+      requiredPermission:'managePlaceArchives',
+      onAuthorizedAdmin:(value) => manager = value,
+    );
+    if (!await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('exclusive100-general-manager-only');
+    }
+    // FirebaseFunctions.instance would use PUBLIC Auth and is prohibited.
+    final callable = FirebaseFunctions.instanceFor(app:_auth.app)
+        .httpsCallable(name,
+          options: HttpsCallableOptions(timeout: const Duration(seconds:40)));
+    final result = await callable.call(data);
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('exclusive100-server-session-changed');
+    }
+    return result.data;
+  }
+
+  /// Parse only the real owner private catalog, never an APK seed or a
+  /// synthetic 100-ID list. Exact fields and dated history are verified.
+  DedaExclusiveAdminSnapshot _decodeScopedExclusive100(dynamic result) {
+    if (result is! Map) throw StateError('exclusive100-malformed-response');
+    final data=Map<String,dynamic>.from(result);
+    if (data['serverConfirmed'] != true || data['total'] != 100 ||
+        data['identifiers'] is! List || data['history'] is! List) {
+      throw StateError('exclusive100-not-server-confirmed');
+    }
+    final ids=<DedaExclusiveAdminId>[];
+    for (final raw in data['identifiers'] as List) {
+      if (raw is! Map) throw StateError('exclusive100-invalid-row');
+      final row=Map<String,dynamic>.from(raw);
+      if (row['sequence'] is! int || row['identifier'] is! String ||
+          row['status'] is! String ||
+          row['permanentColor'] != null && row['permanentColor'] is! String ||
+          row['ownerOriginalId'] != null && row['ownerOriginalId'] is! String) {
+        throw StateError('exclusive100-invalid-row');
+      }
+      ids.add(DedaExclusiveAdminId(
+        sequence:row['sequence'] as int,
+        identifier:row['identifier'] as String,
+        status:row['status'] as String,
+        permanentColor:row['permanentColor'] as String?,
+        ownerOriginalId:row['ownerOriginalId'] as String?,
+      ));
+    }
+    final grants=<DedaExclusiveAdminGrant>[];
+    for (final raw in data['history'] as List) {
+      if (raw is! Map) throw StateError('exclusive100-invalid-receipt');
+      final row=Map<String,dynamic>.from(raw);
+      if (row['identifier'] is! String ||
+          row['recipientOriginalId'] is! String ||
+          row['color'] is! String || row['kind'] is! String ||
+          row['grantedAt'] is! String) {
+        throw StateError('exclusive100-invalid-receipt');
+      }
+      final date=DateTime.tryParse(row['grantedAt'] as String);
+      if (date == null) throw StateError('exclusive100-invalid-receipt-date');
+      grants.add(DedaExclusiveAdminGrant(
+        identifier:row['identifier'] as String,
+        recipientOriginalId:row['recipientOriginalId'] as String,
+        color:row['color'] as String,
+        kind:row['kind'] as String, grantedAt:date,
+      ));
+    }
+    final snapshot=DedaExclusiveAdminSnapshot(
+      serverConfirmed:true,total:100,identifiers:ids,history:grants);
+    if (!DedaExclusiveAdminSnapshotVerifier.isSafe(snapshot)) {
+      throw StateError('exclusive100-invalid-catalog-ownership');
+    }
+    return snapshot;
+  }
+
+  Future<DedaExclusiveAdminSnapshot> readScopedExclusive100({
+    required String dedaPhone,
+  }) async => _decodeScopedExclusive100(await _exclusive100ServerCall(
+    dedaPhone:dedaPhone, name:'dedaStage19Exclusive100Read',
+    data:<String,dynamic>{}, mutation:false,
+  ));
+
+  /// Self-use or gift: no direct Firestore/UID/wallet/alias writes. Actions
+  /// remain disabled until a separately approved, AppCheck-guarded server.
+  Future<DedaExclusiveAdminSnapshot> commitScopedExclusive100({
+    required String dedaPhone, required String identifier,
+    required String color, String? recipientOriginalId,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaExclusiveAdminBridge.serverReadFlag ||
+        !DedaExclusiveAdminBridge.serverActionsFlag) {
+      throw StateError('exclusive100-server-actions-not-approved');
+    }
+    final actor=_auth.currentUser;
+    final userUid=_mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || userUid == null) {
+      throw StateError('exclusive100-session-required');
+    }
+    final adminUid=actor.uid;
+    Map<String,dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid:adminUid,dedaPhone:dedaPhone,expectedPublicUid:userUid,
+      requiredPermission:'managePlaceArchives',
+      onAuthorizedAdmin:(value)=>manager=value,
+    );
+    if (!await proof() || manager?['role'] != 'general_manager') {
+      throw StateError('exclusive100-gm-only');
+    }
+    final previous=await readScopedExclusive100(dedaPhone:dedaPhone);
+    if (!DedaIsolatedAdminProofPolicy.exclusive100CanAssign(
+          admin:manager,snapshot:previous,identifier:identifier,color:color,
+          recipient:recipientOriginalId,
+        ) ||
+        !await proof() ||
+        _auth.currentUser?.uid != adminUid ||
+        _mainAuth.currentUser?.uid != userUid) {
+      throw StateError('exclusive100-owner-or-color-invalid');
+    }
+    final gift=recipientOriginalId != null;
+    final result=await _exclusive100ServerCall(
+      dedaPhone:dedaPhone,
+      name:gift ? 'dedaStage19Exclusive100Grant'
+          : 'dedaStage19Exclusive100SelfUse',
+      data:<String,dynamic>{
+        'identifier':identifier,'color':color,
+        if (gift) 'recipientOriginalId':recipientOriginalId,
+      },mutation:true,
+    );
+    if (result is! Map) throw StateError('exclusive100-receipt-missing');
+    final reply=Map<String,dynamic>.from(result);
+    if (reply['serverConfirmed'] != true ||
+        reply['identifier'] != identifier ||
+        reply['permanentColor'] != color ||
+        (gift && reply['recipientOriginalId'] != recipientOriginalId) ||
+        (!gift && reply['activeId'] != identifier)) {
+      throw StateError('exclusive100-receipt-unverified');
+    }
+    final verified=await readScopedExclusive100(dedaPhone:dedaPhone);
+    if (_auth.currentUser?.uid != adminUid ||
+        _mainAuth.currentUser?.uid != userUid ||
+        !verified.identifiers.any((id) =>
+          id.identifier == identifier &&
+          id.status == (gift ? 'gifted' : 'self_used') &&
+          id.permanentColor == color &&
+          (!gift || id.ownerOriginalId == recipientOriginalId)) ||
+        !verified.history.any((h) =>
+          h.identifier == identifier &&
+          h.kind == (gift ? 'gifted' : 'self_used') &&
+          h.color == color &&
+          (!gift || h.recipientOriginalId == recipientOriginalId))) {
+      throw StateError('exclusive100-server-readback-not-confirmed');
+    }
+    return verified;
+  }
+
+
+
+}
+).hasMatch(day)) {
+        throw StateError('social-cancel-invalid');
+      }
+      final dayRef=_firestore.collection('deda_social_direct_days').doc(day);
+      final target=await tx.get(dayRef);
+      final when=target.data()?['activateAt'];
+      if(!target.exists || target.data()?['status']!='scheduled' ||
+         when is! Timestamp || !when.toDate().isAfter(DateTime.now().toUtc())) {
+        throw StateError('social-day-not-cancellable');
+      }
+      await _tasksRecheck(dedaPhone,actor);
+      tx.update(dayRef,{
+        'status':'cancelled',
+        'revision':((target.data()?['revision'] as int?)??1)+1,
+        'updatedByUid':actor.uid,'updatedAt':FieldValue.serverTimestamp(),
+      });
+      tx.update(draftRef,{
+        'status':'cancelled','revision':expectedRevision+1,
+        'updatedByUid':actor.uid,'updatedAt':FieldValue.serverTimestamp(),
+      });
+    });
+    await _tasksRecheck(dedaPhone,actor);
+  }
 
   // One protected secondary-admin identity; never uses public Firestore.
   Future<({String uid,String publicUid,Map<String,dynamic> gm})>

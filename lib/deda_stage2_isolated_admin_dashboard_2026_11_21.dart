@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
 import 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_league_admin_2026_11_23.dart';
+import 'deda_stage2_isolated_tasks_admin_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
 import 'admin_team_pages.dart' show dedaAdminGovernorates;
 
@@ -299,6 +300,19 @@ class _DedaStage2IsolatedDashboardPageState
         page: DedaStage2IsolatedLeagueAdminPage(
           admin: widget.admin, dedaPhone: widget.dedaPhone,
           isArabic: widget.isArabic),
+      );
+    }
+    // Original 1D7690 manager task tile; same eight slots and local login
+    // offers, backed only by the independent administrator identity.
+    if (can('viewTeam') && widget.profile['role'] == 'general_manager') {
+      addDestination(
+        title:t('إدارة المهام والمكافآت','Tasks & rewards'),
+        subtitle:t('المهام اليومية فقط','Daily tasks only'),
+        icon:Icons.assignment_outlined,
+        accentColor:const Color(0xFF1D7690),
+        page:DedaStage2IsolatedTasksAdminPage(
+          admin:widget.admin,dedaPhone:widget.dedaPhone,
+          isArabic:widget.isArabic),
       );
     }
     // Original owner place deletion: archive, removal, notice and audit.
