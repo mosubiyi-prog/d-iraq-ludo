@@ -43,7 +43,7 @@ NEW = """        builder: (_) => DedaStage2ProfileOwnerBoundMyStore(
 # The ORIGINAL profile editor is a different page from the My Store route.
 # Its already-staged Point09 appearance setter is account-scoped: reuse it,
 # never create a second appearance writer, inventory, wallet, or UID.
-EDITOR = 'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {'
+EDITOR = 'class _DedaEditProfilePageState'
 EDITOR_MARK = '// DEDA_STAGE2_PROFILE_EDITOR_OWNER_CHECK_2026_11_23'
 EDITOR_FIELDS = """  // DEDA_STAGE2_PROFILE_EDITOR_OWNER_CHECK_2026_11_23
   late final String _dedaStage2EditPhone;
@@ -110,8 +110,18 @@ EDITOR_BUILD = """  @override
 
 def editor_span(main: str) -> tuple[int, int]:
     if main.count(EDITOR) != 1:
-        raise ValueError('PROFILE_SAFE_STOP:original-editor-class-not-unique')
+        # The compiled source can add a mixin or repackage the editor.
+        # Report exact class candidates; NEVER select a different page.
+        import re
+        nearby = re.findall(r'(?m)^class [^\n]*(?:Edit|Profile)[^\n]*', main)
+        raise ValueError(
+            'PROFILE_SAFE_STOP:original-editor-class-count=' +
+            str(main.count(EDITOR)) + ':class_candidates=' +
+            repr(nearby[:20]))
     start = main.index(EDITOR)
+    class_header = main[start:main.find('{', start) + 1]
+    if 'extends State<DedaEditProfilePage>' not in class_header:
+        raise ValueError('PROFILE_SAFE_STOP:editor-inheritance-changed')
     end = main.find('\nclass ', start + len(EDITOR))
     if end < 0:
         raise ValueError('PROFILE_SAFE_STOP:original-editor-next-class-not-found')
