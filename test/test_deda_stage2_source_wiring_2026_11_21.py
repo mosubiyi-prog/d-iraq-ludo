@@ -192,7 +192,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         scoped=probe.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split(
             'Future<DedaIsolatedManagerPage> readScopedManagerPage(',1)[0]
         self.assertIn('_scopedReadPermissions[collection]',scoped)
-        self.assertIn('maxItems < 1 || maxItems > 50',scoped)
+        self.assertIn("maxItems > (collection == 'admin_audit' ? 300 : 50)",scoped)
         self.assertIn('scopedReadQueryFilters(',scoped)
         self.assertIn("query.where('createdAt', isGreaterThanOrEqualTo: since)",scoped)
         self.assertIn("query.where('governorate', isEqualTo: province)",scoped)
@@ -746,7 +746,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertIn("'"+collection+"': '"+permission+"'",backend)
         self.assertIn('DedaIsolatedAdminProofPolicy.allowsPermission(',ui)
         self.assertIn('widget.admin.readScopedAdminList(',ui)
-        self.assertIn('maxItems: 25,',ui)
+        self.assertIn("maxItems: widget.collection == 'admin_audit' ? 300 : 25,",ui)
         self.assertIn('ConnectionState.done',ui)
         self.assertIn('snapshot.hasError || !snapshot.hasData',ui)
         self.assertIn('readScopedAdminList(',backend)
@@ -1877,7 +1877,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             "/// Management of existing manager entrance",1)[0]
         self.assertIn("widget.admin.readScopedAdminUserDirectory(",card)
         self.assertIn("widget.admin.readScopedUserAccountSnapshot(",card)
-        self.assertIn("maxItems: 25,",card)
+        self.assertIn("maxItems: widget.collection == 'admin_audit' ? 300 : 25,",card)
         self.assertIn("controller: _userSearch",card)
         self.assertIn("onTap: user && !_openingUser",card)
         self.assertIn("snapshot['relatedTruncatedCollections']",card)
