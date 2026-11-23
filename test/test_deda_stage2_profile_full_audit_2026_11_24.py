@@ -22,9 +22,9 @@ def example():
         SavedPlacesPage(showFavorites: true)
         SavedPlacesPage(showFavorites: false)
         DedaPublicProfilePreviewPage()
-        DedaLevelAchievementsPage(
-          verifiedServerLevel: null,
-          hasVerifiedAccountAndLevel: false,
+        DedaSixAchievementsPage(
+          level: DedaSocialProgressWallet.levelForXp(
+              DedaSocialProgressWallet.xpNotifier.value),
         )
     """
     return """
@@ -64,12 +64,13 @@ class ProfileFullAuditTests(unittest.TestCase):
         self.assertTrue(result["friends_stat_has_literal_zero"])
         self.assertTrue(result["separate_photos_tile_absent_by_approved_single_store_design"])
         self.assertTrue(result["level_xp_from_separate_notifier"])
+        self.assertTrue(result["active_six_badge_route_uses_current_xp_not_server_level"])
 
-    def test_missing_route_or_fake_unlocked_badge_is_blocked(self):
+    def test_missing_route_or_changed_original_xp_authority_is_blocked(self):
         body = example()
         for needle in (
             "SavedPlacesPage(showFavorites: true)",
-            "verifiedServerLevel: null",
+            "DedaSocialProgressWallet.xpNotifier.value",
             "DedaStage2ProfileOwnerBoundMyStore(",
             "  Future<void> _copyDedaId() async {",
         ):
