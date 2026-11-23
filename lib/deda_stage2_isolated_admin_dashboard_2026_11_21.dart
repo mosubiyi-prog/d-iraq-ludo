@@ -3631,7 +3631,7 @@ class _DedaIsolatedReadOnlyTabState
       'place_status_changed': 'تغيير حالة طلب مكان',
       'place_approved': 'اعتماد مكان',
     };
-    return isArabic
+    return widget.isArabic
         ? (ar[value] ?? value)
         : value.replaceAll('_', ' ');
   }
