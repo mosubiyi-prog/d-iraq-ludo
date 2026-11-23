@@ -154,8 +154,12 @@ class DedaIsolatedAdminProofPolicy {
         normalizedRole != 'general_manager') { return false; }
     if (permission == 'reviewPrizeWinners' &&
         normalizedRole != 'general_manager') { return false; }
+    // The existing league Firestore rules require literal 'active' status.
+    // Legacy admin status normalization may prefer the active boolean alone.
     if (permission == 'manageLeague' &&
-        normalizedRole != 'general_manager') { return false; }
+        (normalizedRole != 'general_manager' || admin['status'] != 'active')) {
+      return false;
+    }
     if (normalizedRole == 'general_manager') { return true; }
     // Firestore rules deny these four actions to province agents even if
     // a legacy permissions map accidentally contains a true value.
