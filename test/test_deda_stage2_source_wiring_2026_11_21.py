@@ -2172,5 +2172,88 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("FirebaseFirestore.instance",state)
         self.assertNotIn("FirebaseAuth.instance",state)
 
+
+    def test_original_user_recovery_card_isolated_safe_review_only(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        legacy=(REPO/'lib/deda_recovery_admin.dart').read_text()
+        functions=(REPO/'functions/index.js').read_text()
+        self.assertIn("collection('recovery_requests')",legacy)
+        self.assertIn("collection('deda_credentials')",legacy)
+        self.assertIn("FirebaseAuth.instance.currentUser",legacy)
+        self.assertIn("exports.onRecoveryRequestUpdated",functions)
+        self.assertIn('if (after.status !== "approved") return;',functions)
+        self.assertIn('const dedaPinCompatPilotEnabled = false;',functions)
+        for name in (
+            'readScopedUserRecoveryPage({',
+            'readScopedUserRecoveryAccountCheck({',
+            'decideScopedUserRecoveryReview({',
+        ):
+            self.assertEqual(service.count(name),1,name)
+        reader=service.split('Future<DedaIsolatedManagerPage> readScopedUserRecoveryPage({',1)[1].split(
+            '/// The old card compared',1)[0]
+        account=service.split('readScopedUserRecoveryAccountCheck({',1)[1].split(
+            '/// Safe review/rejection ONLY',1)[0]
+        reviewer=service.split('Future<void> decideScopedUserRecoveryReview({',1)[1].split(
+            '/// Read-only scoped data path',1)[0]
+        for required in (
+            "gm?['role'] != 'general_manager'",
+            "const collection = 'recovery_requests'",
+            "orderBy('createdAt', descending: true)",
+            "query.limit(51)", "snapshot.docs.take(50)",
+            "GetOptions(source: Source.server)",
+            "nextCursor: snapshot.docs.length > 50 ? visible.last : null",
+            "snapshot.metadata.isFromCache",
+            "startAfter.reference.parent.path != collection",
+        ):
+            self.assertIn(required,reader,required)
+        for protected in (
+            "'recoveryPin'", "'pin'", "'password'", "'token'",
+        ):
+            self.assertNotIn(protected,reader,protected)
+        for required in (
+            "collection('deda_account_directory')",
+            "collection('deda_account_profiles')",
+            "GetOptions(source: Source.server)",
+            "gm?['role'] != 'general_manager'",
+            "nameMatches", "directoryActive", "profileExists",
+        ):
+            self.assertIn(required,account,required)
+        for required in (
+            "const <String>{'review', 'reject'}.contains(action)",
+            "note.length < 5 || note.length > 250",
+            "_firestore.runTransaction((tx) async",
+            "tx.get(request)", "tx.update(request,", "tx.set(audit,",
+            "data['status'] == 'new'",
+            "const <String>{'new', 'review'}.contains(data['status'])",
+            "'sourceCollection': 'recovery_requests'",
+            "'recovery_reviewed' : 'recovery_rejected'",
+            "'updatedAt': FieldValue.serverTimestamp()",
+            "gm?['role'] != 'general_manager'",
+        ):
+            self.assertIn(required,reviewer,required)
+        for forbidden in (
+            'FirebaseAuth.instance', 'FirebaseFirestore.instance',
+            'FirebaseFunctions.instance', 'FirebaseStorage.instance',
+            "collection('deda_credentials')",
+            "collection('users')", "collection('deda_sessions')",
+            "collection('recovery_secrets')", "collection('auth_attempts')",
+            "updateUser(", "signOut(", "'status': 'approved'",
+            "'status': 'ready'", "'recoveryPin':",
+        ):
+            self.assertNotIn(forbidden,reader+account+reviewer,forbidden)
+        self.assertEqual(dashboard.count('class _DedaIsolatedUserRecoveryTab extends StatefulWidget'),1)
+        self.assertIn("title: t('استرجاع الدخول', 'Recovery')",dashboard)
+        self.assertIn('accentColor: const Color(0xFF9A6700)',dashboard)
+        self.assertIn("profile['role'] == 'general_manager'",dashboard)
+        self.assertIn('widget.admin.readScopedUserRecoveryPage(',dashboard)
+        self.assertIn('widget.admin.readScopedUserRecoveryAccountCheck(',dashboard)
+        self.assertIn('widget.admin.decideScopedUserRecoveryReview(',dashboard)
+        self.assertIn('value: false, onChanged: null',dashboard)
+        self.assertIn('onPressed: null,',dashboard)
+        self.assertIn("t('إصدار الرمز محجوب'",dashboard)
+        self.assertNotIn("DedaRecoveryAdminList(",dashboard)
+        self.assertNotIn("DedaAdminAutomationToggle(",dashboard)
+
 if __name__ == '__main__':
     unittest.main()
