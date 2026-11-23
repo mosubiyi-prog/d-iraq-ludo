@@ -208,10 +208,10 @@ Widget _isolatedPlaceField(String title, dynamic raw, {bool ltr = false}) {
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title + ': ', style: const TextStyle(fontWeight: FontWeight.w700)),
-      Expanded(child: Directionality(
-        textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
-        child: Text(value),
-      )),
+      Expanded(child: ltr
+          ? Directionality(textDirection: TextDirection.ltr,
+              child: Text(value))
+          : Text(value)),
     ]),
   );
 }
@@ -4432,6 +4432,12 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
               ),
             ),
           ],
+          if (support)
+            _isolatedSupportPhotoGallery(
+              context: context,
+              isArabic: widget.isArabic,
+              data: data,
+            ),
           if (!support &&
               (canApprove || canReview('reviewing') ||
                canReview('needs_changes') ||
