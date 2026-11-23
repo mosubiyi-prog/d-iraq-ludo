@@ -1537,5 +1537,42 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('widget.admin.reviewScopedAccountDeletionRequest(',ui)
         self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
 
+    def test_isolated_owner_place_deletion_full_archive_notice_and_audit(self):
+        src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        self.assertEqual(src.count('Future<DedaIsolatedManagerPage> readScopedPlaceDeletionPage('),1)
+        self.assertEqual(src.count('Future<void> reviewScopedPlaceDeletionRequest('),1)
+        self.assertEqual(src.count('Map<String, dynamic> _placeDeletionNotice('),1)
+        self.assertEqual(ui.count('class _DedaIsolatedPlaceDeletionTabState'),1)
+        self.assertIn('widget.admin.readScopedPlaceDeletionPage(',ui)
+        self.assertIn('widget.admin.reviewScopedPlaceDeletionRequest(',ui)
+        self.assertIn('placeDeletionAllowedTransitions(',ui)
+        self.assertIn('confirmation: destructive ? id : null',ui)
+        body=src.split('Future<void> reviewScopedPlaceDeletionRequest(',1)[1].split(
+            '\\n  }\\n',1)[0]
+        for token in ("if (!dedaIsolatedAdminIdentityEnabled ||",
+                      "requiredPermission: 'managePlaceArchives'",
+                      "collection('place_deletion_requests')",
+                      "collection('published_places')",
+                      "collection('admin_trash_places')",
+                      "collection('owner_place_notifications')",
+                      "_firestore.runTransaction((tx) async {",
+                      "await tx.get(requestRef)", "await tx.get(placeRef)",
+                      "await tx.get(trashRef)", "await tx.get(noticeRef)",
+                      "tx.set(trashRef,", "tx.delete(placeRef)",
+                      "tx.update(requestRef,", "tx.set(auditRef,",
+                      "tx.set(noticeRef, notice)", "tx.set(noticeAuditRef,",
+                      "confirmation != id", "await proof()"):
+            self.assertIn(token,body)
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+                          "collection('users')","DedaBackend.",'signOut('):
+            self.assertNotIn(forbidden,body)
+        policy=src.split('static bool placeDeletionDecisionAllowed(',1)[1].split(
+            '  /// The legacy "deleted" status',1)[0]
+        self.assertIn("published['approvalNumber']",policy)
+        self.assertIn("placeDeletionAllowedTransitions(",policy)
+        self.assertIn("admin?['role'] != 'general_manager'",policy)
+        self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
+
 if __name__ == '__main__':
     unittest.main()

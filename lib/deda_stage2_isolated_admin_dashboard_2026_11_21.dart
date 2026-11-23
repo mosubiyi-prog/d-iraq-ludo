@@ -250,6 +250,22 @@ class _DedaStage2IsolatedDashboardPageState
         ),
       );
     }
+    // Original owner place deletion: archive, removal, notice and audit.
+    if (can('managePlaceArchives') &&
+        widget.profile['role'] == 'general_manager') {
+      addDestination(
+        title: t('طلبات حذف الأماكن', 'Place deletion requests'),
+        subtitle: t('المالك • المحذوفات • الإشعار • التدقيق',
+            'Owner • archive • notice • audit'),
+        icon: Icons.location_off_outlined,
+        accentColor: const Color(0xFF9D4035),
+        page: _DedaIsolatedPlaceDeletionTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+        ),
+      );
+    }
     // Account deletion requests: review status only, not user deletion.
     if (can('reviewAccountDeletions') &&
         widget.profile['role'] == 'general_manager') {
@@ -1148,6 +1164,239 @@ class _DedaIsolatedAccountDeletionTabState
                 _page = _load();
               });
             } : null,
+            child: Text(t('التالي', 'Next'))),
+        ]),
+      ]);
+    },
+  );
+}
+
+/// The original owner-requested place deletion card under isolated admin Auth.
+class _DedaIsolatedPlaceDeletionTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+  const _DedaIsolatedPlaceDeletionTab({
+    required this.admin, required this.dedaPhone, required this.isArabic,
+  });
+  @override
+  State<_DedaIsolatedPlaceDeletionTab> createState() =>
+      _DedaIsolatedPlaceDeletionTabState();
+}
+
+class _DedaIsolatedPlaceDeletionTabState
+    extends State<_DedaIsolatedPlaceDeletionTab> {
+  late Future<DedaIsolatedManagerPage> _page;
+  QueryDocumentSnapshot<Map<String, dynamic>>? _cursor;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>?> _back = [];
+  bool _busy = false;
+  String _filter = 'all';
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+  String _label(String status) => switch (status) {
+    'new' => t('جديد', 'New'),
+    'reviewing' => t('قيد المراجعة', 'Reviewing'),
+    'deleted' => t('تم حذف المكان', 'Place deleted'),
+    'rejected' => t('مرفوض', 'Rejected'),
+    'cancelled' => t('ملغي', 'Cancelled'),
+    _ => t('غير معروف', 'Unknown'),
+  };
+  bool _matches(Map<String, dynamic> row) {
+    final status = (row['status'] ?? 'new').toString();
+    return _filter == 'all' || status == _filter ||
+        (_filter == 'closed' &&
+          (status == 'rejected' || status == 'cancelled'));
+  }
+  @override
+  void initState() { super.initState(); _page = _fetch(); }
+  Future<DedaIsolatedManagerPage> _fetch() =>
+      widget.admin.readScopedPlaceDeletionPage(
+        dedaPhone: widget.dedaPhone, startAfter: _cursor);
+  void _refresh() {
+    if (_busy) return;
+    setState(() { _cursor = null; _back.clear(); _page = _fetch(); });
+  }
+  void _previous() {
+    if (_busy || _back.isEmpty) return;
+    setState(() { _cursor = _back.removeLast(); _page = _fetch(); });
+  }
+  void _next(DedaIsolatedManagerPage page) {
+    if (_busy || page.nextCursor == null) return;
+    setState(() { _back.add(_cursor); _cursor = page.nextCursor;
+      _page = _fetch(); });
+  }
+  Future<void> _decide(Map<String, dynamic> row, String status) async {
+    if (_busy) return;
+    final id = (row['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.placeDeletionAllowedTransitions(
+        (row['status'] ?? '').toString()).contains(status)) {
+      return;
+    }
+    final reason = TextEditingController();
+    final confirm = TextEditingController();
+    final destructive = status == 'deleted';
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (dialog, update) => AlertDialog(
+          title: Text(destructive
+              ? t('اعتماد وحذف المكان', 'Approve place deletion')
+              : status == 'rejected'
+                  ? t('رفض طلب الحذف', 'Reject request')
+                  : t('بدء مراجعة الطلب', 'Start review')),
+          content: SingleChildScrollView(child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('${t('معرّف المكان', 'Place ID')}: $id'),
+              Text('${row['placeName'] ?? ''} • ${row['approvalNumber'] ?? ''}'),
+              if (destructive) ...[
+                Text(t(
+                  'هذا الحذف ينقل المكان إلى محذوفات المدير العام ويزيله '
+                  'من الخريطة ويبلغ المالك، دون حذف حسابه. '
+                  'اكتب معرّف المكان للتأكيد.',
+                  'This archives and removes the place, notifies the owner, '
+                  'but does not delete their account. Type the place ID.',
+                )),
+                TextField(controller: confirm, onChanged: (_) => update(() {}),
+                  decoration: InputDecoration(labelText: t(
+                    'تأكيد معرّف المكان', 'Confirm place ID'))),
+              ],
+              TextField(controller: reason, maxLength: 500,
+                onChanged: (_) => update(() {}),
+                decoration: InputDecoration(labelText: t(
+                    'سبب القرار (3 أحرف على الأقل)', 'Reason (at least 3 characters)'))),
+            ],
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog),
+                child: Text(t('إلغاء', 'Cancel'))),
+            FilledButton(
+              onPressed: reason.text.trim().length < 3 ||
+                  (destructive && confirm.text.trim() != id)
+                  ? null : () => Navigator.pop(dialog, reason.text.trim()),
+              child: Text(t('تأكيد', 'Confirm')),
+            ),
+          ],
+        ),
+      ),
+    );
+    reason.dispose();
+    confirm.dispose();
+    if (!mounted || choice == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.admin.reviewScopedPlaceDeletionRequest(
+        dedaPhone: widget.dedaPhone, requestId: id,
+        status: status, note: choice,
+        confirmation: destructive ? id : null,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(status == 'deleted'
+              ? t('تم الحذف والأرشفة وإشعار المالك والتدقيق',
+                  'Removed, archived, owner notified and audited')
+              : t('تم تدقيق القرار', 'Decision audited')),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذرت العملية، راجع الصلاحية وحالة المكان',
+              'Action denied; verify permissions and place state')),
+        ));
+      }
+    } finally {
+      if (mounted) { setState(() => _busy = false); _refresh(); }
+    }
+  }
+  Widget _item(Map<String, dynamic> row) {
+    final status = (row['status'] ?? 'new').toString();
+    final options = DedaIsolatedAdminProofPolicy
+        .placeDeletionAllowedTransitions(status);
+    return Card(child: ExpansionTile(
+      leading: const Icon(Icons.location_off_outlined),
+      title: Text((row['placeName'] ?? row['id'] ?? '').toString()),
+      subtitle: Text('${_label(status)} • ${row['approvalNumber'] ?? ''}'),
+      childrenPadding: const EdgeInsets.all(12),
+      children: [
+        Text('${t('معرّف المكان', 'Place ID')}: ${row['id'] ?? ''}'),
+        Text('${t('المحافظة', 'Governorate')}: ${row['governorate'] ?? ''}'),
+        Text('${t('العنوان', 'Address')}: ${row['address'] ?? ''}'),
+        Text('${t('الهاتف', 'Phone')}: ${row['phone'] ?? ''}'),
+        if (row['latitude'] != null && row['longitude'] != null)
+          Text('${t('الإحداثيات', 'Coordinates')}: '
+              '${row['latitude']}, ${row['longitude']}'),
+        if ((row['reason'] ?? '').toString().isNotEmpty)
+          Text('${t('سبب المالك', 'Owner reason')}: ${row['reason']}'),
+        if ((row['reviewNote'] ?? '').toString().isNotEmpty)
+          Text('${t('ملاحظة الإدارة', 'Admin note')}: ${row['reviewNote']}'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          if (options.contains('reviewing'))
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _decide(row, 'reviewing'),
+              icon: const Icon(Icons.manage_search_outlined),
+              label: Text(t('مراجعة', 'Review'))),
+          if (options.contains('deleted'))
+            FilledButton.icon(
+              onPressed: _busy ? null : () => _decide(row, 'deleted'),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: Text(t('اعتماد وحذف المكان', 'Approve & delete'))),
+          if (options.contains('rejected'))
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _decide(row, 'rejected'),
+              icon: const Icon(Icons.cancel_outlined),
+              label: Text(t('رفض', 'Reject'))),
+        ]),
+      ],
+    ));
+  }
+  @override
+  Widget build(BuildContext context) => FutureBuilder<DedaIsolatedManagerPage>(
+    future: _page,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError || !snapshot.hasData) {
+        return Center(child: TextButton(onPressed: _busy ? null : _refresh,
+          child: Text(t('تعذر إثبات صلاحية المدير من الخادم',
+              'Could not verify manager permission'))));
+      }
+      final page = snapshot.data!;
+      final visible = page.rows.where(_matches).toList(growable: false);
+      return Column(children: [
+        Padding(padding: const EdgeInsets.all(8),
+          child: Text(t('الموافقة تنقل المكان للمحذوفات وتزيله '
+              'من الخريطة وتبلغ المالك، ولا تحذف حسابه.',
+              'Approval archives and removes the place and notifies '
+              'the owner, without deleting their account.'))),
+        Wrap(spacing: 6, children: [
+          for (final item in <(String, String, String)>[
+            ('all','الكل','All'),('new','جديد','New'),
+            ('reviewing','قيد المراجعة','Reviewing'),
+            ('deleted','تم الحذف','Deleted'),('closed','مغلق','Closed'),
+          ]) ChoiceChip(
+            label: Text(t(item.$2,item.$3)),
+            selected: _filter == item.$1,
+            onSelected: _busy ? null :
+                (_) => setState(() => _filter = item.$1),
+          ),
+        ]),
+        Align(alignment: AlignmentDirectional.centerEnd,
+          child: IconButton(onPressed: _busy ? null : _refresh,
+            icon: const Icon(Icons.refresh))),
+        Expanded(child: visible.isEmpty
+            ? Center(child: Text(t('لا توجد طلبات في هذه الصفحة',
+                'No requests on this page')))
+            : ListView.builder(itemCount: visible.length,
+                itemBuilder: (context, index) => _item(visible[index]))),
+        Row(children: [
+          Text('${t('صفحة', 'Page')} ${_back.length + 1}'),
+          const Spacer(),
+          TextButton(onPressed: !_busy && _back.isNotEmpty ? _previous : null,
+            child: Text(t('السابق', 'Previous'))),
+          TextButton(onPressed: !_busy && page.nextCursor != null
+              ? () => _next(page) : null,
             child: Text(t('التالي', 'Next'))),
         ]),
       ]);

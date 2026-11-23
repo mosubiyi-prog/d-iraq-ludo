@@ -172,6 +172,52 @@ class DedaIsolatedAdminProofPolicy {
     }
   }
 
+  /// Only transitions exposed by the legacy owner place-deletion card.
+  static List<String> placeDeletionAllowedTransitions(String current) {
+    switch (current) {
+      case 'new':
+        return const <String>['reviewing', 'deleted', 'rejected'];
+      case 'reviewing':
+        return const <String>['deleted', 'rejected'];
+      default:
+        return const <String>[];
+    }
+  }
+
+  /// Protect original place ownership, approval identity, and current state.
+  static bool placeDeletionDecisionAllowed({
+    required Map<String, dynamic>? admin,
+    required Map<String, dynamic>? request,
+    required Map<String, dynamic>? published,
+    required String id,
+    required String status,
+    required String note,
+  }) {
+    if (!allowsPermission(admin: admin, permission: 'managePlaceArchives') ||
+        admin?['role'] != 'general_manager' ||
+        !validScopedDocumentId(id) || request == null ||
+        (request['placeId'] ?? '').toString().trim() != id ||
+        (request['requesterUid'] ?? '').toString().trim().isEmpty ||
+        (request['accountKey'] ?? '').toString().trim().isEmpty ||
+        (request['placeName'] ?? '').toString().trim().isEmpty ||
+        (request['approvalNumber'] ?? '').toString().trim().isEmpty ||
+        !placeDeletionAllowedTransitions(
+            (request['status'] ?? '').toString()).contains(status) ||
+        note.trim().length < 3 || note.trim().length > 500) {
+      return false;
+    }
+    if (status != 'deleted') return true;
+    if (published == null) return false;
+    final accountKey = request['accountKey'].toString().trim();
+    final requester = request['requesterUid'].toString().trim();
+    final placeAccount = (published['accountKey'] ?? '').toString().trim();
+    final placeOwner = (published['ownerUid'] ?? '').toString().trim();
+    return ((placeAccount.isNotEmpty && placeAccount == accountKey) ||
+            (placeOwner.isNotEmpty && placeOwner == requester)) &&
+        (published['approvalNumber'] ?? '').toString().trim() ==
+            request['approvalNumber'].toString().trim();
+  }
+
   /// The legacy "deleted" status does NOT delete a Firebase Auth account.
   static bool accountDeletionReviewAllowed({
     required Map<String, dynamic>? admin,
@@ -4015,6 +4061,223 @@ class DedaIsolatedAdminIdentity {
       'createdAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
+  }
+
+  /// GM-only server pagination of owner place deletion requests.
+  Future<DedaIsolatedManagerPage> readScopedPlaceDeletionPage({
+    required String dedaPhone,
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('place-deletion-isolated-off');
+    }
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || publicUid == null) {
+      throw StateError('place-deletion-auth-required');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'managePlaceArchives',
+      onAuthorizedAdmin: (v) => gm = v,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('place-deletion-gm-required');
+    }
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('place_deletion_requests')
+        .orderBy('updatedAt', descending: true);
+    if (startAfter != null) {
+      if (startAfter.reference.parent.path != 'place_deletion_requests' ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(startAfter.id)) {
+        throw StateError('place-deletion-cursor-denied');
+      }
+      query = query.startAfterDocument(startAfter);
+    }
+    final result = await query.limit(51)
+        .get(const GetOptions(source: Source.server));
+    if (result.metadata.isFromCache || result.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('place-deletion-list-proof-changed');
+    }
+    final docs = result.docs.take(50).toList(growable: false);
+    return (
+      rows: docs.map((d) => <String, dynamic>{...d.data(), 'id': d.id})
+          .toList(growable: false),
+      nextCursor: result.docs.length > 50 ? docs.last : null,
+    );
+  }
+
+  /// One payload schema for both owner notifications, matching the original.
+  Map<String, dynamic> _placeDeletionNotice({
+    required Map<String, dynamic> request,
+    required String id,
+    required String type,
+    required String note,
+    required String adminUid,
+    required String adminName,
+  }) {
+    final approved = type == 'deletion_approved';
+    final name = request['placeName'].toString().trim();
+    final titleAr = approved ? 'تمت الموافقة على حذف المكان' : 'تم رفض طلب الحذف';
+    final titleEn = approved ? 'Place deletion approved' : 'Place deletion request rejected';
+    final bodyAr = approved
+        ? 'بناءً على طلبك السابق، تمت الموافقة على حذف «$name» من DEDA. '
+          'يمكنك الآن إنشاء مكان جديد من قسم «إدارة مكاني».'
+        : 'تمت مراجعة طلب حذف «$name» ولم تتم الموافقة عليه. '
+          'ملاحظة الإدارة: $note';
+    final bodyEn = approved
+        ? 'Based on your previous request, “$name” was removed from DEDA. '
+          'You can now create a new place from Manage my place.'
+        : 'The deletion request for “$name” was reviewed and not approved. '
+          'Administration note: $note';
+    return <String, dynamic>{
+      'type': type,
+      'accountKey': request['accountKey'].toString().trim(),
+      'ownerUid': request['requesterUid'].toString().trim(),
+      'placeId': id, 'placeName': name,
+      'approvalNumber': request['approvalNumber'].toString().trim(),
+      'governorate': (request['governorate'] ?? '').toString().trim(),
+      'titleAr': titleAr, 'titleEn': titleEn,
+      'bodyAr': bodyAr, 'bodyEn': bodyEn,
+      'sourceType': 'place_deletion_requests', 'sourceId': id,
+      'createdByUid': adminUid, 'createdByName': adminName,
+      'createdByRole': 'general_manager',
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  /// Exact legacy operation, now inside ONE secondary-admin transaction:
+  /// approve => archive + map removal + owner notice + request + audits.
+  /// reject => owner notice + request + audits; review => request + audit.
+  /// Never deletes Firebase Auth identities or user documents.
+  Future<void> reviewScopedPlaceDeletionRequest({
+    required String dedaPhone,
+    required String requestId,
+    required String status,
+    required String note,
+    String? confirmation,
+  }) async {
+    final id = requestId.trim();
+    final reason = note.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !const <String>{'reviewing', 'deleted', 'rejected'}.contains(status) ||
+        reason.length < 3 || reason.length > 500 ||
+        (status == 'deleted' && confirmation != id)) {
+      throw StateError('place-deletion-invalid-input');
+    }
+    final actor = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (actor == null || actor.isAnonymous || publicUid == null) {
+      throw StateError('place-deletion-auth-required');
+    }
+    final uid = actor.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'managePlaceArchives',
+      onAuthorizedAdmin: (v) => gm = v,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('place-deletion-gm-required');
+    }
+    final requestRef = _firestore.collection('place_deletion_requests').doc(id);
+    final placeRef = _firestore.collection('published_places').doc(id);
+    final trashRef = _firestore.collection('admin_trash_places').doc(id);
+    final type = status == 'deleted' ? 'deletion_approved' : 'deletion_rejected';
+    final noticeRef = _firestore.collection('owner_place_notifications')
+        .doc(type + '_' + id);
+    final auditRef = _firestore.collection('admin_audit').doc();
+    final noticeAuditRef = _firestore.collection('admin_audit').doc();
+
+    await _firestore.runTransaction((tx) async {
+      final snap = await tx.get(requestRef);
+      final request = snap.data();
+      if (!snap.exists || snap.metadata.isFromCache ||
+          snap.metadata.hasPendingWrites || request == null) {
+        throw StateError('place-deletion-request-not-found');
+      }
+      // Read ALL related records before writing anything.
+      final placeSnap = status == 'deleted' ? await tx.get(placeRef) : null;
+      final trashSnap = status == 'deleted' ? await tx.get(trashRef) : null;
+      final noticeSnap = status != 'reviewing' ? await tx.get(noticeRef) : null;
+      if (status == 'deleted' &&
+            (placeSnap == null || !placeSnap.exists ||
+             placeSnap.metadata.isFromCache ||
+             placeSnap.metadata.hasPendingWrites ||
+             trashSnap == null || trashSnap.exists) ||
+          noticeSnap != null && noticeSnap.exists ||
+          !await proof() || gm?['role'] != 'general_manager' ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !DedaIsolatedAdminProofPolicy.placeDeletionDecisionAllowed(
+            admin: gm, request: request, published: placeSnap?.data(),
+            id: id, status: status, note: reason,
+          )) {
+        throw StateError('place-deletion-proof-or-identity-denied');
+      }
+      final name = (gm?['displayName'] ?? gm?['name'] ??
+          actor.email ?? 'DEDA Admin').toString();
+      if (status == 'deleted') {
+        tx.set(trashRef, <String, dynamic>{
+          ...placeSnap!.data()!,
+          'originalId': id,
+          'trashKind': 'owner_requested_place_deletion',
+          'deletedFromCollection': 'published_places',
+          'deletionRequestId': id,
+          'deletedAt': FieldValue.serverTimestamp(),
+          'deletedByUid': uid, 'deletedByName': name,
+          'deletedByRole': 'general_manager',
+        });
+        tx.delete(placeRef);
+      }
+      tx.update(requestRef, <String, dynamic>{
+        'status': status, 'updatedAt': FieldValue.serverTimestamp(),
+        'reviewedByUid': uid, 'reviewedByName': name,
+        'reviewedByRole': 'general_manager', 'reviewNote': reason,
+        if (status == 'deleted') 'completedAt': FieldValue.serverTimestamp(),
+        if (status == 'rejected') 'closedAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(auditRef, <String, dynamic>{
+        'action': 'place_deletion_status_changed',
+        'adminUid': uid, 'adminName': name, 'adminRole': 'general_manager',
+        'details': <String, dynamic>{
+          'requestId': id, 'placeId': id,
+          'placeName': request['placeName'],
+          'approvalNumber': request['approvalNumber'],
+          'requesterUid': request['requesterUid'],
+          'oldStatus': request['status'], 'newStatus': status,
+          'note': reason, 'placeArchived': status == 'deleted',
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (status != 'reviewing') {
+        final notice = _placeDeletionNotice(
+          request: request, id: id, type: type, note: reason,
+          adminUid: uid, adminName: name,
+        );
+        tx.set(noticeRef, notice);
+        tx.set(noticeAuditRef, <String, dynamic>{
+          'action': 'owner_notification_sent',
+          'adminUid': uid, 'adminName': name, 'adminRole': 'general_manager',
+          'notificationType': type,
+          'sourceType': 'place_deletion_requests', 'sourceId': id,
+          'placeId': id, 'placeName': request['placeName'],
+          'accountKey': request['accountKey'],
+          'title': notice['titleAr'], 'message': notice['bodyAr'],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
+    if (_auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('place-deletion-postcommit-session-changed');
+    }
   }
 
 }

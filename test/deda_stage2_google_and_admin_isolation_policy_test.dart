@@ -1153,5 +1153,45 @@ void main() {
       expect(allowed(manager,{...request,'status':'rejected'},
           'deleted','Status after real deletion'),true);
     });
+  });  group('Original owner place-deletion decisions stay GM-only', () {
+    final gm=<String,dynamic>{'active':true,'status':'active',
+      'role':'general_manager'};
+    final request=<String,dynamic>{
+      'placeId':'p1','requesterUid':'owner-A','accountKey':'phone-key',
+      'placeName':'QA place','approvalNumber':'QA-123','status':'new'};
+    final place=<String,dynamic>{
+      'accountKey':'phone-key','ownerUid':'old-uid',
+      'approvalNumber':'QA-123'};
+    bool allowed(Map<String,dynamic> actor, Map<String,dynamic> request,
+        Map<String,dynamic>? place, String next, String note) =>
+      DedaIsolatedAdminProofPolicy.placeDeletionDecisionAllowed(
+        admin:actor,request:request,published:place,
+        id:'p1',status:next,note:note);
+    test('verified GM and matching approved place may archive', () {
+      expect(allowed(gm,request,place,'deleted','Owner verified'),true);
+      expect(allowed(gm,request,null,'reviewing','Owner verified'),true);
+      expect(allowed(gm,request,null,'deleted','Owner verified'),false);
+      expect(allowed({...gm,'role':'employee'},request,place,
+          'deleted','Owner verified'),false);
+    });
+    test('bad place, approval, state or reason cannot proceed', () {
+      expect(allowed(gm,request,{...place,'approvalNumber':'bad'},
+          'deleted','Owner verified'),false);
+      expect(allowed(gm,request,{...place,'accountKey':'other'},
+          'deleted','Owner verified'),false);
+      expect(allowed(gm,{...request,'placeId':'other'},place,
+          'deleted','Owner verified'),false);
+      expect(allowed(gm,{...request,'status':'deleted'},place,
+          'deleted','Owner verified'),false);
+      expect(allowed(gm,request,place,'deleted',''),false);
+    });
+    test('same original actions, no reopening closed requests', () {
+      expect(DedaIsolatedAdminProofPolicy.placeDeletionAllowedTransitions('new'),
+          ['reviewing','deleted','rejected']);
+      expect(DedaIsolatedAdminProofPolicy.placeDeletionAllowedTransitions('reviewing'),
+          ['deleted','rejected']);
+      expect(DedaIsolatedAdminProofPolicy.placeDeletionAllowedTransitions('rejected'),
+          isEmpty);
+    });
   });
 }
