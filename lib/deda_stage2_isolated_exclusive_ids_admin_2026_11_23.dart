@@ -248,7 +248,7 @@ class _DedaStage2IsolatedExclusiveIdsAdminPageState
           Container(height:50,width:double.infinity,
             decoration:BoxDecoration(
               gradient:LinearGradient(colors:[
-                base.withOpacity(.85),base,base.withOpacity(.92)]),
+                base.withValues(alpha:.85),base,base.withValues(alpha:.92)]),
               borderRadius:BorderRadius.circular(13),
               border:Border.all(color:const Color(0xFFCFB77A),width:1.5),
             ),

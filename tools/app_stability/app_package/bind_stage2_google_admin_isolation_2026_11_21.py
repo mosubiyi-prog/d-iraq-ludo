@@ -16,6 +16,7 @@ MODULES = (
     'deda_stage2_google_access_card_2026_11_21.dart',
     'deda_stage2_isolated_admin_identity_2026_11_21.dart',
     'deda_stage2_isolated_admin_dashboard_2026_11_21.dart',
+    'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart',
 )
 GOOGLE_TEST = 'deda_stage2_google_and_admin_isolation_policy_test.dart'
 GOOGLE_DEPENDENCY = '  google_sign_in: ^6.2.2'
@@ -374,6 +375,16 @@ Future<void> main() async {"""
                     'FirebaseFirestore.instance' in text or
                     'DedaBackend.' in text):
                 raise ValueError('STAGE2_ISOLATED_ADMIN_UI_MUST_REMAIN_CLOSED')
+        elif name == 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart':
+            # This card reuses BOTH the Stage2 OFF gate and original Stage19
+            # private server read/action flags; never create a second flag.
+            if ('DedaExclusiveAdminBridge.serverReadFlag' not in text or
+                'DedaExclusiveAdminBridge.serverActionsFlag' not in text or
+                'FirebaseAuth.instance' in text or
+                'FirebaseFirestore.instance' in text or
+                'DedaBackend.' in text or
+                'bool.fromEnvironment(' in text):
+                raise ValueError('STAGE2_EXCLUSIVE100_MUST_REMAIN_SERVER_LOCKED')
         elif name != 'deda_stage2_google_access_card_2026_11_21.dart':
             if 'defaultValue: false' not in text:
                 raise ValueError('STAGE2_FEATURE_MUST_DEFAULT_OFF:'+name)

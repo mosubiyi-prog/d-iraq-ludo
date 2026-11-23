@@ -1612,6 +1612,15 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                           'tx.set(',"collection('exclusive_identifiers')"):
             self.assertNotIn(forbidden,last)
         self.assertEqual(dashboard.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
+        self.assertIn(
+            "'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart',",
+            (REPO/'tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py').read_text())
+        self.assertIn(
+            "'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart'",
+            (REPO/'.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml').read_text())
+        self.assertIn(
+            'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart',
+            (REPO/'.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml').read_text())
 
 if __name__ == '__main__':
     unittest.main()
