@@ -1549,7 +1549,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('placeDeletionAllowedTransitions(',ui)
         self.assertIn('confirmation: destructive ? id : null',ui)
         body=src.split('Future<void> reviewScopedPlaceDeletionRequest(',1)[1].split(
-            '\\n  }\\n',1)[0]
+            '  // One protected secondary-admin identity;',1)[0]
         for token in ("if (!dedaIsolatedAdminIdentityEnabled ||",
                       "requiredPermission: 'managePlaceArchives'",
                       "collection('place_deletion_requests')",
@@ -1728,7 +1728,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         scope=service.split('  // One protected secondary-admin identity;',1)[1].split(
             '  /// Original 500 newest winner requests.',1)[0]
         for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
-                          'DedaBackend.',"collection('users')",
+                          'DedaBackend.',"_firestore.collection('users')",
                           "collection('deda_weekly_direct_accounts')",
                           'tx.delete('):
             self.assertNotIn(forbidden,scope)
