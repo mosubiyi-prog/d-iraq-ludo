@@ -971,26 +971,65 @@ exports.updateAdminMember = onCall(async (request) => {
 });
 
 exports.revokeAdminMemberSessions = onCall(async (request) => {
+  // Reuse the ORIGINAL revocation callable. Never create a second writer.
+  // The old role normalizer treats missing role as GM: reject that here.
   const actor = await requireGeneralManager(request);
-  const targetUid = cleanText((request.data || {}).uid, 160);
-  const reason = cleanText((request.data || {}).reason, 500);
-  if (!targetUid) {
-    throw new HttpsError("invalid-argument", "target-admin-required");
+  if (actor.data.role !== "general_manager" ||
+      actor.data.status !== "active" || actor.data.active !== true) {
+    throw new HttpsError("permission-denied", "explicit-active-gm-required");
+  }
+
+  const input = request.data || {};
+  const targetUid = cleanText(input.uid, 160);
+  const reason = cleanText(input.reason, 500);
+  if (!targetUid || targetUid === actor.uid) {
+    throw new HttpsError("invalid-argument", "valid-subordinate-required");
   }
   if (!reason) {
     throw new HttpsError("invalid-argument", "reason-required");
+  }
+
+  // Stage2's secondary-admin client opts into *additional* server checks.
+  // Legacy GM users keep the original uid+reason callable signature.
+  if (input.stage2Isolated === true) {
+    const accountKey = cleanText(input.dedaPhone, 20);
+    if (!/^9647[0-9]{9}$/.test(accountKey)) {
+      throw new HttpsError("permission-denied", "manager-gateway-required");
+    }
+    const gatewaySnap = await getFirestore()
+        .collection("admin_entry_access").doc(accountKey).get();
+    const gateway = gatewaySnap.exists ? gatewaySnap.data() : null;
+    const boundUid = String((gateway && gateway.adminUid) || "").trim();
+    if (!gateway || gateway.accountKey !== accountKey ||
+        gateway.accessType !== "general_manager_gateway" ||
+        gateway.allowedRole !== "general_manager" ||
+        gateway.status !== "active" || gateway.active !== true ||
+        (boundUid && boundUid !== actor.uid)) {
+      throw new HttpsError("permission-denied", "manager-gateway-unverified");
+    }
   }
 
   const target = await getFirestore().collection("admins").doc(targetUid).get();
   if (!target.exists) {
     throw new HttpsError("not-found", "admin-member-not-found");
   }
+  const member = target.data() || {};
+  if (input.stage2Isolated === true &&
+      (member.active !== false ||
+       member.status !== "temporarily_stopped" ||
+       !["deputy_manager", "employee", "province_agent"]
+           .includes(member.role))) {
+    throw new HttpsError("failed-precondition",
+        "suspend-bound-subordinate-before-token-revoke");
+  }
 
+  // Firebase Auth + Firestore cannot be one transaction. If the Admin Auth
+  // write fails, do not forge an audit/return success. A retry is safe.
   await getAuth().revokeRefreshTokens(targetUid);
   await writeAdminAudit(actor, "admin_sessions_revoked", {
     targetAdminUid: targetUid,
-    targetAdminId: target.data().adminId || null,
-    targetAdminName: target.data().displayName || target.data().name || "",
+    targetAdminId: member.adminId || null,
+    targetAdminName: member.displayName || member.name || "",
     reason,
   });
   return {success: true};

@@ -18,6 +18,8 @@ on:
       - 'qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs'
       - 'functions/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.js'
       - 'functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js'
+      - 'functions/index.js'
+      - 'functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs'
       - 'functions/deda_pin_manual_recovery_compat_private_v1.js'
       - 'functions/deda_pin_auto_recovery_worker.js'
       - 'functions/test/deda_pin_manual_recovery_compat_private_v1.test.js'
@@ -84,6 +86,14 @@ jobs:
           node --check functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js
           node --test functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js
           echo 'PASS_PRIVATE_ORIGINAL_UID_REAUTH_PREFLIGHT_NO_PIN_WRITES_NO_DEPLOY'
+      - name: Test EXISTING admin session revocation callable with synthetic role/gateway/target cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/index.js
+          node --check functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs
+          node --test functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs
+          echo 'PASS_EXISTING_ADMIN_REVOCATION_STRICT_STAGE2_GUARD_NO_DEPLOY'
       - name: Install throwaway emulator tooling in runner temp only
         shell: bash
         run: |

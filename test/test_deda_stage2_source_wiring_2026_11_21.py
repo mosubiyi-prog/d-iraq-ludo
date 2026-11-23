@@ -240,6 +240,46 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("request.resource.data.status == 'temporarily_stopped'",rules)
         self.assertIn('match /admin_audit/{auditId} {',rules)
 
+    def test_existing_admin_revocation_callable_secondary_auth_and_retry_only(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        functions=(REPO/'functions/index.js').read_text()
+        self.assertEqual(functions.count('exports.revokeAdminMemberSessions = onCall('), 1)
+        handler=functions.split('exports.revokeAdminMemberSessions = onCall(',1)[1].split(
+            'exports.resetAdminTemporaryPassword = onCall(',1)[0]
+        for guard in ('actor.data.role !== "general_manager"',
+                      'actor.data.status !== "active"',
+                      'input.stage2Isolated === true',
+                      'manager-gateway-unverified',
+                      'member.status !== "temporarily_stopped"',
+                      'await getAuth().revokeRefreshTokens(targetUid)',
+                      'await writeAdminAudit(actor, "admin_sessions_revoked"'):
+            self.assertIn(guard,handler,guard)
+        policy=service.split('static bool memberSessionRevocationAllowed(',1)[1].split(
+            '/// Only an unclaimed subordinate invitation',1)[0]
+        self.assertIn("target['active'] != false",policy)
+        self.assertIn("target['status'] != 'temporarily_stopped'",policy)
+        self.assertIn("actor?['role'] != 'general_manager'",policy)
+        self.assertEqual(service.count('Future<void> revokeScopedSuspendedMemberSessions('),1)
+        caller=service.split('Future<void> revokeScopedSuspendedMemberSessions(',1)[1].split(
+            'Future<void> cancelScopedAdminInvitation(',1)[0]
+        self.assertIn('FirebaseFunctions.instanceFor(app: _auth.app)',caller)
+        self.assertIn(".httpsCallable('revokeAdminMemberSessions',",caller)
+        self.assertIn("'stage2Isolated': true",caller)
+        self.assertIn("'dedaPhone': phone",caller)
+        self.assertGreaterEqual(caller.count('memberSessionRevocationAllowed('),2)
+        self.assertNotIn('FirebaseAuth.instance',caller)
+        self.assertNotIn('FirebaseFirestore.instance',caller)
+        self.assertNotIn("signOut(",caller)
+        self.assertIn('widget.admin.suspendScopedAdminMember(',ui)
+        self.assertIn('widget.admin.revokeScopedSuspendedMemberSessions(',ui)
+        self.assertIn('var suspended = false;',ui)
+        self.assertIn('var tokensRevoked = false;',ui)
+        self.assertIn("case 'revokeSessions':",ui)
+        self.assertIn("canRetryRevocation",ui)
+        self.assertIn("'temporarily_stopped' && subordinate",ui)
+        self.assertIn('access remains suspended.',ui.lower())
+
     def test_isolated_invitation_create_single_atomic_secondary_auth(self):
         backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()

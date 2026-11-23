@@ -3157,35 +3157,94 @@ class _DedaIsolatedReadOnlyTabState
     );
     if (confirmedReason == null || !mounted) return;
     setState(() => _mutating = true);
+    var suspended = false;
+    var tokensRevoked = false;
     try {
       await widget.admin.suspendScopedAdminMember(
         dedaPhone: widget.dedaPhone,
         targetUid: targetUid,
         reason: confirmedReason,
       );
-      if (!mounted) return;
-      _refresh();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t(
-          'تم تعليق دخول الموظف للإدارة. لا يعني ذلك إبطال رمز Firebase؛ الصلاحيات تُراجع خادمياً عند الدخول.',
-          'Staff admin access suspended. Firebase tokens were not revoked; admin rights are rechecked on the server.')),
-
-      ));
+      suspended = true;
+      try {
+        await widget.admin.revokeScopedSuspendedMemberSessions(
+          dedaPhone: widget.dedaPhone,
+          targetUid: targetUid,
+          reason: confirmedReason,
+        );
+        tokensRevoked = true;
+      } catch (_) {
+        // Do NOT mark the entire action failed or undo a committed
+        // suspension. A separate retry is available on the stopped row.
+      }
     } catch (_) {
-      if (!mounted) return;
-      _refresh();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t(
-          'تعذر التعليق: يجب إعادة التحقق من صلاحية المدير والاتصال بالخادم.',
-          'Suspension denied: verify manager rights and server connectivity.',
-        )),
-      ));
+      suspended = false;
     } finally {
-      if (mounted) setState(() => _mutating = false);
+      if (mounted) {
+        setState(() => _mutating = false);
+        _refresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(suspended
+              ? tokensRevoked
+                  ? t('تم تعليق الموظف وإبطال رموز التحديث مع التدقيق. '
+                      'قد تبقى رموز الدخول الحالية حتى انتهاء صلاحيتها.',
+                      'Access suspended and refresh tokens revoked/audited. '
+                      'Existing ID tokens may remain valid until expiry.')
+                  : t('تم تعليق وصول الموظف فقط؛ إبطال رموز التحديث غير مؤكد. '
+                      'استخدم «إعادة إبطال الجلسات» بعد التأكد من الخادم.',
+                      'Access suspended; refresh-token revocation is NOT '
+                      'confirmed. Use Retry session revocation.')
+              : t('تعذر التعليق: تحقق من صلاحية المدير والاتصال بالخادم.',
+                  'Suspension denied: verify manager rights and connectivity.')),
+        ));
+      }
     }
   }
 
-
+  Future<void> _retrySuspendedMemberRevocation(
+      Map<String, dynamic> member) async {
+    if (_mutating || widget.collection != 'admins' ||
+        member['active'] != false ||
+        member['status'] != 'temporarily_stopped' ||
+        !const <String>{
+          'deputy_manager', 'employee', 'province_agent',
+        }.contains((member['role'] ?? '').toString())) return;
+    final targetUid = (member['id'] ?? '').toString();
+    if (!DedaIsolatedAdminProofPolicy.validScopedDocumentId(targetUid)) {
+      return;
+    }
+    final reason = await _askTeamReason(
+      title: t('إعادة إبطال جلسات الموظف', 'Retry session revocation'),
+      displayName: (member['displayName'] ?? '').toString(),
+    );
+    if (reason == null || !mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.admin.revokeScopedSuspendedMemberSessions(
+        dedaPhone: widget.dedaPhone,
+        targetUid: targetUid,
+        reason: reason,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم إبطال رموز التحديث للموظف مع التدقيق.',
+              'Member refresh tokens revoked and audited.')),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('لم يتأكد إبطال الجلسات. يبقى وصول الموظف معلقاً.',
+              'Token revocation unconfirmed; access remains suspended.')),
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _mutating = false);
+        _refresh();
+      }
+    }
+  }
 
   Future<void> _cancelInvitation(Map<String, dynamic> invitation) async {
     if (_mutating || widget.collection != 'admin_invites') return;
@@ -3713,6 +3772,8 @@ class _DedaIsolatedReadOnlyTabState
       'deputy_manager', 'employee', 'province_agent',
     }.contains((data['role'] ?? '').toString().trim().toLowerCase());
     final canSuspend = team && data['active'] == true && subordinate;
+    final canRetryRevocation = team && data['active'] == false &&
+        data['status'] == 'temporarily_stopped' && subordinate;
     final canCancel = invite && data['status'] == 'pending' && subordinate;
     final canRecover = recovery && data['status'] == 'new';
     return Card(
@@ -3739,6 +3800,10 @@ class _DedaIsolatedReadOnlyTabState
                     child: Text(t('تعديل', 'Edit'))),
                   if (canSuspend) PopupMenuItem(value: 'suspend',
                     child: Text(t('تعليق', 'Suspend'))),
+                  if (canRetryRevocation)
+                    PopupMenuItem(value: 'revokeSessions',
+                      child: Text(t('إعادة إبطال الجلسات',
+                          'Retry session revocation'))),
                   if (team) PopupMenuItem(value: 'reset',
                     child: Text(t('رابط كلمة المرور', 'Password reset'))),
                   if (team) PopupMenuItem(value: 'remove',
@@ -3754,6 +3819,8 @@ class _DedaIsolatedReadOnlyTabState
                     case 'rejectRecovery': _decideStaffRecovery(data, false); break;
                     case 'edit': _editMember(data); break;
                     case 'suspend': _suspendMember(data); break;
+                    case 'revokeSessions':
+                      _retrySuspendedMemberRevocation(data); break;
                     case 'reset': _resetMemberPassword(data); break;
                     case 'remove': _removeMemberAccess(data); break;
                     case 'share': _shareInvitation(data); break;

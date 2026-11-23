@@ -601,6 +601,30 @@ class DedaIsolatedAdminProofPolicy {
     }.contains(role);
   }
 
+  /// Used by the EXISTING server revocation callable after suspension.
+  /// Only a previously stopped subordinate may have refresh tokens revoked
+  /// by this isolated client. A public user or GM is never a target.
+  static bool memberSessionRevocationAllowed({
+    required String actorUid,
+    required Map<String, dynamic>? actor,
+    required String targetUid,
+    required Map<String, dynamic>? target,
+    required String reason,
+  }) {
+    if (!validScopedDocumentId(actorUid) ||
+        !validScopedDocumentId(targetUid) ||
+        actorUid == targetUid ||
+        reason.trim().isEmpty || reason.trim().length > 400 ||
+        !allowsPermission(admin: actor, permission: 'viewTeam') ||
+        actor?['role'] != 'general_manager' ||
+        actor?['status'] != 'active' ||
+        target == null || target['active'] != false ||
+        target['status'] != 'temporarily_stopped') return false;
+    return const <String>{
+      'deputy_manager', 'employee', 'province_agent',
+    }.contains((target['role'] ?? '').toString());
+  }
+
   /// Only an unclaimed subordinate invitation with an exact, dedicated
   /// DEDA phone gateway can be atomically cancelled. A claimed/completed
   /// invitation or a GM gateway is not safe to delete through this path.
@@ -1573,6 +1597,80 @@ class DedaIsolatedAdminIdentity {
         'createdAt': FieldValue.serverTimestamp(),
       });
     });
+  }
+
+  /// Completes suspension by calling the EXISTING Admin Auth revocation
+  /// endpoint from the independent administrator FirebaseApp. No public
+  /// FirebaseAuth sign-out and no new backend/revocation engine.
+  ///
+  /// Failure is explicitly PARTIAL: the Firestore suspension stays applied
+  /// and the caller must offer a retry, never report full completion.
+  Future<void> revokeScopedSuspendedMemberSessions({
+    required String dedaPhone,
+    required String targetUid,
+    required String reason,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-revocation-disabled');
+    }
+    final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(dedaPhone);
+    final cleanTarget = targetUid.trim();
+    final cleanReason = reason.trim();
+    final current = _auth.currentUser;
+    final publicUid = _mainAuth.currentUser?.uid;
+    if (phone.isEmpty || current == null || current.isAnonymous ||
+        publicUid == null || cleanTarget == publicUid ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(cleanTarget)) {
+      throw StateError('deda-admin-isolated-revoke-invalid-session');
+    }
+    final uid = current.uid;
+    Map<String, dynamic>? actor;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: phone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (profile) => actor = profile,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-revoke-no-manager-proof');
+    }
+    final targetSnap = await _firestore.collection('admins').doc(cleanTarget)
+        .get(const GetOptions(source: Source.server));
+    if (!targetSnap.exists || targetSnap.metadata.isFromCache ||
+        targetSnap.metadata.hasPendingWrites ||
+        !DedaIsolatedAdminProofPolicy.memberSessionRevocationAllowed(
+          actorUid: uid, actor: actor, targetUid: cleanTarget,
+          target: targetSnap.data(), reason: cleanReason,
+        ) ||
+        !await proof() ||
+        !DedaIsolatedAdminProofPolicy.memberSessionRevocationAllowed(
+          actorUid: uid, actor: actor, targetUid: cleanTarget,
+          target: targetSnap.data(), reason: cleanReason,
+        ) ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-revoke-bound-target-denied');
+    }
+    try {
+      final reply = await FirebaseFunctions.instanceFor(app: _auth.app)
+          .httpsCallable('revokeAdminMemberSessions',
+            options: HttpsCallableOptions(
+              timeout: const Duration(seconds: 12),
+            )).call(<String, dynamic>{
+              'uid': cleanTarget,
+              'reason': cleanReason,
+              'dedaPhone': phone,
+              'stage2Isolated': true,
+            });
+      if (reply.data is! Map || reply.data['success'] != true ||
+          !await proof() ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-admin-isolated-revoke-ack-unverified');
+      }
+    } catch (_) {
+      // The target remains suspended; never roll back and revive access.
+      throw StateError('deda-admin-isolated-revoke-pending-retry');
+    }
   }
 
   /// Cancel a pending subordinate invitation and only its exact phone
