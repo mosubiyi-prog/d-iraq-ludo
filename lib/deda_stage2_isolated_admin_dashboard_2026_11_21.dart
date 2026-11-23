@@ -2826,7 +2826,8 @@ class _DedaIsolatedReadOnlyTabState
             );
 
   void _refresh() {
-    if (_mutating) return;
+    // Mutation callbacks refresh before their finally block clears _mutating.
+    // Do NOT suppress this server refresh after an invite/team decision.
     setState(() {
       _pageStartId = null;
       _pageHistory.clear();

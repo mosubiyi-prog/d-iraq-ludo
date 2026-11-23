@@ -233,6 +233,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('hasStaffNext',tab)
         self.assertIn('_previousStaffPage()',tab)
         self.assertIn('_nextStaffPage(allRows)',tab)
+        refresh=tab.split('  void _refresh() {',1)[1].split(
+            '  void _nextStaffPage(',1)[0]
+        self.assertNotIn('if (_mutating) return;',refresh)
+        self.assertIn('_pageStartId = null;',refresh)
+        self.assertIn('_pageHistory.clear();',refresh)
         self.assertNotIn('FirebaseFirestore.instance',tab)
         self.assertNotIn('DedaBackend.',tab)
 
