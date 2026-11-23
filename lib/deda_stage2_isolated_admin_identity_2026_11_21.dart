@@ -2752,6 +2752,56 @@ class DedaIsolatedAdminIdentity {
     };
   }
 
+  /// Original header badge, but sourced exclusively through the SECONDARY
+  /// administrator Auth and server-confirmed snapshots. Never the public app.
+  Stream<int> watchScopedPendingStaffRecoveryCount({
+    required String dedaPhone,
+  }) async* {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-isolated-staff-badge-stage-off');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-isolated-staff-badge-session-required');
+    }
+    final uid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone, expectedPublicUid: publicUid,
+      requiredPermission: 'viewTeam',
+      onAuthorizedAdmin: (admin) => gm = admin,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-staff-badge-gm-required');
+    }
+    var serverVerified = false;
+    await for (final snapshot in _firestore
+        .collection('admin_recovery_requests')
+        .where('status', isEqualTo: 'new')
+        .snapshots(includeMetadataChanges: true)) {
+      if (_auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid) {
+        throw StateError('deda-isolated-staff-badge-session-changed');
+      }
+      if (snapshot.metadata.isFromCache) {
+        if (serverVerified) {
+          throw StateError('deda-isolated-staff-badge-server-lost');
+        }
+        continue; // Never display a guessed count from disk cache.
+      }
+      if (snapshot.metadata.hasPendingWrites) continue;
+      if (!await proof() || gm?['role'] != 'general_manager' ||
+          snapshot.docs.any((doc) => doc.metadata.isFromCache ||
+              doc.metadata.hasPendingWrites ||
+              doc.data()['status'] != 'new')) {
+        throw StateError('deda-isolated-staff-badge-proof-changed');
+      }
+      serverVerified = true;
+      yield snapshot.docs.length;
+    }
+  }
+
   /// Read-only scoped data path, with fresh server permissions before and
   /// after fetch. No write operation or raw Firestore handle is exposed.
   Future<List<Map<String, dynamic>>> readScopedAdminList({
