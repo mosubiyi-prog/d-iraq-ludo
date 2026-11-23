@@ -634,6 +634,78 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       }));
     });
 
+    await t.test("candidate staff first place view stays narrowly scoped",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const staffUid="qa_candidate_place_staff_view";
+      const deniedUid="qa_candidate_place_staff_denied";
+      const agentUid="qa_candidate_place_agent_wrong_province";
+      const path="place_requests/qa_candidate_staff_first_view";
+      const staff=env.authenticatedContext(staffUid).firestore();
+      const noPermission=env.authenticatedContext(deniedUid).firestore();
+      const wrongProvince=env.authenticatedContext(agentUid).firestore();
+      const created=Fb.Timestamp.fromMillis(Date.now()-3600000);
+      const activation=Fb.Timestamp.fromMillis(0);
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc("admins/"+staffUid).set({
+            role:"employee",active:true,status:"active",
+            firstLoginCompletedAt:activation,
+            permissions:{viewPlaceRequests:true},
+          }),
+          db.doc("admins/"+deniedUid).set({
+            role:"employee",active:true,status:"active",
+            firstLoginCompletedAt:activation,
+            permissions:{viewPlaceRequests:false},
+          }),
+          db.doc("admins/"+agentUid).set({
+            role:"province_agent",active:true,status:"active",
+            firstLoginCompletedAt:activation,governorate:"Basra",
+            permissions:{viewPlaceRequests:true},
+          }),
+          db.doc(path).set({
+            placeName:"QA synthetic place",status:"pending",
+            ownerUid:"qa_candidate_owner",accountKey:"9647700000060",
+            governorate:"Kirkuk",createdAt:created,
+          }),
+        ]);
+      });
+      const fields=(uid,role)=>({
+        firstViewedAt:Fb.FieldValue.serverTimestamp(),
+        firstViewedByUid:uid,firstViewedByName:"QA Admin",
+        firstViewedByRole:role,
+        lastViewedAt:Fb.FieldValue.serverTimestamp(),
+        lastViewedByUid:uid,lastViewedByName:"QA Admin",
+        lastViewedByRole:role,
+      });
+      await assertFails(noPermission.doc(path).update(
+        fields(deniedUid,"employee")));
+      await assertFails(wrongProvince.doc(path).update(
+        fields(agentUid,"province_agent")));
+      await assertFails(staff.doc(path).update({
+        ...fields(staffUid,"employee"),status:"approved",
+      }));
+      const audit=staff.doc("admin_audit/qa_candidate_staff_first_view_audit");
+      await assertSucceeds(staff.runTransaction(async tx=>{
+        const snap=await tx.get(staff.doc(path));
+        assert.equal(snap.data().firstViewedAt,undefined);
+        tx.update(staff.doc(path),fields(staffUid,"employee"));
+        tx.set(audit,{
+          action:"request_viewed",adminUid:staffUid,adminName:"QA Admin",
+          adminRole:"employee",sourceCollection:"place_requests",
+          sourceId:"qa_candidate_staff_first_view",
+          createdAt:Fb.FieldValue.serverTimestamp(),
+        });
+      }));
+      const saved=await assertSucceeds(staff.doc(path).get());
+      assert.equal(saved.data().firstViewedByUid,staffUid);
+      assert.equal(saved.data().lastViewedByRole,"employee");
+      assert.equal(saved.data().status,"pending");
+      assert.equal((await assertSucceeds(manager.doc(
+        "admin_audit/qa_candidate_staff_first_view_audit").get()))
+        .data().sourceCollection,"place_requests");
+    });
+
     await t.test("missing anchor fails closed instead of allowing last gateway deletion",async()=>{
       await env.withSecurityRulesDisabled(async ctx=>{
         await ctx.firestore().doc("admin_gateway_protection/primary").delete();
