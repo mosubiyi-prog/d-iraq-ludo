@@ -1269,6 +1269,52 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         # Source-only: never alter the deployed rules as an implementation shortcut.
         self.assertIn("allow delete: if false;",notice)
 
+    def test_stage2_cards_reuse_accepted_admin_card_and_registered_routes(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/admin_pages.dart').read_text()
+        card=(REPO/'lib/deda_admin_compact_card.dart').read_text()
+        self.assertIn("import 'deda_admin_compact_card.dart';",ui)
+        self.assertEqual(ui.count('DedaAdminCompactCard('),1)
+        self.assertEqual(card.count('class DedaAdminCompactCard'),1)
+        self.assertIn("DedaAdminCompactCard(",original)
+        self.assertIn("key: const Key('deda_stage19_admin100_dashboard_tile')",original)
+        self.assertIn("key: const Key('deda_admin_league_dashboard_tile')",original)
+        self.assertIn("void addDestination({",ui)
+        self.assertIn("tabs.add(Tab(text: title));",ui)
+        self.assertIn("pages.add(page);",ui)
+        self.assertIn("cardIcons.add(icon);",ui)
+        self.assertIn("cardSubtitles.add(subtitle);",ui)
+        self.assertIn("cardColors.add(accentColor);",ui)
+        self.assertIn("key: const Key('deda_stage2_admin_card_hub')",ui)
+        self.assertIn("itemCount: tabs.length,",ui)
+        self.assertIn("title: tabs[index].text ?? '',",ui)
+        self.assertIn("DefaultTabController.of(overviewContext)",ui)
+        self.assertIn(".animateTo(index + 1)",ui)
+        self.assertIn("...pages,",ui)
+        self.assertIn("tabs.isEmpty ? 0 : tabs.length + 1",ui)
+        self.assertNotIn("DedaBackend.",ui)
+        self.assertNotIn("FirebaseAuth.instance",ui)
+        self.assertNotIn("FirebaseFirestore.instance",ui)
+
+    def test_stage2_admin_cards_keep_existing_permissions_and_scope(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        header=ui.split("class _DedaIsolatedReadOnlyTab",1)[0]
+        for permission in ("supportRead", "viewPlaceRequests", "viewUsers",
+                           "viewAudit", "viewTeam", "managePlaceArchives"):
+            self.assertIn("if (can('"+permission+"')) {",header)
+        for collection in ("support_requests","place_requests","users",
+                           "admin_audit","admins","admin_invites",
+                           "admin_recovery_requests"):
+            self.assertIn("collection: '"+collection+"'",header)
+        self.assertIn("sourceCollection: config.$1,",header)
+        self.assertIn("final pages = <Widget>[];",header)
+        self.assertIn("return PopScope(",header)
+        self.assertIn("if (!dedaIsolatedAdminIdentityEnabled)",header)
+        self.assertNotIn("DedaAdminTaskManagementPage(",header)
+        self.assertNotIn("DedaAdminLeaguePage(",header)
+        self.assertNotIn("DedaExclusiveIdsAdminPage(",header)
+        self.assertNotIn("DedaBackend.",header)
+
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn('return PopScope(',source)

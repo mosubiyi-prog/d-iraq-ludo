@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
+import 'deda_admin_compact_card.dart';
 
 /// Stage2 migration bridge, NOT the complete administrative Dashboard.
 /// It never calls DedaBackend, the public Auth, or the public Firestore.
@@ -54,89 +55,155 @@ class _DedaStage2IsolatedDashboardPageState
           admin: widget.profile,
           permission: permission,
         );
+    // Keep the accepted legacy tile design without duplicating its widget.
+    // Every visible card is registered with its already-isolated destination
+    // in one operation; no route to DedaBackend or public Firebase is added.
     final tabs = <Tab>[];
     final pages = <Widget>[];
+    final cardIcons = <IconData>[];
+    final cardSubtitles = <String>[];
+    final cardColors = <Color>[];
+    void addDestination({
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      required Color accentColor,
+      required Widget page,
+    }) {
+      tabs.add(Tab(text: title));
+      pages.add(page);
+      cardIcons.add(icon);
+      cardSubtitles.add(subtitle);
+      cardColors.add(accentColor);
+    }
+
     if (can('supportRead')) {
-      tabs.add(Tab(text: t('الدعم', 'Support')));
-      pages.add(_DedaIsolatedRequestTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        profile: widget.profile,
-        collection: 'support_requests',
-      ));
+      addDestination(
+        title: t('الدعم', 'Support'),
+        subtitle: t('رسائل المستخدمين والردود', 'User messages and replies'),
+        icon: Icons.support_agent,
+        accentColor: const Color(0xFF00796B),
+        page: _DedaIsolatedRequestTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          profile: widget.profile,
+          collection: 'support_requests',
+        ),
+      );
     }
     if (can('viewPlaceRequests')) {
-      tabs.add(Tab(text: t('طلبات الأماكن', 'Place requests')));
-      pages.add(_DedaIsolatedRequestTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        profile: widget.profile,
-        collection: 'place_requests',
-      ));
+      addDestination(
+        title: t('طلبات الأماكن', 'Place requests'),
+        subtitle: t('المراجعة والاعتماد حسب الصلاحية',
+            'Review according to permission'),
+        icon: Icons.storefront_outlined,
+        accentColor: const Color(0xFF2E7D32),
+        page: _DedaIsolatedRequestTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          profile: widget.profile,
+          collection: 'place_requests',
+        ),
+      );
     }
     if (can('viewUsers')) {
-      tabs.add(Tab(text: t('المستخدمون', 'Users')));
-      pages.add(_DedaIsolatedReadOnlyTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        collection: 'users',
-      ));
+      addDestination(
+        title: t('المستخدمون', 'Users'),
+        subtitle: t('قراءة فقط', 'Read only'),
+        icon: Icons.people_alt_outlined,
+        accentColor: const Color(0xFF4F5AA8),
+        page: _DedaIsolatedReadOnlyTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          collection: 'users',
+        ),
+      );
     }
     if (can('viewAudit')) {
-      tabs.add(Tab(text: t('سجل الإدارة', 'Admin audit')));
-      pages.add(_DedaIsolatedReadOnlyTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        collection: 'admin_audit',
-      ));
+      addDestination(
+        title: t('سجل الإدارة', 'Admin audit'),
+        subtitle: t('من قام بماذا ومتى', 'Who did what and when'),
+        icon: Icons.fact_check_outlined,
+        accentColor: const Color(0xFF476A78),
+        page: _DedaIsolatedReadOnlyTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          collection: 'admin_audit',
+        ),
+      );
     }
     if (can('viewTeam')) {
-      tabs.add(Tab(text: t('فريق الإدارة', 'Admin team')));
-      pages.add(_DedaIsolatedReadOnlyTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        collection: 'admins',
-      ));
-      tabs.add(Tab(text: t('الدعوات الإدارية', 'Admin invitations')));
-      pages.add(_DedaIsolatedReadOnlyTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        collection: 'admin_invites',
-      ));
-      tabs.add(Tab(text: t('طلبات استرجاع الموظفين', 'Staff recovery')));
-      pages.add(_DedaIsolatedReadOnlyTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-        collection: 'admin_recovery_requests',
-      ));
-      tabs.add(Tab(text: t('أرقام دخول المدير', 'Manager entry phones')));
-      pages.add(_DedaIsolatedManagerGatewaysTab(
-        admin: widget.admin,
-        dedaPhone: widget.dedaPhone,
-        isArabic: widget.isArabic,
-      ));
+      addDestination(
+        title: t('فريق الإدارة', 'Admin team'),
+        subtitle: t('الأعضاء والصلاحيات', 'Members and permissions'),
+        icon: Icons.groups_2_outlined,
+        accentColor: const Color(0xFF2F6B8A),
+        page: _DedaIsolatedReadOnlyTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          collection: 'admins',
+        ),
+      );
+      addDestination(
+        title: t('الدعوات الإدارية', 'Admin invitations'),
+        subtitle: t('الدعوات والتفعيل والإلغاء', 'Invites and activation'),
+        icon: Icons.mail_outline,
+        accentColor: const Color(0xFF17652F),
+        page: _DedaIsolatedReadOnlyTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          collection: 'admin_invites',
+        ),
+      );
+      addDestination(
+        title: t('طلبات استرجاع الموظفين', 'Staff recovery'),
+        subtitle: t('مراجعة الطلبات الموثوقة', 'Review verified requests'),
+        icon: Icons.lock_reset,
+        accentColor: const Color(0xFF9A6700),
+        page: _DedaIsolatedReadOnlyTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+          collection: 'admin_recovery_requests',
+        ),
+      );
+      addDestination(
+        title: t('أرقام دخول المدير', 'Manager entry phones'),
+        subtitle: t('البوابات المصرح بها', 'Approved access gateways'),
+        icon: Icons.phonelink_lock,
+        accentColor: const Color(0xFF6A4C93),
+        page: _DedaIsolatedManagerGatewaysTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+        ),
+      );
     }
-    // Only the server-proved GM may access reversible place archives.
     if (can('managePlaceArchives')) {
       for (final config in <(String, String, String)>[
         ('published_places', 'أماكن منشورة', 'Published places'),
         ('admin_trash_place_requests', 'محذوفات الطلبات', 'Request trash'),
         ('admin_trash_places', 'محذوفات الأماكن', 'Place trash'),
       ]) {
-        tabs.add(Tab(text: t(config.$2, config.$3)));
-        pages.add(_DedaIsolatedManagerPlacesTab(
-          admin: widget.admin,
-          dedaPhone: widget.dedaPhone,
-          isArabic: widget.isArabic,
-          sourceCollection: config.$1,
-        ));
+        addDestination(
+          title: t(config.$2, config.$3),
+          subtitle: t('إدارة الأماكن والسجلات', 'Places and records'),
+          icon: config.$1 == 'published_places'
+              ? Icons.place_outlined : Icons.delete_outline,
+          accentColor: const Color(0xFF7A5A2B),
+          page: _DedaIsolatedManagerPlacesTab(
+            admin: widget.admin,
+            dedaPhone: widget.dedaPhone,
+            isArabic: widget.isArabic,
+            sourceCollection: config.$1,
+          ),
+        );
       }
     }
     return PopScope(
@@ -145,7 +212,7 @@ class _DedaStage2IsolatedDashboardPageState
         if (!didPop) await _exit();
       },
       child: DefaultTabController(
-        length: tabs.length,
+        length: tabs.isEmpty ? 0 : tabs.length + 1,
         child: Scaffold(
           appBar: AppBar(
             title: Text(t('إدارة DEDA', 'DEDA administration')),
@@ -158,14 +225,53 @@ class _DedaStage2IsolatedDashboardPageState
             ],
             bottom: tabs.isEmpty
                 ? null
-                : TabBar(isScrollable: true, tabs: tabs),
+                : TabBar(
+                    isScrollable: true,
+                    tabs: [Tab(text: t('الرئيسية', 'Overview')), ...tabs],
+                  ),
           ),
           body: tabs.isEmpty
               ? Center(child: Text(t(
                   'لا توجد صلاحيات إدارية متاحة لهذا الحساب.',
                   'No available administrative permissions.',
                 )))
-              : TabBarView(children: pages),
+              : TabBarView(children: [
+                  // One overview, using the EXACT legacy compact-card widget.
+                  // Tap selects the already registered tab; it never bypasses
+                  // that tab's server-side reauthorization.
+                  Builder(builder: (overviewContext) =>
+                    LayoutBuilder(builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final count = width >= 980 ? 6
+                          : width >= 740 ? 5
+                          : width >= 590 ? 4 : 3;
+                      final extent =
+                          (126 * MediaQuery.textScalerOf(context).scale(1.0))
+                              .clamp(126.0, 240.0).toDouble();
+                      return GridView.builder(
+                        key: const Key('deda_stage2_admin_card_hub'),
+                        padding: const EdgeInsets.all(10),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: count,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          mainAxisExtent: extent,
+                        ),
+                        itemCount: tabs.length,
+                        itemBuilder: (context, index) => DedaAdminCompactCard(
+                          key: ValueKey('deda_stage2_admin_card_$index'),
+                          icon: cardIcons[index],
+                          title: tabs[index].text ?? '',
+                          subtitle: cardSubtitles[index],
+                          accentColor: cardColors[index],
+                          onTap: () => DefaultTabController.of(overviewContext)
+                              .animateTo(index + 1),
+                        ),
+                      );
+                    }),
+                  ),
+                  ...pages,
+                ]),
         ),
       ),
     );
