@@ -1890,7 +1890,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.assertNotIn(forbidden,notice,forbidden)
 
         self.assertEqual(ui.count("Future<void> _showIsolatedOwnerNoticeComposer("),1)
-        self.assertEqual(ui.count("class _DedaIsolatedSupportAttachmentViewer"),1)
+        self.assertEqual(ui.count("class _DedaIsolatedSupportAttachmentViewer extends StatefulWidget"),1)
         self.assertIn("await admin.sendScopedOwnerPlaceNotification(",ui)
         self.assertIn("sourceCollection: 'place_requests'",ui)
         self.assertIn("sourceCollection: 'published_places'",ui)
