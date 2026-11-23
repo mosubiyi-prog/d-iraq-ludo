@@ -1795,5 +1795,62 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('defaultValue: false',service)
         self.assertNotIn("collection('deda_diamond_gifts').doc(",scope)
 
+
+    def test_isolated_users_full_search_profile_audit_and_no_public_mutation(self):
+        original=(REPO/'lib/admin_team_pages.dart').read_text()
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        self.assertIn("class DedaAdminUsersPage",original)
+        self.assertIn("Future<void> _openUser(String uid) async",original)
+        self.assertIn("stream: DedaBackend.adminUsers()",original)
+        self.assertEqual(service.count(
+            "Future<List<Map<String, dynamic>>> readScopedAdminUserDirectory("),1)
+        self.assertEqual(service.count(
+            "Future<Map<String, dynamic>> readScopedUserAccountSnapshot("),1)
+        directory=service.split(
+            "Future<List<Map<String, dynamic>>> readScopedAdminUserDirectory(",1
+        )[1].split("/// Original Users card:",1)[0]
+        self.assertIn("requiredPermission: 'viewUsers'",directory)
+        self.assertIn("page < 10",directory)
+        self.assertIn("query.limit(50)",directory)
+        self.assertIn("GetOptions(source: Source.server)",directory)
+        self.assertIn("snapshot.metadata.isFromCache",directory)
+        self.assertIn("sameScopedFilters(",directory)
+        self.assertIn("scopedDocumentMatches(",directory)
+        self.assertIn("_mainAuth.currentUser?.uid != publicUid",directory)
+        details=service.split("Future<Map<String, dynamic>> readScopedUserAccountSnapshot(",1)[1].split(
+            "/// Read-only scoped data path",1)[0]
+        for required in (
+            "requiredPermission: 'viewUsers'",
+            "readScopedAdminRecord(",
+            "collection: 'users'",
+            "manager?['role'] == 'general_manager'",
+            "collection('published_places')",
+            "related('place_requests')",
+            "related('support_requests')",
+            "get(const GetOptions(source: Source.server))",
+            "collection('admin_audit')",
+            "'action': 'read_user_account'",
+            "'relatedTruncatedCollections': truncatedCollections",
+        ):
+            self.assertIn(required,details,required)
+        self.assertNotIn("collection('users').doc(userUid).set(",details)
+        self.assertNotIn("collection('users').doc(userUid).update(",details)
+        self.assertNotIn("FirebaseFirestore.instance",details)
+        self.assertNotIn("FirebaseAuth.instance",details)
+        self.assertNotIn("DedaBackend.",details)
+        card=dashboard.split("class _DedaIsolatedReadOnlyTabState",1)[1].split(
+            "/// Management of existing manager entrance",1)[0]
+        self.assertIn("widget.admin.readScopedAdminUserDirectory(",card)
+        self.assertIn("widget.admin.readScopedUserAccountSnapshot(",card)
+        self.assertIn("maxItems: 25,",card)
+        self.assertIn("controller: _userSearch",card)
+        self.assertIn("onTap: user && !_openingUser",card)
+        self.assertIn("snapshot['relatedTruncatedCollections']",card)
+        self.assertIn("if (relatedAccessible) ...[",card)
+        self.assertNotIn("DedaBackend.",card)
+        self.assertNotIn("FirebaseAuth.instance",card)
+        self.assertNotIn("FirebaseFirestore.instance",card)
+
 if __name__ == '__main__':
     unittest.main()
