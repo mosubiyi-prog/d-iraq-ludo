@@ -3977,6 +3977,106 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
         admin: widget.profile, permission: 'managePlaceArchives',
       );
 
+  Future<void> _viewLinkedUser(String ownerUid) async {
+    if (_sending || !DedaIsolatedAdminProofPolicy.validScopedDocumentId(
+            ownerUid) ||
+        !DedaIsolatedAdminProofPolicy.allowsPermission(
+          admin: widget.profile, permission: 'viewUsers',
+        )) {
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      final snap = await widget.admin.readScopedUserAccountSnapshot(
+        dedaPhone: widget.dedaPhone, userUid: ownerUid,
+      );
+      if (!mounted) return;
+      final profile = Map<String, dynamic>.from(
+        snap['profile'] as Map? ?? const <String, dynamic>{},
+      );
+      final related = snap['relatedAccessible'] == true;
+      final places = snap['publishedPlaces'] as List? ?? const [];
+      final requests = snap['placeRequests'] as List? ?? const [];
+      final support = snap['supportRequests'] as List? ?? const [];
+      final truncated = Map<String, dynamic>.from(
+        snap['relatedTruncatedCollections'] as Map? ?? const {},
+      );
+      String count(List values, String collection) =>
+          values.length.toString() +
+          (truncated[collection] == true ? '+' : '');
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(t('حساب صاحب الطلب • قراءة فقط',
+              'Request owner • read only')),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _isolatedPlaceField(t('الاسم', 'Name'), profile['name']),
+                  _isolatedPlaceField(t('الهاتف', 'Phone'),
+                      profile['phone'], ltr: true),
+                  _isolatedPlaceField(t('نوع الحساب', 'Account type'),
+                      profile['accountType']),
+                  const Divider(),
+                  if (related) ...[
+                    _isolatedPlaceField(t('الأماكن المنشورة',
+                        'Published places'),
+                        count(places, 'published_places')),
+                    _isolatedPlaceField(t('طلبات الأماكن',
+                        'Place requests'),
+                        count(requests, 'place_requests')),
+                    _isolatedPlaceField(t('رسائل الدعم',
+                        'Support requests'),
+                        count(support, 'support_requests')),
+                    if (places.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(t('أماكن المستخدم', 'User places'),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800)),
+                      ...places.take(10).map((raw) {
+                        final p = Map<String, dynamic>.from(raw as Map);
+                        return ListTile(
+                          dense: true,
+                          title: Text((p['placeName'] ?? '').toString()),
+                          subtitle: Text(
+                            (p['approvalNumber'] ?? '').toString()),
+                        );
+                      }),
+                    ],
+                  ] else
+                    Text(t('بيانات الأماكن والدعم محجوبة لصلاحية هذا الدور.',
+                        'Related records are restricted for this admin role.')),
+                  const SizedBox(height: 8),
+                  Text(t('تم تسجيل هذه المشاهدة إدارياً بلا تعديل حساب المستخدم.',
+                      'The view was audited without changing the user account.')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إغلاق', 'Close')),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر عرض الحساب أو التحقق من الصلاحيات.',
+              'Could not verify permissions or read this user.')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   Future<void> _setStatus(String id, String status) async {
     if (!_canReply || _sending) return;
     setState(() => _sending = true);
@@ -4337,6 +4437,19 @@ class _DedaIsolatedRequestTabState extends State<_DedaIsolatedRequestTab> {
             child: Text((data[support ? 'message' : 'description'] ?? '')
                 .toString()),
           ),
+          if ((data['ownerUid'] ?? '').toString().trim().isNotEmpty &&
+              DedaIsolatedAdminProofPolicy.allowsPermission(
+                admin: widget.profile, permission: 'viewUsers'))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: OutlinedButton.icon(
+                onPressed: _sending ? null : () => _viewLinkedUser(
+                    (data['ownerUid'] ?? '').toString().trim()),
+                icon: const Icon(Icons.visibility_outlined),
+                label: Text(t('عرض حساب المستخدم • قراءة فقط',
+                    'View user account • read only')),
+              ),
+            ),
           if (!support)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
