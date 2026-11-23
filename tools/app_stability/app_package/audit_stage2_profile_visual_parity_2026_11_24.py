@@ -41,17 +41,17 @@ def visual_palette(main):
     grid = main[start:stop]
     # Individual per-card sections prevent accidentally borrowing a neighbor's
     # palette or counting a subtitle as a card.
-    all_titles = re.findall(
-        r"title:\s*dedaText\('([^']+)'", grid)
+    title_marks = list(re.finditer(
+        r"(?<![A-Za-z])title:\s*dedaText\('([^']+)'", grid))
+    all_titles = [m.group(1) for m in title_marks]
     expected = [name for name, _, _ in PALETTE]
     if all_titles != expected:
         raise ValueError("PROFILE_VISUAL_STOP:card-order-or-count-drift:" + repr(all_titles))
     rows = []
     for i, name in enumerate(all_titles):
-        mark = "title: dedaText('" + name + "'"
-        a = grid.find(mark)
-        b = grid.find("title: dedaText('", a + len(mark))
-        card = grid[a:b if b >= 0 else len(grid)]
+        a = title_marks[i].start()
+        b = title_marks[i + 1].start() if i + 1 < len(title_marks) else len(grid)
+        card = grid[a:b]
         m = re.search(
             r"colors:\s*const\s*<Color>\[Color\((0x[0-9A-Fa-f]{8})\),"
             r"\s*Color\((0x[0-9A-Fa-f]{8})\)\]", card)
