@@ -6,6 +6,7 @@ on:
       - deda-100451-owner-admin-session-safe-repair-2026-11-20
     paths:
       - 'qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs'
+      - 'qa/stage2/isolated_admin_tasks_rules_runtime_2026_11_23.test.cjs'
       - 'qa/stage2/build_isolated_admin_gateway_anchor_candidate_2026_11_23.py'
       - 'qa/stage2/isolated_admin_invite_preflight_2026_11_23.py'
       - 'qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
@@ -45,6 +46,7 @@ jobs:
             firestore.rules firebase.json .firebaserc storage.rules \
             lib/main.dart lib/deda_backend.dart lib/admin_pages.dart
           node --check qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs
+          node --check qa/stage2/isolated_admin_tasks_rules_runtime_2026_11_23.test.cjs
           test "$GOOGLE_CLOUD_PROJECT" = demo-deda-stage2-isolated-admin-private-qa
           echo 'PASS_PROTECTED_RULES_AND_BASE_APP_UNCHANGED'
       - name: Test legacy-invite preflight with fake local records, no Firebase
@@ -84,6 +86,17 @@ jobs:
             --only firestore --non-interactive \
             'node --test qa/stage2/isolated_admin_firestore_rules_runtime_2026_11_23.test.cjs'
           echo 'PASS_EMULATOR_RUNTIME_ONLY_NO_REAL_FIREBASE_DATA'
+      - name: Test original tasks and rewards rules on synthetic local emulator data
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/deda-stage2-admin-runtime"
+          "$root/node_modules/.bin/firebase" emulators:exec \
+            --project demo-deda-stage2-isolated-admin-private-qa \
+            --config "$root/firebase.json" \
+            --only firestore --non-interactive \
+            'node --test qa/stage2/isolated_admin_tasks_rules_runtime_2026_11_23.test.cjs'
+          echo 'PASS_STAGE2_TASKS_RUNTIME_EMULATOR_ONLY_NO_REWARD_PAYMENTS'
       - name: Generate rules hardening CANDIDATE into runner temp, never repository
         shell: bash
         run: |
