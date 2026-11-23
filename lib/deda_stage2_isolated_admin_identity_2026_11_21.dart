@@ -2567,7 +2567,8 @@ class DedaIsolatedAdminIdentity {
       throw StateError('deda-admin-isolated-list-not-enabled');
     }
     final permission = _scopedReadPermissions[collection];
-    if (permission == null || maxItems < 1 || maxItems > 50) {
+    if (permission == null || maxItems < 1 ||
+        maxItems > (collection == 'users' ? 500 : 50)) {
       throw StateError('deda-admin-isolated-read-scope-denied');
     }
     final current = _auth.currentUser;
@@ -2627,6 +2628,128 @@ class DedaIsolatedAdminIdentity {
     return rows.docs.map(
       (doc) => <String, dynamic>{...doc.data(), 'id': doc.id},
     ).toList(growable: false);
+  }
+
+  /// Original Users card: only a fresh secondary administrator may inspect
+  /// the selected user. A read audit is mandatory; no public-user write.
+  /// Related places/requests/support are visible only to a verified GM:
+  /// lesser roles receive the user profile without misleading zero counts.
+  Future<Map<String, dynamic>> readScopedUserAccountSnapshot({
+    required String dedaPhone,
+    required String userUid,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(userUid)) {
+      throw StateError('deda-admin-isolated-user-detail-invalid');
+    }
+    final actor = _auth.currentUser;
+    if (actor == null || actor.isAnonymous) {
+      throw StateError('deda-admin-isolated-user-detail-no-session');
+    }
+    final adminUid = actor.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? manager;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: adminUid, dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'viewUsers',
+      onAuthorizedAdmin: (admin) => manager = admin,
+    );
+    if (!await proof()) {
+      throw StateError('deda-admin-isolated-user-detail-denied');
+    }
+    // Reuse the existing server-only, twice-authorised record reader.
+    final profile = await readScopedAdminRecord(
+      dedaPhone: dedaPhone, collection: 'users', recordId: userUid,
+    );
+    if (profile == null) {
+      throw StateError('deda-admin-isolated-user-detail-not-found');
+    }
+    final accountKey = (profile['accountKey'] ?? '').toString().trim();
+    final generalManager = manager?['role'] == 'general_manager';
+    var published = <Map<String, dynamic>>[];
+    var requests = <Map<String, dynamic>>[];
+    var support = <Map<String, dynamic>>[];
+    var relatedMayBeTruncated = false;
+
+    Future<List<Map<String, dynamic>>> related(String collection) async {
+      final byId = <String, Map<String, dynamic>>{};
+      final queries = <Query<Map<String, dynamic>>>[
+        _firestore.collection(collection)
+            .where('ownerUid', isEqualTo: userUid),
+        if (accountKey.isNotEmpty)
+          _firestore.collection(collection)
+              .where('accountKey', isEqualTo: accountKey),
+      ];
+      for (final query in queries) {
+        final result = await query.limit(50)
+            .get(const GetOptions(source: Source.server));
+        if (result.metadata.isFromCache ||
+            result.metadata.hasPendingWrites) {
+          throw StateError('deda-admin-isolated-user-related-offline');
+        }
+        if (result.docs.length == 50) relatedMayBeTruncated = true;
+        for (final row in result.docs) {
+          final data = row.data();
+          // A query must never yield a record belonging to another user.
+          if (data['ownerUid'] != userUid &&
+              (accountKey.isEmpty || data['accountKey'] != accountKey)) {
+            throw StateError('deda-admin-isolated-user-related-owner-mismatch');
+          }
+          byId[row.id] = <String, dynamic>{'id': row.id, ...data};
+        }
+      }
+      return byId.values.toList(growable: false);
+    }
+
+    if (generalManager) {
+      // The current Firestore rules grant these linked collections to GMs.
+      // Do not interpret permission failures as empty customer histories.
+      published = await related('published_places');
+      requests = await related('place_requests');
+      support = await related('support_requests');
+    }
+    if (!await proof() ||
+        (manager?['role'] == 'general_manager') != generalManager ||
+        _auth.currentUser?.uid != adminUid ||
+        _mainAuth.currentUser?.uid != publicUid) {
+      throw StateError('deda-admin-isolated-user-detail-proof-changed');
+    }
+
+    // Match the legacy read audit without mutating the user profile or
+    // writing reviewed-by metadata into their public account.
+    final auditId = 'read_' + adminUid + '_' + userUid + '_' +
+        (DateTime.now().millisecondsSinceEpoch ~/ 5000).toString();
+    await _firestore.collection('admin_audit').doc(auditId).set(
+      <String, dynamic>{
+        'action': 'read_user_account',
+        'ownerUid': userUid,
+        'accountKey': accountKey,
+        'targetUserName': (profile['name'] ?? '').toString(),
+        'targetUserPhone': (profile['phone'] ?? '').toString(),
+        'sourceCollection': 'users',
+        'sourceId': userUid,
+        'adminUid': adminUid,
+        'adminName': (manager?['displayName'] ??
+            manager?['name'] ?? actor.email ?? 'DEDA Admin').toString(),
+        'adminRole': (manager?['role'] ?? '').toString(),
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+    );
+    if (_auth.currentUser?.uid != adminUid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() ||
+        (manager?['role'] == 'general_manager') != generalManager) {
+      throw StateError('deda-admin-isolated-user-detail-after-audit-denied');
+    }
+    return <String, dynamic>{
+      'profile': profile,
+      'publishedPlaces': published,
+      'placeRequests': requests,
+      'supportRequests': support,
+      'relatedAccessible': generalManager,
+      'relatedMayBeTruncated': relatedMayBeTruncated,
+    };
   }
 
   /// Stable Firestore document-ID keyset pagination. A 51st record proves
