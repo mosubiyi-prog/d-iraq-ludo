@@ -3010,7 +3010,8 @@ class DedaIsolatedAdminIdentity {
       throw StateError('deda-admin-isolated-list-not-enabled');
     }
     final permission = _scopedReadPermissions[collection];
-    if (permission == null || maxItems < 1 || maxItems > 50) {
+    if (permission == null || maxItems < 1 ||
+        maxItems > (collection == 'admin_audit' ? 300 : 50)) {
       throw StateError('deda-admin-isolated-read-scope-denied');
     }
     final current = _auth.currentUser;
@@ -3043,7 +3044,8 @@ class DedaIsolatedAdminIdentity {
     if (province is String) {
       query = query.where('governorate', isEqualTo: province);
     }
-    if (collection == 'admin_recovery_requests') {
+    if (collection == 'admin_recovery_requests' ||
+        collection == 'admin_audit') {
       query = query.orderBy('createdAt', descending: true);
     }
     final rows = await query

@@ -15,7 +15,9 @@ import 'deda_stage2_isolated_tasks_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_support_trash_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
 import 'admin_place_map.dart';
-import 'admin_team_pages.dart' show dedaAdminGovernorates;
+import 'admin_team_pages.dart' show dedaAdminGovernorates,
+    dedaAdminRoleLabel, dedaAdminTimestamp,
+    dedaAdminAuditActionLabel, dedaAdminAuditTargetLabel;
 
 /// Reuses the original three manual owner-notice choices, but the sender
 /// is the verified secondary admin session. No public Firebase objects.
@@ -2813,7 +2815,7 @@ class _DedaIsolatedReadOnlyTabState
           : widget.admin.readScopedAdminList(
               dedaPhone: widget.dedaPhone,
               collection: widget.collection,
-              maxItems: 25,
+              maxItems: widget.collection == 'admin_audit' ? 300 : 25,
             );
 
   void _refresh() => setState(() => _rows = _fetch());
@@ -3165,7 +3167,10 @@ class _DedaIsolatedReadOnlyTabState
       if (!mounted) return;
       _refresh();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t('تم تعليق صلاحيات الموظف.', 'Staff access suspended.')),
+        content: Text(t(
+          'تم تعليق دخول الموظف للإدارة. لا يعني ذلك إبطال رمز Firebase؛ الصلاحيات تُراجع خادمياً عند الدخول.',
+          'Staff admin access suspended. Firebase tokens were not revoked; admin rights are rechecked on the server.')),
+
       ));
     } catch (_) {
       if (!mounted) return;
@@ -3601,6 +3606,33 @@ class _DedaIsolatedReadOnlyTabState
     final team = widget.collection == 'admins';
     final invite = widget.collection == 'admin_invites';
     final recovery = widget.collection == 'admin_recovery_requests';
+    // Exact original audit labels, actor, role, time, target and reason,
+    // using existing server-scoped read and shared original formatters.
+    // Never show raw audit maps, internal tokens, or credentials.
+    if (widget.collection == 'admin_audit') {
+      final target = dedaAdminAuditTargetLabel(widget.isArabic, data);
+      final reason = (data['reason'] ?? '').toString().trim();
+      final actor = (data['adminName'] ??
+          t('الإدارة', 'Administration')).toString();
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.fact_check_outlined,
+              color: Color(0xFF17652F)),
+          title: Text(dedaAdminAuditActionLabel(
+            widget.isArabic, (data['action'] ?? '').toString()),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: Text(
+            actor + ' • ' +
+            dedaAdminRoleLabel(widget.isArabic, data['adminRole']) +
+            '\n' + dedaAdminTimestamp(data['createdAt']) +
+            (target.isEmpty ? '' :
+                '\n' + t('الهدف: ', 'Target: ') + target) +
+            (reason.isEmpty ? '' :
+                '\n' + t('السبب: ', 'Reason: ') + reason),
+          ),
+        ),
+      );
+    }
     final title = recovery ? (data['fullName'] ?? '').toString()
         : (team || invite)
         ? (data['displayName'] ?? data['name'] ?? '').toString()

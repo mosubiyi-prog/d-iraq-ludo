@@ -755,6 +755,40 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
                           '.collection(', '.set(', '.update(', '.delete('):
             self.assertNotIn(forbidden,ui,forbidden)
 
+    def test_original_audit_card_exact_readonly_equivalence_no_duplicate_backend(self):
+        legacy=(REPO/'lib/admin_team_pages.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        backend=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        # Original and isolated card share ONE label/target source.
+        self.assertEqual(legacy.count('String dedaAdminAuditActionLabel('), 1)
+        self.assertEqual(legacy.count('String dedaAdminAuditTargetLabel('), 1)
+        self.assertIn('dedaAdminAuditActionLabel(isArabic, value)',legacy)
+        self.assertIn('dedaAdminAuditTargetLabel(isArabic, data)',legacy)
+        original=legacy.split('class DedaAdminAuditPage extends StatelessWidget',1)[1].split('class DedaAdminUsersPage',1)[0]
+        self.assertIn("dedaAdminTimestamp(data['createdAt'])",original)
+        tab=ui.split('class _DedaIsolatedReadOnlyTabState',1)[1].split('/// Uses the same original green card',1)[0]
+        for field in (
+            'dedaAdminAuditTargetLabel(widget.isArabic, data)',
+            'dedaAdminAuditActionLabel(',
+            "dedaAdminRoleLabel(widget.isArabic, data['adminRole'])",
+            "dedaAdminTimestamp(data['createdAt'])",
+            "data['reason']", "data['adminName']",
+            "widget.collection == 'admin_audit' ? 300 : 25",
+        ):
+            self.assertIn(field,tab,field)
+        self.assertNotIn('FirebaseFirestore.instance',tab)
+        self.assertNotIn('FirebaseAuth.instance',tab)
+        self.assertIn("collection == 'admin_audit' ? 300 : 50",backend)
+        reader=backend.split('Future<List<Map<String, dynamic>>> readScopedAdminList(',1)[1].split('Future<DedaIsolatedManagerPage>',1)[0]
+        self.assertIn("collection == 'admin_audit') {",reader)
+        self.assertIn("orderBy('createdAt', descending: true)",reader)
+        self.assertIn('GetOptions(source: Source.server)',reader)
+        self.assertIn('sameScopedFilters(',reader)
+        self.assertIn('scopedDocumentMatches(',reader)
+        self.assertIn('Firebase tokens were not revoked;',ui)
+        # Suspension remains a guarded scope change, not a token revocation.
+        self.assertIn('This suspends admin access; it does not revoke Firebase Auth tokens.',backend)
+
     def test_team_enumeration_is_general_manager_only(self):
         src=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
         ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
@@ -777,7 +811,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',method)
         self.assertIn("throw StateError('deda-admin-isolated-list-not-enabled')",method)
         self.assertIn('_scopedReadPermissions[collection]',method)
-        self.assertIn('maxItems < 1 || maxItems > 50',method)
+        self.assertIn("maxItems > (collection == 'admin_audit' ? 300 : 50)",method)
         self.assertEqual(method.count('await proof()'),2)
         self.assertIn('GetOptions(source: Source.server)',method)
         self.assertIn('_mainAuth.currentUser?.uid != publicUid',method)
