@@ -634,6 +634,106 @@ test("candidate rules protect one immutable GM gateway against all clients",{
       }));
     });
 
+    await t.test("candidate user recovery accepts audited review/reject only",async()=>{
+      const Fb=require("firebase/compat/app").firestore;
+      const path="recovery_requests/qa_candidate_user_recovery";
+      const staffUid="qa_candidate_recovery_staff";
+      const rolelessUid="qa_candidate_recovery_roleless";
+      const staff=env.authenticatedContext(staffUid).firestore();
+      const roleless=env.authenticatedContext(rolelessUid).firestore();
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const db=ctx.firestore();
+        await Promise.all([
+          db.doc(path).set({
+            status:"new",requesterUid:"qa_original_owner",
+            accountKey:"9647700000900",phone:"07700000900",
+            fullName:"QA Original Owner",
+            requesterInstallId:"old_device",
+            createdAt:Fb.Timestamp.now(),updatedAt:Fb.Timestamp.now(),
+          }),
+          db.doc("admins/"+staffUid).set({
+            role:"employee",active:true,status:"active",
+            permissions:{viewTeam:true},
+          }),
+          db.doc("admins/"+rolelessUid).set({
+            active:true,status:"active",
+          }),
+          db.doc("deda_credentials/9647700000900").set({
+            accountKey:"9647700000900",pin:"123456",
+            active:true,createdUid:"qa_original_owner",
+          }),
+        ]);
+      });
+      const target=manager.doc(path);
+      await assertSucceeds(target.get());
+      await assertFails(staff.doc(path).get());
+      await assertFails(roleless.doc(path).get());
+      await assertFails(outsider.doc(path).get());
+      await assertFails(target.update({
+        status:"approved",updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(target.update({
+        status:"review",reviewNote:"Identity check",
+        reviewedBy:managerUid,accountKey:"9647700000999",
+        updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(staff.doc(path).update({
+        status:"review",reviewNote:"Identity check",
+        reviewedBy:staffUid,updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertFails(roleless.doc(path).update({
+        status:"review",reviewNote:"Identity check",
+        reviewedBy:rolelessUid,updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const current=await tx.get(target);
+        assert.equal(current.data().status,"new");
+        tx.update(target,{
+          status:"review",reviewNote:"Validate original UID linkage",
+          reviewedBy:managerUid,updatedAt:Fb.FieldValue.serverTimestamp(),
+        });
+        tx.set(manager.doc("admin_audit/qa_candidate_recovery_review"),{
+          action:"recovery_reviewed",adminUid:managerUid,
+          adminName:"QA General Manager",adminRole:"general_manager",
+          sourceCollection:"recovery_requests",
+          sourceId:"qa_candidate_user_recovery",
+          reason:"Validate original UID linkage",
+          createdAt:Fb.FieldValue.serverTimestamp(),
+        });
+      }));
+      await assertFails(target.update({
+        status:"approved",updatedAt:Fb.FieldValue.serverTimestamp(),
+      }));
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const current=await tx.get(target);
+        assert.equal(current.data().status,"review");
+        tx.update(target,{
+          status:"rejected",rejectionReason:"Owner UID unverified",
+          rejectedBy:managerUid,rejectedAt:Fb.FieldValue.serverTimestamp(),
+          updatedAt:Fb.FieldValue.serverTimestamp(),
+        });
+        tx.set(manager.doc("admin_audit/qa_candidate_recovery_rejected"),{
+          action:"recovery_rejected",adminUid:managerUid,
+          adminName:"QA General Manager",adminRole:"general_manager",
+          sourceCollection:"recovery_requests",
+          sourceId:"qa_candidate_user_recovery",
+          reason:"Owner UID unverified",
+          createdAt:Fb.FieldValue.serverTimestamp(),
+        });
+      }));
+      const saved=await assertSucceeds(target.get());
+      assert.equal(saved.data().requesterUid,"qa_original_owner");
+      assert.equal(saved.data().accountKey,"9647700000900");
+      assert.equal(saved.data().status,"rejected");
+      await env.withSecurityRulesDisabled(async ctx=>{
+        const pin=await ctx.firestore().doc(
+          "deda_credentials/9647700000900").get();
+        assert.equal(pin.data().pin,"123456");
+        assert.equal(pin.data().createdUid,"qa_original_owner");
+      });
+      console.log("PASS_CANDIDATE_RECOVERY_REVIEW_REJECT_UID_PIN_LOCK_NO_DEPLOY");
+    });
+
     await t.test("candidate staff first place view stays narrowly scoped",async()=>{
       const Fb=require("firebase/compat/app").firestore;
       const staffUid="qa_candidate_place_staff_view";
