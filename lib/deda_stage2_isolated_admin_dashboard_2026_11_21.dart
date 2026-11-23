@@ -206,6 +206,20 @@ class _DedaStage2IsolatedDashboardPageState
         );
       }
     }
+    if (can('viewReports')) {
+      addDestination(
+        title: t('التقارير', 'Analytics'),
+        subtitle: t('البلاغات النشطة ونطاق الصلاحيات',
+            'Active road reports and access scope'),
+        icon: Icons.analytics_outlined,
+        accentColor: const Color(0xFF6F4E8C),
+        page: _DedaIsolatedAdminReportsTab(
+          admin: widget.admin,
+          dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic,
+        ),
+      );
+    }
     // Settings belongs to every server-verified admin, not to viewTeam
     // or another elevated permission. Its destination re-checks Auth + UID.
     addDestination(
@@ -288,6 +302,114 @@ class _DedaStage2IsolatedDashboardPageState
                 ]),
         ),
       ),
+    );
+  }
+}
+
+/// Isolated equivalent of legacy Analytics (two original read-only tiles).
+/// It never reads road hazards through the public account.
+class _DedaIsolatedAdminReportsTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+
+  const _DedaIsolatedAdminReportsTab({
+    required this.admin,
+    required this.dedaPhone,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaIsolatedAdminReportsTab> createState() =>
+      _DedaIsolatedAdminReportsTabState();
+}
+
+class _DedaIsolatedAdminReportsTabState
+    extends State<_DedaIsolatedAdminReportsTab> {
+  late Future<Map<String, dynamic>> _summary;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _summary = _load();
+  }
+
+  Future<Map<String, dynamic>> _load() =>
+      widget.admin.readScopedAdminRoadReportSummary(
+        dedaPhone: widget.dedaPhone,
+      );
+
+  void _refresh() => setState(() => _summary = _load());
+
+  String _scope(Map<String, dynamic> summary) {
+    final role = (summary['role'] ?? '').toString();
+    if (role == 'province_agent') {
+      final province = (summary['governorate'] ?? '—').toString();
+      return t('محافظة: ', 'Province: ') + province;
+    }
+    switch (role) {
+      case 'general_manager':
+        return t('المدير العام', 'General manager');
+      case 'deputy_manager':
+        return t('معاون المدير', 'Deputy manager');
+      case 'employee':
+        return t('موظف', 'Employee');
+      default:
+        return role.isEmpty ? '—' : role;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // This tab is constructed only by the original Stage2 flag-closed
+    // dashboard. The isolated reader fails closed until enabled.
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _summary,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+            label: Text(t('تعذر تأكيد صلاحية التقارير، أعد المحاولة',
+                'Report permission verification failed, retry')),
+          ));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final summary = snapshot.data!;
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: t('تحديث من الخادم', 'Refresh from server'),
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+            Card(child: ListTile(
+              leading: const Icon(Icons.report_outlined,
+                  color: Color(0xFF17652F)),
+              title: Text(t('البلاغات النشطة', 'Active road reports')),
+              trailing: Text(
+                (summary['activeReports'] ?? 0).toString(),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 22),
+              ),
+            )),
+            Card(child: ListTile(
+              leading: const Icon(Icons.security_outlined,
+                  color: Color(0xFF17652F)),
+              title: Text(t('نطاق صلاحياتك', 'Your access scope')),
+              subtitle: Text(_scope(summary)),
+            )),
+          ],
+        );
+      },
     );
   }
 }

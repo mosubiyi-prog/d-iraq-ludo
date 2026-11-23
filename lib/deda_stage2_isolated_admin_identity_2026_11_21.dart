@@ -2178,6 +2178,63 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
+  /// Reproduces the legacy Analytics active-hazard count with secondary
+  /// Firestore only. Source policy: status=active, limit=500, ignore expired
+  /// and reports with >=3 resolved votes. Scope comes from fresh server
+  /// proof, not a cached role or a public DEDA session.
+  Future<Map<String, dynamic>> readScopedAdminRoadReportSummary({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-admin-isolated-reports-disabled');
+    }
+    final current = _auth.currentUser;
+    if (current == null || current.isAnonymous) {
+      throw StateError('deda-admin-isolated-reports-session-required');
+    }
+    final uid = current.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? verifiedAdmin;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid,
+      dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      requiredPermission: 'viewReports',
+      onAuthorizedAdmin: (profile) => verifiedAdmin = profile,
+    );
+    if (publicUid == null || !await proof()) {
+      throw StateError('deda-admin-isolated-reports-role-denied');
+    }
+    final snapshot = await _firestore.collection('road_hazards')
+        .where('status', isEqualTo: 'active')
+        .limit(500).get(const GetOptions(source: Source.server));
+    if (snapshot.metadata.isFromCache ||
+        snapshot.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() ||
+        verifiedAdmin == null) {
+      throw StateError('deda-admin-isolated-reports-proof-changed');
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var count = 0;
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final expiresAt = data['expiresAt'];
+      final millis = expiresAt is Timestamp
+          ? expiresAt.millisecondsSinceEpoch : 0;
+      final resolved = (data['resolvedReports'] as num?)?.toInt() ?? 0;
+      if (millis > 0 && millis <= now) continue;
+      if (resolved >= 3) continue;
+      count++;
+    }
+    return <String, dynamic>{
+      'activeReports': count,
+      'role': (verifiedAdmin!['role'] ?? '').toString(),
+      'governorate': (verifiedAdmin!['governorate'] ?? '').toString(),
+    };
+  }
+
   /// Read-only scoped data path, with fresh server permissions before and
   /// after fetch. No write operation or raw Firestore handle is exposed.
   Future<List<Map<String, dynamic>>> readScopedAdminList({

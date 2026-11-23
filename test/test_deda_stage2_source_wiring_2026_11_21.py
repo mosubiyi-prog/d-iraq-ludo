@@ -1341,6 +1341,40 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn("FirebaseFirestore.instance",ui)
         self.assertNotIn("SharedPreferences.getInstance(",ui)
 
+    def test_stage2_analytics_card_reproduces_legacy_count_and_scope(self):
+        ui=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        legacy=(REPO/'lib/admin_team_pages.dart').read_text()
+        backend=(REPO/'lib/deda_backend.dart').read_text()
+        self.assertEqual(ui.count("class _DedaIsolatedAdminReportsTab "),1)
+        self.assertEqual(ui.count("class _DedaIsolatedAdminReportsTabState"),1)
+        self.assertEqual(ui.count("title: t('التقارير', 'Analytics')"),1)
+        self.assertIn("if (can('viewReports')) {",ui)
+        self.assertIn("page: _DedaIsolatedAdminReportsTab(",ui)
+        self.assertIn("widget.admin.readScopedAdminRoadReportSummary(",ui)
+        self.assertIn("'البلاغات النشطة'",ui)
+        self.assertIn("'نطاق صلاحياتك'",ui)
+        self.assertEqual(service.count("Future<Map<String, dynamic>> readScopedAdminRoadReportSummary("),1)
+        self.assertIn("requiredPermission: 'viewReports'",service)
+        summary=service.split("Future<Map<String, dynamic>> readScopedAdminRoadReportSummary(",1)[1].split(
+            "/// Read-only scoped data path",1)[0]
+        original=backend.split("static Future<List<Map<String, dynamic>>> roadHazards()",1)[1].split(
+            "static Future<String> submitRoadHazard(",1)[0]
+        for q in ("collection('road_hazards')",
+                  ".where('status', isEqualTo: 'active')",
+                  ".limit(500)",
+                  "resolved >= 3",
+                  "expiresAt is Timestamp"):
+            self.assertIn(q,summary)
+            self.assertIn(q,original)
+        self.assertIn("get(const GetOptions(source: Source.server))",summary)
+        self.assertIn("!await proof()",summary)
+        self.assertIn("_mainAuth.currentUser?.uid != publicUid",summary)
+        self.assertIn("class DedaAdminReportsPage",legacy)
+        self.assertNotIn("DedaBackend.",ui)
+        self.assertNotIn("FirebaseFirestore.instance",ui)
+        self.assertNotIn("FirebaseAuth.instance",ui)
+
     def test_isolated_dashboard_back_navigation_signs_out_secondary_only(self):
         source=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
         self.assertIn('return PopScope(',source)
