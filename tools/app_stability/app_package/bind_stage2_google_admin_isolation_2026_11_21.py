@@ -19,6 +19,7 @@ MODULES = (
     'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart',
     'deda_stage2_isolated_league_admin_2026_11_23.dart',
     'deda_stage2_isolated_tasks_admin_2026_11_23.dart',
+    'deda_stage2_isolated_support_trash_2026_11_23.dart',
 )
 GOOGLE_TEST = 'deda_stage2_google_and_admin_isolation_policy_test.dart'
 GOOGLE_DEPENDENCY = '  google_sign_in: ^6.2.2'
@@ -405,6 +406,17 @@ Future<void> main() async {"""
                 'DedaBackend.' in text or
                 'bool.fromEnvironment(' in text):
                 raise ValueError('STAGE2_TASKS_MUST_BE_SECONDARY_ONLY')
+        elif name == 'deda_stage2_isolated_support_trash_2026_11_23.dart':
+            if ('if (!dedaIsolatedAdminIdentityEnabled)' not in text or
+                'DedaStage2IsolatedSupportTrashPage' not in text or
+                'mutateScopedSupportTrash(' not in text or
+                'readScopedSupportTrashPage(' not in text or
+                'FirebaseAuth.instance' in text or
+                'FirebaseFirestore.instance' in text or
+                'FirebaseStorage.instance' in text or
+                'DedaBackend.' in text or
+                'bool.fromEnvironment(' in text):
+                raise ValueError('STAGE2_SUPPORT_TRASH_MUST_BE_SECONDARY_ONLY')
         elif name != 'deda_stage2_google_access_card_2026_11_21.dart':
             if 'defaultValue: false' not in text:
                 raise ValueError('STAGE2_FEATURE_MUST_DEFAULT_OFF:'+name)
