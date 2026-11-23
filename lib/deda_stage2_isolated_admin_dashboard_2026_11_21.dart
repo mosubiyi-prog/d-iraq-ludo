@@ -1807,11 +1807,15 @@ class _DedaIsolatedReadOnlyTabState
   }
 
   Future<List<Map<String, dynamic>>> _fetch() =>
-      widget.admin.readScopedAdminList(
-        dedaPhone: widget.dedaPhone,
-        collection: widget.collection,
-        maxItems: widget.collection == 'users' ? 500 : 25,
-      );
+      widget.collection == 'users'
+          ? widget.admin.readScopedAdminUserDirectory(
+              dedaPhone: widget.dedaPhone,
+            )
+          : widget.admin.readScopedAdminList(
+              dedaPhone: widget.dedaPhone,
+              collection: widget.collection,
+              maxItems: 25,
+            );
 
   void _refresh() => setState(() => _rows = _fetch());
 
