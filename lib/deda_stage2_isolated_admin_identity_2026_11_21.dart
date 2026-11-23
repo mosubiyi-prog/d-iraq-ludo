@@ -4353,6 +4353,123 @@ class DedaIsolatedAdminIdentity {
   }
 
 
+  /// Original 500 newest winner requests. Secondary Auth, server only.
+  Future<List<Map<String,dynamic>>> readScopedPrizeWinnerRequests({
+    required String dedaPhone,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('prize-winners-isolated-off');
+    }
+    final actor=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    if (actor==null || actor.isAnonymous || publicUid==null) {
+      throw StateError('prize-winners-isolated-session-required');
+    }
+    final uid=actor.uid;
+    Map<String,dynamic>? gm;
+    Future<bool> proof()=>_serverAuthorizedAdmin(
+      uid:uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
+      requiredPermission:'reviewPrizeWinners',
+      onAuthorizedAdmin:(value)=>gm=value,
+    );
+    if (!await proof() || gm?['role']!='general_manager') {
+      throw StateError('prize-winners-gm-required');
+    }
+    final result=await _firestore.collection('prize_winner_requests')
+        .orderBy('updatedAt',descending:true).limit(500)
+        .get(const GetOptions(source:Source.server));
+    if (result.metadata.isFromCache || result.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid ||
+        !await proof() || gm?['role']!='general_manager') {
+      throw StateError('prize-winners-proof-changed');
+    }
+    return result.docs.map((doc)=>
+      <String,dynamic>{...doc.data(),'id':doc.id}).toList(growable:false);
+  }
+
+  /// Records administrative decisions only. Never transfers diamonds or
+  /// confirms delivery; the owner must confirm through their own account.
+  Future<void> reviewScopedPrizeWinnerRequest({
+    required String dedaPhone,
+    required String requestId,
+    required String status,
+    required String adminMessage,
+    required String prizeDetails,
+  }) async {
+    final id=requestId.trim();
+    final msg=adminMessage.trim();
+    final prize=prizeDetails.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
+        !const <String>{'new','reviewing','needs_info','approved',
+          'prize_sent','rejected'}.contains(status) ||
+        msg.length>800 || prize.length>800) {
+      throw StateError('prize-winner-invalid-input');
+    }
+    final actor=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    if (actor==null || actor.isAnonymous || publicUid==null) {
+      throw StateError('prize-winner-isolated-session-required');
+    }
+    final uid=actor.uid;
+    Map<String,dynamic>? gm;
+    Future<bool> proof()=>_serverAuthorizedAdmin(
+      uid:uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
+      requiredPermission:'reviewPrizeWinners',
+      onAuthorizedAdmin:(value)=>gm=value,
+    );
+    if (!await proof() || gm?['role']!='general_manager') {
+      throw StateError('prize-winner-general-manager-only');
+    }
+    final ref=_firestore.collection('prize_winner_requests').doc(id);
+    final audit=_firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final snap=await tx.get(ref);
+      final before=snap.data();
+      if (!snap.exists || snap.metadata.isFromCache ||
+          snap.metadata.hasPendingWrites ||
+          !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
+            admin:gm,request:before,requestId:id,status:status,
+            adminMessage:msg,prizeDetails:prize,
+          ) || !await proof() || gm?['role']!='general_manager' ||
+          _auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid ||
+          !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
+            admin:gm,request:before,requestId:id,status:status,
+            adminMessage:msg,prizeDetails:prize,
+          )) throw StateError('prize-winner-request-or-proof-changed');
+      final previous=(before?['status'] ?? 'new').toString();
+      // The legacy UI automatically records approved+prize as prize_sent.
+      final finalStatus=status=='approved' && prize.isNotEmpty
+          ? 'prize_sent' : status;
+      final name=(gm?['displayName'] ?? gm?['name'] ??
+          actor.email ?? 'DEDA Admin').toString();
+      tx.update(ref,<String,dynamic>{
+        'status':finalStatus,'adminMessage':msg,'prizeDetails':prize,
+        'adminByUid':uid,'adminByName':name,
+        'adminByRole':'general_manager',
+        'adminUpdatedAt':FieldValue.serverTimestamp(),
+        'updatedAt':FieldValue.serverTimestamp(),
+        if (finalStatus=='prize_sent' && previous!='prize_sent')
+          'prizeSentAt':FieldValue.serverTimestamp(),
+      });
+      tx.set(audit,<String,dynamic>{
+        'action':'prize_winner_status_changed',
+        'adminUid':uid,'adminName':name,'adminRole':'general_manager',
+        'details':<String,dynamic>{
+          'sourceCollection':'prize_winner_requests',
+          'sourceId':id,'targetAccountKey':before?['accountKey'],
+          'targetDedaId':before?['dedaId'],
+          'oldStatus':previous,'newStatus':finalStatus,
+          'statusOnlyNoDiamondTransfer':true,
+        },
+        'createdAt':FieldValue.serverTimestamp(),
+      });
+    });
+    if (_auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid) {
+      throw StateError('prize-winner-postcommit-session-changed');
+    }
+  }
+
   /// Only identity-change events; never exposes user credentials or catalogs.
   Stream<String?> watchScopedExclusiveAdminUid() =>
       _auth.authStateChanges().map((user) => user?.uid);
@@ -4544,121 +4661,5 @@ class DedaIsolatedAdminIdentity {
   }
 
 
-  /// Original 500 newest winner requests. Secondary Auth, server only.
-  Future<List<Map<String,dynamic>>> readScopedPrizeWinnerRequests({
-    required String dedaPhone,
-  }) async {
-    if (!dedaIsolatedAdminIdentityEnabled) {
-      throw StateError('prize-winners-isolated-off');
-    }
-    final actor=_auth.currentUser;
-    final publicUid=_mainAuth.currentUser?.uid;
-    if (actor==null || actor.isAnonymous || publicUid==null) {
-      throw StateError('prize-winners-isolated-session-required');
-    }
-    final uid=actor.uid;
-    Map<String,dynamic>? gm;
-    Future<bool> proof()=>_serverAuthorizedAdmin(
-      uid:uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
-      requiredPermission:'reviewPrizeWinners',
-      onAuthorizedAdmin:(value)=>gm=value,
-    );
-    if (!await proof() || gm?['role']!='general_manager') {
-      throw StateError('prize-winners-gm-required');
-    }
-    final result=await _firestore.collection('prize_winner_requests')
-        .orderBy('updatedAt',descending:true).limit(500)
-        .get(const GetOptions(source:Source.server));
-    if (result.metadata.isFromCache || result.metadata.hasPendingWrites ||
-        _auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid ||
-        !await proof() || gm?['role']!='general_manager') {
-      throw StateError('prize-winners-proof-changed');
-    }
-    return result.docs.map((doc)=>
-      <String,dynamic>{...doc.data(),'id':doc.id}).toList(growable:false);
-  }
-
-  /// Records administrative decisions only. Never transfers diamonds or
-  /// confirms delivery; the owner must confirm through their own account.
-  Future<void> reviewScopedPrizeWinnerRequest({
-    required String dedaPhone,
-    required String requestId,
-    required String status,
-    required String adminMessage,
-    required String prizeDetails,
-  }) async {
-    final id=requestId.trim();
-    final msg=adminMessage.trim();
-    final prize=prizeDetails.trim();
-    if (!dedaIsolatedAdminIdentityEnabled ||
-        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(id) ||
-        !const <String>{'new','reviewing','needs_info','approved',
-          'prize_sent','rejected'}.contains(status) ||
-        msg.length>800 || prize.length>800) {
-      throw StateError('prize-winner-invalid-input');
-    }
-    final actor=_auth.currentUser;
-    final publicUid=_mainAuth.currentUser?.uid;
-    if (actor==null || actor.isAnonymous || publicUid==null) {
-      throw StateError('prize-winner-isolated-session-required');
-    }
-    final uid=actor.uid;
-    Map<String,dynamic>? gm;
-    Future<bool> proof()=>_serverAuthorizedAdmin(
-      uid:uid,dedaPhone:dedaPhone,expectedPublicUid:publicUid,
-      requiredPermission:'reviewPrizeWinners',
-      onAuthorizedAdmin:(value)=>gm=value,
-    );
-    if (!await proof() || gm?['role']!='general_manager') {
-      throw StateError('prize-winner-general-manager-only');
-    }
-    final ref=_firestore.collection('prize_winner_requests').doc(id);
-    final audit=_firestore.collection('admin_audit').doc();
-    await _firestore.runTransaction((tx) async {
-      final snap=await tx.get(ref);
-      final before=snap.data();
-      if (!snap.exists || snap.metadata.isFromCache ||
-          snap.metadata.hasPendingWrites ||
-          !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
-            admin:gm,request:before,requestId:id,status:status,
-            adminMessage:msg,prizeDetails:prize,
-          ) || !await proof() || gm?['role']!='general_manager' ||
-          _auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid ||
-          !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
-            admin:gm,request:before,requestId:id,status:status,
-            adminMessage:msg,prizeDetails:prize,
-          )) throw StateError('prize-winner-request-or-proof-changed');
-      final previous=(before?['status'] ?? 'new').toString();
-      // The legacy UI automatically records approved+prize as prize_sent.
-      final finalStatus=status=='approved' && prize.isNotEmpty
-          ? 'prize_sent' : status;
-      final name=(gm?['displayName'] ?? gm?['name'] ??
-          actor.email ?? 'DEDA Admin').toString();
-      tx.update(ref,<String,dynamic>{
-        'status':finalStatus,'adminMessage':msg,'prizeDetails':prize,
-        'adminByUid':uid,'adminByName':name,
-        'adminByRole':'general_manager',
-        'adminUpdatedAt':FieldValue.serverTimestamp(),
-        'updatedAt':FieldValue.serverTimestamp(),
-        if (finalStatus=='prize_sent' && previous!='prize_sent')
-          'prizeSentAt':FieldValue.serverTimestamp(),
-      });
-      tx.set(audit,<String,dynamic>{
-        'action':'prize_winner_status_changed',
-        'adminUid':uid,'adminName':name,'adminRole':'general_manager',
-        'details':<String,dynamic>{
-          'sourceCollection':'prize_winner_requests',
-          'sourceId':id,'targetAccountKey':before?['accountKey'],
-          'targetDedaId':before?['dedaId'],
-          'oldStatus':previous,'newStatus':finalStatus,
-          'statusOnlyNoDiamondTransfer':true,
-        },
-        'createdAt':FieldValue.serverTimestamp(),
-      });
-    });
-    if (_auth.currentUser?.uid!=uid || _mainAuth.currentUser?.uid!=publicUid) {
-      throw StateError('prize-winner-postcommit-session-changed');
-    }
-  }
 
 }

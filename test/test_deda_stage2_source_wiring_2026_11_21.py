@@ -1637,11 +1637,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("requiredPermission:'reviewPrizeWinners'",src)
         self.assertIn("collection('prize_winner_requests')",src)
         self.assertIn("_firestore.runTransaction((tx) async {",src)
-        self.assertIn('tx.update(requestRef,',src)
-        self.assertIn('tx.set(auditRef,',src)
+        self.assertIn('tx.update(ref,',src)
+        self.assertIn('tx.set(audit,',src)
         self.assertIn("'statusOnlyNoDiamondTransfer':true",src)
-        self.assertIn("status == 'approved' && details.isNotEmpty",src)
-        self.assertIn("if (finalStatus == 'prize_sent' && previous != 'prize_sent')",src)
+        self.assertIn("status=='approved' && prize.isNotEmpty",src)
+        self.assertIn("if (finalStatus=='prize_sent' && previous!='prize_sent')",src)
         self.assertIn("if (can('reviewPrizeWinners')",ui)
         self.assertEqual(ui.count('class _DedaIsolatedPrizeWinnersTabState'),1)
         self.assertIn('class _DedaIsolatedPrizeWinnerReviewDialogState',ui)
@@ -1654,7 +1654,7 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertIn("item['userReply']",ui)
         self.assertIn("item['prizeSentAt']",ui)
         self.assertIn("item['pointsAtCompletion']",ui)
-        part=src.split('  /// Original GM-only 500 newest prize_v1 submissions',1)[1]
+        part=src.split('  /// Original 500 newest winner requests.',1)[1]
         for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
             "collection('users')","collection('deda_diamond_gifts')",
             'tx.delete(','deleteUser(', 'tx.set(prize','DedaBackend.'):
