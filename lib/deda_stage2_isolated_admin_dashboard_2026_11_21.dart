@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';
 import 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart';
+import 'deda_stage2_isolated_league_admin_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
 import 'admin_team_pages.dart' show dedaAdminGovernorates;
 
@@ -278,6 +279,21 @@ class _DedaStage2IsolatedDashboardPageState
           admin:widget.admin, dedaPhone:widget.dedaPhone,
           isArabic:widget.isArabic,
         ),
+      );
+    }
+    // Original weekly league card, never prize_v1 winners.
+    // One destination with independently authorized actions and read-only prizes.
+    if (can('manageLeague') &&
+        widget.profile['role'] == 'general_manager') {
+      addDestination(
+        title: t('إدارة الدوري', 'League management'),
+        subtitle: t('المتصدرون • التحكم • الأرشيف • الجوائز',
+            'Standings • controls • archive • prizes'),
+        icon: Icons.leaderboard_outlined,
+        accentColor: const Color(0xFF133F65),
+        page: DedaStage2IsolatedLeagueAdminPage(
+          admin: widget.admin, dedaPhone: widget.dedaPhone,
+          isArabic: widget.isArabic),
       );
     }
     // Original owner place deletion: archive, removal, notice and audit.

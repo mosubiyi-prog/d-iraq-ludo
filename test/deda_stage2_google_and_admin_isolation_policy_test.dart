@@ -1228,6 +1228,39 @@ void main() {
       expect(DedaExclusiveAdminBridge.serverReadFlag,false);
       expect(DedaExclusiveAdminBridge.serverActionsFlag,false);
     });
+  });  group('Stage2 weekly league manager-only actions', () {
+    final gm=<String,dynamic>{
+      'active':true,'status':'active','role':'general_manager',
+    };
+    final staff=<String,dynamic>{
+      'active':true,'status':'active','role':'employee',
+      'permissions':<String,bool>{'manageLeague':true},
+    };
+    test('league cannot elevate an employee, blank or inactive role', () {
+      expect(DedaIsolatedAdminProofPolicy.allowsPermission(
+        admin:gm,permission:'manageLeague'),true);
+      expect(DedaIsolatedAdminProofPolicy.allowsPermission(
+        admin:staff,permission:'manageLeague'),false);
+      expect(DedaIsolatedAdminProofPolicy.allowsPermission(
+        admin:{...gm,'role':''},permission:'manageLeague'),false);
+      expect(DedaIsolatedAdminProofPolicy.allowsPermission(
+        admin:{...gm,'status':'suspended'},permission:'manageLeague'),false);
+      expect(DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+        admin:staff,weekId:'2026-11-21',reason:'Verified league action'),false);
+    });
+    test('week, original DEDA ID and explanation must all validate', () {
+      bool accept(String week,String why,{String? id}) =>
+        DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+          admin:gm,weekId:week,reason:why,publicId:id);
+      expect(accept('2026-11-21','Verified league action',
+          id:'@DEDA-ABCD12'),true);
+      expect(accept('2026-11-21','Verified league action'),true);
+      expect(accept('2026-11-21','short',id:'@DEDA-ABCD12'),false);
+      expect(accept('2026-11-21','Verified league action',
+          id:'BAD-ID'),false);
+      expect(accept('not-a-week','Verified league action'),false);
+      expect(accept('2026-11-21','Verified\nleague action'),false);
+    });
   });  group('Stage2 prize_v1 winner decisions match original card', () {
     final gm=<String,dynamic>{'active':true,'status':'active',
       'role':'general_manager'};

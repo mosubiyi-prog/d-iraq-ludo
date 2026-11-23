@@ -1663,5 +1663,77 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         self.assertNotIn('FirebaseFirestore.instance',ui)
         self.assertEqual(ui.count('if (!dedaIsolatedAdminIdentityEnabled)'),3)
 
+    def test_league_card_isolated_original_functions_and_no_wallet_mutation(self):
+        service=(REPO/'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart').read_text()
+        ui=(REPO/'lib/deda_stage2_isolated_league_admin_2026_11_23.dart').read_text()
+        dashboard=(REPO/'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart').read_text()
+        original=(REPO/'lib/deda_admin_league_page.dart').read_text()
+        original_controls=(REPO/'lib/deda_admin_league_controls.dart').read_text()
+        rules=(REPO/'firestore.rules').read_text()
+        binder=(REPO/'tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py').read_text()
+        self.assertIn('class DedaAdminLeaguePage',original)
+        self.assertIn('setPaused(',original_controls)
+        self.assertIn('setFrozen(',original_controls)
+        self.assertEqual(service.count('class DedaIsolatedAdminIdentity {'),1)
+        self.assertEqual(service.count('static bool leagueActionAllowed('),1)
+        self.assertEqual(service.count('Future<Map<String,dynamic>> readScopedLeague('),1)
+        self.assertEqual(service.count('Future<List<Map<String,dynamic>>> readScopedLeagueArchive('),1)
+        self.assertEqual(service.count('Future<void> setScopedLeaguePaused('),1)
+        self.assertEqual(service.count('Future<void> setScopedLeagueFrozen('),1)
+        self.assertIn("requiredPermission:'manageLeague'",service)
+        self.assertIn("permission == 'manageLeague'",service)
+        self.assertIn('await _leagueRecheck(dedaPhone,actor);',service)
+        for token in (
+            "collection('deda_weekly_direct_weeks')",
+            "collection('deda_weekly_direct_control')",
+            "collection('deda_weekly_direct_reviews')",
+            "collection('deda_weekly_direct_notices')",
+            "collection('deda_weekly_direct_admin_events')",
+            "collection('deda_weekly_direct_prize_plans')",
+            "collection('deda_diamond_gifts')",
+            '_firestore.runTransaction((tx) async {',
+        ):
+            self.assertIn(token,service)
+        for path in (
+            'deda_weekly_direct_weeks','deda_weekly_direct_control',
+            'deda_weekly_direct_reviews','deda_weekly_direct_notices',
+            'deda_weekly_direct_prize_plans','deda_weekly_direct_admin_events',
+        ):
+            self.assertIn('match /'+path+'/',rules)
+        self.assertEqual(ui.count('class DedaStage2IsolatedLeagueAdminPage'),1)
+        self.assertIn('if (!dedaIsolatedAdminIdentityEnabled)',ui)
+        self.assertIn('widget.admin.setScopedLeaguePaused(',ui)
+        self.assertIn('widget.admin.setScopedLeagueFrozen(',ui)
+        self.assertIn('widget.admin.readScopedLeagueArchive(',ui)
+        self.assertIn('widget.admin.readScopedLeague(',ui)
+        self.assertEqual(service.count('Future<Map<String,dynamic>> readScopedLeaguePrizeRegister('),1)
+        self.assertEqual(service.count('Future<void> increaseScopedLeaguePrizePlan('),1)
+        self.assertIn('DedaWeeklyPrizeProjection.merge(',service)
+        self.assertIn("collection('deda_diamond_gifts')",service)
+        self.assertIn("tx.set(plan,{",service)
+        self.assertIn("tx.set(event,{",service)
+        self.assertEqual(ui.count('class DedaStage2IsolatedLeaguePrizeEditor'),1)
+        self.assertIn('widget.admin.readScopedLeaguePrizeRegister(',ui)
+        self.assertIn('widget.admin.increaseScopedLeaguePrizePlan(',ui)
+        self.assertIn('No verified league results.',ui)
+        self.assertEqual(dashboard.count("if (can('manageLeague')"),1)
+        self.assertIn('DedaStage2IsolatedLeagueAdminPage(',dashboard)
+        self.assertIn("'deda_stage2_isolated_league_admin_2026_11_23.dart',",binder)
+        workflow=(REPO/'.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml').read_text()
+        self.assertIn('lib/deda_stage2_isolated_league_admin_2026_11_23.dart',workflow)
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+                          'DedaBackend.','FirebaseFunctions.instance',
+                          'collection("users")','deleteUser('):
+            self.assertNotIn(forbidden,ui)
+        scope=service.split('  // One protected secondary-admin identity;',1)[1].split(
+            '  /// Original 500 newest winner requests.',1)[0]
+        for forbidden in ('FirebaseAuth.instance','FirebaseFirestore.instance',
+                          'DedaBackend.',"collection('users')",
+                          "collection('deda_weekly_direct_accounts')",
+                          'tx.delete('):
+            self.assertNotIn(forbidden,scope)
+        self.assertIn('defaultValue: false',service)
+        self.assertNotIn("collection('deda_diamond_gifts').doc(",scope)
+
 if __name__ == '__main__':
     unittest.main()

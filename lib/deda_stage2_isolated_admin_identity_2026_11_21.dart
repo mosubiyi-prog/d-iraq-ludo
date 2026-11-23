@@ -12,6 +12,10 @@ import 'deda_exclusive_ids_admin_page.dart' show DedaExclusiveAdminBridge,
     DedaExclusiveAdminSnapshot, DedaExclusiveAdminSnapshotVerifier;
 
 import 'deda_backend.dart';
+import 'deda_admin_league_winners_prizes.dart'
+    show DedaWeeklyPrizeProjection;
+import 'deda_admin_league_live_data.dart';
+import 'deda_weekly_league_clock.dart';
 
 const bool dedaIsolatedAdminIdentityEnabled = bool.fromEnvironment(
   'DEDA_STABILITY_ADMIN_ISOLATED_AUTH', defaultValue: false,
@@ -125,7 +129,7 @@ class DedaIsolatedAdminProofPolicy {
     'reviewPlaceRequests', 'approvePlaces', 'rejectPlaces',
     'viewUsers', 'viewReports', 'manageReports',
     'viewGovernorates', 'viewAudit', 'viewTeam', 'managePlaceArchives',
-    'reviewAccountDeletions', 'reviewPrizeWinners',
+    'reviewAccountDeletions', 'reviewPrizeWinners', 'manageLeague',
   };
   static bool allowsPermission({
     required Map<String, dynamic>? admin,
@@ -149,6 +153,8 @@ class DedaIsolatedAdminProofPolicy {
     if (permission == 'reviewAccountDeletions' &&
         normalizedRole != 'general_manager') { return false; }
     if (permission == 'reviewPrizeWinners' &&
+        normalizedRole != 'general_manager') { return false; }
+    if (permission == 'manageLeague' &&
         normalizedRole != 'general_manager') { return false; }
     if (normalizedRole == 'general_manager') { return true; }
     // Firestore rules deny these four actions to province agents even if
@@ -243,6 +249,20 @@ class DedaIsolatedAdminProofPolicy {
     DedaExclusiveAdminSnapshotVerifier.isSafe(snapshot) &&
     snapshot.identifiers.any((id) =>
       id.identifier == identifier && id.available);
+
+  /// Strict league manager action: exact week, public ID and audit reason.
+  static bool leagueActionAllowed({
+    required Map<String,dynamic>? admin,
+    required String weekId,
+    required String reason,
+    String? publicId,
+  }) => allowsPermission(admin:admin,permission:'manageLeague') &&
+      admin?['role']=='general_manager' &&
+      RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}$').hasMatch(weekId) &&
+      (publicId==null ||
+       RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(publicId)) &&
+      reason.trim().length>=8 && reason.trim().length<=200 &&
+      !reason.contains(RegExp(r'[\x00-\x1f\x7f]'));
 
   /// One source of truth for legacy prize_v1 status transitions.
   static List<String> prizeWinnerAllowedTransitions(String current) {
@@ -4354,6 +4374,376 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
+
+  // One protected secondary-admin identity; never uses public Firestore.
+  Future<({String uid,String publicUid,Map<String,dynamic> gm})>
+      _leagueManager(String phone) async {
+    if (!dedaIsolatedAdminIdentityEnabled) throw StateError('league-off');
+    final user=_auth.currentUser;
+    final publicUid=_mainAuth.currentUser?.uid;
+    Map<String,dynamic>? gm;
+    if (user==null || user.isAnonymous || publicUid==null ||
+        !await _serverAuthorizedAdmin(
+          uid:user.uid,dedaPhone:phone,expectedPublicUid:publicUid,
+          requiredPermission:'manageLeague',
+          onAuthorizedAdmin:(row)=>gm=row) ||
+        gm?['role']!='general_manager') {
+      throw StateError('league-manager-required');
+    }
+    return (uid:user.uid,publicUid:publicUid,gm:gm!);
+  }
+
+  Future<void> _leagueRecheck(String phone,
+      ({String uid,String publicUid,Map<String,dynamic> gm}) actor) async {
+    if (_auth.currentUser?.uid!=actor.uid ||
+        _mainAuth.currentUser?.uid!=actor.publicUid ||
+        !await _serverAuthorizedAdmin(
+          uid:actor.uid,dedaPhone:phone,expectedPublicUid:actor.publicUid,
+          requiredPermission:'manageLeague')) {
+      throw StateError('league-session-or-rights-changed');
+    }
+  }
+
+  static List<String> _leagueReviewWeeks() {
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    if (clock.phase==DedaWeeklyPhase.beforeFirstWeek) return const [];
+    return [
+      for(var i=0;i<=12;i++)
+        if(!clock.weekStart.subtract(Duration(days:i*7))
+          .isBefore(DedaWeeklyLeagueClock.origin))
+          DedaAdminLeagueLiveData.weekId(
+            clock.weekStart.subtract(Duration(days:i*7))),
+    ];
+  }
+
+  Future<List<DedaAdminLeagueRow>> _leagueScores(String week) async {
+    final snap=await _firestore.collection('deda_weekly_direct_weeks')
+      .doc(week).collection('scores').limit(100)
+      .get(const GetOptions(source:Source.server));
+    if (snap.metadata.isFromCache || snap.metadata.hasPendingWrites) {
+      throw StateError('league-score-unverified');
+    }
+    return DedaAdminLeagueProjection.fromRecords([
+      for(final doc in snap.docs) MapEntry(doc.id,doc.data()),
+    ]);
+  }
+
+  /// Mirrors league controls, top ten, podium, review and Hadaya status.
+  Future<Map<String,dynamic>> readScopedLeague({
+    required String dedaPhone,String? weekForReview,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final currentWeek=DedaAdminLeagueLiveData.weekId(clock.weekStart);
+    final week=weekForReview??currentWeek;
+    if (week!=currentWeek && !_leagueReviewWeeks().contains(week)) {
+      throw StateError('league-week-invalid');
+    }
+    final current=await _leagueScores(currentWeek);
+    final other=week==currentWeek?current:await _leagueScores(week);
+    const opts=GetOptions(source:Source.server);
+    final holds=await _firestore.collection('deda_weekly_direct_reviews')
+      .doc(week).collection('users').limit(100).get(opts);
+    final control=await _firestore.collection('deda_weekly_direct_control')
+      .doc('active').get(opts);
+    final plan=await _firestore.collection('deda_weekly_direct_prize_plans')
+      .doc(currentWeek).get(opts);
+    if (holds.metadata.isFromCache || holds.metadata.hasPendingWrites ||
+        control.metadata.isFromCache || control.metadata.hasPendingWrites ||
+        plan.metadata.isFromCache || plan.metadata.hasPendingWrites) {
+      throw StateError('league-meta-unverified');
+    }
+    final defaults=<int>[150,100,50,10,10,10,10,10,10,10];
+    final raw=plan.data()?['amounts'];
+    final amounts=<int>[];
+    if(raw==null) {
+      amounts.addAll(defaults);
+    }else{
+      if(raw is! List || raw.length!=10)throw StateError('prize-plan-invalid');
+      for(var i=0;i<10;i++) {
+        if(raw[i] is! int || raw[i]<defaults[i] || raw[i]>1000000) {
+          throw StateError('prize-plan-unverified');
+        }
+        amounts.add(raw[i] as int);
+      }
+    }
+    Map<String,dynamic> receipts={'verified':false};
+    try {
+      final gifts=await _firestore.collection('deda_diamond_gifts')
+        .where('sourceType',isEqualTo:'weekly_league').limit(100).get(opts);
+      if (!gifts.metadata.isFromCache && !gifts.metadata.hasPendingWrites) {
+        final accepted=gifts.docs.where((d){
+          final x=d.data();
+          return x['sourceType']=='weekly_league' && x['giftId'] is String &&
+            x['targetPublicId'] is String && x['amount'] is int &&
+            (x['status']=='pending' || x['status']=='received');
+        }).toList(growable:false);
+        receipts={
+          'verified':true,'count':accepted.length,
+          'pending':accepted.where((d)=>d.data()['status']=='pending').length,
+          'received':accepted.where((d)=>d.data()['status']=='received').length,
+          'limited':gifts.docs.length>=100,
+        };
+      }
+    } catch (_) {
+      // A denied read is UNKNOWN, never interpreted as no payout.
+    }
+    await _leagueRecheck(dedaPhone,actor);
+    final frozen={for(final d in holds.docs)d.id:d.data()['frozen']==true};
+    List<Map<String,dynamic>> view(List<DedaAdminLeagueRow> rows) => [
+      for(final r in rows) <String,dynamic>{
+        'name':r.name,'id':r.publicId,'place':r.place,'xp':r.xp,
+        'frozen':frozen[r.publicId]==true,
+      },
+    ];
+    return {
+      'currentWeek':currentWeek,'reviewWeek':week,
+      'paused':control.data()?['paused']==true &&
+          control.data()?['weekId']==currentWeek,
+      'weekFrozen':clock.phase==DedaWeeklyPhase.frozen,
+      'currentRows':view(current),'reviewRows':view(other),
+      'amounts':List<int>.unmodifiable(amounts),'receipts':receipts,
+    };
+  }
+
+  /// Only original completed-week score docs; never a shadow XP database.
+  Future<List<Map<String,dynamic>>> readScopedLeagueArchive({
+    required String dedaPhone,required String month,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final starts=DedaAdminLeagueLiveData.completedWeekStartsForMonth(
+      DateTime.now().toUtc(),month);
+    final out=<Map<String,dynamic>>[];
+    for(final start in starts) {
+      final week=DedaAdminLeagueLiveData.weekId(start);
+      final data=await _leagueScores(week);
+      out.add({
+        'week':week,'rows':<Map<String,dynamic>>[
+          for(final r in data.take(10))
+            {'name':r.name,'id':r.publicId,'place':r.place,'xp':r.xp},
+        ],
+      });
+    }
+    await _leagueRecheck(dedaPhone,actor);
+    return List.unmodifiable(out);
+  }
+
+  /// Atomic pause and original immutable admin event (no user XP edits).
+  Future<void> setScopedLeaguePaused({
+    required String dedaPhone,required bool paused,required String reason,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final week=DedaAdminLeagueLiveData.weekId(clock.weekStart);
+    final why=reason.trim();
+    if(clock.phase==DedaWeeklyPhase.beforeFirstWeek ||
+        !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+          admin:actor.gm,weekId:week,reason:why)) {
+      throw StateError('league-pause-invalid');
+    }
+    final control=_firestore.collection('deda_weekly_direct_control')
+      .doc('active');
+    final event=_firestore.collection('deda_weekly_direct_admin_events').doc();
+    await _firestore.runTransaction((tx) async {
+      final old=await tx.get(control);
+      await _leagueRecheck(dedaPhone,actor);
+      if(DedaAdminLeagueLiveData.weekId(DedaWeeklyLeagueClock.at(
+          DateTime.now().toUtc()).weekStart)!=week ||
+         (old.data()?['weekId']==week && old.data()?['paused']==paused)) {
+        throw StateError('league-paused-or-week-shift');
+      }
+      tx.set(control,{
+        'weekId':week,'paused':paused,'reason':why,
+        'updatedAt':FieldValue.serverTimestamp(),'updatedBy':actor.uid,
+      });
+      tx.set(event,{
+        'action':paused?'pause':'resume','weekId':week,'publicId':'',
+        'reason':why,'createdAt':FieldValue.serverTimestamp(),
+        'createdBy':actor.uid,
+      });
+    });
+    await _leagueRecheck(dedaPhone,actor);
+  }
+
+  /// Original freeze/release + private reason + neutral notice in ONE commit.
+  Future<void> setScopedLeagueFrozen({
+    required String dedaPhone,required String weekId,
+    required String publicId,required bool frozen,required String reason,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final why=reason.trim();
+    if(!_leagueReviewWeeks().contains(weekId) ||
+       !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+         admin:actor.gm,weekId:weekId,publicId:publicId,reason:why)) {
+      throw StateError('league-freeze-invalid');
+    }
+    final score=_firestore.collection('deda_weekly_direct_weeks')
+      .doc(weekId).collection('scores').doc(publicId);
+    final review=_firestore.collection('deda_weekly_direct_reviews')
+      .doc(weekId).collection('users').doc(publicId);
+    final notice=_firestore.collection('deda_weekly_direct_notices')
+      .doc(weekId).collection('users').doc(publicId);
+    final event=_firestore.collection('deda_weekly_direct_admin_events').doc();
+    const frozenText='تم تعليق اعتماد نقاطك في الدوري الأسبوعي مؤقتاً لغرض المراجعة. '
+      'تستمر المهام ونقاط المستوى بصورة طبيعية.';
+    const releasedText='اكتملت مراجعة نقاط الدوري ورفعت الإدارة التجميد عن مشاركتك.';
+    await _firestore.runTransaction((tx) async {
+      final player=await tx.get(score);
+      final old=await tx.get(review);
+      if(!player.exists || player.data()?['publicId']!=publicId ||
+         player.data()?['weekId']!=weekId ||
+         (old.exists && old.data()?['frozen']==frozen)) {
+        throw StateError('league-review-row-changed');
+      }
+      await _leagueRecheck(dedaPhone,actor);
+      tx.set(review,{
+        'weekId':weekId,'publicId':publicId,'frozen':frozen,
+        'notice':frozen?frozenText:releasedText,'reason':why,
+        'updatedAt':FieldValue.serverTimestamp(),'updatedBy':actor.uid,
+      });
+      tx.set(notice,{
+        'weekId':weekId,'publicId':publicId,'frozen':frozen,
+        'notice':frozen?frozenText:releasedText,
+        'updatedAt':FieldValue.serverTimestamp(),'updatedBy':actor.uid,
+      });
+      tx.set(event,{
+        'action':frozen?'freeze':'unfreeze','weekId':weekId,
+        'publicId':publicId,'reason':why,
+        'createdAt':FieldValue.serverTimestamp(),'createdBy':actor.uid,
+      });
+    });
+    await _leagueRecheck(dedaPhone,actor);
+  }
+
+
+  /// The 100439 original winners-and-prizes register: four independent
+  /// server sources and the ONE existing pure projection; never a payout.
+  Future<Map<String,dynamic>> readScopedLeaguePrizeRegister({
+    required String dedaPhone,required String weekId,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final valid={
+      for(var n=1;n<=12;n++)
+        if(!clock.weekStart.subtract(Duration(days:7*n))
+            .isBefore(DedaWeeklyLeagueClock.origin))
+          DedaAdminLeagueLiveData.weekId(
+            clock.weekStart.subtract(Duration(days:7*n))),
+    };
+    if(!valid.contains(weekId))throw StateError('league-prize-week-incomplete');
+    const opts=GetOptions(source:Source.server);
+    final scores=await _firestore.collection('deda_weekly_direct_weeks')
+      .doc(weekId).collection('scores').limit(100).get(opts);
+    final prefix='deda-weekly-'+weekId+'-';
+    final gifts=await _firestore.collection('deda_diamond_gifts')
+      .orderBy(FieldPath.documentId)
+      .startAt([prefix]).endAt([prefix+'\uf8ff'])
+      .limit(100).get(opts);
+    final reviews=await _firestore.collection('deda_weekly_direct_reviews')
+      .doc(weekId).collection('users').limit(100).get(opts);
+    final plan=await _firestore.collection('deda_weekly_direct_prize_plans')
+      .doc(weekId).get(opts);
+    if(scores.metadata.isFromCache || scores.metadata.hasPendingWrites ||
+       gifts.metadata.isFromCache || gifts.metadata.hasPendingWrites ||
+       reviews.metadata.isFromCache || reviews.metadata.hasPendingWrites ||
+       plan.metadata.isFromCache || plan.metadata.hasPendingWrites ||
+       scores.docs.length>=100 || gifts.docs.length>=100 ||
+       reviews.docs.length>=100) {
+      throw StateError('league-prizes-unverified-or-truncated');
+    }
+    final report=DedaWeeklyPrizeProjection.merge(
+      week:weekId,
+      scores:[for(final d in scores.docs)MapEntry(d.id,d.data())],
+      gifts:{for(final d in gifts.docs)d.id:d.data()},
+      frozen:{for(final d in reviews.docs)
+        if(d.data()['frozen']==true)d.id},
+      plan:plan.data()?['amounts'] as List<dynamic>?,
+    );
+    await _leagueRecheck(dedaPhone,actor);
+    return {
+      'week':weekId,
+      'rows':<Map<String,dynamic>>[
+        for(final r in report.rows){
+          'place':r.place,'name':r.name,'id':r.originalId,
+          'amount':r.amount,'status':r.status.name,
+        },
+      ],
+    };
+  }
+
+  /// Original 100408 GM-only increase editor, NEVER a diamond settlement.
+  /// Current week, paused status and monotonic amounts are checked atomically.
+  Future<void> increaseScopedLeaguePrizePlan({
+    required String dedaPhone,required String weekId,
+    required List<int> amounts,required String reason,
+  }) async {
+    final actor=await _leagueManager(dedaPhone);
+    final clock=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+    final current=DedaAdminLeagueLiveData.weekId(clock.weekStart);
+    final why=reason.trim();
+    const floor=<int>[150,100,50,10,10,10,10,10,10,10];
+    if(weekId!=current || !clock.canAccumulate ||
+       !DedaIsolatedAdminProofPolicy.leagueActionAllowed(
+         admin:actor.gm,weekId:weekId,reason:why) ||
+       amounts.length!=10) {
+      throw StateError('league-prize-input-or-week-invalid');
+    }
+    for(var i=0;i<10;i++) {
+      if(amounts[i]<floor[i] || amounts[i]>1000000) {
+        throw StateError('league-prize-amount-outside-rules');
+      }
+    }
+    final control=_firestore.collection('deda_weekly_direct_control')
+      .doc('active');
+    final plan=_firestore.collection('deda_weekly_direct_prize_plans')
+      .doc(weekId);
+    final event=_firestore.collection('deda_weekly_direct_admin_events').doc();
+    await _firestore.runTransaction((tx) async {
+      final pause=await tx.get(control);
+      final old=await tx.get(plan);
+      await _leagueRecheck(dedaPhone,actor);
+      final now=DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
+      if(!now.canAccumulate ||
+         DedaAdminLeagueLiveData.weekId(now.weekStart)!=weekId ||
+         pause.data()?['weekId']!=weekId ||
+         pause.data()?['paused']!=true) {
+        throw StateError('league-prizes-require-current-paused-week');
+      }
+      final saved=old.data()?['amounts'];
+      final prior=<int>[];
+      if(saved==null) {
+        prior.addAll(floor);
+      }else{
+        if(saved is! List || saved.length!=10) {
+          throw StateError('league-prize-previous-invalid');
+        }
+        for(var i=0;i<10;i++) {
+          final n=saved[i];
+          if(n is! int || n<floor[i] || n>1000000) {
+            throw StateError('league-prize-previous-unverified');
+          }
+          prior.add(n);
+        }
+      }
+      var increased=false;
+      for(var i=0;i<10;i++) {
+        if(amounts[i]<prior[i])throw StateError('league-prize-decrease-denied');
+        if(amounts[i]>prior[i])increased=true;
+      }
+      if(!increased)throw StateError('league-prize-no-increase');
+      tx.set(plan,{
+        'weekId':weekId,'amounts':List<int>.from(amounts),
+        'reason':why,'updatedBy':actor.uid,
+        'updatedAt':FieldValue.serverTimestamp(),
+      });
+      tx.set(event,{
+        'action':'prizes_increase','weekId':weekId,'publicId':'',
+        'reason':why,'createdAt':FieldValue.serverTimestamp(),
+        'createdBy':actor.uid,
+      });
+    });
+    await _leagueRecheck(dedaPhone,actor);
+  }
 
   /// Original 500 newest winner requests. Secondary Auth, server only.
   Future<List<Map<String,dynamic>>> readScopedPrizeWinnerRequests({

@@ -12,6 +12,7 @@ on:
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart'
+      - 'lib/deda_stage2_isolated_league_admin_2026_11_23.dart'
       - 'test/deda_stage2_google_and_admin_isolation_policy_test.dart'
       - 'test/test_deda_stage2_source_wiring_2026_11_21.py'
       - '.github/workflows/deda-stage2-google-admin-isolation-source-qa-2026-11-21.yml'
@@ -153,6 +154,7 @@ jobs:
             lib/deda_stage2_isolated_admin_identity_2026_11_21.dart \
             lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart \
             lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart \
+            lib/deda_stage2_isolated_league_admin_2026_11_23.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path
