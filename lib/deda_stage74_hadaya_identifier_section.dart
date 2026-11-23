@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -22,6 +23,9 @@ class _DedaStage74IdGiftsSectionState
   String? _claimingId;
   String? _error;
   int _generation = 0;
+  // Stage2 profile: invalidate visible gifts immediately on Firebase UID rotation.
+  StreamSubscription<User?>? _auth;
+  String? _observedUid;
   // DEDA_100377_POINT08_GIFT_INBOX_FROZEN_FIREBASE_UID
   // A still-mounted gift inbox may outlive the signed-in recipient account.
   String? _verifiedUid;
@@ -33,9 +37,34 @@ class _DedaStage74IdGiftsSectionState
   }
 
 
+  void _onAuthChanged(User? user) {
+    final nextUid = user?.uid;
+    if (nextUid == _observedUid) return;
+    _observedUid = nextUid;
+    ++_generation; // Reject every old in-flight read before any refresh.
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _claimingId = null;
+      _gifts = null;
+      _verifiedUid = null;
+      _error = null;
+    });
+    // Existing owner verification remains authoritative; no new login/UID.
+    if (nextUid != null) _refresh();
+  }
+
   @override
   void initState() {
     super.initState();
+    _observedUid = _currentUid();
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        _auth = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);
+      }
+    } catch (_) {
+      // Keep the existing no-Firebase/read-only fallback.
+    }
     _refresh();
   }
 
@@ -49,6 +78,7 @@ class _DedaStage74IdGiftsSectionState
       _loading = false;
       _claimingId = null;
       _gifts = null;
+      _verifiedUid = null;
       _error = null;
       _refresh();
     }
@@ -57,6 +87,7 @@ class _DedaStage74IdGiftsSectionState
   @override
   void dispose() {
     _generation++;
+    _auth?.cancel();
     super.dispose();
   }
 
