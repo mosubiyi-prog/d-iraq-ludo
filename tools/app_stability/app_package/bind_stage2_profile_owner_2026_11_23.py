@@ -156,8 +156,10 @@ def _paid_frame_row(main: str):
     mend = section.index('  Widget _featureGrid() {', mstart)
     method = section[mstart:mend]
     if (method.count('DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED') != 1 or
-            method.count('if (DedaLabFrameSecureCheckout.live)') != 1 or
-            method.count('id: frame.id,') != 1):
+            method.count('if (DedaOwner18FrameCheckout.live)') != 1 or
+            method.count('id: frame.id,') != 1 or
+            method.count('DedaOwner18FrameCheckout.verifiedOwnedFrameIds(originalId)') != 1 or
+            method.count('ownedFrames.contains(frame.id)') != 1):
         diagnostic = [line.strip() for line in method.splitlines()
                       if any(word in line for word in
                              ('PAID_FRAMES', 'FrameSecureCheckout', 'frame.id',
@@ -173,7 +175,7 @@ def _paid_frame_row(main: str):
     for required in (
         'id: frame.id,', 'label: frame.nameAr,',
         'section: DedaMyStoreSection.frames,',
-        'proof: DedaMyStoreProof.serverVerified,',
+        'proof: DedaMyStoreProof.accountSaved,',
         "receiptKind: 'purchase',", 'active: frameStyle == style,',
     ):
         if required not in row:
@@ -212,9 +214,9 @@ def verify_verified_owned_frame_art(main: str):
     if (row.count(PAID_FRAME_ART_MARK) != 1 or
             row.count('previewAsset: frame.assetPath,') != 1 or
             main.count(PAID_FRAME_ART_MARK) != 1 or
-            method.index('if (DedaLabFrameSecureCheckout.live)') >
+            method.index('if (DedaOwner18FrameCheckout.live)') >
                 method.index('id: frame.id,') or
-            method.index('verifiedOwnedFrameIds(originalId)') >
+            method.index('DedaOwner18FrameCheckout.verifiedOwnedFrameIds(originalId)') >
                 method.index('id: frame.id,')):
         raise ValueError('PROFILE_FRAME_ART_VERIFY:proven-original-only')
 
