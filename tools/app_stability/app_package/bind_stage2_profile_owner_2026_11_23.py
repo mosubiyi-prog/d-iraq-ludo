@@ -16,18 +16,27 @@ MAIN_ANCHOR = ("        builder: (_) => DedaMyStorePage(\n"
 MAIN_GUARD = """        builder: (_) => DedaMyStorePage(
           originalId: originalId,
           items: items,
-          // Same existing read-only inventory, never a second store.
-          // Freeze the public owner, original ID and signed UID at entry.
+          // Same original store; frozen public account identity at entry.
           guardAccountState: true,
-          guardUidAtOpen: signedUidAtOpen,
+          guardUidAtOpen: _dedaStage2OwnerUidAtEntry,
           isOriginalOwnerCurrent: () =>
               mounted &&
               DedaPreferences.isLoggedIn &&
-              DedaPreferences.phone == accountPhone &&
-              _dedaId == originalId &&
+              DedaPreferences.phone == _dedaStage2OwnerPhoneAtEntry &&
+              _dedaId == _dedaStage2OriginalIdAtEntry &&
+              originalId == _dedaStage2OriginalIdAtEntry &&
               (Firebase.apps.isEmpty
-                  ? signedUidAtOpen == null
-                  : FirebaseAuth.instance.currentUser?.uid == signedUidAtOpen),"""
+                  ? _dedaStage2OwnerUidAtEntry == null
+                  : FirebaseAuth.instance.currentUser?.uid ==
+                      _dedaStage2OwnerUidAtEntry),"""
+METHOD_MARK = '  Future<void> _openDedaMyStore() async {'
+METHOD_FENCE = """  Future<void> _openDedaMyStore() async {
+    // Freeze the SAME public account before asynchronous inventory work.
+    // No new UID, profile, entitlement, receipt, checkout or wallet source.
+    final _dedaStage2OwnerPhoneAtEntry = DedaPreferences.phone;
+    final _dedaStage2OriginalIdAtEntry = _dedaId;
+    final _dedaStage2OwnerUidAtEntry = Firebase.apps.isEmpty
+        ? null : FirebaseAuth.instance.currentUser?.uid;"""
 IMPORT = "import 'package:flutter/material.dart';"
 OWNER_IMPORTS = """import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -104,7 +113,6 @@ def patched(main: str, store: str) -> tuple[str, str]:
     for label, value in (
         ('original-edit', '  Future<void> _openEditProfile() async {'),
         ('original-store', '  Future<void> _openDedaMyStore() async {'),
-        ('owner-frozen-uid', 'final signedUidAtOpen = Firebase.apps.isEmpty'),
         ('original-id', 'final originalId = _dedaId;'),
         ('my-store-route', MAIN_ANCHOR),
     ):
@@ -116,7 +124,14 @@ def patched(main: str, store: str) -> tuple[str, str]:
     store = once(store, CTOR, GUARD_CTOR, 'constructor')
     store = once(store, FIELDS, GUARD_FIELDS, 'fields')
     store = once(store, BUILD, GUARD_BUILD, 'original-store-widget')
-    main = once(main, MAIN_ANCHOR, MAIN_GUARD, 'existing-profile-store-route')
+    # Edit only the state that owns this store action; an unrelated page
+    # may have the same helper method name in the protected full app.
+    profile = once(profile, METHOD_MARK, METHOD_FENCE, 'original-profile-entry-snapshot')
+    profile = once(profile, MAIN_ANCHOR, MAIN_GUARD, 'original-profile-store-route')
+    start = main.index(class_name)
+    next_class = main[start:].find('\nclass ', len(class_name))
+    stop = start + next_class if next_class >= 0 else len(main)
+    main = main[:start] + profile + main[stop:]
     verify(main, store)
     return main, store
 
@@ -126,9 +141,9 @@ def verify(main: str, store: str):
         ('one-profile', main.count('class _DedaProfilePhase2PageState') == 1),
         ('one-store-route', main.count('builder: (_) => DedaMyStorePage(') == 1),
         ('one-owner-check', main.count('guardAccountState: true,') == 1),
-        ('original-phone', 'DedaPreferences.phone == accountPhone' in main),
-        ('original-id', '_dedaId == originalId' in main),
-        ('signed-uid', 'FirebaseAuth.instance.currentUser?.uid == signedUidAtOpen' in main),
+        ('original-phone', 'DedaPreferences.phone == _dedaStage2OwnerPhoneAtEntry' in main),
+        ('original-id', '_dedaId == _dedaStage2OriginalIdAtEntry' in main),
+        ('signed-uid', '_dedaStage2OwnerUidAtEntry' in main),
         ('one-my-store', store.count('class DedaMyStorePage extends StatelessWidget') == 1),
         ('one-guard', store.count(MARK) == 1),
         ('auth-stream', 'FirebaseAuth.instance.authStateChanges()' in store),

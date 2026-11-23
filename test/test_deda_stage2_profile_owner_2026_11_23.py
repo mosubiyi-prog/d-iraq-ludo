@@ -30,9 +30,9 @@ class Stage2OriginalProfileOwnerTests(unittest.TestCase):
     def test_single_existing_store_uses_frozen_phone_id_and_uid(self):
         main, store=mod.patched(*self._sample())
         mod.verify(main,store)
-        self.assertIn('DedaPreferences.phone == accountPhone',main)
-        self.assertIn('_dedaId == originalId',main)
-        self.assertIn('guardUidAtOpen: signedUidAtOpen',main)
+        self.assertIn('DedaPreferences.phone == _dedaStage2OwnerPhoneAtEntry',main)
+        self.assertIn('_dedaId == _dedaStage2OriginalIdAtEntry',main)
+        self.assertIn('guardUidAtOpen: _dedaStage2OwnerUidAtEntry',main)
         self.assertIn('FirebaseAuth.instance.authStateChanges()',store)
         self.assertIn('isOriginalOwnerCurrent?.call() != true',store)
         self.assertIn('return _buildOriginalMyStore(context)',store)
