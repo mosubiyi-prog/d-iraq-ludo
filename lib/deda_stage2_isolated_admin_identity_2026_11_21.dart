@@ -275,7 +275,7 @@ class DedaIsolatedAdminProofPolicy {
     if (!allowsPermission(admin:admin,permission:'reviewPrizeWinners') ||
         admin?['role'] != 'general_manager' ||
         request == null || !validScopedDocumentId(requestId) ||
-        request['cycleId'] != 'prize_v1') return false;
+        request['cycleId'] != 'prize_v1') { return false; }
     final accountKey=(request['accountKey'] ?? '').toString().trim();
     if (!RegExp(r'^[0-9]{10,16}$').hasMatch(accountKey) ||
         requestId != 'prize_v1_$accountKey' ||
@@ -284,9 +284,11 @@ class DedaIsolatedAdminProofPolicy {
         (request['rewardCode'] ?? '').toString().length != 16 ||
         request['finalReservedPoints'] != 25000 ||
         adminMessage.trim().length > 800 || prizeDetails.trim().length > 800 ||
-        (status == 'needs_info' && adminMessage.trim().isEmpty)) return false;
+        (status == 'needs_info' && adminMessage.trim().isEmpty)) { return false; }
     if (!prizeWinnerAllowedTransitions(
-        (request['status'] ?? 'new').toString()).contains(status)) return false;
+        (request['status'] ?? 'new').toString()).contains(status)) {
+      return false;
+    }
     return status != 'prize_sent' || prizeDetails.trim().isNotEmpty;
   }
 
@@ -4436,7 +4438,9 @@ class DedaIsolatedAdminIdentity {
           !DedaIsolatedAdminProofPolicy.prizeWinnerReviewAllowed(
             admin:gm,request:before,requestId:id,status:status,
             adminMessage:msg,prizeDetails:prize,
-          )) throw StateError('prize-winner-request-or-proof-changed');
+          )) {
+        throw StateError('prize-winner-request-or-proof-changed');
+      }
       final previous=(before?['status'] ?? 'new').toString();
       // The legacy UI automatically records approved+prize as prize_sent.
       final finalStatus=status=='approved' && prize.isNotEmpty

@@ -1453,7 +1453,7 @@ class _DedaIsolatedPrizeWinnersTabState
   late Future<List<Map<String,dynamic>>> _requests;
   final _search=TextEditingController();
   String _query='';
-  bool _busy=false;
+  final bool _busy=false;
   String t(String ar,String en)=>widget.isArabic?ar:en;
   String statusName(String value)=>switch(value) {
     'new'=>t('جديد','New'),
@@ -1696,7 +1696,7 @@ class _DedaIsolatedPrizeWinnerReviewDialogState
                 dateText(item['winnerConfirmedAt'])),
           const SizedBox(height:12),
           DropdownButtonFormField<String>(
-            value:_status,
+            initialValue:_status,
             decoration:InputDecoration(
               labelText:t('حالة الطلب','Request status')),
             items:options.map((v)=>DropdownMenuItem<String>(
