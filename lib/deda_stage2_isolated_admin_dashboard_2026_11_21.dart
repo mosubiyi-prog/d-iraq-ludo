@@ -196,6 +196,44 @@ Future<void> _showIsolatedOwnerNoticeComposer({
   }
 }
 
+/// Shared read-only place detail rows; never touches a Firebase principal.
+Widget _isolatedPlaceField(String title, dynamic raw, {bool ltr = false}) {
+  final value = (raw ?? '').toString().trim();
+  if (value.isEmpty) return const SizedBox.shrink();
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title + ': ', style: const TextStyle(fontWeight: FontWeight.w700)),
+      Expanded(child: Directionality(
+        textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
+        child: Text(value),
+      )),
+    ]),
+  );
+}
+
+bool _isolatedValidPlaceCoords(dynamic latitude, dynamic longitude) =>
+    latitude is num && longitude is num &&
+    latitude.toDouble().isFinite && longitude.toDouble().isFinite &&
+    latitude >= -90 && latitude <= 90 &&
+    longitude >= -180 && longitude <= 180;
+
+Future<void> _openIsolatedPlaceMap({
+  required BuildContext context,
+  required bool isArabic,
+  required String placeName,
+  required num latitude,
+  required num longitude,
+}) async {
+  if (!_isolatedValidPlaceCoords(latitude, longitude)) return;
+  await Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (_) => DedaAdminPlaceMapPage(
+      isArabic: isArabic, placeName: placeName,
+      latitude: latitude.toDouble(), longitude: longitude.toDouble(),
+    ),
+  ));
+}
+
 /// Stage2 migration bridge, NOT the complete administrative Dashboard.
 /// It never calls DedaBackend, the public Auth, or the public Firestore.
 /// The stage flag remains OFF until all original admin operations are ported.
@@ -3414,6 +3452,50 @@ class _DedaIsolatedManagerPlacesTabState
             Text(id, style: Theme.of(context).textTheme.bodySmall),
             if (approvalNumber.isNotEmpty)
               Text(approvalNumber),
+            _isolatedPlaceField(t('المحافظة', 'Governorate'),
+                data['governorate']),
+            _isolatedPlaceField(t('العنوان', 'Address'), data['address']),
+            _isolatedPlaceField(t('الهاتف', 'Phone'),
+                data['phone'], ltr: true),
+            _isolatedPlaceField(t('نوع المكان', 'Place type'),
+                data['category']),
+            _isolatedPlaceField(t('أوقات العمل', 'Opening hours'),
+                data['openingHours']),
+            _isolatedPlaceField(t('الوصف', 'Description'),
+                data['description']),
+            _isolatedPlaceField(t('حالة التواجد', 'Availability'),
+                data['isAvailableNow'] == true
+                    ? t('متواجد الآن', 'Available now')
+                    : t('غير متواجد حاليًا', 'Not available now')),
+            if (_isolatedValidPlaceCoords(
+                data['latitude'], data['longitude']))
+              OutlinedButton.icon(
+                onPressed: _mutating ? null : () => _openIsolatedPlaceMap(
+                  context: context, isArabic: widget.isArabic,
+                  placeName: placeName,
+                  latitude: data['latitude'] as num,
+                  longitude: data['longitude'] as num,
+                ),
+                icon: const Icon(Icons.map_outlined),
+                label: Text(t('فتح الموقع على الخريطة',
+                    'Open place on map')),
+              ),
+            if (!_isArchive && (data['accountKey'] ?? '')
+                .toString().trim().isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: _mutating ? null :
+                    () => _showIsolatedOwnerNoticeComposer(
+                  context: context, admin: widget.admin,
+                  dedaPhone: widget.dedaPhone,
+                  isArabic: widget.isArabic,
+                  sourceCollection: 'published_places',
+                  sourceId: id, placeName: placeName,
+                  accountKey: (data['accountKey'] ?? '').toString().trim(),
+                ),
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: Text(t('إرسال إشعار لصاحب المكان',
+                    'Notify place owner')),
+              ),
             if (!_isArchive && !published)
               Text(managerHidden
                   ? t('مخفي بواسطة الإدارة', 'Hidden by administration')
