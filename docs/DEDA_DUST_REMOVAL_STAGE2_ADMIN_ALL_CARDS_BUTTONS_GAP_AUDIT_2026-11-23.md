@@ -348,3 +348,11 @@
 - أُضيف اختبار مصدر يثبت عدم حجب المتصدرين والتحكم بسبب الخطة، وعدم إضافة كاتب صرف أو وصول للـAuth العام.
 - الحالة: `PRIZE_PLAN_FAIL_CLOSED_PRESERVE_LEADERBOARD / STAGE2_OFF / RELEASE_HOLD`. لا تُعلن نتيجة قبل نجاح CI.
 
+
+
+### إعادة فحص آيدي الإدارة الحصري (100) دون تفعيل — 2026-11-23
+
+- كود التثبيت والمنح للـ100 آيدي **موجود مسبقاً** في `tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js`، وأمان بوابة الآيدي المشفرة في `tools/deda_stage19_encrypted_admin100_callable_gateway_2026_10_19.js`، مع اختبارات أصلية. حارس `DedaExclusiveAdminBridge.serverReadFlag` و`serverActionsFlag` يبقى **OFF** افتراضياً، و`functions/index.js` لا يُصدر `Grant/SelfUse/Read` الحساسة.
+- أُعيد تشغيل **الاختبارات الأصلية نفسها** من نفس Workflow المعزول: `test/deda_stage19_exclusive_fixed_color_actions.test.js` (التثبيت واللون ومنع الإعادة) و`test/deda_stage19_private100_firestore_races_emulator.test.js` (Firestore Emulator وأسماء مشفرة صناعية وسباق 10 منح متوازية وعزل المدير). لا مولّد آيدي مكرر ولا تغيير ألوان أو قائمة حقيقية.
+- **الحالة حتى انتهاء CI:** `STAGE19_REUSE_EXISTING_TESTS / ENCRYPTED_CATALOG_UNDEPLOYED / GRANTS_OFF / NO_REAL_IDS / NO_REAL_USERS`. نجاحها لا يعني تشغيل الزر مع Secret Manager أو اعتماد الملكية الحقيقية؛ يظل حظر التفعيل قائماً حتى الأدلة والتصريح المنفصل.
+

@@ -20,6 +20,11 @@ on:
       - 'functions/test/deda_stage2_original_owner_session_pin_preflight_private_2026_11_23.test.js'
       - 'functions/index.js'
       - 'functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs'
+      - 'test/deda_stage19_exclusive_fixed_color_actions.test.js'
+      - 'test/deda_stage19_private100_firestore_races_emulator.test.js'
+      - 'tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js'
+      - 'tools/deda_stage19_encrypted_admin100_callable_gateway_2026_10_19.js'
+      - 'functions/stage19_private/stage19_owner100_readonly_NOT_EXPORTED.js'
       - 'functions/deda_weekly_direct_prize_plan.js'
       - 'functions/deda_weekly_direct_prize_worker.cjs'
       - 'functions/deda_weekly_payout_approved_runner_100438.cjs'
@@ -98,6 +103,22 @@ jobs:
           node --check functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs
           node --test functions/test/deda_stage2_existing_admin_revocation_private_2026_11_23.test.cjs
           echo 'PASS_EXISTING_ADMIN_REVOCATION_STRICT_STAGE2_GUARD_NO_DEPLOY'
+      - name: Reuse existing Stage19 100-ID fixed-color tests without exporting grant callables
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check test/deda_stage19_exclusive_fixed_color_actions.test.js
+          node --test test/deda_stage19_exclusive_fixed_color_actions.test.js
+          node - <<'NODE'
+          const s=require('fs').readFileSync('functions/index.js','utf8');
+          for(const name of ['dedaStage19Exclusive100Grant',
+                             'dedaStage19Exclusive100SelfUse',
+                             'dedaStage19Exclusive100Read']){
+            if(s.includes('exports.'+name))throw Error('STAGE19_UNAPPROVED_EXPORT');
+          }
+          console.log('STAGE19_PRIVATE_GRANTS_NOT_EXPORTED');
+          NODE
+          echo 'PASS_EXISTING_STAGE19_FIXED_COLOR_TESTS_NO_GRANT_DEPLOY'
       - name: Install throwaway emulator tooling in runner temp only
         shell: bash
         run: |
@@ -141,6 +162,20 @@ jobs:
             --only firestore --non-interactive \
             'node --test functions/tests/deda_weekly_direct_prize_custom_plan_100438.test.cjs'
           echo 'PASS_ORIGINAL_APPROVED_WEEKLY_PRIZE_WORKER_EMULATOR_ONLY_NO_DEPLOY'
+      - name: Test EXISTING encrypted 100-ID grant race safeguards on throwaway Firestore
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOOGLE_CLOUD_PROJECT=demo-deda-stage19-owner100-races
+          export GCLOUD_PROJECT=demo-deda-stage19-owner100-races
+          root="$RUNNER_TEMP/deda-stage2-admin-runtime"
+          node --check test/deda_stage19_private100_firestore_races_emulator.test.js
+          "$root/node_modules/.bin/firebase" emulators:exec \
+            --project demo-deda-stage19-owner100-races \
+            --config "$root/firebase.json" \
+            --only firestore --non-interactive \
+            'node --test test/deda_stage19_private100_firestore_races_emulator.test.js'
+          echo 'PASS_STAGE19_ORIGINAL_100_ID_FIRESTORE_RACE_EMULATOR_NO_DEPLOY'
       - name: Exercise actual Firestore security rules on fake staff, invite, and recovery records
         shell: bash
         run: |
