@@ -26,43 +26,6 @@ class _DedaProfilePhase2PageState
         builder: (_) => DedaMyStorePage(
           originalId: originalId,
           items: items,
-class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
-  bool _saving = false;
-  @override
-  void initState() {
-    super.initState();
-    _name = TextEditingController(text: DedaPreferences.userName);
-  }
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-  Future<void> _save() async {
-    final cleanName = _name.text.trim();
-    try {
-      await DedaPreferences.setUserName(cleanName);
-      await DedaPreferences.setProfileAppearance(
-        avatarStyle: _avatarStyle,
-        frameStyle: _frameStyle,
-        backgroundStyle: _backgroundStyle,
-      );
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } catch (_) {}
-  }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: DedaFramedAvatar(
-        avatarStyle: _avatarStyle,
-        frameStyle: _frameStyle,
-        size: 142,
-      ),
-    );
-  }
-}
-class _FollowingProtectedWidget extends StatelessWidget {
 """
         return src,store
 
@@ -80,13 +43,6 @@ class _FollowingProtectedWidget extends StatelessWidget {
         self.assertNotIn("collection('users')",GATE.read_text())
         self.assertNotIn("signInAnonymously",GATE.read_text())
         self.assertNotIn("tx.set(",GATE.read_text())
-        edit=changed.split('class _DedaEditProfilePageState',1)[1]
-        self.assertIn(mod.EDITOR_MARK, edit)
-        self.assertEqual(edit.count('await DedaPreferences.setUserName(cleanName);'),1)
-        self.assertEqual(edit.count('await DedaPreferences.setProfileAppearance('),1)
-        self.assertIn('_dedaStage2EditAuthSubscription?.cancel();',edit)
-        self.assertIn('DedaPreferences.accountType == _dedaStage2EditAccountType',edit)
-        self.assertIn('if (!_dedaStage2SameEditingAccount())',edit)
 
     def test_refuses_duplicate_or_ambiguous_profile_navigation(self):
         original,store=self._sample()
@@ -101,19 +57,38 @@ class _FollowingProtectedWidget extends StatelessWidget {
         with self.assertRaises(ValueError):
             mod.proposed(changed,store)
 
-    def test_editor_guard_stops_if_existing_save_or_style_source_changes(self):
-        original,store=self._sample()
-        for missing in (
-            'await DedaPreferences.setUserName(cleanName);',
-            'await DedaPreferences.setProfileAppearance(',
-            'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {',
+    def test_existing_original_editor_uses_one_account_epoch_and_await_guard(self):
+        editor="""class _DedaEditProfilePageState extends State<DedaEditProfilePage> with DedaSectionState<DedaEditProfilePage> {
+  Future<void> _save() async {
+    return dedaRunSectionVoid(() async {
+      final verified = await DedaSectionOperationContext.wait(() => originalReceipt());
+      if (!dedaSectionCurrent) return;
+      await DedaSectionOperationContext.wait(() => DedaPreferences.setUserName(cleanName));
+      await DedaSectionOperationContext.wait(() => DedaPreferences.setProfileAppearance(
+          avatarStyle: avatar, frameStyle: frame, backgroundStyle: background));
+    });
+  }
+  @override
+  Widget build(BuildContext context) {
+    if (!dedaSectionCurrent) return dedaSectionExpiredView();
+    return const Placeholder();
+  }
+}
+class _UnrelatedNextState {}
+"""
+        mod.audit_original_editor(editor)
+        self.assertIn("DedaSectionState<DedaEditProfilePage>",editor)
+        for required in (
+            'DedaSectionState<DedaEditProfilePage>',
+            'return dedaRunSectionVoid(() async {',
+            'DedaSectionOperationContext.wait(',
+            'if (!dedaSectionCurrent) return;',
+            'DedaPreferences.setUserName(',
+            'DedaPreferences.setProfileAppearance(',
+            'dedaSectionExpiredView()',
         ):
             with self.assertRaises(ValueError):
-                mod.proposed(original.replace(missing,'// DRIFT'),store)
-        changed=mod.proposed(original,store)
-        mod.verify_original_editor(changed)
-        self.assertEqual(changed.count(mod.EDITOR_MARK),1)
-
+                mod.audit_original_editor(editor.replace(required,'BROKEN',1))
 
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):

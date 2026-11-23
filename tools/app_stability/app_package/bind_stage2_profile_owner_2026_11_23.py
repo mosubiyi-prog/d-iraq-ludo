@@ -6,7 +6,6 @@ original source overwrite, Play deployment, checkout or wallet mutation.
 Only the disposable fully reconstructed QA app gets this wrapper.
 """
 import argparse
-import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -41,167 +40,44 @@ NEW = """        builder: (_) => DedaStage2ProfileOwnerBoundMyStore(
                       _dedaStage2OwnerUidAtEntry),"""
 
 
-# The ORIGINAL profile editor is a different page from the My Store route.
-# Its already-staged Point09 appearance setter is account-scoped: reuse it,
-# never create a second appearance writer, inventory, wallet, or UID.
-EDITOR = 'class _DedaEditProfilePageState'
-EDITOR_MARK = '// DEDA_STAGE2_PROFILE_EDITOR_OWNER_CHECK_2026_11_23'
-EDITOR_FIELDS = """  // DEDA_STAGE2_PROFILE_EDITOR_OWNER_CHECK_2026_11_23
-  late final String _dedaStage2EditPhone;
-  late final DedaAccountType? _dedaStage2EditAccountType;
-  late final String? _dedaStage2EditUid;
-  late final bool _dedaStage2EditFirebaseReady;
-  StreamSubscription<User?>? _dedaStage2EditAuthSubscription;
-
-  bool _dedaStage2SameEditingAccount() =>
-      mounted &&
-      DedaPreferences.isLoggedIn &&
-      DedaPreferences.phone == _dedaStage2EditPhone &&
-      DedaPreferences.accountType == _dedaStage2EditAccountType &&
-      Firebase.apps.isNotEmpty == _dedaStage2EditFirebaseReady &&
-      (Firebase.apps.isEmpty
-          ? null : FirebaseAuth.instance.currentUser?.uid) ==
-          _dedaStage2EditUid;
-
-"""
-EDITOR_INIT = """    super.initState();
-    _dedaStage2EditPhone = DedaPreferences.phone;
-    _dedaStage2EditAccountType = DedaPreferences.accountType;
-    _dedaStage2EditFirebaseReady = Firebase.apps.isNotEmpty;
-    _dedaStage2EditUid = Firebase.apps.isEmpty
-        ? null : FirebaseAuth.instance.currentUser?.uid;
-    if (_dedaStage2EditFirebaseReady) {
-      _dedaStage2EditAuthSubscription =
-          FirebaseAuth.instance.authStateChanges().listen((_) {
-        if (mounted) setState(() {});
-      });
+# The fully assembled original editor is ALREADY protected by the preexisting
+# DedaSectionState mixin, DedaSectionOperationContext.wait and account epoch.
+# Prove this before reusing it; do NOT create a duplicate editor auth listener.
+def audit_original_editor(main: str):
+    import re
+    matches=list(re.finditer(
+        r'(?m)^class\s+_DedaEditProfilePageState\b[^{]*\{', main))
+    if len(matches) != 1:
+        raise ValueError('PROFILE_AUDIT_STOP:original-editor-class-count:'+str(len(matches)))
+    start=matches[0].start()
+    next_class=main.find('\nclass ',matches[0].end())
+    if next_class < 0:
+        raise ValueError('PROFILE_AUDIT_STOP:editor-section-boundary')
+    editor=main[start:next_class]
+    header=matches[0].group()
+    save_start=editor.find('  Future<void> _save() async {')
+    if save_start < 0:
+        raise ValueError('PROFILE_AUDIT_STOP:original-editor-save-absent')
+    save=editor[save_start:]
+    required={
+        'single-existing-account-epoch-mixin':
+            'DedaSectionState<DedaEditProfilePage>' in header,
+        'single-original-section-operation':
+            'return dedaRunSectionVoid(() async {' in save,
+        'owner-current-after-server-receipt':
+            'if (!dedaSectionCurrent) return;' in save,
+        'account-principal-rechecked-around-awaits':
+            'DedaSectionOperationContext.wait(' in save,
+        'original-name-writer':
+            'DedaPreferences.setUserName(' in save,
+        'original-appearance-writer':
+            'DedaPreferences.setProfileAppearance(' in save,
+        'original-expired-screen':
+            'dedaSectionExpiredView()' in editor,
     }
-    _name = TextEditingController(text: DedaPreferences.userName);"""
-EDITOR_SAVE_OPEN = """  Future<void> _save() async {
-    // The editor may outlive the public owner: never start stale writes.
-    if (!_dedaStage2SameEditingAccount()) {
-      if (mounted) setState(() => _error = dedaText(
-        'تغيّر الحساب. أعد فتح تعديل الملف للحساب الحالي.',
-        'Account changed. Reopen Edit Profile for the current account.'));
-      return;
-    }"""
-EDITOR_SAVE_AFTER_NAME = """      // Stop before the second (appearance) write if Auth rotated while
-      // the original name setter awaited; do not report a stale success.
-      if (!_dedaStage2SameEditingAccount()) return;"""
-EDITOR_SAVE_END = """      if (!_dedaStage2SameEditingAccount()) return;
-      Navigator.pop(context, true);"""
-EDITOR_DISPOSE = """  @override
-  void dispose() {
-    _dedaStage2EditAuthSubscription?.cancel();
-    _name.dispose();"""
-EDITOR_BUILD = """  @override
-  Widget build(BuildContext context) {
-    if (!_dedaStage2SameEditingAccount()) {
-      return Scaffold(
-        appBar: AppBar(title: Text(dedaText('تعديل الملف', 'Edit Profile'))),
-        body: Center(child: Text(dedaText(
-          'تغيّر الحساب. أعد فتح تعديل الملف للحساب الحالي.',
-          'Account changed. Reopen Edit Profile for the current account.',
-        ), textAlign: TextAlign.center)),
-      );
-    }
-"""
-
-
-def editor_span(main: str) -> tuple[int, int]:
-    if main.count(EDITOR) != 1:
-        # The compiled source can add a mixin or repackage the editor.
-        # Report exact class candidates; NEVER select a different page.
-        import re
-        nearby = re.findall(r'(?m)^class [^\n]*(?:Edit|Profile)[^\n]*', main)
-        raise ValueError(
-            'PROFILE_SAFE_STOP:original-editor-class-count=' +
-            str(main.count(EDITOR)) + ':class_candidates=' +
-            repr(nearby[:20]))
-    start = main.index(EDITOR)
-    class_header = main[start:main.find('{', start) + 1]
-    if 'extends State<DedaEditProfilePage>' not in class_header:
-        raise ValueError('PROFILE_SAFE_STOP:editor-inheritance-changed')
-    end = main.find('\nclass ', start + len(EDITOR))
-    if end < 0:
-        raise ValueError('PROFILE_SAFE_STOP:original-editor-next-class-not-found')
-    return start, end
-
-
-def patch_original_editor(main: str) -> str:
-    start, end = editor_span(main)
-    editor = main[start:end]
-    if EDITOR_MARK in editor:
-        raise ValueError('PROFILE_SAFE_STOP:editor-already-bound')
-    for label, old, new in (
-        ('existing-saving-field',
-         '  bool _saving = false;', EDITOR_FIELDS + '  bool _saving = false;'),
-        ('real-profile-init',
-         '    super.initState();\n    _name = TextEditingController(text: DedaPreferences.userName);',
-         EDITOR_INIT),
-        ('original-dispose',
-         '  @override\n  void dispose() {\n    _name.dispose();',
-         EDITOR_DISPOSE),
-        ('original-save',
-         '  Future<void> _save() async {', EDITOR_SAVE_OPEN),
-        ('before-original-success',
-         '      Navigator.pop(context, true);',
-         EDITOR_SAVE_END),
-        ('original-build',
-         '  @override\n  Widget build(BuildContext context) {\n',
-         EDITOR_BUILD),
-    ):
-        editor = once(editor, old, new, 'editor-' + label)
-    # The protected editor may rename its local clean-name variable; match
-    # the original async name SETTER call, not a guessed argument string.
-    # Require exactly one owner-facing write and preserve its entire call.
-    name_calls = list(re.finditer(
-        r'(?m)^[ \t]*await\s+DedaPreferences\.setUserName\([\s\S]{0,300}?\);[^\n]*\n',
-        editor,
-    ))
-    if len(name_calls) != 1:
-        save_at = editor.find('  Future<void> _save() async {')
-        sample = editor[save_at:save_at + 1600] if save_at >= 0 else ''
-        raise ValueError(
-            'PROFILE_SAFE_STOP:original-name-save-count=' +
-            str(len(name_calls)) + ':editor-save-source=' + repr(sample))
-    saved = name_calls[0]
-    editor = editor[:saved.end()] + EDITOR_SAVE_AFTER_NAME + '\n' + editor[saved.end():]
-    # Recheck around the original Point09 account-scoped appearance writer.
-    # No new setter is introduced; this guard denies stale save continuation.
-    setter = '      await DedaPreferences.setProfileAppearance('
-    if editor.count(setter) != 1:
-        raise ValueError('PROFILE_SAFE_STOP:original-appearance-call-drift')
-    editor = once(editor, setter,
-                  '      if (!_dedaStage2SameEditingAccount()) return;\n' + setter,
-                  'editor-before-appearance')
-    main = main[:start] + editor + main[end:]
-    verify_original_editor(main)
-    return main
-
-
-def verify_original_editor(main: str):
-    start, end = editor_span(main)
-    editor = main[start:end]
-    conditions = {
-        'one-editor-owner-guard': editor.count(EDITOR_MARK) == 1,
-        'same-phone': 'DedaPreferences.phone == _dedaStage2EditPhone' in editor,
-        'same-type': 'DedaPreferences.accountType == _dedaStage2EditAccountType' in editor,
-        'same-uid': 'FirebaseAuth.instance.currentUser?.uid' in editor,
-        'auth-listener': 'authStateChanges().listen' in editor,
-        'listener-disposed': '_dedaStage2EditAuthSubscription?.cancel();' in editor,
-        'guard-before-name': editor.index('if (!_dedaStage2SameEditingAccount())') <
-            editor.index('await DedaPreferences.setUserName('),
-        'guard-between-saves': 'await DedaPreferences.setUserName(' in editor and
-            editor.count('if (!_dedaStage2SameEditingAccount()) return;') >= 3,
-        'single-original-name-writer': editor.count('await DedaPreferences.setUserName(') == 1,
-        'single-original-appearance-writer': editor.count('await DedaPreferences.setProfileAppearance(') == 1,
-        'original-edit-gallery-retained': 'DedaFramedAvatar(' in editor,
-        'original-save-page-retained': 'Navigator.pop(context, true);' in editor,
-    }
-    for label, verified in conditions.items():
-        if not verified:
-            raise ValueError('PROFILE_VERIFY_FAILED:editor-' + label)
+    for name,passed in required.items():
+        if not passed:
+            raise ValueError('PROFILE_AUDIT_STOP:'+name)
 
 
 def once(source: str, old: str, new: str, label: str) -> str:
@@ -240,13 +116,11 @@ def proposed(main: str, old_store: str):
     main = main[:start] + section + main[stop:]
     main = once(main, IMPORT_ANCHOR, IMPORT_ANCHOR + IMPORT,
                 'single-import-following-existing-stage2')
-    main = patch_original_editor(main)
     verify(main, old_store)
     return main
 
 
 def verify(main: str, old_store: str):
-    verify_original_editor(main)
     first, stop = original_profile_span(main)
     section = main[first:stop]
     for label, assertion in [
@@ -279,7 +153,8 @@ def bind(project: Path, verify_only: bool = False):
     main, old_store = main_path.read_text(), store_path.read_text()
     if ('DEDA_100377_POINT09_APPEARANCE_ASYNC_ACCOUNT_SCOPE' not in main or
             '_profileAvatarKey(savePhone)' not in main):
-        raise ValueError('PROFILE_SAFE_STOP:prior-appearance-account-guard-missing')
+        raise ValueError('PROFILE_AUDIT_STOP:existing-appearance-async-guard-missing')
+    audit_original_editor(main)
     if verify_only:
         verify(main, old_store)
         if module_path.read_bytes() != expected.read_bytes():
