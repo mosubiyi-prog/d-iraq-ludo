@@ -8,7 +8,193 @@ import 'deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_league_admin_2026_11_23.dart';
 import 'deda_stage2_isolated_tasks_admin_2026_11_23.dart';
 import 'deda_admin_compact_card.dart';
+import 'admin_place_map.dart';
 import 'admin_team_pages.dart' show dedaAdminGovernorates;
+
+/// Reuses the original three manual owner-notice choices, but the sender
+/// is the verified secondary admin session. No public Firebase objects.
+Future<void> _showIsolatedOwnerNoticeComposer({
+  required BuildContext context,
+  required bool isArabic,
+  required DedaIsolatedAdminIdentity admin,
+  required String dedaPhone,
+  required String sourceCollection,
+  required String sourceId,
+  required String placeName,
+  required String accountKey,
+}) async {
+  String t(String ar, String en) => isArabic ? ar : en;
+  final title = TextEditingController();
+  final body = TextEditingController();
+  var type = 'place_report';
+
+  void applyTemplate(String selected) {
+    type = selected;
+    if (selected == 'place_report') {
+      title.text = t('ورد بلاغ بخصوص مكانك',
+          'A report was received about your place');
+      body.text = t(
+        'ورد إلى إدارة DEDA بلاغ بخصوص مكانك. تمت مراجعة البلاغ ونطلب منك مراجعة بيانات المكان والتأكد من صحتها. ستتواصل الإدارة عند الحاجة.',
+        'DEDA administration received and reviewed a report about your place. Please review the place information and make sure it is accurate. Administration will contact you when needed.',
+      );
+    } else if (selected == 'admin_alert') {
+      title.text = t('تنبيه إداري بخصوص مكانك',
+          'Administration notice about your place');
+      body.text = t('يرجى مراجعة بيانات مكانك في DEDA والتأكد من صحتها.',
+          'Please review your place information in DEDA and make sure it is accurate.');
+    } else {
+      title.text = t('رسالة من إدارة DEDA', 'Message from DEDA administration');
+      body.clear();
+    }
+  }
+
+  applyTemplate(type);
+  try {
+    final draft = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) => AlertDialog(
+          title: Text(t('إرسال إشعار لصاحب المكان',
+              'Send notification to place owner')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(t('المكان: ', 'Place: ') + placeName,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 5),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(t('حساب صاحب المكان: ', 'Owner account: ') +
+                      accountKey),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: type,
+                  decoration: InputDecoration(
+                    labelText: t('نوع الإشعار', 'Notification type'),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(value: 'place_report',
+                        child: Text(t('ورد بلاغ بخصوص مكانك', 'Place report'))),
+                    DropdownMenuItem(value: 'admin_alert',
+                        child: Text(t('تنبيه إداري', 'Administration alert'))),
+                    DropdownMenuItem(value: 'custom',
+                        child: Text(t('رسالة مخصصة', 'Custom message'))),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    updateDialog(() => applyTemplate(value));
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(controller: title, maxLength: 180,
+                  decoration: InputDecoration(
+                    labelText: t('عنوان الإشعار', 'Notification title'),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(controller: body, maxLength: 4000,
+                  minLines: 4, maxLines: 7,
+                  decoration: InputDecoration(
+                    labelText: t('نص الإشعار', 'Notification message'),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                Text(t('سيظهر الإشعار داخل جرس إشعارات صاحب المكان للقراءة فقط، بدون إمكانية الرد.',
+                    'The owner sees this in the read-only notification bell.')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+                child: Text(t('إلغاء', 'Cancel'))),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, <String, String>{
+                'type': type, 'title': title.text.trim(), 'body': body.text.trim(),
+              }),
+              icon: const Icon(Icons.arrow_forward_outlined),
+              label: Text(t('مراجعة قبل الإرسال', 'Review before sending')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (draft == null || !context.mounted) return;
+    final selectedTitle = (draft['title'] ?? '').trim();
+    final selectedBody = (draft['body'] ?? '').trim();
+    if (selectedTitle.isEmpty || selectedBody.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('اكتب العنوان ونص الإشعار قبل الإرسال.',
+            'Enter the notification title and message.')),
+      ));
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('تأكيد الإشعار', 'Confirm notification')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(placeName, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Directionality(
+                textDirection: TextDirection.ltr, child: Text(accountKey)),
+              const Divider(height: 20),
+              Text(selectedTitle, style: const TextStyle(
+                  fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              Text(selectedBody),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(t('رجوع', 'Back'))),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.send_outlined),
+            label: Text(t('إرسال الإشعار', 'Send notification')),
+          ),
+        ],
+      ),
+    ) ?? false;
+    if (!confirm || !context.mounted) return;
+    try {
+      await admin.sendScopedOwnerPlaceNotification(
+        dedaPhone: dedaPhone,
+        sourceCollection: sourceCollection,
+        sourceId: sourceId,
+        expectedAccountKey: accountKey,
+        type: draft['type'] ?? 'custom',
+        title: selectedTitle,
+        body: selectedBody,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تم إرسال الإشعار وتسجيله إدارياً.',
+              'Notice sent and audited.')),
+        ));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('تعذر الإرسال: تحقق من صلاحية الإدارة وملكية المكان.',
+              'Send denied: verify admin permission and place ownership.')),
+        ));
+      }
+    }
+  } finally {
+    title.dispose();
+    body.dispose();
+  }
+}
 
 /// Stage2 migration bridge, NOT the complete administrative Dashboard.
 /// It never calls DedaBackend, the public Auth, or the public Firestore.
