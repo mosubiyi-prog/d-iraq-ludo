@@ -15,6 +15,10 @@ on:
       - 'qa/stage2/isolated_admin_invite_preflight_2026_11_23.py'
       - 'qa/stage2/isolated_admin_gateway_anchor_candidate_2026_11_23.test.cjs'
       - 'qa/stage2/isolated_admin_secondary_auth_activation_emulator_2026_11_23.test.cjs'
+      - 'functions/deda_pin_manual_recovery_compat_private_v1.js'
+      - 'functions/deda_pin_auto_recovery_worker.js'
+      - 'functions/test/deda_pin_manual_recovery_compat_private_v1.test.js'
+      - 'functions/test/deda_pin_auto_recovery_compat_private_v1.test.js'
       - '.github/workflows/deda-stage2-isolated-admin-firestore-emulator-no-deploy.yml'
   workflow_dispatch:
 
@@ -59,6 +63,16 @@ jobs:
           echo 'PASS_PROTECTED_RULES_AND_BASE_APP_UNCHANGED'
       - name: Test legacy-invite preflight with fake local records, no Firebase
         run: python3 qa/stage2/isolated_admin_invite_preflight_2026_11_23.py --self-test
+      - name: Verify existing UID-safe manual PIN compatibility worker without enabling it
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'const dedaPinCompatPilotEnabled = false;' functions/index.js
+          node --check functions/deda_pin_manual_recovery_compat_private_v1.js
+          node --check functions/deda_pin_auto_recovery_worker.js
+          node --test functions/test/deda_pin_manual_recovery_compat_private_v1.test.js \
+            functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
+          echo 'PASS_EXISTING_PRIVATE_PIN_DUAL_SYNC_WORKER_TESTS_OFF_NO_DEPLOY'
       - name: Install throwaway emulator tooling in runner temp only
         shell: bash
         run: |
