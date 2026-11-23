@@ -27,32 +27,42 @@ PERMISSION_HARDENED = "\n    // STAGE2 QA CANDIDATE: newly invited staff have no
 NOTIFICATION_CREATE_ORIGINAL = "      allow create: if isAdmin()\n        && adminProvinceMatches(request.resource.data)"
 NOTIFICATION_CREATE_HARDENED = "      allow create: if isAdmin()\n        && activeInvitedMemberGateway()\n        && adminProvinceMatches(request.resource.data)"
 
-OWNER_MANUAL_NOTICE_CANDIDATE = """    // Emulator candidate only: manual notices must be tied to the current
-    // source place owner and authorized for this kind of admin operation.
-    // Existing automatic deletion/edit notice types keep their old paths.
+OWNER_MANUAL_NOTICE_CANDIDATE = """      // Candidate only: limit manual owner notices to the exact source owner
+      // and explicitly authorized admin. Avoid nested auth helper expansion:
+      // the outer allow-create already checks the secondary member gateway.
+      function candidateManualNoticeSourceMatches() {
+        let place = get(/databases/$(database)/documents/$(request.resource.data.sourceType)/$(request.resource.data.sourceId)).data;
+        return place.accountKey == request.resource.data.accountKey
+          && place.ownerUid == request.resource.data.ownerUid
+          && place.governorate == request.resource.data.governorate;
+      }
       function candidateManualOwnerNoticeScope() {
         let sourceCollection = request.resource.data.sourceType;
-        let sourceId = request.resource.data.sourceId;
+        let role = adminData().role;
         return !(request.resource.data.type in [
             'place_report', 'admin_alert', 'custom'
           ])
           || (
             sourceCollection in ['place_requests', 'published_places']
-            && sourceId is string
-            && exists(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
-            && get(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
-                .data.accountKey == request.resource.data.accountKey
-            && get(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
-                .data.ownerUid == request.resource.data.ownerUid
-            && get(/databases/$(database)/documents/$(sourceCollection)/$(sourceId))
-                .data.governorate == request.resource.data.governorate
+            && request.resource.data.sourceId is string
             && (
               (sourceCollection == 'published_places'
-                && isGeneralManager()
-                && adminData().role == 'general_manager')
-              || (sourceCollection == 'place_requests'
-                && hasAdminPermission('viewPlaceRequests'))
+                && role == 'general_manager')
+              || (
+                sourceCollection == 'place_requests'
+                && (
+                  role == 'general_manager'
+                  || (
+                    adminData().keys().hasAny(['permissions'])
+                    && adminData().permissions is map
+                    && adminData().permissions.keys()
+                        .hasAny(['viewPlaceRequests'])
+                    && adminData().permissions.viewPlaceRequests == true
+                  )
+                )
+              )
             )
+            && candidateManualNoticeSourceMatches()
           );
       }
 
