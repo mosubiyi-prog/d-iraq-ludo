@@ -110,6 +110,88 @@ test("actual checked-in Firestore rules: secondary admin isolation + release hol
       ]);
     });
 
+    await t.test("place auto approval requires trusted backend marker, strict GM, revision",async()=>{
+      const configPath="deda_automation_settings/place_auto_approval";
+      const markerPath="deda_automation_status/place_auto_approval";
+      const config=manager.doc(configPath);
+      const marker=manager.doc(markerPath);
+      const fields=(enabled,rev,uid)=>({
+        enabled,enabledAt:enabled?sent():null,
+        revision:rev,updatedAt:sent(),changedByUid:uid,
+      });
+      // Status is server/SDK owned: no secondary admin can forge readiness.
+      await assertFails(manager.doc(markerPath).set({
+        ready:true,checkedAt:sent(),
+      }));
+      await assertFails(staff.doc(markerPath).set({
+        ready:true,checkedAt:sent(),
+      }));
+      await assertFails(publicDb.doc(markerPath).get());
+      await assertFails(staff.doc(configPath).get());
+      await assertFails(outsider.doc(configPath).get());
+      await assertSucceeds(config.get());
+      // No worker marker: no client may enable the 30-second worker.
+      await assertFails(config.set(fields(true,1,managerUid)));
+      await assertSucceeds(config.set(fields(false,1,managerUid)));
+      await assertFails(staff.doc(configPath).set(fields(false,1,staffUid)));
+      await assertFails(publicDb.doc(configPath).update(
+        fields(true,2,publicUid)));
+      // Trusted server marker is seeded only by the emulator's privileged
+      // test context, representing a separately deployed callable.
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc(markerPath).set({
+          ready:true,checkedAt:firebase.firestore.Timestamp.now(),
+          serviceVersion:"synthetic-emulator-only",
+        });
+      });
+      await assertSucceeds(marker.get());
+      await assertFails(staff.doc(configPath).update(fields(true,2,staffUid)));
+      await assertFails(config.update(fields(true,4,managerUid)));
+      await assertFails(config.update(fields(true,2,staffUid)));
+      // The owner can opt in only AFTER readiness, audited in same commit.
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const previous=await tx.get(config);
+        const readiness=await tx.get(marker);
+        assert.equal(previous.data().revision,1);
+        assert.equal(readiness.data().ready,true);
+        tx.update(config,fields(true,2,managerUid));
+        tx.set(manager.doc("admin_audit/qa_place_automation_enabled"),{
+          action:"place_auto_approval_enabled",
+          adminUid:managerUid,
+          adminName:"QA General Manager",
+          adminRole:"general_manager",
+          sourceCollection:"deda_automation_settings",
+          sourceId:"place_auto_approval",
+          createdAt:sent(),
+        });
+      }));
+      assert.equal((await config.get()).data().enabled,true);
+      await assertFails(config.delete());
+      // OFF must work even after trusted worker readiness expires.
+      await env.withSecurityRulesDisabled(async ctx=>{
+        await ctx.firestore().doc(markerPath).update({
+          ready:false,checkedAt:firebase.firestore.Timestamp.fromMillis(0),
+        });
+      });
+      await assertFails(config.update(fields(true,3,managerUid)));
+      await assertSucceeds(manager.runTransaction(async tx=>{
+        const previous=await tx.get(config);
+        assert.equal(previous.data().revision,2);
+        tx.update(config,fields(false,3,managerUid));
+        tx.set(manager.doc("admin_audit/qa_place_automation_disabled"),{
+          action:"place_auto_approval_disabled",
+          adminUid:managerUid,
+          adminName:"QA General Manager",
+          adminRole:"general_manager",
+          sourceCollection:"deda_automation_settings",
+          sourceId:"place_auto_approval",
+          createdAt:sent(),
+        });
+      }));
+      assert.equal((await config.get()).data().enabled,false);
+      console.log("PASS_PLACE_AUTO_GM_SECONDARY_AUTH_WORKER_MARKER_AND_OFF_FALLBACK_NO_DEPLOY");
+    });
+
     await t.test("unrelated users cannot read admin team or pending invite", async () => {
       await assertFails(outsider.collection("admins").get());
       await assertFails(outsider.doc("admins/" + staffUid).get());
