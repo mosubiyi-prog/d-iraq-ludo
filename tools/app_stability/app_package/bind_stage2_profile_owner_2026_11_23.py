@@ -158,7 +158,12 @@ def _paid_frame_row(main: str):
     if (method.count('DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED') != 1 or
             method.count('if (DedaLabFrameSecureCheckout.live)') != 1 or
             method.count('id: frame.id,') != 1):
-        raise ValueError('PROFILE_FRAME_ART_STOP:original-receipt-gate-or-item')
+        diagnostic = [line.strip() for line in method.splitlines()
+                      if any(word in line for word in
+                             ('PAID_FRAMES', 'FrameSecureCheckout', 'frame.id',
+                              'previewAsset', 'receiptKind', 'frame.nameAr'))]
+        raise ValueError('PROFILE_FRAME_ART_STOP:original-receipt-gate-or-item:' +
+                         repr(diagnostic[:18]))
     entry = method.index('id: frame.id,')
     row_start = method.rfind('items.add(DedaMyStoreItem(', 0, entry)
     row_end = method.find('));', entry)
