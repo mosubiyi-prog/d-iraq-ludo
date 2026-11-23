@@ -273,10 +273,71 @@ def candidate(source):
         raise ValueError("FAIL_CANDIDATE_RULES_DUPLICATE_GUARD")
     if result.count("match /admin_gateway_protection/{guardId}") != 1:
         raise ValueError("FAIL_CANDIDATE_RULES_DUPLICATE_ANCHOR")
-    return add_invite_email_reservation(add_place_first_view_candidate(result))
+    return add_invite_email_reservation(
+        add_user_recovery_review_candidate(add_place_first_view_candidate(result))
+    )
 
 
 
+
+USER_RECOVERY_MATCH = "    match /recovery_requests/{requestId} {"
+USER_RECOVERY_NEXT = "    // Retained as a denied legacy path so older test builds cannot expose"
+USER_RECOVERY_UPDATE = "      allow update: if isGeneralManager();"
+USER_RECOVERY_CANDIDATE = """      // STAGE2 QA CANDIDATE ONLY: never approve/issue an account PIN
+      // through a client-side user-recovery request update.
+      function candidateUserRecoveryReviewOnly() {
+        let a = adminData();
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        return signedIn()
+          && a.keys().hasAll(['role', 'active', 'status'])
+          && a.active == true
+          && a.status == 'active'
+          && a.role == 'general_manager'
+          && activeInvitedMemberGateway()
+          && resource.data.keys().hasAll([
+            'requesterUid', 'accountKey', 'status'
+          ])
+          && request.resource.data.requesterUid ==
+            resource.data.requesterUid
+          && request.resource.data.accountKey ==
+            resource.data.accountKey
+          && request.resource.data.updatedAt == request.time
+          && (
+            (
+              resource.data.status == 'new'
+              && request.resource.data.status == 'review'
+              && changed.hasOnly([
+                'status', 'reviewNote', 'reviewedBy', 'updatedAt'
+              ])
+              && changed.hasAll([
+                'status', 'reviewNote', 'reviewedBy', 'updatedAt'
+              ])
+              && request.resource.data.reviewedBy == request.auth.uid
+              && request.resource.data.reviewNote is string
+              && request.resource.data.reviewNote.size() >= 5
+              && request.resource.data.reviewNote.size() <= 250
+            )
+            || (
+              resource.data.status in ['new', 'review']
+              && request.resource.data.status == 'rejected'
+              && changed.hasOnly([
+                'status', 'rejectionReason', 'rejectedBy', 'rejectedAt',
+                'updatedAt'
+              ])
+              && changed.hasAll([
+                'status', 'rejectionReason', 'rejectedBy', 'rejectedAt',
+                'updatedAt'
+              ])
+              && request.resource.data.rejectedBy == request.auth.uid
+              && request.resource.data.rejectedAt == request.time
+              && request.resource.data.rejectionReason is string
+              && request.resource.data.rejectionReason.size() >= 5
+              && request.resource.data.rejectionReason.size() <= 250
+            )
+          );
+      }
+
+"""
 def add_place_first_view_candidate(source):
     """Candidate-only direct first-view policy; production remains unchanged."""
     if source.count(PLACE_MATCH) != 1 or source.count(PLACE_NEXT_MATCH) != 1:
@@ -301,6 +362,32 @@ def add_place_first_view_candidate(source):
     if combined.count("function candidatePlaceFirstViewedOnly()") != 1:
         raise ValueError("FAIL_PLACE_FIRST_VIEW_GUARD_MISSING")
     return combined
+
+
+
+def add_user_recovery_review_candidate(source):
+    """Only review/reject with immutable account identity in QA candidate."""
+    if source.count(USER_RECOVERY_MATCH) != 1 or source.count(USER_RECOVERY_NEXT) != 1:
+        raise ValueError("FAIL_USER_RECOVERY_MATCH_DRIFT")
+    start = source.index(USER_RECOVERY_MATCH)
+    end = source.index(USER_RECOVERY_NEXT, start)
+    chunk = source[start:end]
+    if chunk.count(USER_RECOVERY_UPDATE) != 1:
+        raise ValueError("FAIL_USER_RECOVERY_UPDATE_DRIFT")
+    if "candidateUserRecoveryReviewOnly()" in source:
+        raise ValueError("FAIL_USER_RECOVERY_GUARD_DUPLICATED")
+    chunk = chunk.replace(
+        USER_RECOVERY_MATCH,
+        USER_RECOVERY_MATCH + "\n" + USER_RECOVERY_CANDIDATE, 1
+    )
+    chunk = chunk.replace(
+        USER_RECOVERY_UPDATE,
+        "      allow update: if candidateUserRecoveryReviewOnly();", 1
+    )
+    result = source[:start] + chunk + source[end:]
+    if result.count("function candidateUserRecoveryReviewOnly()") != 1:
+        raise ValueError("FAIL_USER_RECOVERY_CANDIDATE_MISSING")
+    return result
 
 
 def add_invite_email_reservation(source):
