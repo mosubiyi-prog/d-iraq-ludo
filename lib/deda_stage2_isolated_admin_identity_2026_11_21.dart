@@ -2802,6 +2802,203 @@ class DedaIsolatedAdminIdentity {
     }
   }
 
+
+  /// Original user PIN-recovery queue, NOT the staff recovery inbox.
+  /// Only requests with an exact verified SECONDARY general-manager session.
+  /// The original credential, user UID and Firebase Auth are never written.
+  Future<DedaIsolatedManagerPage> readScopedUserRecoveryPage({
+    required String dedaPhone,
+    QueryDocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    if (!dedaIsolatedAdminIdentityEnabled) {
+      throw StateError('deda-isolated-user-recovery-stage-off');
+    }
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('deda-isolated-user-recovery-no-admin-session');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      onAuthorizedAdmin: (admin) => gm = admin,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-user-recovery-gm-required');
+    }
+    const collection = 'recovery_requests';
+    if (startAfter != null &&
+        (startAfter.reference.parent.path != collection ||
+            startAfter.metadata.isFromCache ||
+            startAfter.metadata.hasPendingWrites)) {
+      throw StateError('deda-isolated-user-recovery-cursor-denied');
+    }
+    Query<Map<String, dynamic>> query = _firestore.collection(collection)
+        .orderBy('createdAt', descending: true);
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+    final snapshot = await query.limit(51)
+        .get(const GetOptions(source: Source.server));
+    if (snapshot.metadata.isFromCache ||
+        snapshot.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || gm?['role'] != 'general_manager' ||
+        snapshot.docs.any((doc) =>
+            doc.metadata.isFromCache || doc.metadata.hasPendingWrites)) {
+      throw StateError('deda-isolated-user-recovery-server-proof-changed');
+    }
+    final visible = snapshot.docs.take(50).toList(growable: false);
+    return (
+      // Security: project only review metadata; NEVER pass recoveryPin,
+      // password, token or other secret fields through the UI.
+      rows: visible.map((doc) => <String, dynamic>{
+        'id': doc.id,
+        'fullName': doc.data()['fullName'],
+        'phone': doc.data()['phone'],
+        'accountKey': doc.data()['accountKey'],
+        'requesterUid': doc.data()['requesterUid'],
+        'status': doc.data()['status'],
+        'createdAt': doc.data()['createdAt'],
+        'updatedAt': doc.data()['updatedAt'],
+        'riskLevel': doc.data()['riskLevel'],
+        'sameDevice': doc.data()['sameDevice'],
+        'nameMatches': doc.data()['nameMatches'],
+      }).toList(growable: false),
+      nextCursor: snapshot.docs.length > 50 ? visible.last : null,
+    );
+  }
+
+  /// The old card compared an unverified name against the public profile.
+  /// Here the same comparison is server-only, under separately proven GM.
+  /// Name matching is just context, NEVER ownership proof.
+  Future<({bool directoryActive, bool profileExists, bool nameMatches})>
+      readScopedUserRecoveryAccountCheck({
+    required String dedaPhone,
+    required String accountKey,
+    required String requestedName,
+  }) async {
+    final phone = DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(accountKey);
+    if (!dedaIsolatedAdminIdentityEnabled || phone.isEmpty ||
+        requestedName.trim().isEmpty) {
+      throw StateError('deda-isolated-user-recovery-account-invalid');
+    }
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('deda-isolated-user-recovery-no-admin-session');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      onAuthorizedAdmin: (admin) => gm = admin,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-user-recovery-check-gm-required');
+    }
+    final directory = await _firestore.collection('deda_account_directory')
+        .doc(phone).get(const GetOptions(source: Source.server));
+    final profile = await _firestore.collection('deda_account_profiles')
+        .doc(phone).get(const GetOptions(source: Source.server));
+    if (directory.metadata.isFromCache ||
+        directory.metadata.hasPendingWrites ||
+        profile.metadata.isFromCache ||
+        profile.metadata.hasPendingWrites ||
+        _auth.currentUser?.uid != uid ||
+        _mainAuth.currentUser?.uid != publicUid ||
+        !await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-user-recovery-account-proof-changed');
+    }
+    String normalized(String value) =>
+        value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    final registered = (profile.data()?['name'] ?? '').toString();
+    return (
+      directoryActive: directory.exists && directory.data()?['active'] == true,
+      profileExists: profile.exists,
+      nameMatches: profile.exists && registered.trim().isNotEmpty &&
+          normalized(registered) == normalized(requestedName),
+    );
+  }
+
+  /// Safe review/rejection ONLY. Explicitly NO approval, PIN issuance,
+  /// account creation, credential writes, owner UID changes or Auth reset.
+  Future<void> decideScopedUserRecoveryReview({
+    required String dedaPhone,
+    required String requestId,
+    required String action,
+    required String reason,
+  }) async {
+    final note = reason.trim();
+    if (!dedaIsolatedAdminIdentityEnabled ||
+        !DedaIsolatedAdminProofPolicy.validScopedDocumentId(requestId) ||
+        !const <String>{'review', 'reject'}.contains(action) ||
+        note.length < 5 || note.length > 250) {
+      throw StateError('deda-isolated-user-recovery-decision-invalid');
+    }
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('deda-isolated-user-recovery-no-admin-session');
+    }
+    final uid = user.uid;
+    final publicUid = _mainAuth.currentUser?.uid;
+    Map<String, dynamic>? gm;
+    Future<bool> proof() => _serverAuthorizedAdmin(
+      uid: uid, dedaPhone: dedaPhone,
+      expectedPublicUid: publicUid,
+      onAuthorizedAdmin: (admin) => gm = admin,
+    );
+    if (!await proof() || gm?['role'] != 'general_manager') {
+      throw StateError('deda-isolated-user-recovery-decision-gm-required');
+    }
+    final request = _firestore.collection('recovery_requests').doc(requestId);
+    final audit = _firestore.collection('admin_audit').doc();
+    await _firestore.runTransaction((tx) async {
+      final existing = await tx.get(request);
+      final data = existing.data();
+      if (!existing.exists || data == null ||
+          existing.metadata.isFromCache ||
+          existing.metadata.hasPendingWrites ||
+          !(action == 'review' && data['status'] == 'new' ||
+            action == 'reject' &&
+            const <String>{'new', 'review'}.contains(data['status'])) ||
+          data['requesterUid'] is! String ||
+          !DedaIsolatedAdminProofPolicy.validScopedDocumentId(
+              data['requesterUid'] as String) ||
+          DedaIsolatedAdminProofPolicy.canonicalIraqiPhone(
+              (data['accountKey'] ?? '').toString()).isEmpty ||
+          _auth.currentUser?.uid != uid ||
+          _mainAuth.currentUser?.uid != publicUid ||
+          !await proof() || gm?['role'] != 'general_manager') {
+        throw StateError('deda-isolated-user-recovery-decision-denied');
+      }
+      // A review/rejection changes only queue metadata, not credential.
+      tx.update(request, <String, dynamic>{
+        'status': action == 'review' ? 'review' : 'rejected',
+        if (action == 'review') 'reviewNote': note,
+        if (action == 'reject') 'rejectionReason': note,
+        if (action == 'review') 'reviewedBy': uid,
+        if (action == 'reject') 'rejectedBy': uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (action == 'reject') 'rejectedAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(audit, <String, dynamic>{
+        'action': action == 'review'
+            ? 'recovery_reviewed' : 'recovery_rejected',
+        'adminUid': uid,
+        'adminName': (gm?['displayName'] ?? gm?['name'] ??
+            user.email ?? 'DEDA Admin').toString(),
+        'adminRole': 'general_manager',
+        'sourceCollection': 'recovery_requests',
+        'sourceId': requestId,
+        'reason': note,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   /// Read-only scoped data path, with fresh server permissions before and
   /// after fetch. No write operation or raw Firestore handle is exposed.
   Future<List<Map<String, dynamic>>> readScopedAdminList({
