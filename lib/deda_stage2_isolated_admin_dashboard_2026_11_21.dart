@@ -265,6 +265,21 @@ class _DedaStage2IsolatedDashboardPageState
           isArabic:widget.isArabic),
       );
     }
+    // Original \"🏆 الرابحون معنا\" (not the weekly-league payout report).
+    if (can('reviewPrizeWinners') &&
+        widget.profile['role'] == 'general_manager') {
+      addDestination(
+        title: t('🏆 الرابحون معنا', '🏆 Prize winners'),
+        subtitle: t('طلبات الفوز والتدقيق وتسليم الجوائز',
+            'Prize claims, review and delivery'),
+        icon: Icons.emoji_events_outlined,
+        accentColor: const Color(0xFF9A7415),
+        page: _DedaIsolatedPrizeWinnersTab(
+          admin:widget.admin, dedaPhone:widget.dedaPhone,
+          isArabic:widget.isArabic,
+        ),
+      );
+    }
     // Original owner place deletion: archive, removal, notice and audit.
     if (can('managePlaceArchives') &&
         widget.profile['role'] == 'general_manager') {
@@ -1417,6 +1432,303 @@ class _DedaIsolatedPlaceDeletionTabState
       ]);
     },
   );
+}
+
+/// Full legacy \"🏆 الرابحون معنا\" queue under independent admin Auth.
+/// Never pays diamonds, deducts points or marks a winner-confirmed receipt.
+class _DedaIsolatedPrizeWinnersTab extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+  const _DedaIsolatedPrizeWinnersTab({
+    required this.admin,required this.dedaPhone,required this.isArabic,
+  });
+  @override
+  State<_DedaIsolatedPrizeWinnersTab> createState() =>
+      _DedaIsolatedPrizeWinnersTabState();
+}
+
+class _DedaIsolatedPrizeWinnersTabState
+    extends State<_DedaIsolatedPrizeWinnersTab> {
+  late Future<List<Map<String,dynamic>>> _requests;
+  final _search=TextEditingController();
+  String _query='';
+  bool _busy=false;
+  String t(String ar,String en)=>widget.isArabic?ar:en;
+  String statusName(String value)=>switch(value) {
+    'new'=>t('جديد','New'),
+    'reviewing'=>t('قيد التدقيق','Under review'),
+    'needs_info'=>t('نحتاج معلومات','Needs information'),
+    'approved'=>t('تم اعتماد الفوز','Approved'),
+    'prize_sent'=>t('بانتظار تأكيد الفائز','Awaiting winner confirmation'),
+    'delivered'=>t('تم التسليم بتأكيد الفائز','Winner confirmed receipt'),
+    'rejected'=>t('مرفوض','Rejected'),
+    _=>value,
+  };
+  String displayId(String value) {
+    final clean=value.trim().replaceAll('@','');
+    return clean.isEmpty?'—':'@$clean';
+  }
+  int createdMillis(Map<String,dynamic> item) {
+    final date=item['createdAt'];
+    return date is Timestamp?date.millisecondsSinceEpoch:0;
+  }
+  Future<List<Map<String,dynamic>>> load()=>widget.admin
+      .readScopedPrizeWinnerRequests(dedaPhone:widget.dedaPhone);
+  @override
+  void initState() {super.initState();_requests=load();}
+  @override
+  void dispose() {_search.dispose();super.dispose();}
+  void refresh() {
+    if(_busy)return;
+    setState(()=>_requests=load());
+  }
+  Future<void> openRequest(Map<String,dynamic> record,int serial) async {
+    if(_busy)return;
+    final updated=await showDialog<bool>(context:context,
+      builder:(ctx)=>_DedaIsolatedPrizeWinnerReviewDialog(
+        admin:widget.admin,dedaPhone:widget.dedaPhone,
+        isArabic:widget.isArabic,record:record,serial:serial));
+    if(mounted && updated==true)refresh();
+  }
+  @override
+  Widget build(BuildContext context) =>
+      FutureBuilder<List<Map<String,dynamic>>>(
+    future:_requests,builder:(context,snapshot) {
+      if(snapshot.connectionState!=ConnectionState.done) {
+        return const Center(child:CircularProgressIndicator());
+      }
+      if(snapshot.hasError || !snapshot.hasData) {
+        return Center(child:TextButton(onPressed:refresh,
+          child:Text(t('تعذر إثبات صلاحية المدير من الخادم، أعد المحاولة',
+              'Could not verify manager permissions; retry'))));
+      }
+      final rows=snapshot.data!;
+      final oldest=rows.toList()..sort((a,b)=>
+          createdMillis(a).compareTo(createdMillis(b)));
+      final numbers=<String,int>{
+        for(var i=0;i<oldest.length;i++)
+          oldest[i]['id'].toString():i+1,
+      };
+      final q=_query.trim().toLowerCase();
+      final visible=rows.where((item){
+        final id=(item['id']??'').toString();
+        final serial=numbers[id]??0;
+        final haystack=<String>[
+          id,(item['name']??'').toString(),(item['dedaId']??'').toString(),
+          (item['phone']??'').toString(),(item['rewardCode']??'').toString(),
+          statusName((item['status']??'new').toString()),
+          serial.toString(),'#${serial.toString().padLeft(3,'0')}',
+        ].join(' ').toLowerCase();
+        return haystack.contains(q);
+      }).toList(growable:false);
+      return Column(children:[
+        Padding(padding:const EdgeInsets.all(10),
+          child:TextField(controller:_search,
+            onChanged:(value)=>setState(()=>_query=value),
+            decoration:InputDecoration(
+              prefixIcon:const Icon(Icons.search_rounded),
+              hintText:t('ابحث بالاسم أو المعرّف أو الهاتف أو رقم الفائز',
+                  'Search name, ID, phone or winner number'),
+              suffixIcon:_query.isEmpty?null:IconButton(
+                onPressed:(){_search.clear();setState(()=>_query='');},
+                icon:const Icon(Icons.close_rounded)),
+            ),
+          ),
+        ),
+        Align(alignment:AlignmentDirectional.centerEnd,
+          child:IconButton(onPressed:refresh,
+              icon:const Icon(Icons.refresh))),
+        Expanded(child:visible.isEmpty
+          ?Center(child:Text(rows.isEmpty
+            ?t('لا توجد طلبات فوز حالياً','No prize requests yet')
+            :t('لا توجد نتائج مطابقة','No matching winners')))
+          :ListView.builder(itemCount:visible.length,
+            itemBuilder:(ctx,i){
+              final item=visible[i];
+              final id=(item['id']??'').toString();
+              final serial=numbers[id]??0;
+              final identifier=displayId((item['dedaId']??'').toString());
+              final rewardCode=(item['rewardCode']??'—').toString();
+              final state=statusName((item['status']??'new').toString());
+              return Card(child:ListTile(
+                leading:const Icon(Icons.emoji_events_outlined,
+                    color:Color(0xFF9A7415)),
+                title:Text((item['name']??'—').toString()),
+                subtitle:Text('$identifier • $rewardCode\n$state'),
+                trailing:Text('#${serial.toString().padLeft(3,'0')}'),
+                onTap:()=>openRequest(item,serial),
+              ));
+            })),
+      ]);
+    },
+  );
+}
+
+class _DedaIsolatedPrizeWinnerReviewDialog extends StatefulWidget {
+  final DedaIsolatedAdminIdentity admin;
+  final String dedaPhone;
+  final bool isArabic;
+  final Map<String,dynamic> record;
+  final int serial;
+  const _DedaIsolatedPrizeWinnerReviewDialog({
+    required this.admin,required this.dedaPhone,required this.isArabic,
+    required this.record,required this.serial,
+  });
+  @override
+  State<_DedaIsolatedPrizeWinnerReviewDialog> createState()=>
+      _DedaIsolatedPrizeWinnerReviewDialogState();
+}
+class _DedaIsolatedPrizeWinnerReviewDialogState
+    extends State<_DedaIsolatedPrizeWinnerReviewDialog> {
+  late String _status;
+  late String _initialStatus;
+  late final TextEditingController _message;
+  late final TextEditingController _prize;
+  bool _saving=false;
+  String t(String ar,String en)=>widget.isArabic?ar:en;
+  String statusLabel(String value)=>switch(value) {
+    'new'=>t('جديد','New'),
+    'reviewing'=>t('قيد التدقيق','Under review'),
+    'needs_info'=>t('طلب معلومات إضافية','Request more information'),
+    'approved'=>t('اعتماد الفوز','Approve win'),
+    'prize_sent'=>t('إرسال الجائزة / انتظار تأكيد الفائز',
+        'Mark sent / await winner'),
+    'delivered'=>t('تم التسليم بتأكيد الفائز','Winner confirmed receipt'),
+    'rejected'=>t('مرفوض','Rejected'),_=>value,
+  };
+  @override
+  void initState(){
+    super.initState();
+    _status=(widget.record['status']??'new').toString();
+    _initialStatus=_status;
+    _message=TextEditingController(
+      text:(widget.record['adminMessage']??'').toString());
+    _prize=TextEditingController(
+      text:(widget.record['prizeDetails']??'').toString());
+  }
+  @override
+  void dispose(){_message.dispose();_prize.dispose();super.dispose();}
+  String dateText(dynamic value)=>value is Timestamp
+      ? value.toDate().toUtc().toIso8601String()
+      : value?.toString()??'—';
+  Widget dataRow(String title,dynamic data) => Padding(
+    padding:const EdgeInsets.symmetric(vertical:3),
+    child:Text('$title: ${data?.toString()??'—'}'),
+  );
+  Future<void> save() async {
+    if(_saving)return;
+    final note=_message.text.trim();
+    final details=_prize.text.trim();
+    if((_status=='needs_info' && note.isEmpty) ||
+        (_status=='prize_sent' && details.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(t('اكتب المعلومات اللازمة قبل الحفظ.',
+            'Complete the required information before saving.'))));
+      return;
+    }
+    // An approval WITH details auto-advances to prize_sent in the legacy UI.
+    // Require an explicit confirmation so it cannot imply diamond payout.
+    if(_status=='approved' && details.isNotEmpty ||
+        _status=='prize_sent' && _initialStatus!='prize_sent') {
+      final yes=await showDialog<bool>(context:context,
+        builder:(ctx)=>AlertDialog(
+          title:Text(t('تأكيد تسجيل إرسال الجائزة',
+              'Confirm recording prize sent')),
+          content:Text(t('يسجل التطبيق حالة إرسال الجائزة فقط، '
+              'ولا يحول ماسات. الفائز وحده يؤكد استلامها.',
+              'This records prize-sent status only; no diamonds are '
+              'transferred. Only the winner confirms receipt.')),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(ctx,false),
+              child:Text(t('إلغاء','Cancel'))),
+            FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+              child:Text(t('تأكيد','Confirm'))),
+          ],
+        ));
+      if(!mounted||yes!=true)return;
+    }
+    setState(()=>_saving=true);
+    try {
+      await widget.admin.reviewScopedPrizeWinnerRequest(
+        dedaPhone:widget.dedaPhone,
+        requestId:(widget.record['id']??'').toString(),
+        status:_status,adminMessage:note,prizeDetails:details);
+      if(mounted)Navigator.pop(context,true);
+    }catch(_){
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:Text(t('تعذر الحفظ أو تغيّرت حالة الطلب وصلاحية المدير.',
+            'Update denied: request state or permission changed.'))));
+      }
+    }finally{
+      if(mounted)setState(()=>_saving=false);
+    }
+  }
+  @override
+  Widget build(BuildContext context){
+    final item=widget.record;
+    final options=DedaIsolatedAdminProofPolicy
+        .prizeWinnerAllowedTransitions(_initialStatus);
+    final serial=widget.serial.toString().padLeft(3,'0');
+    return AlertDialog(
+      title:Text(t('تفاصيل الفائز','Winner details')),
+      content:SizedBox(width:480,child:SingleChildScrollView(
+        child:Column(mainAxisSize:MainAxisSize.min,
+          crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          dataRow(t('الاسم','Name'),item['name']),
+          dataRow(t('رقم الفائز','Winner number'),'#$serial'),
+          dataRow(t('معرّف DEDA','DEDA ID'),item['dedaId']),
+          dataRow(t('الهاتف','Phone'),item['phone']),
+          dataRow(t('الرمز الكامل','Full code'),item['rewardCode']),
+          dataRow(t('الرصيد عند الفوز','Balance at win'),
+              item['pointsAtCompletion']),
+          dataRow(t('النقاط المستقطعة نهائياً','Reserved points'),
+              item['finalReservedPoints']),
+          dataRow(t('رد الفائز','Winner reply'),item['userReply']),
+          if(item['createdAt']!=null)
+            dataRow(t('تاريخ الفوز','Won at'),dateText(item['createdAt'])),
+          if(item['prizeSentAt']!=null)
+            dataRow(t('وقت إرسال الجائزة','Prize sent at'),
+                dateText(item['prizeSentAt'])),
+          if(item['winnerConfirmedAt']!=null)
+            dataRow(t('تأكيد الفائز','Winner confirmed at'),
+                dateText(item['winnerConfirmedAt'])),
+          const SizedBox(height:12),
+          DropdownButtonFormField<String>(
+            value:_status,
+            decoration:InputDecoration(
+              labelText:t('حالة الطلب','Request status')),
+            items:options.map((v)=>DropdownMenuItem<String>(
+              value:v,child:Text(statusLabel(v)))).toList(),
+            onChanged:_saving||_initialStatus=='delivered'||
+                  _initialStatus=='prize_sent'
+                ?null:(v){if(v!=null)setState(()=>_status=v);},
+          ),
+          const SizedBox(height:8),
+          if(_initialStatus=='prize_sent')
+            Text(t('بانتظار أن يؤكد الفائز الاستلام بنفسه.',
+                'Waiting for winner to confirm receipt.')),
+          if(_initialStatus=='delivered')
+            Text(t('الفائز أكد الاستلام؛ أُغلقت دورة الجوائز.',
+                'Winner confirmed receipt; prize cycle closed.')),
+          TextField(controller:_message,maxLength:800,minLines:2,maxLines:4,
+            decoration:InputDecoration(
+              labelText:t('رسالة الإدارة للفائز','Admin message'))),
+          TextField(controller:_prize,maxLength:800,minLines:2,maxLines:4,
+            decoration:InputDecoration(
+              labelText:t('تفاصيل الجائزة المخصصة','Assigned prize details'))),
+          Text(t('هذه البطاقة لا تحول ماسات ولا تخصم نقاطاً.',
+              'This card never transfers diamonds or deducts points.')),
+        ]))),
+      actions:[
+        TextButton(onPressed:_saving?null:()=>Navigator.pop(context,false),
+          child:Text(t('إلغاء','Cancel'))),
+        FilledButton(onPressed:_saving||options.isEmpty?null:save,
+          child:Text(t('حفظ وإرسال التحديث','Save and update'))),
+      ],
+    );
+  }
 }
 
 class _DedaIsolatedReadOnlyTab extends StatefulWidget {
