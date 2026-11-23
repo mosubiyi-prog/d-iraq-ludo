@@ -1850,7 +1850,8 @@ class _DedaIsolatedReadOnlyTabState
       final requests = snapshot['placeRequests'] as List? ?? const [];
       final support = snapshot['supportRequests'] as List? ?? const [];
       final relatedAccessible = snapshot['relatedAccessible'] == true;
-      final truncated = snapshot['relatedMayBeTruncated'] == true;
+      final truncated = Map<String, dynamic>.from(
+          snapshot['relatedTruncatedCollections'] as Map? ?? const {});
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -1873,15 +1874,18 @@ class _DedaIsolatedReadOnlyTabState
                   const Divider(),
                   if (relatedAccessible) ...[
                     _userInfoRow(t('الأماكن المعتمدة', 'Approved places'),
-                        truncated ? t('50 أو أكثر (قد تكون النتائج محدودة)',
-                            '50 or more possible (bounded result)')
-                            : places.length),
+                        truncated['published_places'] == true
+                            ? places.length.toString() + '+' : places.length),
                     _userInfoRow(t('طلبات الأماكن', 'Place requests'),
-                        truncated ? t('نتائج جزئية', 'Bounded results')
-                            : requests.length),
+                        truncated['place_requests'] == true
+                            ? requests.length.toString() + '+' : requests.length),
                     _userInfoRow(t('رسائل الدعم', 'Support messages'),
-                        truncated ? t('نتائج جزئية', 'Bounded results')
-                            : support.length),
+                        truncated['support_requests'] == true
+                            ? support.length.toString() + '+' : support.length),
+                    if (truncated.values.any((item) => item == true))
+                      Text(t('علامة + تعني أن العدد الأدنى مؤكد، '
+                          'وقد توجد سجلات إضافية.',
+                          '+ means at least this many records; more may exist.')),
                     if (places.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(t('أماكن المستخدم', 'User places'),
