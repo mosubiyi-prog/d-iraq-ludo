@@ -12,6 +12,7 @@ on:
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
       - 'test/test_deda_stage2_profile_owner_2026_11_23.py'
+      - 'lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart'
       - 'lib/deda_stage2_isolated_admin_dashboard_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_exclusive_ids_admin_2026_11_23.dart'
       - 'lib/deda_stage2_isolated_league_admin_2026_11_23.dart'
@@ -165,6 +166,7 @@ jobs:
             lib/deda_stage2_isolated_tasks_admin_2026_11_23.dart \
             lib/deda_stage2_isolated_support_trash_2026_11_23.dart \
             lib/deda_100377_my_store_page_staged.dart \
+            lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path
