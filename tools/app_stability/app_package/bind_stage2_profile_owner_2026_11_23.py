@@ -91,17 +91,27 @@ def patched(main: str, store: str) -> tuple[str, str]:
         raise ValueError('PROFILE_ALREADY_BOUND_USE_VERIFY_ONLY')
     # The real assembled profile, its unique store route and current owner
     # snapshot must exist. Never inject a second screen or overwrite source.
+    # The full app also has an edit action in a different page. Scope
+    # markers to the ONE actual profile state, not every matching method
+    # name across 100380's reconstructed main.dart.
+    class_name = 'class _DedaProfilePhase2PageState'
+    if main.count(class_name) != 1:
+        raise ValueError('PROFILE_STOP_PROFILE_CLASS_NOT_UNIQUE')
+    profile = main[main.index(class_name):]
+    next_class = profile.find('\nclass ', len(class_name))
+    if next_class >= 0:
+        profile = profile[:next_class]
     for label, value in (
-        ('profile-class', 'class _DedaProfilePhase2PageState'),
         ('original-edit', '  Future<void> _openEditProfile() async {'),
         ('original-store', '  Future<void> _openDedaMyStore() async {'),
         ('owner-frozen-uid', 'final signedUidAtOpen = Firebase.apps.isEmpty'),
         ('original-id', 'final originalId = _dedaId;'),
-        ('single-store-class', 'class DedaMyStorePage extends StatelessWidget'),
+        ('my-store-route', MAIN_ANCHOR),
     ):
-        where = store if label == 'single-store-class' else main
-        if where.count(value) != 1:
-            raise ValueError(f'PROFILE_STOP_MISSING_SINGLE_ORIGINAL:{label}:{where.count(value)}')
+        if profile.count(value) != 1:
+            raise ValueError(f'PROFILE_STOP_MISSING_SINGLE_PROFILE_MARKER:{label}:{profile.count(value)}')
+    if store.count('class DedaMyStorePage extends StatelessWidget') != 1:
+        raise ValueError('PROFILE_STOP_MY_STORE_WIDGET_NOT_UNIQUE')
     store = once(store, IMPORT, OWNER_IMPORTS, 'imports')
     store = once(store, CTOR, GUARD_CTOR, 'constructor')
     store = once(store, FIELDS, GUARD_FIELDS, 'fields')
