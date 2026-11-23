@@ -16,6 +16,7 @@ import 'deda_admin_league_winners_prizes.dart'
     show DedaWeeklyPrizeProjection;
 import 'deda_admin_league_live_data.dart';
 import 'deda_weekly_league_clock.dart';
+import 'deda_weekly_prize_plan.dart' show DedaWeeklyPrizePlan;
 
 const bool dedaIsolatedAdminIdentityEnabled = bool.fromEnvironment(
   'DEDA_STABILITY_ADMIN_ISOLATED_AUTH', defaultValue: false,
@@ -4657,6 +4658,7 @@ class DedaIsolatedAdminIdentity {
     }
     final report=DedaWeeklyPrizeProjection.merge(
       week:weekId,
+      minimumOverride:DedaWeeklyPrizePlan.minimum,
       scores:[for(final d in scores.docs)MapEntry(d.id,d.data())],
       gifts:{for(final d in gifts.docs)d.id:d.data()},
       frozen:{for(final d in reviews.docs)

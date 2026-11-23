@@ -4,6 +4,8 @@ import 'package:d_iraq_ludo/deda_exclusive_ids_admin_page.dart' show
     DedaExclusiveAdminBridge, DedaExclusiveAdminId, DedaExclusiveAdminSnapshot;
 import 'package:d_iraq_ludo/deda_stable_google_login_2026_11_21.dart';
 import 'package:d_iraq_ludo/deda_stage2_isolated_admin_identity_2026_11_21.dart';
+import 'package:d_iraq_ludo/deda_admin_league_winners_prizes.dart';
+import 'package:d_iraq_ludo/deda_weekly_prize_plan.dart';
 
 void main() {
   group('Stage2 Google identity: explicit switching only', () {
@@ -1298,4 +1300,48 @@ void main() {
       expect(can(gm,{...request,'status':'rejected'},'reviewing'),true);
     });
   });
+  group('Stage2 league report uses real weekly prize floor', () {
+    test('historical original baseline unchanged, isolated floor is 100408', () {
+      expect(DedaWeeklyPrizeProjection.minimum,
+          [250,200,150,100,100,100,100,100,100,100]);
+      expect(DedaWeeklyPrizePlan.minimum,
+          [150,100,50,10,10,10,10,10,10,10]);
+      expect(DedaWeeklyPrizeProjection.amounts(null),
+          DedaWeeklyPrizeProjection.minimum);
+      expect(DedaWeeklyPrizeProjection.amounts(null,
+          minimumOverride:DedaWeeklyPrizePlan.minimum),
+          DedaWeeklyPrizePlan.minimum);
+    });
+    test('valid official plan and Hadaya receipt use the same amount', () {
+      const week='2026-11-14', id='@DEDA-AAAA11';
+      final giftId=DedaWeeklyPrizeProjection.giftId(week,id);
+      final report=DedaWeeklyPrizeProjection.merge(
+        week:week,
+        scores:[MapEntry(id,<String,dynamic>{
+          'weekId':week,'publicId':id,'displayName':'اختبار',
+          'weeklyXp':100,'completedTasks':5,
+          'updatedAt':Timestamp.fromMillisecondsSinceEpoch(1000),
+        })],
+        gifts:{giftId:<String,dynamic>{
+          'giftId':giftId,'sourceType':'weekly_league',
+          'targetPublicId':id,'amount':150,'status':'received',
+          'reason':'جائزة دوري DEDA — الأسبوع '+week+' — المركز 1',
+        }},
+        frozen:const {},
+        plan:DedaWeeklyPrizePlan.minimum,
+        minimumOverride:DedaWeeklyPrizePlan.minimum,
+      );
+      expect(report.rows.length,1);
+      expect(report.rows.single.amount,150);
+      expect(report.rows.single.status,DedaWeeklyGiftStatus.received);
+    });
+    test('invalid official plan is rejected, never silently relabeled', () {
+      expect(()=>DedaWeeklyPrizeProjection.amounts(
+        [149,100,50,10,10,10,10,10,10,10],
+        minimumOverride:DedaWeeklyPrizePlan.minimum),throwsStateError);
+      expect(()=>DedaWeeklyPrizeProjection.amounts(null,
+        minimumOverride:[150]),throwsStateError);
+    });
+  });
+
 }

@@ -25,13 +25,19 @@ class DedaWeeklyPrizeProjection {
   static const minimum=[250,200,150,100,100,100,100,100,100,100];
   static String giftId(String week,String id) =>
       'deda-weekly-$week-${id.substring(1)}';
-  static List<int> amounts(List<dynamic>? saved) {
-    if(saved==null) return minimum;
+  static List<int> amounts(List<dynamic>? saved, {List<int>? minimumOverride}) {
+    // Old 100439 reports keep their historical 250/200 baseline. The
+    // isolated current league passes the official 100408 floor explicitly.
+    final floor=minimumOverride??minimum;
+    if(floor.length!=10 || floor.any((v)=>v<0 || v>1000000)) {
+      throw StateError('invalid-week-prize-floor');
+    }
+    if(saved==null) return List<int>.unmodifiable(floor);
     if(saved.length!=10) throw StateError('invalid-week-prize-plan');
     final result=<int>[];
     for(var i=0;i<10;i++){
       final v=saved[i];
-      if(v is! int || v<minimum[i] || v>1000000){
+      if(v is! int || v<floor[i] || v>1000000){
         throw StateError('invalid-week-prize-value');
       }
       result.add(v);
@@ -44,11 +50,12 @@ class DedaWeeklyPrizeProjection {
     required Map<String,Map<String,dynamic>> gifts,
     required Set<String> frozen,
     List<dynamic>? plan,
+    List<int>? minimumOverride,
   }){
     if(!RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}$').hasMatch(week)){
       throw ArgumentError.value(week);
     }
-    final prizes=amounts(plan);
+    final prizes=amounts(plan,minimumOverride:minimumOverride);
     final winners=<DedaWeeklyPrizeWinner>[];
     for(final player in DedaAdminLeagueProjection.fromRecords(scores).take(10)){
       final gid=giftId(week,player.publicId);
