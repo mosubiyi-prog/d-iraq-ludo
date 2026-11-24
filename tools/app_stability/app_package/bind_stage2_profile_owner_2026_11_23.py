@@ -18,6 +18,7 @@ SNAPSHOT = """  Future<void> _openDedaMyStore() async {
     // Stage2 profile: original phone + canonical ID + public UID only.
     // Freeze once BEFORE slow inventory calls; never infer any ownership.
     final _dedaStage2OwnerPhoneAtEntry = DedaPreferences.phone;
+    final _dedaStage2AccountEpochAtEntry = DedaPreferences.stabilityAccountEpoch;
     final _dedaStage2OriginalIdAtEntry = _dedaId;
     final _dedaStage2OwnerUidAtEntry = Firebase.apps.isEmpty
         ? null : FirebaseAuth.instance.currentUser?.uid;"""
@@ -32,6 +33,7 @@ NEW = """        builder: (_) => DedaStage2ProfileOwnerBoundMyStore(
               mounted &&
               DedaPreferences.isLoggedIn &&
               DedaPreferences.phone == _dedaStage2OwnerPhoneAtEntry &&
+              DedaPreferences.stabilityAccountEpoch == _dedaStage2AccountEpochAtEntry &&
               _dedaId == _dedaStage2OriginalIdAtEntry &&
               originalId == _dedaStage2OriginalIdAtEntry &&
               (Firebase.apps.isEmpty
@@ -132,6 +134,8 @@ def verify(main: str, old_store: str):
         ('old-route-replaced', OLD not in section),
         ('single-owner-freeze', section.count('final _dedaStage2OwnerUidAtEntry =') == 1),
         ('original-phone-check', 'DedaPreferences.phone == _dedaStage2OwnerPhoneAtEntry' in section),
+        ('account-epoch-frozen-before-reads', section.count('final _dedaStage2AccountEpochAtEntry = DedaPreferences.stabilityAccountEpoch;') == 1),
+        ('account-epoch-check', 'DedaPreferences.stabilityAccountEpoch == _dedaStage2AccountEpochAtEntry' in section),
         ('canonical-id-check', '_dedaId == _dedaStage2OriginalIdAtEntry' in section),
         ('live-uid-check', 'FirebaseAuth.instance.currentUser?.uid ==' in section),
         ('original-store-ui-untouched', "class DedaMyStorePage" in old_store),

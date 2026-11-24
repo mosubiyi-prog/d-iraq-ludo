@@ -44,6 +44,32 @@ class _DedaProfilePhase2PageState
         self.assertNotIn("signInAnonymously",GATE.read_text())
         self.assertNotIn("tx.set(",GATE.read_text())
 
+    def test_store_route_lifetime_reuses_account_epoch_and_rejects_queued_uid_rotation(self):
+        original, store = self._sample()
+        changed = mod.proposed(original, store)
+        self.assertIn('final _dedaStage2AccountEpochAtEntry = DedaPreferences.stabilityAccountEpoch;', changed)
+        self.assertIn('DedaPreferences.stabilityAccountEpoch == _dedaStage2AccountEpochAtEntry', changed)
+        for anchor in (
+            'final _dedaStage2AccountEpochAtEntry = DedaPreferences.stabilityAccountEpoch;',
+            'DedaPreferences.stabilityAccountEpoch == _dedaStage2AccountEpochAtEntry',
+        ):
+            with self.assertRaises(ValueError):
+                mod.verify(changed.replace(anchor, 'BROKEN'), store)
+        gate = GATE.read_text()
+        for anchor in (
+            'user?.uid != widget.initialUid',
+            'DedaSectionAccountChanges.epoch.addListener(_expire)',
+            'DedaSectionAccountChanges.epoch.removeListener(_expire)',
+            'setState(() => _expired = true)',
+            'if (!mounted || _expired) return;',
+            '_guarded(widget.onOpenIdentifierShop)',
+            '_guarded(widget.onOpenEditProfile)',
+            'unawaited(_auth?.cancel())',
+        ):
+            self.assertIn(anchor, gate)
+        self.assertNotIn('StreamBuilder<User?>', gate)
+        self.assertEqual(gate.count('return DedaMyStorePage('), 1)
+
     def test_refuses_duplicate_or_ambiguous_profile_navigation(self):
         original,store=self._sample()
         for candidate in (

@@ -13,6 +13,7 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
       - 'tools/stage_deda_100377_point12_my_store.py'
       - 'test/test_deda_stage2_profile_owner_2026_11_23.py'
+      - 'test/deda_stage2_profile_store_lifetime_test.dart'
       - 'test/test_deda_stage2_profile_assets_2026_11_24.py'
       - 'test/test_deda_stage2_profile_full_audit_2026_11_24.py'
       - 'test/test_deda_stage2_profile_entitlement_parity_2026_11_24.py'
@@ -174,6 +175,8 @@ jobs:
           set -euo pipefail
           cd "$DEDA_STAGE1_SOURCE"
           flutter pub get
+          cp "$GITHUB_WORKSPACE/test/deda_stage2_profile_store_lifetime_test.dart" test/deda_stage2_profile_store_lifetime_test.dart
+          flutter test --no-pub --reporter expanded test/deda_stage2_profile_store_lifetime_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_google_and_admin_isolation_policy_test.dart
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
