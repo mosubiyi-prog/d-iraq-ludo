@@ -303,12 +303,162 @@ def audit_part3(project, main, reference):
 PART4_EXACT = ('DedaShareLocationPage', 'DedaReceivedLocationsPage')
 
 
+
+def part4_later_share_reference(main):
+    # Read-only reconstruction of the location-only edits from the previously
+    # verified 100410 and 100411 binders. This runs on reference text only.
+    # Preserve exact anchors, not a permissive list of allowed changes.
+    from bind_weekly_100410_unified_active_id import one
+    from bind_weekly_100411_friend_copy_share import once
+    def call_end(source,start):
+        depth=0
+        for i in range(start,len(source)):
+            if source[i]=='(': depth+=1
+            elif source[i]==')':
+                depth-=1
+                if depth==0:
+                    return i+2 if source[i+1:i+2]==',' else i+1
+        raise ValueError("unclosed Dart call")
+
+    # The assembled original already has two QA32 per-section wrappers.
+    # Remove their separate resolution/fallback to the retired original ID.
+    flag="// DEDA_QA32_SHARE_SENDER_VERIFIED_ACTIVE_ID_VISUAL_ONLY"
+    if main.count(flag)!=1:
+        raise ValueError("assembled owner's location ID wrapper not unique")
+    begin=main.index("DedaQa32ActiveAccountScope(",main.index(flag))
+    finish=call_end(main,begin)
+    assert "originalId: _personalId" in main[begin:finish]
+    assert "'معرفي الشخصي'" in main[begin:finish]
+    main=main[:begin]+"""DedaUnifiedActiveIdBuilder100410(
+                            originalId:_personalId,
+                            builder:(context,active) => active==null
+                              ? const SizedBox(height:48,child:Center(
+                                  child:Text('جارِ تأكيد الآيدي...',
+                                    textDirection:TextDirection.rtl)))
+                              : _idCard(
+                                  title:dedaText('معرفي الشخصي','My personal ID'),
+                                  id:active,icon:Icons.person),
+                          ),"""+main[finish:]
+    marker="// DEDA_QA32_RECEIVED_PERSONAL_LOCATION_VERIFIED_SENDER_ALIAS_NO_DEPLOY"
+    if main.count(marker)!=1:
+        raise ValueError("assembled recipient sharing display anchor changed")
+    begin=main.index("DedaSixReceivedIdentity(",main.index(marker))
+    finish=call_end(main,begin)
+    if "originalId: senderId" not in main[begin:finish]:
+        raise ValueError("sender personal ID resolver not safe to replace")
+    main=main[:begin]+"""DedaUnifiedActiveIdLabel100410(
+                            originalId:senderId,
+                            style:const TextStyle(
+                              color:Color(0xFF5C635D),
+                              fontWeight:FontWeight.w700)),"""+main[finish:]
+    # Security regression caught by the added location identity tests.
+    # An existing page must not use a changed/logged-out account, even if
+    # GPS and permission callbacks complete long after the switch.
+    share_begin=main.index("class DedaShareLocationPage")
+    share_end=main.index("class DedaReceived",share_begin) if "class DedaReceived" in main[share_begin:] else main.index("Widget _shareCard(",share_begin)
+    share=main[share_begin:share_end]
+    if "Future<void> _send() async {" not in share:
+        raise ValueError("location sender guard could not be reviewed")
+    share=one(share,
+        """  String _personalId = '';""",
+        """  String _personalId = '';
+  late final String _ownerPhoneAtOpen;""",
+        "account isolation fixed when opening share page")
+    share=one(share,
+        """    _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);""",
+        """    _ownerPhoneAtOpen = DedaPreferences.phone;
+    _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);""",
+        "snapshot opening identity for old page protection")
+    send=share.index("Future<void> _send() async {")
+    body=send+len("Future<void> _send() async {")
+    share=share[:body]+"""
+    // A page opened under A cannot validate or send anything under B/logout.
+    if (!DedaPreferences.isLoggedIn ||
+        DedaPreferences.phone != _ownerPhoneAtOpen) return;
+"""+share[body:]
+    # Only the GPS branch awaits before making the original backend call.
+    # Guard IMMEDIATELY after its await, instead of matching an obsolete
+    # indentation of createLocationShare in the assembled real owner source.
+    # The place branch is synchronous until the same backend call, so its
+    # account protection is the entry guard above.
+    if "createLocationShare(" not in share:
+        raise ValueError("original location-share backend operation missing")
+    # Verified exact assembled 100409 call (from GitHub QA run 18):
+    # _currentPosition runs inside SectionOperationContext.wait, so do not
+    # search for a direct await. Keep all existing snapshot/route protections.
+    gps_before="        final position = await DedaSectionOperationContext.wait(() => _currentPosition());"
+    share=one(share,gps_before,
+              gps_before+"""
+        // Late GPS must never resume a share for B from A's open page.
+        if (!mounted || !DedaPreferences.isLoggedIn ||
+            DedaPreferences.phone != _ownerPhoneAtOpen) return;""",
+              "actual assembled GPS wrapper account isolation")
+    main=main[:share_begin]+share+main[share_end:]
+
+    text = main
+    share_begin=text.index("class DedaShareLocationPage")
+    share_end=text.index("class DedaReceived",share_begin)
+    share=text[share_begin:share_end]
+    send_begin=share.index("Future<void> _send() async")
+    send_end=share.index("  Widget _idCard(",send_begin)
+    send=share[send_begin:send_end]
+    send=once(send,
+        "if (!DedaBackend.isValidPersonalShareId(recipient)) {",
+        "if (DedaFriendIdCopy100411.exactCopyValue(recipient) == null) {",
+        "accept structurally valid copyable premium input")
+
+    # Route identity AFTER the location acquisition, immediately BEFORE
+    # the existing backend send. Never delay the original GPS path or change
+    # its busy flag, permissions, account/session sequencing and user prompts.
+    backend="await DedaSectionOperationContext.wait(() => DedaBackend.createLocationShare("
+    if send.count(backend)!=1:
+        raise ValueError("100411 exact backend send count="+str(send.count(backend)))
+    at=send.index(backend)
+    guard="""
+      // Canonical personal IDs always take priority over premium aliases.
+      // Server comparison is only needed once GPS is ready. Firebase may
+      // be deliberately uninitialized in legacy widget tests: preserve
+      // their original backend-not-ready error and the original GPS flow.
+      String canonicalRecipient = recipient;
+      if (DedaBackend.isReady) {
+        final direct = DedaBackend.isValidPersonalShareId(recipient)
+            ? await DedaSectionOperationContext.wait(
+                () => DedaBackend.locationShareIdInfo(recipient))
+            : null;
+        if (direct == null || direct['kind'] != 'personal') {
+          final resolved = await DedaSectionOperationContext.wait(
+              () => DedaQa32PublicRecipientResolver.resolveActiveAlias(
+                  recipient));
+          if (resolved == null ||
+              !DedaBackend.isValidPersonalShareId(resolved)) {
+            throw StateError('recipient-share-id-not-found');
+          }
+          canonicalRecipient = resolved;
+        }
+        if (!_locationAccountCurrent() ||
+            !DedaPreferences.isLoggedIn ||
+            DedaPreferences.phone != _ownerPhoneAtOpen) return;
+        DedaAuthRuntime.checkSnapshot(requestPrincipal);
+        if (canonicalRecipient == personalId) {
+          throw StateError('share-self-recipient');
+        }
+      }
+      """
+    send=send[:at]+guard+send[at:]
+    send=once(send,"recipientPublicId: recipient,",
+                   "recipientPublicId: canonicalRecipient,",
+                   "server-authoritative canonical routing for location")
+    share=share[:send_begin]+send+share[send_end:]
+    text=text[:share_begin]+share+text[share_end:]
+    return text
+
 def part4_expected(reference):
     from bind_auth_runtime import bind_main
     from bind_location_entries import bind as bind_location
     from bind_location_identity import bind as bind_identity
     from bind_all_sections import bind_file
     guarded, _ = bind_file(bind_identity(bind_location(bind_main(reference))))
+    guarded = part4_later_share_reference(guarded)
     return {name: member(reference if name in PART4_EXACT else guarded,
                          'class ' + name + ' ')
             for name in INVENTORY['4']}
