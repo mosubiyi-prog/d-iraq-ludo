@@ -156,10 +156,13 @@ def patch_ui(body):
     # invalidates a slower previous read even if the phone is unchanged.
     a,z = callback_region(body, '  Future<void> _refreshAdminEntryVisibility() async {')
     part = body[a:z+1]
-    part = one(part, 'return dedaRunSectionVoid(() async {',
-        'return dedaRunSectionVoid(() async {\n'
-        '    if (!_settingsCurrent) return;\n'
-        '    final generation = ++_settingsAdminGeneration;', 'existing-admin-reader')
+    if ('currentDedaAccountCanSeeAdminEntry(' not in part or
+        'setState(() => _adminEntryVisible = allowed);' not in part):
+        raise ValueError('SETTINGS_SOURCE_STOP:existing-admin-reader:' + repr(part))
+    # Capture the generation outside the existing method's operation wrapper;
+    # the actual assembly can use either section or inherited auth guards.
+    # Preserve every token of the original operation body.
+    part = part[:1] + '\n    if (!_settingsCurrent) return;\n    final generation = ++_settingsAdminGeneration;' + part[1:]
     part = one(part, '    setState(() => _adminEntryVisible = allowed);',
         '    if (!_settingsCurrent || generation != _settingsAdminGeneration) return;\n'
         '    final uid = Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser?.uid;\n'
@@ -191,8 +194,8 @@ def patch_ui(body):
     part = body[a+1:z]
     if 'currentDedaAccountCanSeeAdminEntry(' not in part or 'dedaIsolatedAdminIdentityEnabled' not in part:
         raise ValueError('SETTINGS_SOURCE_STOP:existing-admin-gates')
-    part = one(part, 'return dedaRunSectionVoid(() async {',
-        'return await dedaRunSectionVoid(() async {', 'await-existing-admin-operation')
+    # Keep the prior async/section operation intact, including its return
+    # paths. Await the original callback inside the one navigation lock.
     # Wait for original route dismissal to release the entry lock; no
     # changes to admin login/auth or route builder arguments.
     ts = home.tokens(part)
@@ -210,7 +213,9 @@ def patch_ui(body):
     if (!_settingsCurrent || _settingsAdminOpening || _settingsLogoutPending ||
         !_adminEntryVisible) return;
     _settingsAdminOpening = true;
-    try {''' + part + '''
+    try {
+      await (() async {''' + part + '''
+      })();
     } finally {
       _settingsAdminOpening = false;
       if (_settingsCurrent) unawaited(_refreshAdminEntryVisibility());
