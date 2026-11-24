@@ -83,6 +83,9 @@ class Stage1SessionBinding(unittest.TestCase):
         for old, new in pairs:
             self.assertEqual(backend.count(old), 1, old)
             backend = backend.replace(old, new, 1)
+        old_create = "auth.createUserWithEmailAndPassword("
+        self.assertEqual(backend.count(old_create), 1)
+        backend = backend.replace(old_create, "DedaAuthRuntime.createAdmin(auth,", 1)
         backend_file.write_text(backend)
         pin_file = self.root / FILES[1]
         pin = pin_file.read_text()
@@ -95,12 +98,32 @@ class Stage1SessionBinding(unittest.TestCase):
         after = backend_file.read_text()
         self.assertIn("deda-stability-explicit-auth-entry-no-new-uid", after)
         self.assertIn("deda-stability-admin-isolated-auth-required", after)
+        invite = after.split("activateAdminInvitation({", 1)[1].split("changeCurrentAdminPassword(", 1)[0]
+        self.assertLess(invite.index("deda-stability-admin-invite-preserve-existing-session"),
+                        invite.index("DedaAuthRuntime.createAdmin(auth,"))
         self.assertNotIn("await DedaAuthRuntime.wait(() => signOutAdmin());",
                          after.split("static Future<User> _ensureOwnerSessionForAccountKey(", 1)[1]
                          .split("static Future<bool> _isCurrentGeneralManagerSession", 1)[0])
         self.assertNotIn("DedaAuthRuntime.signOut(auth)",
                          pin_file.read_text().split("static Future<User> _ensureAnonymousSession(", 1)[1]
                          .split("static Future<User> _ensurePinSessionForAccount(", 1)[0])
+
+    def test_legacy_invitation_never_replaces_existing_principal(self):
+        binder.bind(self.root)
+        backend_file = self.root / FILES[0]
+        backend = backend_file.read_text()
+        invite = backend.split("activateAdminInvitation({", 1)[1].split(
+            "changeCurrentAdminPassword(", 1)[0]
+        guard = "deda-stability-admin-invite-preserve-existing-session"
+        self.assertEqual(invite.count(guard), 1)
+        self.assertLess(invite.index(guard), invite.index("auth.createUserWithEmailAndPassword("))
+        self.assertIn("if (auth.currentUser != null)", invite)
+        backend_file.write_text(backend.replace(
+            "    if (auth.currentUser != null) {\n"
+            "      throw StateError('deda-stability-admin-invite-preserve-existing-session');\n"
+            "    }\n", "", 1))
+        with self.assertRaisesRegex(ValueError, "STAGE1_VERIFY_BACKEND_FAILED"):
+            binder.bind(self.root, verify_only=True)
 
     def test_optional_original_owner_login_uses_existing_guardian(self):
         source = (REPO / "lib/deda_100430_owner_uid_continuity.dart").read_text()

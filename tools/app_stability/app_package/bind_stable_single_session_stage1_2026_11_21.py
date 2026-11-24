@@ -84,6 +84,24 @@ def patch_backend(text: str) -> str:
       throw StateError('deda-stability-admin-principal-changed');
     }
     final admin =""", path)
+    # Legacy invitation activation can create a credential on default Auth
+    # BEFORE invitation proof. Never let it displace an existing owner/admin.
+    # This is the same preservation rule as signInAdmin, not a new auth lane.
+    invite_start = "  static Future<Map<String, dynamic>> activateAdminInvitation({"
+    invite_end = "  static Future<void> changeCurrentAdminPassword("
+    if text.count(invite_start) != 1 or text.count(invite_end) != 1:
+        raise ValueError("STAGE1_INVITE_BOUNDARY_CHANGED")
+    prefix, rest = text.split(invite_start, 1)
+    invite, suffix = rest.split(invite_end, 1)
+    invite = change_once(invite,
+        """    final auth = FirebaseAuth.instance;
+    UserCredential credential;""",
+        """    final auth = FirebaseAuth.instance;
+    if (auth.currentUser != null) {
+      throw StateError('deda-stability-admin-invite-preserve-existing-session');
+    }
+    UserCredential credential;""", path)
+    text = prefix + invite_start + invite + invite_end + suffix
     # Scope all admin-logout changes to its existing function.
     begin = "  static Future<void> signOutAdmin() async {"
     end = "  // DEDA in-app location sharing v1."
@@ -171,7 +189,18 @@ def bind(project: Path, *, verify_only: bool = False) -> dict:
                     "deda-stability-owner-read-cannot-switch-auth",
                     "deda-stability-admin-isolated-auth-required",
                     "deda-stability-admin-principal-changed",
+                    "deda-stability-admin-invite-preserve-existing-session",
                 )
+                invite = original.split(
+                    "  static Future<Map<String, dynamic>> activateAdminInvitation({", 1
+                )[1].split("  static Future<void> changeCurrentAdminPassword(", 1)[0]
+                invite_guard = """    final auth = FirebaseAuth.instance;
+    if (auth.currentUser != null) {
+      throw StateError('deda-stability-admin-invite-preserve-existing-session');
+    }
+    UserCredential credential;"""
+                if invite.count(invite_guard) != 1:
+                    raise ValueError("STAGE1_VERIFY_BACKEND_FAILED")
                 if any(mark not in original for mark in checks) or (
                     "linkedOwnerPilotEnabled: true," not in logout or
                     "FirebaseAuth.instance.currentUser?.uid != confirmedAdminUid" not in logout or
