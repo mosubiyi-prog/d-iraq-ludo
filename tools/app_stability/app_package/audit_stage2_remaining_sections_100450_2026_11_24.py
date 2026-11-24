@@ -145,8 +145,14 @@ def support(reference, project):
         equal('backend:' + name, method(old_backend), method(new_backend))
     body = member(new, 'class _HomePageState ')
     home.verify_home(body)
-    if body.count('const DedaTeamPage()') != 2 or body.count('DedaContactPage(') != 2:
-        raise ValueError('SUPPORT_PHONE_TABLET_ENTRY_DRIFT')
+    old_body = member(old, 'class _HomePageState ')
+    for marker in ('const DedaTeamPage()', 'DedaContactPage('):
+        # Match the actual assembled 100450 entries; do not assume that an
+        # app-bar action shared across layouts must appear twice in Dart.
+        count = old_body.count(marker)
+        if count == 0 or body.count(marker) != count:
+            raise ValueError('SUPPORT_HOME_ENTRY_DRIFT:' + marker)
+        print('SUPPORT_HOME_ENTRY_PARITY', marker, count, flush=True)
     dash = read(project, 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart')
     for marker in ("collection: 'support_requests'", 'replyToScopedSupport(',
                    'updateScopedSupportStatus(', 'mutateScopedSupportTrash(',
