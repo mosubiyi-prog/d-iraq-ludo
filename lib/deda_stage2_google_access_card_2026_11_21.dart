@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_stable_google_login_2026_11_21.dart';
 export 'deda_stable_google_login_2026_11_21.dart'
@@ -158,17 +157,7 @@ class _DedaStage2GooglePendingPageState
     try {
       // Only the user's explicit button may sign out this pending Google UID.
       // It never calls the admin Auth client, DEDA PIN, or legacy owner logout.
-      final pending = await DedaStableGoogleLogin.pendingGoogleUid();
-      final active = FirebaseAuth.instance.currentUser;
-      if (pending != widget.expectedUid ||
-          active == null || active.uid != widget.expectedUid) {
-        throw StateError('deda-stage2-pending-google-identity-changed');
-      }
-      await FirebaseAuth.instance.signOut();
-      final prefs = await SharedPreferences.getInstance();
-      if (!await prefs.remove(DedaStableGoogleLogin.verifiedUidKey)) {
-        throw StateError('deda-stage2-pending-google-marker-not-cleared');
-      }
+      await DedaStableGoogleLogin.signOutPending(widget.expectedUid);
       widget.onSignedOut?.call();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(

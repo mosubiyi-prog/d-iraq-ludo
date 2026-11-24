@@ -3,6 +3,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'deda_auth_session_runtime.dart';
+import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
+
 /// Phase 2 is opt-in. The legacy published account and administrative login
 /// remain untouched until full local DEDA enrollment and map/admin QA passes.
 const bool dedaStableGoogleLoginEnabled = bool.fromEnvironment(
@@ -147,15 +150,50 @@ class DedaStableGoogleLogin {
     return live!.uid;
   }
 
+  /// Only an explicit pending-page exit may clear this exact Google principal.
+  static Future<void> signOutPending(String expectedUid) async {
+    if (!dedaStableGoogleLoginEnabled || !DedaAuthRuntime.enabled ||
+        Firebase.apps.isEmpty) {
+      throw StateError('deda-google-requires-default-auth-guardian');
+    }
+    final auth = FirebaseAuth.instance;
+    final snapshot = DedaAuthRuntime.capture();
+    await DedaAuthRuntime.run<void>(
+      kind: DedaSessionTransitionKind.logout,
+      origin: DedaSessionTransitionOrigin.userAction,
+      action: () async {
+        DedaAuthRuntime.checkSnapshot(snapshot);
+        final pending = await pendingGoogleUid();
+        DedaAuthRuntime.check();
+        if (pending != expectedUid || auth.currentUser?.uid != expectedUid) {
+          throw StateError('deda-stage2-pending-google-identity-changed');
+        }
+        await DedaAuthRuntime.signOut(auth);
+        DedaAuthRuntime.check();
+        final prefs = await SharedPreferences.getInstance();
+        DedaAuthRuntime.check();
+        if (!await prefs.remove(verifiedUidKey)) {
+          throw StateError('deda-stage2-pending-google-marker-not-cleared');
+        }
+        DedaAuthRuntime.check();
+      },
+    );
+  }
+
   Future<DedaGoogleIdentityResult> signIn({
     required bool explicitAnonymousReplacement,
   }) async {
     if (!_enabled) throw StateError('deda-stable-google-feature-disabled');
+    if (!DedaAuthRuntime.enabled ||
+        _auth.app.name != FirebaseAuth.instance.app.name) {
+      throw StateError('deda-google-requires-default-auth-guardian');
+    }
     if (_busy) throw StateError('deda-google-login-already-in-progress');
     _busy = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       final rememberedDedaLogin = prefs.getBool('deda_logged_in_v1') == true;
+      final snapshot = DedaAuthRuntime.capture();
       final original = _auth.currentUser;
       final beforeUid = original?.uid;
       final admission = DedaStableGoogleLoginPolicy.admission(
@@ -189,26 +227,53 @@ class DedaStableGoogleLogin {
       if ((prefs.getBool('deda_logged_in_v1') == true) != rememberedDedaLogin) {
         throw StateError('deda-google-local-login-changed-during-selection');
       }
-      final credential = await _auth.signInWithCredential(oauth);
-      final current = _auth.currentUser;
-      final uid = credential.user?.uid;
-      if (uid == null || current == null ||
-          !DedaStableGoogleLoginPolicy.isSameAuthenticatedGooglePrincipal(
-            expectedUid: uid,
-            actualUid: current.uid,
-            actualIsAnonymous: current.isAnonymous,
-            providerIds: current.providerData.map((p) => p.providerId),
-          )) {
-        throw StateError('deda-google-verified-principal-mismatch');
-      }
-
-      // A historical local phone/profile is NOT owned by this new Google UID.
-      // Fence it off instead of projecting legacy ID, map, wallet, or role.
-      if (!await prefs.setBool('deda_logged_in_v1', false) ||
-          !await prefs.setString(verifiedUidKey, uid)) {
-        throw StateError('deda-google-local-owner-fence-not-persisted');
-      }
-      return DedaGoogleIdentityResult.verified(uid);
+      // Google selection remains outside the lane: no network Auth mutation
+      // occurs there. Recheck the epoch inside the existing shared lane.
+      return await DedaAuthRuntime.run<DedaGoogleIdentityResult>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        origin: DedaSessionTransitionOrigin.userAction,
+        verifiedOwnerLoginMaxWait: const Duration(seconds: 60),
+        action: () async {
+          DedaAuthRuntime.checkSnapshot(snapshot);
+          DedaAuthRuntime.check();
+          await prefs.reload();
+          DedaAuthRuntime.check();
+          if (_auth.currentUser?.uid != beforeUid ||
+              (prefs.getBool('deda_logged_in_v1') == true) != rememberedDedaLogin) {
+            throw StateError('deda-google-owner-intent-changed');
+          }
+          final credential = await DedaAuthRuntime.controller.transition<UserCredential>(
+            kind: DedaSessionTransitionKind.ownerLogin,
+            action: () => _auth.signInWithCredential(oauth),
+            accepts: (result, live) => result.user != null &&
+                result.user!.uid == live.uid &&
+                live.kind == DedaSessionAuthKind.authenticated &&
+                result.user!.providerData.any((p) => p.providerId == 'google.com'),
+          );
+          final current = _auth.currentUser;
+          final uid = credential.user?.uid;
+          if (uid == null || current == null ||
+              !DedaStableGoogleLoginPolicy.isSameAuthenticatedGooglePrincipal(
+                expectedUid: uid,
+                actualUid: current.uid,
+                actualIsAnonymous: current.isAnonymous,
+                providerIds: current.providerData.map((p) => p.providerId),
+              )) {
+            throw StateError('deda-google-verified-principal-mismatch');
+          }
+          // Fence old local DEDA data; Google alone never grants ownership.
+          DedaAuthRuntime.check();
+          if (!await prefs.setBool('deda_logged_in_v1', false)) {
+            throw StateError('deda-google-local-owner-fence-not-persisted');
+          }
+          DedaAuthRuntime.check();
+          if (!await prefs.setString(verifiedUidKey, uid)) {
+            throw StateError('deda-google-local-owner-fence-not-persisted');
+          }
+          DedaAuthRuntime.check();
+          return DedaGoogleIdentityResult.verified(uid);
+        },
+      );
     } finally {
       _busy = false;
     }
