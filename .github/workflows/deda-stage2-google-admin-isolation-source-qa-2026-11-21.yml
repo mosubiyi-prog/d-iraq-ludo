@@ -12,6 +12,9 @@ on:
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
       - 'tools/app_stability/app_package/bind_stage2_friends_2026_11_24.py'
+      - 'tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py'
+      - 'test/test_deda_stage2_weekly_league_2026_11_24.py'
+      - 'test/deda_stage2_weekly_league_session_test.dart'
       - 'test/test_deda_stage2_friends_2026_11_24.py'
       - 'test/deda_stage2_friends_relation_feed_test.dart'
       - 'tools/stage_deda_100377_point12_my_store.py'
@@ -64,6 +67,8 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_profile_visual_parity_2026_11_24.py -v
       - name: Verify original friends keys, readers and UI source guards
         run: python3 -m unittest discover -s test -p test_deda_stage2_friends_2026_11_24.py -v
+      - name: Verify weekly source owner, clock, ranking and prize readers
+        run: python3 -m unittest discover -s test -p test_deda_stage2_weekly_league_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
           python3 - <<'PY'
@@ -170,6 +175,8 @@ jobs:
           python3 tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py "$project" --verify-only
           python3 tools/app_stability/app_package/bind_stage2_friends_2026_11_24.py "$project"
           python3 tools/app_stability/app_package/bind_stage2_friends_2026_11_24.py "$project" --verify-only
+          python3 tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py "$project"
+          python3 tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py "$project" --verify-only
           # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
           python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
           # Read-only check against the actual reconstructed profile appearance and bundled art.
@@ -187,10 +194,17 @@ jobs:
           flutter test --no-pub --reporter expanded test/deda_stage2_google_and_admin_isolation_policy_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_friends_relation_feed_test.dart test/deda_100411_friend_copy_test.dart
           flutter test --no-pub --reporter expanded --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_100441_assembled_friend_alias_search_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_stage2_weekly_league_session_test.dart" test/deda_stage2_weekly_league_session_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_100404_league_clock_test.dart" test/deda_weekly_100404_league_clock_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_leaderboard_policy_test.dart" test/deda_weekly_leaderboard_policy_test.dart
+          flutter test --no-pub --reporter expanded test/deda_stage2_weekly_league_session_test.dart test/deda_weekly_100404_league_clock_test.dart test/deda_weekly_leaderboard_policy_test.dart
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
             lib/deda_social_service.dart lib/deda_stage51_verified_friend_alias_search.dart \
             lib/deda_friend_id_copy_100411.dart \
+            lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_account_view_gate.dart \
+            lib/deda_weekly_prize_plan.dart lib/deda_weekly_maintenance_status.dart \
+            lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_safe_screen.dart \
             lib/admin_pages.dart lib/places_service.dart lib/admin_place_map.dart \
             lib/deda_stable_google_login_2026_11_21.dart \
             lib/deda_stage2_google_access_card_2026_11_21.dart \
