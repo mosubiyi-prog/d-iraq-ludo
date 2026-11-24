@@ -295,10 +295,26 @@ jobs:
           export GOOGLE_CLOUD_PROJECT=demo-deda-stage2-isolated-admin-anchor-qa
           root="$RUNNER_TEMP/deda-stage2-admin-runtime"
           node --check qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs
-          "$root/node_modules/.bin/firebase" emulators:exec \
-            --project demo-deda-stage2-isolated-admin-anchor-qa \
-            --config "$root/candidate-firebase.json" \
-            --only auth,firestore --non-interactive \
+          # Prior emulator steps download/cache tools before entering this
+          # loopback-only namespace. Run the final identity proof with no
+          # external network, no inherited credential variables, no root.
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ip -o link show | wc -l)" -eq 1
+            test -z "$(ip route show default)"
+            test -z "$(ip -6 route show default)"
+            echo "PASS_STAGE01_IDENTITY_EMULATOR_NO_EXTERNAL_ROUTE"
+            exec setpriv --reuid "$1" --regid "$2" --init-groups --no-new-privs env -i \
+              HOME="$3" PATH="$4" JAVA_HOME="$5" NODE_PATH="$6/node_modules" \
+              CI=true DEDA_EMULATOR_ONLY=true FIREBASE_CLI_DISABLE_UPDATE_CHECK=true \
+              GOOGLE_CLOUD_PROJECT=demo-deda-stage2-isolated-admin-anchor-qa \
+              GCLOUD_PROJECT=demo-deda-stage2-isolated-admin-anchor-qa \
+              "$6/node_modules/.bin/firebase" emulators:exec \
+              --project demo-deda-stage2-isolated-admin-anchor-qa \
+              --config "$6/candidate-firebase.json" \
+              --only auth,firestore --non-interactive "$7"
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "$JAVA_HOME" "$root" \
             'node --test qa/stage2/isolated_original_user_pin_dual_sync_auth_firestore_emulator_2026_11_23.test.cjs'
           echo 'PASS_CANONICAL_PIN_DUAL_SYNC_AUTH_FIRESTORE_EMULATOR_NO_DEPLOY'
       - name: Verify no writes to source, production or build outputs
