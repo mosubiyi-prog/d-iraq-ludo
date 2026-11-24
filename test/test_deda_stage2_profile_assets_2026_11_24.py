@@ -86,6 +86,27 @@ class Stage2ProfileAssetsSourceParity(unittest.TestCase):
                           "FieldValue.increment(", "transaction.set("):
             self.assertNotIn(forbidden, ui)
 
+    def test_old_gift_row_and_claim_completion_cannot_revive_after_rotation(self):
+        ui = source("deda_stage74_hadaya_identifier_section.dart")
+        for begin, end in (
+            ("void _onAuthChanged(User? user)", "void initState()"),
+            ("void didUpdateWidget(", "void dispose()"),
+            ("void dispose()", "Future<void> _refresh()"),
+        ):
+            part = ui[ui.index(begin):ui.index(end, ui.index(begin))]
+            self.assertIn("_claimToken = null;", part)
+        receive = ui[ui.index("Future<void> _receive("):ui.index("Widget _giftTile(")]
+        self.assertIn("rowGeneration != _generation", receive)
+        self.assertIn("identical(_claimToken, token)", receive)
+        self.assertIn("_claimToken = token;", receive)
+        self.assertIn("if (!claimCurrent()) return;", receive)
+        self.assertEqual(receive.count("if (claimCurrent()) {"), 3)
+        self.assertLess(receive.index("if (!claimCurrent()) return;"),
+                        receive.index("await _refresh();"))
+        self.assertNotIn("_claimingId == gift.identifier", receive)
+        self.assertIn("final rowGeneration = _generation;", ui)
+        self.assertIn("_receive(gift, rowGeneration)", ui)
+
 
 if __name__ == "__main__":
     unittest.main()

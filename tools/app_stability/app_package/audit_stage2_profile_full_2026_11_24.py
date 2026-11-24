@@ -93,6 +93,19 @@ def audit(main, files=None):
         "verified_preview_page_is_separate_and_not_activated": (
             "DedaLevelAchievementsPage(" not in grid),
     }
+    # These are established true facts of the previously verified assembled
+    # profile, not optional diagnostics. Losing one must block source QA.
+    for key in (
+        "points_reward_cards_present",
+        "level_xp_from_separate_notifier",
+        "task_points_from_original_engine",
+        "visible_diamonds_source_used",
+        "verified_preview_page_is_separate_and_not_activated",
+    ):
+        if not info[key]:
+            raise ValueError("PROFILE_PARITY_STOP:lost-original-function:" + key)
+    if info["friends_stat_has_literal_zero"]:
+        raise ValueError("PROFILE_PARITY_STOP:friends-count-replaced-by-literal-zero")
     return info
 
 def main():
@@ -105,8 +118,6 @@ def main():
     result = audit(file.read_text(encoding="utf-8"))
     print("PASS_STAGE2_ORIGINAL_PROFILE_6_APPROVED_TILES_ROUTES_ORDER_NO_DUPLICATE")
     print("PROFILE_ASSEMBLED_PARITY=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
-    if result["friends_stat_has_literal_zero"]:
-        print("PROFILE_DEFERRED:friends-count-is-literal-zero-needs-existing-social-bridge")
     if result["active_six_badge_route_uses_current_xp_not_server_level"]:
         print("PROFILE_DEFERRED:legacy-level-badges-use-local-XP; separate verified-policy-release-unproven")
     print("PROFILE_RELEASE_HOLD_NO_FIREBASE_WRITE_NO_APK_NO_PLAY")

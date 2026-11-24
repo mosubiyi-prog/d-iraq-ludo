@@ -21,6 +21,7 @@ class _DedaStage74IdGiftsSectionState
   List<DedaStage74IdGift>? _gifts;
   bool _loading = false;
   String? _claimingId;
+  Object? _claimToken; // One receipt callback belongs to one inbox lifetime.
   String? _error;
   int _generation = 0;
   // Stage2 profile: invalidate visible gifts immediately on Firebase UID rotation.
@@ -46,6 +47,7 @@ class _DedaStage74IdGiftsSectionState
     setState(() {
       _loading = false;
       _claimingId = null;
+      _claimToken = null;
       _gifts = null;
       _verifiedUid = null;
       _error = null;
@@ -77,6 +79,7 @@ class _DedaStage74IdGiftsSectionState
       _generation++;
       _loading = false;
       _claimingId = null;
+      _claimToken = null;
       _gifts = null;
       _verifiedUid = null;
       _error = null;
@@ -87,6 +90,7 @@ class _DedaStage74IdGiftsSectionState
   @override
   void dispose() {
     _generation++;
+    _claimToken = null;
     _auth?.cancel();
     super.dispose();
   }
@@ -100,6 +104,8 @@ class _DedaStage74IdGiftsSectionState
         setState(() {
           _gifts = null;
           _verifiedUid = null;
+          _claimingId = null;
+          _claimToken = null;
           _error = null;
         });
       }
@@ -128,48 +134,57 @@ class _DedaStage74IdGiftsSectionState
             _gifts = null;
             _verifiedUid = null;
             _claimingId = null;
+            _claimToken = null;
           }
         });
       }
     }
   }
 
-  Future<void> _receive(DedaStage74IdGift gift) async {
+  Future<void> _receive(DedaStage74IdGift gift, int rowGeneration) async {
+    if (!mounted || _loading || rowGeneration != _generation) return;
     final uid = _currentUid();
     if (_claimingId != null || gift.received || uid == null ||
         _verifiedUid != uid || gift.originalId != widget.originalId) return;
     final originalId = widget.originalId;
-    setState(() => _claimingId = gift.identifier);
+    final token = Object();
+    bool claimCurrent() => mounted && identical(_claimToken, token) &&
+        widget.originalId == originalId && _currentUid() == uid;
+    setState(() {
+      _claimingId = gift.identifier;
+      _claimToken = token;
+    });
     try {
       await DedaStage74IdGiftService.receive(gift);
-      // Never refresh a DIFFERENT user's inbox after the old claim returns.
-      if (!mounted || widget.originalId != originalId) return;
-      if (_currentUid() != uid) return;
+      // An expired receipt response cannot refresh or notify a newer inbox,
+      // even after the UID returns to its original value.
+      if (!claimCurrent()) return;
       await _refresh();
-      if (mounted && originalId == widget.originalId &&
-          _currentUid() == uid) {
+      if (claimCurrent()) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('تم استلام المعرّف وحفظه ضمن معرّفاتي.'),
         ));
       }
     } catch (_) {
-      // The server might have committed before a weak connection lost its
-      // response. Refresh is the only safe way to verify permanent receipt.
-      if (mounted && originalId == widget.originalId &&
-          _currentUid() == uid) {
+      // A server readback is still the only proof of permanent reception.
+      if (claimCurrent()) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('نتيجة الاستلام غير مؤكدة. حدّث القسم قبل المحاولة ثانية.'),
         ));
       }
     } finally {
-      if (mounted && widget.originalId == originalId &&
-          _claimingId == gift.identifier) {
-        setState(() => _claimingId = null);
+      // Only this exact request can clear its own pending button.
+      if (claimCurrent()) {
+        setState(() {
+          _claimingId = null;
+          _claimToken = null;
+        });
       }
     }
   }
 
   Widget _giftTile(DedaStage74IdGift gift) {
+    final rowGeneration = _generation;
     return Card(
       key: ValueKey<String>('deda_stage74_gift_${gift.identifier}'),
       margin: const EdgeInsets.only(bottom: 7),
@@ -198,7 +213,8 @@ class _DedaStage74IdGiftsSectionState
           else
             FilledButton(
               key: ValueKey<String>('deda_stage74_receive_${gift.identifier}'),
-              onPressed: _claimingId == null ? () => _receive(gift) : null,
+              onPressed: !_loading && _claimingId == null
+                  ? () => _receive(gift, rowGeneration) : null,
               child: Text(_claimingId == gift.identifier
                   ? 'انتظار' : 'استلام'),
             ),

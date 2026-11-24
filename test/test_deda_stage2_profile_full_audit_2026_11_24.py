@@ -43,11 +43,14 @@ class _DedaProfilePhase2PageState extends State<DedaProfilePhase2Page> {
   Widget _statsRow() {
     return _statCard(
       valueListenable: DedaTaskEngine.totalPointsNotifier,
-      value: '0',
+      value: friendsCount.toString(),
       label: dedaText('الأصدقاء', 'Friends'),
+      diamonds: dedaProfileVisibleDiamonds(ordinaryEarnedAndGifted: ordinary),
+
     );
   }
   Widget _statCard() { return const Placeholder(); }
+  Widget _otherOriginalPanel() { return _pointsCardsPanel(totalPoints); }
   Widget _featureGrid() {
 """ + grid + """
   }
@@ -61,7 +64,10 @@ class ProfileFullAuditTests(unittest.TestCase):
     def test_six_approved_cards_and_all_routes(self):
         result = mod.audit(example())
         self.assertEqual(result["cards_in_order"], list(mod.EXPECTED))
-        self.assertTrue(result["friends_stat_has_literal_zero"])
+        self.assertFalse(result["friends_stat_has_literal_zero"])
+        self.assertTrue(result["points_reward_cards_present"])
+        self.assertTrue(result["task_points_from_original_engine"])
+        self.assertTrue(result["visible_diamonds_source_used"])
         self.assertTrue(result["separate_photos_tile_absent_by_approved_single_store_design"])
         self.assertTrue(result["level_xp_from_separate_notifier"])
         self.assertTrue(result["active_six_badge_route_uses_current_xp_not_server_level"])
@@ -76,6 +82,22 @@ class ProfileFullAuditTests(unittest.TestCase):
         ):
             with self.subTest(needle=needle), self.assertRaises(ValueError):
                 mod.audit(body.replace(needle, "REMOVED"))
+
+    def test_previously_verified_profile_functions_are_mandatory(self):
+        body = example()
+        for needle in (
+            "_pointsCardsPanel(totalPoints)",
+            "valueListenable: DedaSocialProgressWallet.xpNotifier",
+            "DedaTaskEngine.totalPointsNotifier",
+            "dedaProfileVisibleDiamonds(",
+        ):
+            with self.subTest(needle=needle), self.assertRaises(ValueError):
+                mod.audit(body.replace(needle, "REMOVED"))
+        with self.assertRaises(ValueError):
+            mod.audit(body.replace("value: friendsCount.toString(),", "value: '0',"))
+        with self.assertRaises(ValueError):
+            mod.audit(body.replace("DedaPublicProfilePreviewPage()",
+                                   "DedaPublicProfilePreviewPage() DedaLevelAchievementsPage()"))
 
     def test_card_duplicate_reorder_or_extra_is_blocked(self):
         body = example()
