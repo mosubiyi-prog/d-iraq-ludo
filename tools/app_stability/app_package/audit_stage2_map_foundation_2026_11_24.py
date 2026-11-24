@@ -220,6 +220,82 @@ def audit_part2(project, main, reference):
     print('PASS_STAGE2_MAP_PART2_17_MEMBERS_EXISTING_BINDERS_PARITY_NO_RUNTIME_CHANGE')
 
 
+
+# Part 3: use the original ordered integration steps on the protected archive.
+# The audit compares entire classes, including every original storage key,
+# ownership check, publish/availability action and navigation callback.
+PART3_EXACT = ('OwnerPlacePage', 'PersonalPlaceEditorPage', 'PersonalPlacesPage',
+               'DedaPersonalPlace', 'SavedPlacesPage', 'DedaMakaniPage')
+
+
+def part3_expected(reference):
+    from bind_auth_runtime import bind_owner_place_load
+    from bind_location_entries import bind as bind_location
+    from bind_all_sections import bind_file, bind_main_data_helpers
+    from bind_private_data import bind_source as bind_private
+    # Same relative order as restore_deda_stability_baseline and
+    # bind_section_entries. No new runtime bindings are written.
+    owner = bind_owner_place_load(reference)
+    gps = bind_location(owner)
+    bound, _ = bind_file(gps)
+    data = bind_private(bind_main_data_helpers(bound))
+    return {name: member(reference if name in PART3_EXACT else data,
+                         'class ' + name + ' ')
+            for name in INVENTORY['3']}
+
+
+def part3_equal(name, expected, actual):
+    import difflib
+    if tokens(expected) != tokens(actual):
+        diff = difflib.unified_diff(
+            expected.splitlines(), actual.splitlines(),
+            fromfile='archive-plus-approved-binders/' + name,
+            tofile='assembled/' + name, lineterm='', n=3)
+        print('\n'.join(list(diff)[:120]))
+        raise ValueError('MAP_PART3_UNEXPLAINED_TOKEN_DRIFT:' + name)
+    if name in PART3_EXACT and expected != actual:
+        raise ValueError('MAP_PART3_EXACT_MEMBER_DRIFT:' + name)
+
+
+def audit_part3(project, main, reference):
+    expected = part3_expected(reference)
+    if len(expected) != 13:
+        raise ValueError('MAP_PART3_INVENTORY_INCOMPLETE')
+    actual = {name: member(main, 'class ' + name + ' ')
+              for name in expected}
+    failed = []
+    for name, body in expected.items():
+        try:
+            part3_equal(name, body, actual[name])
+            print('MAP_PART3_PARITY_PASS', name, digest(actual[name]))
+        except ValueError as error:
+            failed.append(str(error))
+    if failed:
+        raise ValueError('MAP_PART3_STOP:' + ';'.join(failed))
+    # Controls: do not accept missing owner proof, bypassed private-data
+    # bridge, or a disabled section-lifetime check.
+    for name, before, after in (
+        ('_OwnerPlacePageState', 'expectedAccountKey: recoveryAccountKey',
+         'expectedAccountKey: otherAccountKey'),
+        ('DedaPlacesStore', 'DedaPrivateDataBridge.readList',
+         'otherPrivateDataBridge.readList'),
+        ('_PersonalPlacesPageState', 'DedaPrivateDataBridge.write',
+         'otherPrivateDataBridge.write'),
+        ('_SavedPlacesPageState', 'dedaSectionExpiredView()',
+         'otherExpiredView()'),
+    ):
+        changed = actual[name].replace(before, after, 1)
+        if changed == actual[name]:
+            raise ValueError('MAP_PART3_NEGATIVE_CONTROL_ANCHOR:' + name)
+        try:
+            part3_equal(name, expected[name], changed)
+        except ValueError:
+            pass
+        else:
+            raise ValueError('MAP_PART3_NEGATIVE_CONTROL_ACCEPTED:' + name)
+    print('PASS_STAGE2_MAP_PART3_13_MEMBERS_OWNER_STORAGE_AND_LIFETIME_PARITY')
+
+
 def audit(project):
     project = Path(project).resolve()
     if project == ROOT or ROOT in project.parents or project in ROOT.parents:
@@ -242,6 +318,7 @@ def audit(project):
     print('MAP_FIVE_PART_INVENTORY=' + json.dumps(inventory, sort_keys=True))
     print('PASS_STAGE2_MAP_PART1_PROVIDER_CACHE_GPS_CORE_VISUAL_PARITY_READ_ONLY')
     audit_part2(project, main, reference)
+    audit_part3(project, main, reference)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
