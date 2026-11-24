@@ -192,6 +192,8 @@ jobs:
             lib/deda_100377_my_store_page_staged.dart \
             lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart \
             lib/deda_stage74_hadaya_identifier_section.dart \
+            lib/deda_stage71_free_owned_use_profile.dart \
+            lib/deda_100377_profile_free_inventory.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path

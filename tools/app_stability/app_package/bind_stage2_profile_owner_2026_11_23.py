@@ -224,6 +224,201 @@ def verify_verified_owned_frame_art(main: str):
                 method.index('id: frame.id,')):
         raise ValueError('PROFILE_FRAME_ART_VERIFY:proven-original-only')
 
+
+# The reconstructed app starts from the immutable 100380 archive, not raw lib/.
+# Reuse the current tested inbox methods without replacing the archived widget:
+# the archive contains the unread-gift badge integration and exact artwork.
+HADAYA = 'lib/deda_stage74_hadaya_identifier_section.dart'
+FREE_INVENTORY = 'lib/deda_100377_profile_free_inventory.dart'
+OWNED_IDS = 'lib/deda_stage71_free_owned_use_profile.dart'
+HADAYA_MARK = 'DEDA_STAGE2_ASSEMBLED_HADAYA_LIFETIME'
+FRAME_NAMES_MARK = 'DEDA_STAGE2_ASSEMBLED_ROYAL_FRAME_LABELS'
+OWNED_ROW_MARK = 'DEDA_STAGE2_OWNED_ID_ROW_GENERATION'
+
+
+def archived_profile_member(path):
+    import hashlib
+    import json
+    import tarfile
+    data = REPO / 'tools/app_stability'
+    manifest = json.loads((data / '100380-baseline-manifest.json').read_text())
+    archive = data / '100380-baseline.tar.gz'
+    if hashlib.sha256(archive.read_bytes()).hexdigest() != manifest['archiveSHA256']:
+        raise ValueError('PROFILE_ARCHIVE_STOP:archive-hash')
+    with tarfile.open(archive, 'r:gz') as tar:
+        blob = tar.extractfile(path).read()
+    if hashlib.sha256(blob).hexdigest() != manifest['files'][path]:
+        raise ValueError('PROFILE_ARCHIVE_STOP:member-hash:' + path)
+    return blob.decode('utf-8')
+
+
+def patch_hadaya_archive(old, tested):
+    if HADAYA_MARK in old or '_claimToken' in old or '_onAuthChanged(' in old:
+        raise ValueError('PROFILE_HADAYA_STOP:already-bound-or-unexpected')
+    for anchor, count in (
+        ('DedaStage75UnreadGiftBadge.start(widget.originalId)', 2),
+        ('DedaStage75UnreadGiftBadge.markViewed(originalId, gifts)', 1),
+        ('DedaStage74IdGiftService.receive(gift)', 1),
+        ('DedaStage74IdGiftService.load(originalId)', 1),
+    ):
+        if old.count(anchor) != count:
+            raise ValueError('PROFILE_HADAYA_STOP:original-notification-or-service:' + anchor)
+    out = once(old, '  String? _claimingId;\n',
+               '  // ' + HADAYA_MARK + '\n'
+               '  String? _claimingId;\n  Object? _claimToken;\n'
+               '  StreamSubscription<User?>? _auth;\n  String? _observedUid;\n',
+               'hadaya-original-fields')
+    # Reuse the two tested original-widget methods, not a second service.
+    auth_start = tested.index('  void _onAuthChanged(User? user) {')
+    auth_end = tested.index('  @override\n  void initState()', auth_start)
+    auth_method = tested[auth_start:auth_end]
+    if '++_generation;' not in auth_method or '_claimToken = null;' not in auth_method:
+        raise ValueError('PROFILE_HADAYA_STOP:tested-auth-method-drift')
+    out = once(out, '  @override\n  void initState() {',
+               auth_method + '  @override\n  void initState() {',
+               'hadaya-auth-method')
+    out = once(out, '    super.initState();\n',
+               '    super.initState();\n'
+               '    _observedUid = _currentUid();\n'
+               '    try {\n'
+               '      if (Firebase.apps.isNotEmpty) {\n'
+               '        _auth = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);\n'
+               '      }\n'
+               '    } catch (_) { /* Retain the no-Firebase fallback. */ }\n',
+               'hadaya-auth-listener')
+    out = once(out, '      _claimingId = null;\n      _gifts = null;\n      _error = null;',
+               '      _claimingId = null;\n      _claimToken = null;\n'
+               '      _gifts = null;\n      _verifiedUid = null;\n      _error = null;',
+               'hadaya-original-id-rotation')
+    out = once(out, '    _generation++;\n    super.dispose();',
+               '    _generation++;\n    _claimToken = null;\n'
+               '    _auth?.cancel();\n    super.dispose();',
+               'hadaya-dispose')
+    out = once(out, '          _gifts = null;\n          _verifiedUid = null;\n          _error = null;',
+               '          _gifts = null;\n          _verifiedUid = null;\n'
+               '          _claimingId = null;\n          _claimToken = null;\n          _error = null;',
+               'hadaya-null-uid')
+    out = once(out, '            _claimingId = null;\n',
+               '            _claimingId = null;\n            _claimToken = null;\n',
+               'hadaya-finally')
+    start = out.index('  Future<void> _receive(')
+    end = out.index('  Widget _giftTile(', start)
+    tested_start = tested.index('  Future<void> _receive(')
+    tested_end = tested.index('  Widget _giftTile(', tested_start)
+    receive = tested[tested_start:tested_end]
+    if ('identical(_claimToken, token)' not in receive or
+            'rowGeneration != _generation' not in receive):
+        raise ValueError('PROFILE_HADAYA_STOP:tested-receive-method-drift')
+    out = out[:start] + receive + out[end:]
+    out = once(out, '  Widget _giftTile(DedaStage74IdGift gift) {\n',
+               '  Widget _giftTile(DedaStage74IdGift gift) {\n'
+               '    final rowGeneration = _generation;\n', 'hadaya-row-generation')
+    out = once(out, 'onPressed: _claimingId == null ? () => _receive(gift) : null,',
+               'onPressed: !_loading && _claimingId == null\n'
+               '                  ? () => _receive(gift, rowGeneration) : null,',
+               'hadaya-row-callback')
+    for anchor, count in (
+        ('DedaStage75UnreadGiftBadge.start(widget.originalId)', 2),
+        ('DedaStage75UnreadGiftBadge.markViewed(originalId, gifts)', 1),
+        ('DedaStage74IdGiftService.receive(gift)', 1),
+        ('DedaStage74IdGiftService.load(originalId)', 1),
+        ('class DedaStage74IdGiftsSection extends StatefulWidget', 1),
+        ('authStateChanges().listen(_onAuthChanged)', 1),
+    ):
+        if out.count(anchor) != count:
+            raise ValueError('PROFILE_HADAYA_VERIFY:' + anchor)
+    return out
+
+
+def patch_royal_frame_labels(old):
+    if ('frameChoices = <int>[0, 3, 4, 5]' not in old or
+            FRAME_NAMES_MARK in old):
+        raise ValueError('PROFILE_FRAME_NAMES_STOP:original-free-choices')
+    return once(old, "      'وردي ملكي',\n      'ذهبي ملكي',\n      'زمردي ملكي',",
+                "      // " + FRAME_NAMES_MARK + "\n"
+                "      'زمردي ملكي',\n      'ذهبي ملكي',\n      'وردي ملكي',",
+                'approved-royal-labels-only')
+
+
+def _owned_panel_bounds(source):
+    state = 'class _DedaStage71OwnedIdsPanelState'
+    if source.count(state) != 1:
+        raise ValueError('PROFILE_OWNED_IDS_STOP:original-panel-count')
+    start = source.index(state)
+    end = source.index('\n/// On the user', start)
+    return start, end
+
+
+def verify_owned_row_guard(source):
+    start, end = _owned_panel_bounds(source)
+    panel = source[start:end]
+    for anchor in (
+        OWNED_ROW_MARK,
+        'rowGeneration != _generation',
+        'originalAtBuild != widget.originalId',
+        'id != original && !_ids!.any((item) => item.identifier == id)',
+        '_use(originalAtBuild, rowGeneration, originalAtBuild)',
+        '_use(owned.identifier, rowGeneration, originalAtBuild)',
+    ):
+        if panel.count(anchor) != 1:
+            raise ValueError('PROFILE_OWNED_IDS_VERIFY:' + anchor)
+
+
+def patch_owned_rows(source):
+    start, end = _owned_panel_bounds(source)
+    panel = source[start:end]
+    if OWNED_ROW_MARK in panel:
+        raise ValueError('PROFILE_OWNED_IDS_STOP:duplicate')
+    panel = once(panel,
+        '  Future<void> _use(String id) async {\n    if (_busy) return;',
+        '  // ' + OWNED_ROW_MARK + '\n'
+        '  Future<void> _use(String id, int rowGeneration, String originalAtBuild) async {\n'
+        '    if (!mounted || _busy || rowGeneration != _generation ||\n'
+        '        originalAtBuild != widget.originalId) return;',
+        'owned-row-entry')
+    panel = once(panel, '    if (uid == null || uid != _verifiedUid) return;',
+        '    if (uid == null || uid != _verifiedUid || _ids == null ||\n'
+        '        (id != original && !_ids!.any((item) => item.identifier == id))) return;',
+        'owned-row-current-list')
+    panel = once(panel, '    final currentActive = currentRows == null ? null : _active;',
+        '    final currentActive = currentRows == null ? null : _active;\n'
+        '    final rowGeneration = _generation;\n'
+        '    final originalAtBuild = widget.originalId;',
+        'owned-row-snapshot')
+    panel = once(panel, '() => _use(widget.originalId)',
+                 '() => _use(originalAtBuild, rowGeneration, originalAtBuild)',
+                 'owned-original-callback')
+    panel = once(panel, '() => _use(owned.identifier)',
+                 '() => _use(owned.identifier, rowGeneration, originalAtBuild)',
+                 'owned-premium-callback')
+    patched = source[:start] + panel + source[end:]
+    verify_owned_row_guard(patched)
+    return patched
+
+
+def profile_member_patches(project, verify_only):
+    # Compute every proposed edit before writing any part of the disposable app.
+    # Fail closed if an earlier recipe has changed either protected member.
+    results = {}
+    raw_hadaya = (REPO / HADAYA).read_text(encoding='utf-8')
+    for path, transform in (
+        (HADAYA, lambda old: patch_hadaya_archive(old, raw_hadaya)),
+        (FREE_INVENTORY, patch_royal_frame_labels),
+    ):
+        original = archived_profile_member(path)
+        expected = transform(original)
+        current = (project / path).read_text(encoding='utf-8')
+        if current != (expected if verify_only else original):
+            raise ValueError('PROFILE_ASSEMBLED_MEMBER_STOP:unexpected-source:' + path)
+        results[project / path] = expected
+    owned = (project / OWNED_IDS).read_text(encoding='utf-8')
+    if verify_only:
+        verify_owned_row_guard(owned)
+    else:
+        results[project / OWNED_IDS] = patch_owned_rows(owned)
+    return results
+
+
 def bind(project: Path, verify_only: bool = False):
     project = project.resolve()
     if project == REPO or project in REPO.parents or REPO in project.parents:
@@ -239,6 +434,7 @@ def bind(project: Path, verify_only: bool = False):
             '_profileAvatarKey(savePhone)' not in main):
         raise ValueError('PROFILE_AUDIT_STOP:existing-appearance-async-guard-missing')
     audit_original_editor(main)
+    member_changes = profile_member_patches(project, verify_only)
     if verify_only:
         verify(main, old_store)
         verify_verified_owned_frame_art(main)
@@ -252,6 +448,9 @@ def bind(project: Path, verify_only: bool = False):
         # Check all originals before mutating only a disposable build directory.
         main_path.write_text(new_main)
         module_path.write_bytes(expected.read_bytes())
+        for path, source in member_changes.items():
+            path.write_text(source, encoding='utf-8')
+    print('PASS_ASSEMBLED_PROFILE_HADAYA_BADGE_FRAME_LABELS_OWNED_ROWS_NO_SERVICE_MUTATION')
     return 'PASS_PROFILE_SINGLE_ORIGINAL_STORE_PUBLIC_UID_GUARD_NO_PRODUCTION_WRITE'
 
 

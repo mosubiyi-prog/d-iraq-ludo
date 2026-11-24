@@ -181,6 +181,46 @@ class DedaOtherPage {}
             with self.assertRaises(ValueError):
                 mod.verify_verified_owned_frame_art(changed)
 
+    def test_real_archived_hadaya_preserves_unread_badge_and_uses_tested_claim_guard(self):
+        old = mod.archived_profile_member(mod.HADAYA)
+        tested = (ROOT / mod.HADAYA).read_text(encoding='utf-8')
+        patched = mod.patch_hadaya_archive(old, tested)
+        self.assertEqual(patched.count('DedaStage75UnreadGiftBadge.start(widget.originalId)'), 2)
+        self.assertEqual(patched.count('DedaStage75UnreadGiftBadge.markViewed(originalId, gifts)'), 1)
+        self.assertEqual(patched.count('DedaStage74IdGiftService.receive(gift)'), 1)
+        self.assertIn('identical(_claimToken, token)', patched)
+        self.assertIn('_receive(gift, rowGeneration)', patched)
+        self.assertIn('authStateChanges().listen(_onAuthChanged)', patched)
+        with self.assertRaises(ValueError):
+            mod.patch_hadaya_archive(patched, tested)
+        with self.assertRaises(ValueError):
+            mod.patch_hadaya_archive(old.replace('DedaStage75UnreadGiftBadge.markViewed', 'REMOVED'), tested)
+
+    def test_real_archived_royal_labels_only_no_free_choice_or_art_change(self):
+        original = mod.archived_profile_member(mod.FREE_INVENTORY)
+        patched = mod.patch_royal_frame_labels(original)
+        self.assertIn("      'زمردي ملكي',\n      'ذهبي ملكي',\n      'وردي ملكي',", patched)
+        self.assertIn('frameChoices = <int>[0, 3, 4, 5]', patched)
+        self.assertEqual(patched.replace(
+            "      // " + mod.FRAME_NAMES_MARK + "\n"
+            "      'زمردي ملكي',\n      'ذهبي ملكي',\n      'وردي ملكي',",
+            "      'وردي ملكي',\n      'ذهبي ملكي',\n      'زمردي ملكي',"), original)
+        with self.assertRaises(ValueError):
+            mod.patch_royal_frame_labels(patched)
+
+    def test_real_owned_ids_panel_only_old_row_guard_no_service_change(self):
+        original = mod.archived_profile_member(mod.OWNED_IDS)
+        patched = mod.patch_owned_rows(original)
+        mod.verify_owned_row_guard(patched)
+        begin, end = mod._owned_panel_bounds(original)
+        new_begin, new_end = mod._owned_panel_bounds(patched)
+        self.assertEqual(original[:begin], patched[:new_begin])
+        self.assertEqual(original[end:], patched[new_end:])
+        with self.assertRaises(ValueError):
+            mod.patch_owned_rows(patched)
+        with self.assertRaises(ValueError):
+            mod.verify_owned_row_guard(patched.replace('rowGeneration != _generation', 'false'))
+
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
