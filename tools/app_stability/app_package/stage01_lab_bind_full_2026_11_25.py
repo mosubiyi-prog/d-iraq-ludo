@@ -91,14 +91,20 @@ def bind(root, config):
     probe.write_text(dart)
     test = root/'test/deda_stage01_full_entry_hold_test.dart'
     gate.require(not test.exists(), 'TEST_EXISTS')
-    test.write_text("""import 'package:flutter_test/flutter_test.dart';
+    test.write_text("""import 'package:flutter/rendering.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/main.dart' as full;
 
 void main() {
   testWidgets('full entry stays in phase 01 without native Firebase',
       (tester) async {
-    await full.main();
-    await tester.pumpAndSettle();
+    // Platform-channel replies and timeout timers must run outside FakeAsync.
+    await tester.runAsync(() async {
+      await full.main().timeout(const Duration(seconds: 10));
+    });
+    await tester.pump();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate, const Duration(seconds: 5));
     expect(find.text('BLOCKED: phase 01 lab configuration'), findsOneWidget);
   });
 }

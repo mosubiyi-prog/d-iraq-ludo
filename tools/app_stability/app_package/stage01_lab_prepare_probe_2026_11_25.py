@@ -22,7 +22,7 @@ bool matchesLab(FirebaseOptions options) =>
         'final app = await Firebase.initializeApp();', '''if (Firebase.apps.isNotEmpty) {
       throw StateError('Unexpected pre-initialized Firebase app');
     }
-    final app = await Firebase.initializeApp(options: labOptions);''')
+    final app = await Firebase.initializeApp(options: labOptions)\n        .timeout(const Duration(seconds: 5));''')
     gate.require(dart != gate.PROBE and 'Firebase.initializeApp(options: labOptions)' in dart,
                  'PROBE_ENTRY_ANCHOR_CHANGED')
     return dart
