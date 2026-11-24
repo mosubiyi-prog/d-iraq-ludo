@@ -38,6 +38,15 @@ API = {
  'pin_account_create': r'\bDedaPinAuth\.createAccount\s*\(',
  'pin_account_lookup': r'\bDedaPinAuth\.accountExists\s*\(',
  'routes': r'\b(?:MaterialPageRoute|CupertinoPageRoute)\s*(?:<[^>]+>)?\s*\(',
+ # Preserve old call counters. These separate lexical candidates cover SDK
+ # method references (including callbacks) and mutation kinds missed before.
+ 'auth_transition_member_reference': r'\.\s*(?:signInAnonymously|signInWithEmailAndPassword|signInWithCredential|linkWithCredential|signOut|createUserWithEmailAndPassword|signInWithCustomToken|signInWithPhoneNumber|verifyPhoneNumber|reauthenticateWithCredential|unlink|updateEmail|updatePassword|verifyBeforeUpdateEmail)\b(?!\s*\()',
+ 'auth_create_password_account': r'\bcreateUserWithEmailAndPassword\s*\(',
+ 'auth_custom_token_signin': r'\bsignInWithCustomToken\s*\(',
+ 'auth_phone_signin': r'\b(?:signInWithPhoneNumber|verifyPhoneNumber)\s*\(',
+ 'auth_provider_or_credential_change': r'\b(?:reauthenticateWithCredential|unlink|updateEmail|updatePassword|verifyBeforeUpdateEmail)\s*\(',
+ # delete() is shared by Firestore and Auth: do not claim these are user deletes.
+ 'member_delete_candidates': r'\.\s*delete\s*(?:\(|\b(?!\s*\())',
 }
 def digest(b):
     return hashlib.sha256(b).hexdigest()
@@ -149,6 +158,34 @@ def code_index(sources):
             'duplicate_whole_files':[v for v in whole.values() if len(v)>1],
             'duplicate_windows':repeats,'duplicate_merged_ranges':merged,
             'duplicate_declaration_name_candidates':{k:v for k,v in declarations.items() if len(v)>1}}
+def verify_auth_inventory_patterns():
+    # Self-test through the same token masking/index implementation used on
+    # assembled source. No new scanner or runtime dependency.
+    sample = """
+void fixture() {
+  auth.signInAnonymously();
+  final callback = auth.signInAnonymously;
+  final logout = auth.signOut;
+  auth.createUserWithEmailAndPassword(email: e, password: p);
+  auth.signInWithCustomToken(t);
+  auth.verifyPhoneNumber(phoneNumber: p);
+  user.reauthenticateWithCredential(c);
+  user.delete();
+  doc.delete();
+  // auth.signInWithCustomToken(comment);
+  final literal = 'auth.signInWithCustomToken(secret)';
+}
+"""
+    sites=code_index({'lib/main.dart':sample})['api_sites']
+    expected={'anonymous_auth':1,'auth_transition_member_reference':2,
+              'auth_create_password_account':1,'auth_custom_token_signin':1,
+              'auth_phone_signin':1,'auth_provider_or_credential_change':1,
+              'member_delete_candidates':2}
+    for key,count in expected.items():
+        if len(sites.get(key,[]))!=count:
+            raise ValueError('AUTH_INVENTORY_PATTERN_REGRESSION:'+key)
+    print('PASS_AUTH_MUTATION_INVENTORY_PATTERN_SELF_TEST',flush=True)
+
 def summary(idx):
     return {'dart_files':len(idx['lengths']),
             'physical_lines':sum(v['physical_lines'] for v in idx['lengths'].values()),
@@ -169,6 +206,7 @@ def main():
     p.add_argument('reference',type=Path);p.add_argument('candidate',type=Path)
     p.add_argument('output',type=Path);p.add_argument('--baseline',required=True);p.add_argument('--head',required=True)
     a=p.parse_args()
+    verify_auth_inventory_patterns()
     old,new,out=a.reference.resolve(),a.candidate.resolve(),a.output.resolve()
     if old==new or any(x==ROOT or ROOT in x.parents for x in (old,new,out)) or any(x==out or x in out.parents for x in (old,new)):
         raise ValueError('INVENTORY_REQUIRES_DISPOSABLE_READONLY_INPUTS')
