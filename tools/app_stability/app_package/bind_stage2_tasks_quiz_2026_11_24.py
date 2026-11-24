@@ -31,13 +31,24 @@ ENGINE_HELPER = '''  // ''' + MARK + '''
   static Future<DedaTaskEventResult> _withTaskMutation(
       String? taskId, String cycle,
       Future<DedaTaskEventResult> Function() action) {
-    final account = _accountKey();
-    final accountEpoch = DedaPreferences.stabilityAccountEpoch;
-    final openingDay = currentLocalCycleId();
     DedaTaskEventResult expired() => DedaTaskEventResult(
       accepted: false, completedNow: false, pointsAwarded: false,
       pointsDelta: 0, totalPoints: 0, taskId: taskId, cycleId: cycle,
     );
+    return _withLedgerMutation<DedaTaskEventResult>(
+      requireSameDay: true, expired: expired, action: action);
+  }
+
+  // The two original prize-card pages and daily task engine share this
+  // SAME in-process ledger lane. Prize stages are not daily-cycle rewards.
+  static Future<T> _withLedgerMutation<T>({
+    required bool requireSameDay,
+    required T Function() expired,
+    required Future<T> Function() action,
+  }) {
+    final account = _accountKey();
+    final accountEpoch = DedaPreferences.stabilityAccountEpoch;
+    final openingDay = currentLocalCycleId();
     DedaAuthSnapshot? captured;
     try { captured = DedaAuthRuntime.capture(); }
     catch (_) { return Future.value(expired()); }
@@ -47,19 +58,19 @@ ENGINE_HELPER = '''  // ''' + MARK + '''
         return DedaPreferences.isLoggedIn && account.isNotEmpty &&
             account == _accountKey() &&
             accountEpoch == DedaPreferences.stabilityAccountEpoch &&
-            openingDay == currentLocalCycleId();
+            (!requireSameDay || openingDay == currentLocalCycleId());
       } catch (_) { return false; }
     }
     Object? principal() {
       final live = DedaAuthRuntime.capture();
       return (live?.uid, live?.kind, live?.epoch);
     }
-    return _taskMutations.run(
+    return _taskMutations.run<T>(
       isCurrent: current, expired: expired,
       action: () async {
         try {
           DedaSectionOperationContext.checkCurrent();
-          return await DedaSectionOperationContext.run<DedaTaskEventResult>(
+          return await DedaSectionOperationContext.run<T>(
             owner: _taskMutations, isCurrent: current,
             principal: principal, action: action,
           );
@@ -156,10 +167,69 @@ def patch_daily(body):
     return body
 
 
+POINT_TIER_PAGES = ('class _DedaAccountHubPageState', 'class _DedaProfilePhase2PageState')
+POINT_TIER_METHODS = (
+    ('_loadOpenedPointTiers', '', '', '_loadOpenedPointTiersInLane'),
+    ('_claimPointTierReward', 'int threshold', 'threshold', '_claimPointTierRewardInLane'),
+    ('_openPointTier', 'int threshold, int totalPoints', 'threshold, totalPoints', '_openPointTierInLane'),
+)
+
+def verify_point_tier_page(body):
+    if ('DedaSectionState<' not in body or
+            body.count('DedaTaskEngine._withLedgerMutation<void>(') != 3 or
+            body.count('requireSameDay: false, expired: () {},') != 3 or
+            body.count('_loadOpenedPointTiersInLane()') != 3):
+        raise ValueError('POINT_TIER_VERIFY:shared-ledger-lane-or-nested-load')
+    for name, params, args, inner in POINT_TIER_METHODS:
+        for header in ('  Future<void> '+name+'('+params+') async {',
+                       '  Future<void> '+inner+'('+params+') async {'):
+            if body.count(header) != 1:
+                raise ValueError('POINT_TIER_VERIFY:original-entry:'+name)
+        callback = ('action: '+inner+',' if not args else
+                    'action: () => '+inner+'('+args+'),')
+        if body.count(callback) != 1:
+            raise ValueError('POINT_TIER_VERIFY:original-action:'+name)
+    a = body.index('  Future<void> _claimPointTierRewardInLane(')
+    z = body.index('  String _formatPointTier(', a)
+    if '_loadOpenedPointTiers()' in body[a:z]:
+        raise ValueError('POINT_TIER_VERIFY:nested-lane-deadlock')
+
+def patch_point_tier_page(body):
+    if 'DedaSectionState<' not in body or 'DedaTaskEngine._withLedgerMutation<void>(' in body:
+        raise ValueError('POINT_TIER_SOURCE_STOP:existing-section-guard-or-duplicate')
+    # Rename only the three original private implementations, then keep
+    # their original entry names as wrappers. The internal load invoked by
+    # open/claim must NOT requeue behind the lane already held by its caller.
+    for name, params, args, inner in reversed(POINT_TIER_METHODS[1:]):
+        old = '  Future<void> '+name+'('+params+') async {'
+        if body.count(old) != 1:
+            raise ValueError('POINT_TIER_SOURCE_STOP:'+name)
+        start = body.index(old)
+        end = body.index('  String _formatPointTier(', start) if name == '_openPointTier' else body.index('  Future<void> _openPointTier(', start)
+        part = one(body[start:end], '_loadOpenedPointTiers()', '_loadOpenedPointTiersInLane()', name+'-nested-load')
+        body = body[:start]+part+body[end:]
+    for name, params, args, inner in POINT_TIER_METHODS:
+        old = '  Future<void> '+name+'('+params+') async {'
+        callback = ('action: '+inner+',' if not args else
+                    'action: () => '+inner+'('+args+'),')
+        wrapper = (old+'\n'
+            '    return dedaRunSectionVoid(() async {\n'
+            '      return DedaTaskEngine._withLedgerMutation<void>(\n'
+            '        requireSameDay: false, expired: () {},\n'
+            '        '+callback+'\n'
+            '      );\n'
+            '    });\n'
+            '  }\n\n')
+        body = one(body, old, wrapper+'  Future<void> '+inner+'('+params+') async {', name+'-single-lane-wrapper')
+    verify_point_tier_page(body)
+    return body
+
 def patch_main(main):
     imp = "import 'deda_section_operation_context.dart';"
     main = one(main, imp, imp + "\nimport 'deda_stage2_task_mutation_lane_2026_11_24.dart';", 'single-lane-import')
     main = region(main, 'class DedaTaskEngine {', '\nString dedaCategoryLabel', patch_engine)
+    for page in POINT_TIER_PAGES:
+        main = region(main, page, '\nclass ', patch_point_tier_page)
     return region(main, 'class _DedaDailyTasksPageState', '\nclass ', patch_daily)
 
 
@@ -229,7 +299,8 @@ def patch_quiz(q):
 def verify(main, quiz, social, pubspec):
     for body, markers in (
         (main, (MARK, 'DedaTaskMutationLane()', 'accountEpoch == DedaPreferences.stabilityAccountEpoch',
-                'openingDay == currentLocalCycleId()', 'DedaSectionOperationContext.run<DedaTaskEventResult>',
+                'openingDay == currentLocalCycleId()', 'DedaSectionOperationContext.run<T>',
+                '_withLedgerMutation<DedaTaskEventResult>(', '_taskMutations.run<T>(',
                 'task-ledger-write-not-confirmed',
                 "final awardId = 'task|$cycle|$taskId';", "'traffic_answer|$cycle|$cleanDedupe'",
                 "'daily_login|$dayId'", 'deda_task_points_state_v1_', 'deda_social_progress_v1_',
@@ -258,6 +329,12 @@ def verify(main, quiz, social, pubspec):
         for marker in markers:
             if marker not in body:
                 raise ValueError('TASKS_VERIFY:' + marker)
+    if main.count('DedaTaskMutationLane()') != 1:
+        raise ValueError('POINT_TIER_VERIFY:duplicate-ledger-lane')
+    for page in POINT_TIER_PAGES:
+        a = main.index(page)
+        z = main.index('\nclass ', a+len(page))
+        verify_point_tier_page(main[a:z])
     if main.count('DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(') != 1:
         raise ValueError('TASKS_VERIFY:duplicate-weekly-report')
     if '_dedaTraffic500Asset' in quiz or 'deda_traffic_500_bank_ar_v1.json' in pubspec:

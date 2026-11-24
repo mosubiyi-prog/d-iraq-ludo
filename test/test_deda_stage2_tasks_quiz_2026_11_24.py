@@ -42,6 +42,25 @@ class TasksQuizSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.patch_engine(changed)
 
+    def test_both_original_prize_pages_use_same_existing_ledger_lane(self):
+        raw = profile.archived_profile_member('lib/main.dart')
+        for page in mod.POINT_TIER_PAGES:
+            with self.subTest(page=page):
+                a=raw.index(page)
+                z=raw.index('\nclass ', a+len(page))
+                source=profile.bind_existing_section_lifetime("import 'placeholder.dart';\n"+raw[a:z])
+                changed=mod.patch_point_tier_page(source)
+                mod.verify_point_tier_page(changed)
+                for marker in ("'point_tier_reserve|$threshold'", "'point_tier_claim|$threshold'",
+                               'DedaTaskEngine._writeState(', 'DedaTaskEngine._readState('):
+                    self.assertGreater(source.count(marker), 0)
+                    self.assertEqual(source.count(marker), changed.count(marker))
+                with self.assertRaises(ValueError):
+                    mod.patch_point_tier_page(changed)
+                with self.assertRaises(ValueError):
+                    mod.verify_point_tier_page(changed.replace(
+                        'action: _loadOpenedPointTiersInLane,','action: _loadOpenedPointTiers,',1))
+
     def test_confirmed_friend_acceptance_not_lost_in_merged_reader(self):
         raw = profile.archived_profile_member('lib/deda_social_service.dart')
         changed = friends.patch_service(raw)
