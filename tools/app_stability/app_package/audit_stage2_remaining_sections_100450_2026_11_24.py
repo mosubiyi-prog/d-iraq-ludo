@@ -168,13 +168,75 @@ def support(reference, project):
     print('PASS_SUPPORT_100450_CONTACT_TEAM_ADMIN_SOURCE_PARITY_DRAFT_SCOPE', flush=True)
 
 
+
+def login(reference, project):
+    import hashlib
+    old, new = read(reference, 'main.dart'), read(project, 'main.dart')
+    for name in ('LoginPage', '_LoginPageState'):
+        marker = 'class ' + name + ' '
+        equal('login:' + name, member(old, marker), member(new, marker))
+    first = member(new, 'class _LoginPageState ')
+    for marker in ("assets/deda_login_bg.jpg", "DedaSmartSecondStageAccountPage(",
+                   "_buildExistingAccountForm(", "DedaExistingAccountSignInPage(",
+                   "DedaPinAuth.createAccount(", "DedaPreferences.saveLogin(",
+                   "new-owner-server-readback-not-proven"):
+        if marker not in first:
+            raise ValueError('LOGIN_REQUIRED_SOURCE_MISSING:' + marker)
+    for marker, count in (('DedaSmartSecondStageAccountPage(', 1),
+                          ('DedaExistingAccountSignInPage(', 1),
+                          ('Widget _buildExistingAccountForm(', 1)):
+        if first.count(marker) != count:
+            raise ValueError('LOGIN_DUPLICATE_ENTRY:' + marker)
+    # Compare every byte of the three original login artworks in the two
+    # actual assemblies. The exact embedded hero and screen layout are
+    # covered by the entire LoginPageState equality above.
+    for name in ('deda_login_bg.jpg', 'deda_login_reference.jpg',
+                 'deda_login_reference_exact.b64'):
+        a, b = reference/'assets'/name, project/'assets'/name
+        if a.read_bytes() != b.read_bytes():
+            raise ValueError('LOGIN_ARTWORK_DRIFT:' + name)
+        print('LOGIN_ARTWORK_SHA256', name, hashlib.sha256(b.read_bytes()).hexdigest(), flush=True)
+    if "assets/deda_login_bg.jpg" not in (project/'pubspec.yaml').read_text():
+        # A directory-level asset declaration is also legitimate.
+        if 'assets/' not in (project/'pubspec.yaml').read_text():
+            raise ValueError('LOGIN_BACKGROUND_NOT_REGISTERED')
+    second = 'deda_step2_smart_second_stage_account_page_100439.dart'
+    equal('login:smart-second-stage', read(reference, second), read(project, second))
+    existing = 'deda_step2_existing_account_signin_page.dart'
+    expected = read(reference, existing)
+    for before, after in (
+        ("    this.initialPhone,\n",
+         "    this.initialPhone,\n    this.sessionOnly = false,\n"),
+        ("  final String? initialPhone;\n",
+         "  final String? initialPhone;\n  // The 100454 original-phone flow repairs Firebase Auth, NOT user data.\n  final bool sessionOnly;\n"),
+        ("              const Text('تسجيل الدخول بحسابك السابق',\n",
+         "              Text(widget.sessionOnly\n                  ? 'تفعيل جلسة حسابي الأصلي'\n                  : 'تسجيل الدخول بحسابك السابق',\n"),
+        ("                title: const Text('أطلب استرجاع حسابي السابق وبياناته'),\n                subtitle: const Text(\n                  'لا يتم نقل أو تصفير أي بيانات قبل التحقق من مصدرها '\n                  'على الخادم. احتفظ بالهاتف القديم لحين نجاح الفحص.'),",
+         "                title: Text(widget.sessionOnly\n                    ? 'أوافق على التحقق من هوية حسابي الأصلي'\n                    : 'أطلب استرجاع حسابي السابق وبياناته'),\n                subtitle: Text(widget.sessionOnly\n                    ? 'تفعيل جلسة Firebase الأصلية فقط بعد إثبات UID على الخادم. '\n                      'لا ننشئ حساباً جديداً ولا نسترجع أو ننقل أي بيانات.'\n                    : 'لا يتم نقل أو تصفير أي بيانات قبل التحقق من مصدرها '\n                      'على الخادم. احتفظ بالهاتف القديم لحين نجاح الفحص.'),"),
+        ("                child: Text(_busy ? 'جارٍ فحص الاسترجاع...' :\n                    'التحقق واسترجاع حسابي'),",
+         "                child: Text(_busy\n                    ? (widget.sessionOnly ? 'جارٍ التحقق من الجلسة...' : 'جارٍ فحص الاسترجاع...')\n                    : (widget.sessionOnly ? 'تحقق وفعّل الجلسة الأصلية' : 'التحقق واسترجاع حسابي')),"),
+    ):
+        expected = home.one(expected, before, after, 'login:historical-session-only-mode')
+    equal('login:existing-account-with-preserved-session-only-mode', expected, read(project, existing))
+    # Keep the release barrier explicit. A staged Google principal is not
+    # yet an enrolled DEDA account, and the legacy PIN guardian is not
+    # evidence of successful authentication after a change of handset.
+    google = read(project, 'deda_stable_google_login_2026_11_21.dart')
+    if "'DEDA_STABILITY_GOOGLE_LOGIN', defaultValue: false" not in google:
+        raise ValueError('LOGIN_UNAPPROVED_GOOGLE_ACTIVATION')
+    if 'deda-stability-original-login-no-anonymous-uid' not in read(project, 'deda_pin_auth.dart'):
+        raise ValueError('LOGIN_PASSIVE_UID_GUARD_LOST')
+    print('LOGIN_EXISTING_ACCOUNT_AND_GOOGLE_DURABLE_ENROLLMENT_RELEASE_HOLD', flush=True)
+    print('PASS_LOGIN_100450_ORIGINAL_FIRST_STAGE_ARTWORK_SECOND_STAGE_SINGLE_DELEGATE', flush=True)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('reference', type=Path)
     parser.add_argument('project', type=Path)
-    parser.add_argument('--section', choices=['gifts', 'assistant', 'support'], required=True)
+    parser.add_argument('--section', choices=['gifts', 'assistant', 'support', 'login'], required=True)
     args = parser.parse_args()
     reference, project = args.reference.resolve(), args.project.resolve()
     if reference == project or ROOT in reference.parents or ROOT in project.parents:
         raise ValueError('REMAINING_AUDIT_REQUIRES_TWO_DISPOSABLE_ASSEMBLIES')
-    {'gifts': gifts, 'assistant': assistant, 'support': support}[args.section](reference, project)
+    {'gifts': gifts, 'assistant': assistant, 'support': support, 'login': login}[args.section](reference, project)
