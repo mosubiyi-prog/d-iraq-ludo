@@ -118,6 +118,38 @@ def group_priority_contexts(contexts):
         raise ValueError('STAGE01_PRIORITY_GROUP_COVERAGE')
     return result
 
+def priority_source_evidence(root, contexts):
+    """Exact source excerpts for the outstanding semantic review, not an
+    equivalence verdict. Do not read platform configuration or account data.
+    """
+    spans=defaultdict(list)
+    for entry in contexts:
+        for c in entry['contexts']:
+            spans[c['file']].append((c['start'],c['end']))
+    evidence={}
+    for file,ranges in sorted(spans.items()):
+        path=(root/file).resolve()
+        if root not in path.parents or path.suffix!='.dart':
+            raise ValueError('STAGE01_SOURCE_EVIDENCE_INVALID_PATH')
+        lines=path.read_text(encoding='utf-8').splitlines()
+        merged=[]
+        for start,end in sorted(ranges):
+            if not 1<=start<=end<=len(lines):
+                raise ValueError('STAGE01_SOURCE_EVIDENCE_INVALID_RANGE')
+            start,end=max(1,start-8),min(len(lines),end+8)
+            if merged and start<=merged[-1][1]+1:
+                merged[-1][1]=max(merged[-1][1],end)
+            else:
+                merged.append([start,end])
+        for start,end in ranges:
+            if not any(a<=start<=end<=b for a,b in merged):
+                raise ValueError('STAGE01_SOURCE_EVIDENCE_INCOMPLETE')
+        evidence[file]={'sha256':sha(path),'line_count':len(lines),
+                        'excerpts':[{'start':a,'end':b,'text':'\n'.join(lines[a-1:b])}
+                                    for a,b in merged]}
+    return evidence
+
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('reference',type=Path);p.add_argument('candidate',type=Path);p.add_argument('inventory',type=Path)
@@ -148,6 +180,7 @@ def main():
         raise ValueError('STAGE01_PRIORITY_REVIEW_FINGERPRINT_MISMATCH')
     print('STAGE01_PRIORITY_CONTEXT_INDEXED',len(contexts),flush=True)
     priority_groups=group_priority_contexts(contexts)
+    source_evidence=priority_source_evidence(new,contexts)
     store_separation=verify_store_route_separation(iy)
     print('STAGE01_PRIORITY_ANCHOR_GROUPS',len(priority_groups),flush=True)
     print('STAGE01_STORE_SINGLE_ACTIVE_RENDERER_PROOF_LIBRARY_PRESERVED',
@@ -199,6 +232,10 @@ def main():
                            'No source code was deleted or changed by this review; no production or historical identity access.',
                            'Live lab launch prohibited until independently approved project configuration and runtime guard are verified.']}
     (inv.parent/'stage01-review.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+    (inv.parent/'stage01-priority-source-evidence.json').write_text(
+        json.dumps({'inventory_head': data['raw_head'], 'priority_count':priority_count,
+                    'files':source_evidence},ensure_ascii=False,indent=2),encoding='utf-8')
+    print('STAGE01_PRIORITY_SOURCE_EVIDENCE_FILES',len(source_evidence),flush=True)
     print('STAGE01_ALL_REPEAT_FINGERPRINTS_TRIAGED',len(result),flush=True)
     print('STAGE01_DUPLICATE_DECLARATIONS',json.dumps(report['duplicate_declarations']),flush=True)
     print('STAGE01_QA_PRODUCTION_CONFIG_REMOVED_BOTH_TEMP_TREES_NO_APK',flush=True)
