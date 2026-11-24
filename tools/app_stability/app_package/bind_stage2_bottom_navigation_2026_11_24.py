@@ -153,6 +153,7 @@ def patch_inbox(body):
     body = one(body, '  static int _generation = 0;',
         '  static int _generation = 0;\n'
         '  static int? _accountEpoch;\n'
+        '  static int? _accountAuthEpoch;\n'
         '  // ' + GIFT_MARK + '\n'
         '  static Future<void> stop() async {\n'
         '    ++_generation;\n'
@@ -161,6 +162,7 @@ def patch_inbox(body):
         "    _publicId = '';\n"
         '    _accountUid = null;\n'
         '    _accountEpoch = null;\n'
+        '    _accountAuthEpoch = null;\n'
         '    pendingNotifier.value = 0;\n'
         '    try { await previous?.cancel(); } catch (_) {}\n'
         '  }\n\n'
@@ -195,13 +197,14 @@ def patch_inbox(body):
     DedaAuthSnapshot? principal;
     try { principal = DedaAuthRuntime.capture(); } catch (_) { await stop(); return; }
     if (_subscription != null && _publicId == publicId && _accountUid == uid &&
-        _accountEpoch == accountEpoch) return;
+        _accountEpoch == accountEpoch && _accountAuthEpoch == principal?.epoch) return;
     final generation = ++_generation;
     final previous = _subscription;
     _subscription = null;
     _publicId = publicId;
     _accountUid = uid;
     _accountEpoch = accountEpoch;
+    _accountAuthEpoch = principal?.epoch;
     pendingNotifier.value = 0;
     bool current() {
       if (_generation != generation || _publicId != publicId ||
@@ -227,7 +230,8 @@ def patch_inbox(body):
 
 
 def verify_inbox(body):
-    for marker in (GIFT_MARK, '_accountEpoch == accountEpoch', 'DedaAuthRuntime.checkSnapshot(principal)',
+    for marker in (GIFT_MARK, '_accountEpoch == accountEpoch', '_accountAuthEpoch == principal?.epoch',
+                   'DedaAuthRuntime.checkSnapshot(principal)',
                    'DedaPreferences.stabilityAccountEpoch != accountEpoch',
                    'if (!current()) return; // old account cannot publish a badge.',
                    'DedaBackend.watchPersonalDiamondGifts(publicId).listen(',
