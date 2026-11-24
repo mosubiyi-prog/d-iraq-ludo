@@ -16,6 +16,9 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_tasks_quiz_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_home_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_bottom_navigation_2026_11_24.py'
+      - 'tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py'
+      - 'test/test_deda_stage2_settings_2026_11_24.py'
+      - 'test/deda_stage2_settings_persistence_test.dart'
       - 'test/test_deda_stage2_bottom_navigation_2026_11_24.py'
       - 'test/deda_stage2_bottom_gift_badge_test.dart'
       - 'test/test_deda_stage2_home_2026_11_24.py'
@@ -84,6 +87,8 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_home_2026_11_24.py -v
       - name: Verify original five bottom destinations and gift badge lifecycle
         run: python3 -m unittest discover -s test -p test_deda_stage2_bottom_navigation_2026_11_24.py -v
+      - name: Verify protected settings and original preference keys
+        run: python3 -m unittest discover -s test -p test_deda_stage2_settings_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
           python3 - <<'PY'
@@ -198,6 +203,8 @@ jobs:
           python3 tools/app_stability/app_package/bind_stage2_home_2026_11_24.py "$project" --verify-only
           python3 tools/app_stability/app_package/bind_stage2_bottom_navigation_2026_11_24.py "$project"
           python3 tools/app_stability/app_package/bind_stage2_bottom_navigation_2026_11_24.py "$project" --verify-only
+          python3 tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py "$project"
+          python3 tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py "$project" --verify-only
           # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
           python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
           # Read-only check against the actual reconstructed profile appearance and bundled art.
@@ -223,6 +230,8 @@ jobs:
           flutter test --no-pub --reporter expanded test/deda_stage2_task_mutation_lane_test.dart
           cp "$GITHUB_WORKSPACE/test/deda_stage2_bottom_gift_badge_test.dart" test/deda_stage2_bottom_gift_badge_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_bottom_gift_badge_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_stage2_settings_persistence_test.dart" test/deda_stage2_settings_persistence_test.dart
+          flutter test --no-pub --reporter expanded test/deda_stage2_settings_persistence_test.dart
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
             lib/deda_social_service.dart lib/deda_stage51_verified_friend_alias_search.dart \

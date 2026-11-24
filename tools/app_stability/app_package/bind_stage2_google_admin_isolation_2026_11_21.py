@@ -45,12 +45,12 @@ def prepare(project: Path, verify_only: bool = False):
     admin_source = admin_path.read_text()
     import_statement = "import 'deda_stage2_google_access_card_2026_11_21.dart';"
     isolated_admin_import = "import 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart';"
-    pilot_insert = """            if (dedaStableGoogleLoginEnabled) ...[
-              DedaStage2GoogleAccessCard(
-                onFreshGoogleIdentity: _onStage2FreshGoogleIdentity,
-              ),
-              const SizedBox(height: 12),
-            ],
+    pilot_insert = """                  if (dedaStableGoogleLoginEnabled) ...[
+                    DedaStage2GoogleAccessCard(
+                      onFreshGoogleIdentity: _onStage2FreshGoogleIdentity,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 """
     expected_import = "import 'deda_backend.dart';\n"
     isolated_main_import = "import 'deda_stage2_isolated_admin_identity_2026_11_21.dart';"
@@ -124,7 +124,15 @@ Future<void> main() async {"""
   }
 
 """
-    expected_logout = "            OutlinedButton.icon(\n              onPressed: _logout,"
+    expected_logout = "                  Card(\n                    color: const Color(0xFFFFF7F6),"
+    def settings_span(source):
+        marker = 'class _DedaSettingsPageState '
+        if source.count(marker) != 1:
+            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:actual-settings-page')
+        a = source.index(marker)
+        z = source.index('\nclass ', a + len(marker))
+        return a, z
+
     ISOLATED_ADMIN_LOGIN = "      // Isolated Stage2 gateway. Never pass a secondary principal to the\n      // legacy Dashboard while its privileged calls still use default Auth.\n      if (dedaIsolatedAdminIdentityEnabled) {\n        final isolated = await DedaIsolatedAdminIdentity.open();\n        try {\n          await isolated.verifyAdminLogin(\n            email: _email.text,\n            password: _password.text,\n            dedaPhone: widget.dedaPhone,\n          );\n          final verifiedProfile = await isolated.readVerifiedAdminProfile(\n            dedaPhone: widget.dedaPhone,\n          );\n          if (verifiedProfile['mustChangePassword'] == true) {\n            throw StateError('deda-isolated-admin-password-change-pending');\n          }\n          await _saveIdentity();\n          if (!mounted) {\n            await isolated.signOutSecondaryAdmin();\n            return;\n          }\n          Navigator.pushReplacement(\n            context,\n            MaterialPageRoute(\n              builder: (_) => DedaStage2IsolatedDashboardPage(\n                isArabic: widget.isArabic,\n                dedaPhone: widget.dedaPhone,\n                admin: isolated,\n                profile: verifiedProfile,\n              ),\n            ),\n          );\n          return;\n        } catch (_) {\n          await isolated.signOutSecondaryAdmin();\n          rethrow;\n        }\n      }\n"
     if not verify_only:
         if import_statement in main or 'DedaStage2GoogleAccessCard(' in main:
@@ -153,9 +161,16 @@ Future<void> main() async {"""
         main = one(main, '  static bool _liveVerifiedOriginalOwner(',
                    in_memory_fence + '  static bool _liveVerifiedOriginalOwner(',
                    'legacy-live-profile-fence')
-        main = one(main, '  Future<void> _logout() async {',
-                   handoff_method + '  Future<void> _logout() async {',
-                   'google-auth-handoff-route')
+        a, z = settings_span(main)
+        settings = main[a:z]
+        settings = one(settings, '  Future<void> _logoutPersonalAccount() async {',
+                   handoff_method + '  Future<void> _logoutPersonalAccount() async {',
+                   'google-auth-handoff-route-in-actual-settings')
+        if settings.count('onTap: _logoutPersonalAccount,') != 1:
+            raise ValueError('STAGE2_STOP_SOURCE_DRIFT:actual-settings-signout')
+        settings = one(settings, expected_logout, pilot_insert + expected_logout,
+                       'existing-settings-signout-location')
+        main = main[:a] + settings + main[z:]
         main = one(main, '          home: DedaPreferences.isLoggedIn\n',
                    """          home: _dedaStage2PendingGoogleUid != null
               ? DedaStage2GooglePendingPage(
@@ -165,8 +180,6 @@ Future<void> main() async {"""
                 )
               : DedaPreferences.isLoggedIn
 """, 'pending-boot-home-gate')
-        main = one(main, expected_logout, pilot_insert + expected_logout,
-                   'existing-signout-location')
         main = one(main, settings_admin_anchor,
                    ISOLATED_SETTINGS_GATE + settings_admin_anchor,
                    'settings-isolated-route-before-legacy-auth')
@@ -303,6 +316,12 @@ Future<void> main() async {"""
         (project/'test').mkdir(exist_ok=True)
         if not existing_test.exists():
             existing_test.write_bytes((REPO/'test'/GOOGLE_TEST).read_bytes())
+    a, z = settings_span(main)
+    settings = main[a:z]
+    if (settings.count(pilot_insert + expected_logout) != 1 or
+        settings.count('onTap: _logoutPersonalAccount,') != 1 or
+        settings.count('Future<void> _onStage2FreshGoogleIdentity(') != 1):
+        raise ValueError('STAGE2_VERIFY_ACTUAL_SETTINGS_SIGNOUT_LOCATION_FAILED')
     if (main.count(import_statement) != 1 or
         main.count(isolated_main_import) != 1 or
         main.count(ISOLATED_SETTINGS_GATE) != 1 or
@@ -310,8 +329,8 @@ Future<void> main() async {"""
             main.index(settings_admin_anchor) or
         (
         main.count('DedaStage2GoogleAccessCard(') != 1 or
-        not main.index('DedaStage2GoogleAccessCard(') <
-            main.index(expected_logout) or
+        not settings.index('DedaStage2GoogleAccessCard(') <
+            settings.index('onTap: _logoutPersonalAccount,') or
         main.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();') != 2 or
         main.count('DedaStage2GooglePendingPage(') != 2 or
         main.count('String? _dedaStage2PendingGoogleUid;') != 1 or
@@ -320,7 +339,7 @@ Future<void> main() async {"""
         main.count('await _dedaStage2LoadPreferencesWithGoogleFence();') not in (1, 2) or
         not main.index('await DedaStableGoogleLogin.pendingGoogleUid();') <
             main.index('await DedaTaskEngine.initializeForCurrentAccount();') or
-        main.count(expected_logout) != 1 or
+        settings.count(expected_logout) != 1 or
         pubspec.count(GOOGLE_DEPENDENCY) != 1 or
         pubspec.count(CRYPTO_DEPENDENCY) != 1
         )):

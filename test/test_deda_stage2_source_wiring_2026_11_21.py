@@ -19,6 +19,18 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         (self.dst/'lib').mkdir()
         (self.dst/'test').mkdir()
         self.untouched = {}
+        # The raw checkout predates the real 100380 Settings logout card.
+        # Read the hash-verified protected Settings class, not the retired hub.
+        profile_script = REPO/'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
+        profile_spec = importlib.util.spec_from_file_location('settings_archive', profile_script)
+        profile = importlib.util.module_from_spec(profile_spec)
+        profile_spec.loader.exec_module(profile)
+        archived = profile.archived_profile_member('lib/main.dart')
+        def settings_bounds(s):
+            a = s.index('class _DedaSettingsPageState ')
+            return a, s.index('\nclass ', a + 10)
+        aa, az = settings_bounds(archived)
+        self.actual_settings = archived[aa:az]
         for name in ('lib/main.dart','pubspec.yaml','lib/deda_backend.dart',
                      'lib/deda_pin_auth.dart','lib/admin_pages.dart',
                      'lib/places_service.dart','lib/admin_place_map.dart'):
@@ -26,7 +38,12 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
             self.untouched[name]=hashlib.sha256(data).hexdigest()
             dst=self.dst/name
             dst.parent.mkdir(parents=True,exist_ok=True)
-            dst.write_bytes(data)
+            if name == 'lib/main.dart':
+                raw = data.decode('utf-8')
+                a, z = settings_bounds(raw)
+                dst.write_text(raw[:a] + self.actual_settings + raw[z:])
+            else:
+                dst.write_bytes(data)
 
     def test_existing_settings_card_above_original_logout(self):
         r=binder.prepare(self.dst)
@@ -36,8 +53,11 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
         binder.prepare(self.dst,verify_only=True)
         ui=(self.dst/'lib/main.dart').read_text()
         self.assertIn("import 'deda_stage2_google_access_card_2026_11_21.dart';",ui)
-        self.assertLess(ui.index("DedaStage2GoogleAccessCard("),
-            ui.index('            OutlinedButton.icon(\n              onPressed: _logout,'))
+        settings = ui.split('class _DedaSettingsPageState ',1)[1].split('\nclass ',1)[0]
+        self.assertLess(settings.index("DedaStage2GoogleAccessCard("),
+                        settings.index('onTap: _logoutPersonalAccount,'))
+        self.assertIn('Future<void> _onStage2FreshGoogleIdentity(', settings)
+        self.assertNotIn('DedaStage2GoogleAccessCard(', ui.split('class _DedaAccountHubPageState ',1)[1].split('\nclass ',1)[0])
         self.assertEqual(ui.count('DedaStage2GoogleAccessCard('),1)
         self.assertEqual(ui.count('DedaStage2GooglePendingPage('),2)
         self.assertEqual(ui.count('DedaPreferences.suspendLegacyLiveSessionForGoogle();'),2)
@@ -1622,8 +1642,8 @@ class Stage2GoogleAdminSourceTests(unittest.TestCase):
 
     def test_unknown_signout_anchor_never_mutates_pubspec(self):
         main=self.dst/'lib/main.dart'
-        main.write_text(main.read_text().replace('onPressed: _logout,',
-                                                  'onPressed: differentLogout,',1))
+        main.write_text(main.read_text().replace('onTap: _logoutPersonalAccount,',
+                                                  'onTap: differentLogout,',1))
         before=(self.dst/'pubspec.yaml').read_bytes()
         with self.assertRaisesRegex(ValueError,'STAGE2_STOP_SOURCE_DRIFT'):
             binder.prepare(self.dst)
