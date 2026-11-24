@@ -137,6 +137,45 @@ def callback_region(s, marker):
     z = opening + ts[home.pairs(ts, True)[0]][1]
     return opening, z
 
+def patch_admin_refresh(body):
+    # 100441 wraps the original server gateway in an existing rescue method.
+    # Bind the generation through BOTH existing calls, including the recheck.
+    a,z = callback_region(body, '  Future<void> _refreshAdminEntryVisibilityOriginal() async {')
+    original_reader = body[a:z+1]
+    if ('currentDedaAccountCanSeeAdminEntry(' not in original_reader or
+        'setState(() => _adminEntryVisible = allowed);' not in original_reader):
+        raise ValueError('SETTINGS_SOURCE_STOP:actual-original-admin-reader:' + repr(original_reader))
+    original_reader = one(original_reader, '    setState(() => _adminEntryVisible = allowed);',
+        '    if (!_settingsCurrent || generation != _settingsAdminGeneration) return;\n'
+        '    final uid = Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser?.uid;\n'
+        '    setState(() {\n'
+        '      _settingsAdminUid = allowed ? uid : null;\n'
+        '      _adminEntryVisible = allowed && uid != null;\n'
+        '    });', 'only-current-admin-result')
+    body = body[:a] + original_reader + body[z+1:]
+    body = one(body, '  Future<void> _refreshAdminEntryVisibilityOriginal() async {',
+        '  Future<void> _refreshAdminEntryVisibilityOriginal(int generation) async {',
+        'preserve-existing-server-reader')
+    a,z = callback_region(body, '  Future<void> _refreshAdminEntryVisibility() async {')
+    rescue = body[a:z+1]
+    if (rescue.count('await _refreshAdminEntryVisibilityOriginal();') != 2 or
+        'DedaSessionRescueStage3Bridge.runForPhone(phone)' not in rescue or
+        'rescue?.mayRecheckAdminGateway == true' not in rescue):
+        raise ValueError('SETTINGS_SOURCE_STOP:actual-stage3-rescue:' + repr(rescue))
+    rescue = rescue[:1] + '\n    if (!_settingsCurrent) return;\n    final generation = ++_settingsAdminGeneration;' + rescue[1:]
+    rescue = rescue.replace('await _refreshAdminEntryVisibilityOriginal();',
+                            'await _refreshAdminEntryVisibilityOriginal(generation);')
+    rescue = one(rescue, 'if (mounted) {',
+        'if (_settingsCurrent && generation == _settingsAdminGeneration) {', 'missing-principal-fence')
+    rescue = one(rescue, 'if (!mounted || _adminEntryVisible ||',
+        'if (!_settingsCurrent || generation != _settingsAdminGeneration || _adminEntryVisible ||',
+        'before-existing-rescue')
+    rescue = one(rescue, 'if (!mounted) return;',
+        'if (!_settingsCurrent || generation != _settingsAdminGeneration) return;',
+        'after-existing-rescue')
+    return body[:a] + rescue + body[z+1:]
+
+
 def patch_ui(body):
     if 'DedaSectionState<DedaSettingsPage>' not in body or UI_MARK in body:
         raise ValueError('SETTINGS_SOURCE_STOP:existing-section')
@@ -152,25 +191,7 @@ def patch_ui(body):
     } else {
       unawaited(_refreshAdminEntryVisibility());
     }''', 'refresh-existing-admin-visibility-on-auth')
-    # The generated async section scope remains intact. A newer auth event
-    # invalidates a slower previous read even if the phone is unchanged.
-    a,z = callback_region(body, '  Future<void> _refreshAdminEntryVisibility() async {')
-    part = body[a:z+1]
-    if ('currentDedaAccountCanSeeAdminEntry(' not in part or
-        'setState(() => _adminEntryVisible = allowed);' not in part):
-        raise ValueError('SETTINGS_SOURCE_STOP:existing-admin-reader:' + repr(part))
-    # Capture the generation outside the existing method's operation wrapper;
-    # the actual assembly can use either section or inherited auth guards.
-    # Preserve every token of the original operation body.
-    part = part[:1] + '\n    if (!_settingsCurrent) return;\n    final generation = ++_settingsAdminGeneration;' + part[1:]
-    part = one(part, '    setState(() => _adminEntryVisible = allowed);',
-        '    if (!_settingsCurrent || generation != _settingsAdminGeneration) return;\n'
-        '    final uid = Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser?.uid;\n'
-        '    setState(() {\n'
-        '      _settingsAdminUid = allowed ? uid : null;\n'
-        '      _adminEntryVisible = allowed && uid != null;\n'
-        '    });', 'only-current-admin-result')
-    body = body[:a] + part + body[z+1:]
+    body = patch_admin_refresh(body)
     body = one(body, 'if (_adminEntryVisible) ...[',
         'if (_adminEntryVisible && _settingsAdminUid != null &&\n'
         '                      Firebase.apps.isNotEmpty &&\n'
@@ -259,6 +280,8 @@ def verify_ui(body):
                    'logoutIntent.commit(isCurrent: () => mounted)', 'confirmed != true',
                    '_settingsLogoutPending = true;', '_settingsAdminOpening = true;',
                    'generation != _settingsAdminGeneration', 'FirebaseAuth.instance.authStateChanges()',
+                   'await _refreshAdminEntryVisibilityOriginal(generation);',
+                   'DedaSessionRescueStage3Bridge.runForPhone(phone)', 'rescue?.mayRecheckAdminGateway == true',
                    'FirebaseAuth.instance.currentUser?.uid == _settingsAdminUid',
                    'DedaBackend.currentDedaAccountCanSeeAdminEntry(', 'dedaIsolatedAdminIdentityEnabled',
                    'DedaAdminLoginPage(', 'DedaAdminDashboardPage(', 'Geolocator.openAppSettings()',

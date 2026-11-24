@@ -34,6 +34,24 @@ class SettingsSourceTests(unittest.TestCase):
         self.assertIn('const DedaSettingsPage()', raw)
         self.assertIn('onPressed: _logout,', raw)
 
+    def test_actual_existing_stage3_wrapper_passes_generation_to_original_reader(self):
+        raw = mod.home.archive_reference()
+        a,z = mod.home.span(raw, 'class _DedaSettingsPageState ')
+        settings = raw[a:z].replace(
+            '  Future<void> _refreshAdminEntryVisibility() async {',
+            '  Future<void> _refreshAdminEntryVisibilityOriginal() async {', 1)
+        script = (ROOT/'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py').read_text()
+        start = script.index('"""  Future<void> _refreshAdminEntryVisibility() async {') + 3
+        end = script.index('  Widget _sectionTitle(String text) {"""', start)
+        wrapper = script[start:end]
+        settings = settings.replace('  Widget _sectionTitle(String text) {',
+                                    wrapper + '  Widget _sectionTitle(String text) {', 1)
+        changed = mod.patch_admin_refresh(settings)
+        self.assertEqual(changed.count('await _refreshAdminEntryVisibilityOriginal(generation);'), 2)
+        self.assertIn('rescue?.mayRecheckAdminGateway == true', changed)
+        self.assertIn('generation != _settingsAdminGeneration', changed)
+        self.assertIn('DedaBackend.currentDedaAccountCanSeeAdminEntry(', changed)
+
     def test_repository_write_refused(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
