@@ -252,6 +252,19 @@ def archived_profile_member(path):
     return blob.decode('utf-8')
 
 
+def bind_existing_section_lifetime(source):
+    # Reproduce the already approved generic guard on a verified source copy.
+    # Never run this on the already-bound assembled widget.
+    import sys
+    root = str(REPO / 'tools/app_stability')
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from bind_all_sections import bind_file, bind_stateless
+    result, _ = bind_file(source)
+    result, _ = bind_stateless(result)
+    return result
+
+
 def patch_hadaya_archive(old, tested):
     if HADAYA_MARK in old or '_claimToken' in old or '_onAuthChanged(' in old:
         raise ValueError('PROFILE_HADAYA_STOP:already-bound-or-unexpected')
@@ -369,13 +382,29 @@ def patch_owned_rows(source):
     panel = source[start:end]
     if OWNED_ROW_MARK in panel:
         raise ValueError('PROFILE_OWNED_IDS_STOP:duplicate')
-    panel = once(panel,
-        '  Future<void> _use(String id) async {\n    if (_busy) return;',
-        '  // ' + OWNED_ROW_MARK + '\n'
-        '  Future<void> _use(String id, int rowGeneration, String originalAtBuild) async {\n'
-        '    if (!mounted || _busy || rowGeneration != _generation ||\n'
-        '        originalAtBuild != widget.originalId) return;',
-        'owned-row-entry')
+    guarded = 'with DedaSectionState<DedaStage71OwnedIdsPanel>' in panel
+    # On the real build the general lifetime binder has already wrapped _use.
+    # Keep its single operation context, and reject stale rows before entering it.
+    if guarded:
+        prefix = '  Future<void> _use(String id) async {'
+        if ('return dedaRunSectionVoid(() async {' not in panel or
+                'DedaSectionOperationContext.wait(' not in panel or
+                'if (!dedaSectionCurrent) return dedaSectionExpiredView();' not in panel):
+            raise ValueError('PROFILE_OWNED_IDS_STOP:existing-section-guard-missing')
+        panel = once(panel, prefix,
+            '  // ' + OWNED_ROW_MARK + '\n'
+            '  Future<void> _use(String id, int rowGeneration, String originalAtBuild) async {\n'
+            '    if (!dedaSectionCurrent || _busy || rowGeneration != _generation ||\n'
+            '        originalAtBuild != widget.originalId) return;',
+            'owned-row-before-existing-section-entry')
+    else:
+        panel = once(panel,
+            '  Future<void> _use(String id) async {\n    if (_busy) return;',
+            '  // ' + OWNED_ROW_MARK + '\n'
+            '  Future<void> _use(String id, int rowGeneration, String originalAtBuild) async {\n'
+            '    if (!mounted || _busy || rowGeneration != _generation ||\n'
+            '        originalAtBuild != widget.originalId) return;',
+            'owned-row-entry')
     panel = once(panel, '    if (uid == null || uid != _verifiedUid) return;',
         '    if (uid == null || uid != _verifiedUid || _ids == null ||\n'
         '        (id != original && !_ids!.any((item) => item.identifier == id))) return;',
@@ -396,6 +425,26 @@ def patch_owned_rows(source):
     return patched
 
 
+def verify_hadaya_section_lifetime(original, expected):
+    # Do not allow the new account fence to replace the original shared lane.
+    for marker, count in (
+        ('with DedaSectionState<DedaStage74IdGiftsSection>', 1),
+        ('return dedaRunSectionVoid(() async {', 2),
+        ('DedaSectionOperationContext.wait(() => DedaStage74IdGiftService.load(originalId))', 1),
+        ('DedaSectionOperationContext.wait(() => DedaStage74IdGiftService.receive(gift))', 1),
+        ('DedaSectionOperationContext.wait(() => _refresh())', 1),
+        ('if (!dedaSectionCurrent) return dedaSectionExpiredView();', 1),
+        ('DedaStage75UnreadGiftBadge.start(widget.originalId)', 2),
+        ('DedaStage75UnreadGiftBadge.markViewed(originalId, gifts)', 1),
+    ):
+        if original.count(marker) != count or expected.count(marker) != count:
+            raise ValueError('PROFILE_HADAYA_SHARED_GUARD_STOP:' + marker)
+    if ('identical(_claimToken, token)' not in expected or
+            'dedaCancelSectionResource(() => _auth?.cancel());' not in expected or
+            'rowGeneration != _generation' not in expected):
+        raise ValueError('PROFILE_HADAYA_SHARED_GUARD_STOP:new-guard-or-cleanup')
+
+
 def profile_member_patches(project, verify_only):
     # Compute every proposed edit before writing any part of the disposable app.
     # Fail closed if an earlier recipe has changed either protected member.
@@ -407,6 +456,13 @@ def profile_member_patches(project, verify_only):
     ):
         original = archived_profile_member(path)
         expected = transform(original)
+        if path == HADAYA:
+            # 100387 prepare already bound the original inbox via bind_all_sections.
+            # Recreate both versions with that SAME deterministic guard generator:
+            # the original accepted guard and the new guard on the revised methods.
+            original = bind_existing_section_lifetime(original)
+            expected = bind_existing_section_lifetime(expected)
+            verify_hadaya_section_lifetime(original, expected)
         current = (project / path).read_text(encoding='utf-8')
         if current != (expected if verify_only else original):
             import difflib

@@ -221,6 +221,40 @@ class DedaOtherPage {}
         with self.assertRaises(ValueError):
             mod.verify_owned_row_guard(patched.replace('rowGeneration != _generation', 'false'))
 
+    def test_hadaya_actual_assembled_guard_is_reproduced_and_retained(self):
+        import hashlib
+        old = mod.archived_profile_member(mod.HADAYA)
+        original = mod.bind_existing_section_lifetime(old)
+        # Exact source hash captured from the blocked full-app QA run.
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(),
+                         '3d5bcd8d3450564fe0107cea17d02435be895fa0843c61f0a1107c148535d5a3')
+        tested = (ROOT / mod.HADAYA).read_text(encoding='utf-8')
+        expected = mod.bind_existing_section_lifetime(mod.patch_hadaya_archive(old, tested))
+        mod.verify_hadaya_section_lifetime(original, expected)
+        with self.assertRaises(ValueError):
+            mod.verify_hadaya_section_lifetime(original, expected.replace(
+                'with DedaSectionState<DedaStage74IdGiftsSection>', 'REMOVED'))
+        with self.assertRaises(ValueError):
+            mod.verify_hadaya_section_lifetime(original, expected.replace(
+                'DedaStage75UnreadGiftBadge.markViewed(originalId, gifts)', 'REMOVED'))
+
+    def test_owned_rows_keep_prebound_section_lifetime(self):
+        original = mod.bind_existing_section_lifetime(mod.archived_profile_member(mod.OWNED_IDS))
+        patched = mod.patch_owned_rows(original)
+        mod.verify_owned_row_guard(patched)
+        begin, end = mod._owned_panel_bounds(original)
+        new_begin, new_end = mod._owned_panel_bounds(patched)
+        self.assertEqual(original[:begin], patched[:new_begin])
+        self.assertEqual(original[end:], patched[new_end:])
+        before, after = original[begin:end], patched[new_begin:new_end]
+        for marker in ('with DedaSectionState<DedaStage71OwnedIdsPanel>',
+                       'return dedaRunSectionVoid(() async {',
+                       'DedaSectionOperationContext.wait(',
+                       'if (!dedaSectionCurrent) return dedaSectionExpiredView();'):
+            self.assertGreater(before.count(marker), 0)
+            self.assertEqual(before.count(marker), after.count(marker))
+        self.assertIn('if (!dedaSectionCurrent || _busy || rowGeneration != _generation', after)
+
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
