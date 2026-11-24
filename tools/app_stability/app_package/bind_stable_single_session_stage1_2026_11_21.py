@@ -206,6 +206,36 @@ def patch_pin(text: str) -> str:
       await DedaAuthRuntime.wait(() => DedaAuthRuntime.signOut(auth));
     }""", replacement),
     ], path)
+    # Passive gateway reads may refresh only an already verified SAME
+    # account/UID, regardless of the old linked-owner compatibility flag.
+    start = "  static Future<User> restoreTrustedSessionForAccountKey("
+    stop = "  static Future<Map<String, dynamic>> createAccount("
+    if text.count(start) != 1 or text.count(stop) != 1:
+        raise ValueError("STAGE1_TRUSTED_REFRESH_BOUNDARY_CHANGED")
+    prefix, rest = text.split(start, 1)
+    refresh, suffix = rest.split(stop, 1)
+    refresh = change_once(refresh,
+        """    if (dedaLinkedOwnerCompatEnabled) {
+      // An implicit trusted-session refresh""",
+        """    {
+      // deda-stability-trusted-refresh-same-account-only
+      // An implicit trusted-session refresh""", path)
+    refresh = change_once(refresh,
+        "linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,",
+        "linkedOwnerPilotEnabled: true,", path)
+    # Never dispatch the old refresh write after the principal has rotated
+    # during the asynchronous install lookup. Keep existing runtime checks.
+    recheck = """
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+      throw StateError('deda-stability-trusted-refresh-principal-changed');
+    }"""
+    refresh = change_variant(refresh, [
+        ("    final install = await installId();",
+         "    final install = await installId();" + recheck),
+        ("    final install = await DedaAuthRuntime.wait(() => installId());",
+         "    final install = await DedaAuthRuntime.wait(() => installId());" + recheck),
+    ], path)
+    text = prefix + start + refresh + stop + suffix
     # Local logout must not delete a UID-wide server session.
     logout_start = "  static Future<void> signOutFirebase() async {"
     if text.count(logout_start) != 1:
@@ -296,6 +326,24 @@ def bind(project: Path, *, verify_only: bool = False) -> dict:
                     or "await auth.signOut();" in part
                     or "DedaAuthRuntime.signOut(auth)" in part):
                     raise ValueError("STAGE1_VERIFY_PIN_FAILED")
+                refresh = original.split(
+                    "  static Future<User> restoreTrustedSessionForAccountKey(", 1
+                )[1].split("  static Future<Map<String, dynamic>> createAccount(", 1)[0]
+                for marker in (
+                    "deda-stability-trusted-refresh-same-account-only",
+                    "linkedOwnerPilotEnabled: true,",
+                    "existing.metadata.isFromCache",
+                    "existing.metadata.hasPendingWrites",
+                    "existing.data()?['uid'] != user.uid",
+                    "existing.data()?['accountKey'] != cleanKey",
+                    "deda-stability-trusted-refresh-principal-changed",
+                ):
+                    if refresh.count(marker) != 1:
+                        raise ValueError("STAGE1_VERIFY_TRUSTED_REFRESH:" + marker)
+                if ("if (dedaLinkedOwnerCompatEnabled) {" in refresh or
+                    refresh.index("deda-stability-trusted-refresh-principal-changed") >
+                        refresh.index(".set(<String, dynamic>{")):
+                    raise ValueError("STAGE1_VERIFY_TRUSTED_REFRESH_ORDER")
                 pin_logout = original.split("  static Future<void> signOutFirebase() async {", 1)[1]
                 if ("deda-stability-device-logout-preserve-shared-session" not in pin_logout
                     or ".delete()" in pin_logout

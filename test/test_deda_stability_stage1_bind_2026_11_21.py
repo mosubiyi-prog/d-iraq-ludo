@@ -67,6 +67,26 @@ class Stage1SessionBinding(unittest.TestCase):
         for name in FILES:
             self.assertEqual(fingerprint((REPO / name).read_bytes()), self.before[name])
 
+    def test_passive_trusted_refresh_never_changes_account_scope(self):
+        binder.bind(self.root)
+        pin_file = self.root / FILES[1]
+        original = pin_file.read_text()
+        a = original.index("  static Future<User> restoreTrustedSessionForAccountKey(")
+        z = original.index("  static Future<Map<String, dynamic>> createAccount(", a)
+        refresh = original[a:z]
+        self.assertIn("linkedOwnerPilotEnabled: true,", refresh)
+        self.assertNotIn("if (dedaLinkedOwnerCompatEnabled) {", refresh)
+        for marker in ("existing.data()?['accountKey'] != cleanKey",
+                       "existing.data()?['uid'] != user.uid",
+                       "existing.metadata.isFromCache",
+                       "deda-stability-trusted-refresh-principal-changed"):
+            self.assertLess(refresh.index(marker), refresh.index(".set(<String, dynamic>{"))
+            pin_file.write_text(original[:a] + refresh.replace(marker, "REMOVED", 1) + original[z:])
+            with self.assertRaises(ValueError):
+                binder.bind(self.root, verify_only=True)
+        pin_file.write_text(original)
+        binder.bind(self.root, verify_only=True)
+
     def test_real_assembled_auth_runtime_variants_are_supported(self):
         # Exact wrapper signatures observed in the protected 100436/Stage2
         # complete assembly. Never use a broad text/regex permission patch.
