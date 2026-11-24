@@ -10,6 +10,10 @@ import json
 from pathlib import Path
 import re
 import unittest
+import sys
+from stage01_lab_prepare_probe_2026_11_25 import prepare_probe
+
+ROOT = Path(__file__).resolve().parents[3]
 
 PROJECT = 'deda-qa-uid-lab-20261108'
 NUMBER = '180856267046'
@@ -137,7 +141,10 @@ def main():
     parser.add_argument('--self-test', action='store_true')
     parser.add_argument('--config', type=Path)
     parser.add_argument('--build-package')
+    parser.add_argument('--prepare-probe', type=Path, help='Existing disposable Flutter scaffold; offline only')
     args = parser.parse_args()
+    if args.prepare_probe and not args.config:
+        parser.error('--prepare-probe requires --config')
     if args.self_test:
         result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Tests))
         if not result.wasSuccessful(): raise SystemExit(1)
@@ -145,6 +152,8 @@ def main():
         raw = args.config.read_bytes()
         report = validate(json.loads(raw), args.build_package)
         report['config_sha256'] = hashlib.sha256(raw).hexdigest()
+        if args.prepare_probe:
+            report['probe'] = prepare_probe(args.prepare_probe, json.loads(raw), sys.modules[__name__])
         print(json.dumps(report))
     elif not args.self_test:
         parser.error('provide --config and --build-package, or --self-test')
