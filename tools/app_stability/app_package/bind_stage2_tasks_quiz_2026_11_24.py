@@ -251,7 +251,7 @@ def verify(main, quiz, social, pubspec):
                 '_quizOpeningAccount == widget.accountKey', 'widget.onCorrectAnswer(q.id)',
                 'widget.onCompleted()', '_TrafficSignCard(kind: q.visual)')),
         (social, ('DEDA_STAGE2_FRIEND_ACCEPTED_TASK_SIGNAL_RETAINED',
-                  'DedaTaskSignalBridge.friendAccepted()', 'data[\\'respondedAt\\']',
+                  'DedaTaskSignalBridge.friendAccepted()', "data['respondedAt']",
                   '!snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites',
                   'DedaPreferences.stabilityAccountEpoch == accountEpoch')),
     ):
