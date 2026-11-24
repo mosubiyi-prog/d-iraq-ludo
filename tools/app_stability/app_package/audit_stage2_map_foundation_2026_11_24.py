@@ -533,6 +533,108 @@ def audit_part4(project, main, reference):
     print('PASS_STAGE2_MAP_PART4_UI_BACKEND_SHARE_CONTRACT_AND_ACCOUNT_LIFETIME_PARITY')
 
 
+
+# Part 5: preserve navigation providers, original route model/geometry,
+# voice, tracking, hazard reporting and trip actions. Reuse the original
+# lifetime binder (including its exact pre-await voice capture).
+PART5_STATE = '_DedaRoutePageState'
+
+
+def part5_expected(reference):
+    from bind_location_entries import bind as bind_location
+    from bind_all_sections import bind_file
+    original = member(bind_location(reference), 'class ' + PART5_STATE + ' ')
+    voice = """        if (female != null) {
+          await _tts.setVoice({
+            'name': (female['name'] ?? '').toString(),
+            'locale': (female['locale'] ?? locale).toString(),
+          });
+        }"""
+    replacement = voice.replace('if (female != null)',
+        'final selectedVoice = female;\n        if (selectedVoice != null)').replace("female['", "selectedVoice['")
+    if original.count(voice) != 1:
+        raise ValueError('MAP_PART5_ORIGINAL_VOICE_ANCHOR')
+    original = original.replace(voice, replacement, 1)
+    guarded, report = bind_file("import 'dart:async';\n" + original)
+    if len(report) != 1 or report[0]['binding'] != 'section-lifetime':
+        raise ValueError('MAP_PART5_EXPECTED_SECTION_BINDING')
+    return {name: member(guarded if name == PART5_STATE else reference,
+                         'class ' + name + ' ') for name in INVENTORY['5']}
+
+
+def part5_equal(name, expected, actual, exact=False):
+    import difflib
+    if tokens(expected) != tokens(actual):
+        diff = difflib.unified_diff(expected.splitlines(), actual.splitlines(),
+            fromfile='archive-plus-approved-binders/' + name,
+            tofile='assembled/' + name, n=3, lineterm='')
+        print('\n'.join(list(diff)[:140]))
+        raise ValueError('MAP_PART5_UNEXPLAINED_TOKEN_DRIFT:' + name)
+    if exact and expected != actual:
+        raise ValueError('MAP_PART5_EXACT_MEMBER_DRIFT:' + name)
+
+
+def audit_part5(project, main, reference):
+    from bind_all_sections import bind_service, bind_stateless
+    from bind_auth_runtime import bind_backend, body_range
+    expected = part5_expected(reference)
+    if len(expected) != 7:
+        raise ValueError('MAP_PART5_INVENTORY_INCOMPLETE')
+    actual = {name: member(main, 'class ' + name + ' ') for name in expected}
+    for name, body in expected.items():
+        part5_equal(name, body, actual[name], exact=name != PART5_STATE)
+        print('MAP_PART5_PARITY_PASS', name, digest(actual[name]))
+    spec = importlib.util.spec_from_file_location(
+        'map_part5_archive', ROOT/'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py')
+    profile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(profile)
+    archive = profile.archived_profile_member
+    # The corridor is planning-only. Do not silently wire it into production.
+    corridor = 'deda_route_hazard_corridor.dart'
+    road = 'deda_road_class_lookup.dart'
+    admin = 'admin_place_map.dart'
+    admin_expected, rows = bind_stateless(archive('lib/' + admin))
+    if len(rows) != 1:
+        raise ValueError('MAP_PART5_ADMIN_MAP_BOUNDARY')
+    files = {corridor: archive('lib/' + corridor),
+             road: bind_service(archive('lib/' + road)), admin: admin_expected}
+    for name, body in files.items():
+        part5_equal(name, body, (project/'lib'/name).read_text(), exact=name == corridor)
+        print('MAP_PART5_FILE_PARITY_PASS', name)
+    old_backend = bind_backend(archive('lib/deda_backend.dart'))
+    backend = (project/'lib/deda_backend.dart').read_text()
+    for name in ('roadHazards', 'submitRoadHazard', 'voteRoadHazard', 'deleteRoadHazardAsAdmin'):
+        def future_body(src):
+            opening, closing, _, start = body_range(src, name)
+            return src[start:closing+1]
+        part5_equal(name, future_body(old_backend), future_body(backend))
+        print('MAP_PART5_BACKEND_PARITY_PASS', name)
+    state = actual[PART5_STATE]
+    require(state, ('dedaOnSectionExpired()', 'dedaCancelSectionResource(() => _tts.stop())',
+                    'Geolocator.getPositionStream(', 'startTrip(', 'stopTrip(',
+                    'DedaBackend.roadHazards()', 'DedaBackend.submitRoadHazard(',
+                    'DedaBackend.voteRoadHazard(', 'dedaNavigationMapLayers(',
+                    'dedaNavigationMapAttribution(', 'Polyline(',
+                    'DedaRoadClassLookup.lookup('), 'navigation')
+    for name, before, after in (
+        (PART5_STATE, 'dedaCancelSectionResource(() => _tts.stop())', '_tts.stop()'),
+        (PART5_STATE, 'Geolocator.getPositionStream(', 'otherPositionStream('),
+        (PART5_STATE, 'DedaBackend.submitRoadHazard(', 'otherHazardBackend('),
+        ('DedaRouteService', 'https://router.project-osrm.org/', 'https://wrong.invalid/'),
+    ):
+        changed = actual[name].replace(before, after, 1)
+        if changed == actual[name]:
+            raise ValueError('MAP_PART5_NEGATIVE_CONTROL_ANCHOR:' + name)
+        try:
+            part5_equal(name, expected[name], changed)
+        except ValueError:
+            pass
+        else:
+            raise ValueError('MAP_PART5_NEGATIVE_CONTROL_ACCEPTED:' + name)
+    print('PASS_STAGE2_MAP_PART5_ROUTE_VOICE_GPS_HAZARD_CONTRACTS_PARITY')
+    print('PASS_STAGE2_MAP_ALL_FIVE_PARTS_SOURCE_PARITY_DEVICE_QA_PENDING')
+
+
 def audit(project):
     project = Path(project).resolve()
     if project == ROOT or ROOT in project.parents or project in ROOT.parents:
@@ -557,6 +659,7 @@ def audit(project):
     audit_part2(project, main, reference)
     audit_part3(project, main, reference)
     audit_part4(project, main, reference)
+    audit_part5(project, main, reference)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
