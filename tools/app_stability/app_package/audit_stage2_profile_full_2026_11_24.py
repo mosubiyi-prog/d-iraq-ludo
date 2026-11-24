@@ -84,6 +84,7 @@ def audit(main, files=None):
         "level_xp_from_separate_notifier": "DedaSocialProgressWallet.xpNotifier" in progress,
         "task_points_from_original_engine": "DedaTaskEngine.totalPointsNotifier" in stats,
         "visible_diamonds_source_used": "dedaProfileVisibleDiamonds(" in stats,
+        "friends_stat_from_original_notifier": "DedaSocialFriendCount.notifier" in stats,
         "friends_stat_has_literal_zero": bool(re.search(
             r"value:\s*'0'\s*,\s*label:\s*dedaText\('الأصدقاء'", stats)),
         "separate_photos_tile_absent_by_approved_single_store_design": "الصور" not in titles,
@@ -100,6 +101,7 @@ def audit(main, files=None):
         "level_xp_from_separate_notifier",
         "task_points_from_original_engine",
         "visible_diamonds_source_used",
+        "friends_stat_from_original_notifier",
         "verified_preview_page_is_separate_and_not_activated",
     ):
         if not info[key]:
@@ -107,6 +109,39 @@ def audit(main, files=None):
     if info["friends_stat_has_literal_zero"]:
         raise ValueError("PROFILE_PARITY_STOP:friends-count-replaced-by-literal-zero")
     return info
+
+
+def audit_linked_routes(main):
+    # Audit the real destinations and data bridges, not just card captions.
+    saved = unique_span(main, "class _SavedPlacesPageState", "\nclass ", "saved-places-state")
+    store = unique_span(main, "class DedaPlacesStore {", "class DedaRegisteredPlacesStore {", "places-store")
+    preview = unique_span(main, "class DedaPublicProfilePreviewPage extends StatelessWidget", "\nclass ", "public-preview")
+    account = unique_span(main, "class _DedaAccountInfoPageState", "\nclass ", "account-info-state")
+    for label, body, needles in (
+        ("saved-places", saved, (
+            "DedaSectionState<SavedPlacesPage>", "dedaRunSectionVoid(",
+            "DedaSectionOperationContext.wait(", "dedaSectionExpiredView()",
+            "DedaPlacesStore.favorites()", "DedaPlacesStore.recent()",
+            "DedaPlacesStore.toggleFavorite(place)", "PlaceDetailsPage(")),
+        ("places-store", store, (
+            "DedaPrivateDataBridge.readList(prefs, key)",
+            "DedaPrivateDataBridge.write(prefs, key, encoded)")),
+        ("public-preview", preview, (
+            "DedaSectionBoundary(builder:", "DedaPreferences.userName",
+            "DedaPreferences.profileBackgroundStyle", "DedaFramedAvatar(",
+            "originalId: id")),
+        ("account-info", account, (
+            "DedaSectionState<DedaAccountInfoPage>", "dedaSectionExpiredView()",
+            "DedaStage71OwnedIdsPanel(", "DedaPreferences.phone")),
+    ):
+        for needle in needles:
+            if needle not in body:
+                raise ValueError("PROFILE_LINKED_ROUTE_STOP:" + label + ":" + needle)
+    return {"saved_places_original_reader_and_writer": True,
+            "existing_private_data_bridge": True,
+            "public_preview_account_boundary": True,
+            "original_account_info_and_owned_ids": True}
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -118,6 +153,8 @@ def main():
     result = audit(file.read_text(encoding="utf-8"))
     print("PASS_STAGE2_ORIGINAL_PROFILE_6_APPROVED_TILES_ROUTES_ORDER_NO_DUPLICATE")
     print("PROFILE_ASSEMBLED_PARITY=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
+    linked = audit_linked_routes(file.read_text(encoding="utf-8"))
+    print("PROFILE_LINKED_ROUTES=" + json.dumps(linked, sort_keys=True))
     if result["active_six_badge_route_uses_current_xp_not_server_level"]:
         print("PROFILE_DEFERRED:legacy-level-badges-use-local-XP; separate verified-policy-release-unproven")
     print("PROFILE_RELEASE_HOLD_NO_FIREBASE_WRITE_NO_APK_NO_PLAY")

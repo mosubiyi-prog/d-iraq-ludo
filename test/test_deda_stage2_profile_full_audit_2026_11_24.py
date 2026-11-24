@@ -43,6 +43,7 @@ class _DedaProfilePhase2PageState extends State<DedaProfilePhase2Page> {
   Widget _statsRow() {
     return _statCard(
       valueListenable: DedaTaskEngine.totalPointsNotifier,
+      friendSource: DedaSocialFriendCount.notifier,
       value: friendsCount.toString(),
       label: dedaText('الأصدقاء', 'Friends'),
       diamonds: dedaProfileVisibleDiamonds(ordinaryEarnedAndGifted: ordinary),
@@ -89,6 +90,7 @@ class ProfileFullAuditTests(unittest.TestCase):
             "_pointsCardsPanel(totalPoints)",
             "valueListenable: DedaSocialProgressWallet.xpNotifier",
             "DedaTaskEngine.totalPointsNotifier",
+            "DedaSocialFriendCount.notifier",
             "dedaProfileVisibleDiamonds(",
         ):
             with self.subTest(needle=needle), self.assertRaises(ValueError):
@@ -108,6 +110,39 @@ class ProfileFullAuditTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 mod.audit(broken)
+
+    def test_linked_profile_targets_keep_account_boundaries_and_original_stores(self):
+        body = """
+class _SavedPlacesPageState with DedaSectionState<SavedPlacesPage> {
+  dedaRunSectionVoid( DedaSectionOperationContext.wait( dedaSectionExpiredView()
+  DedaPlacesStore.favorites() DedaPlacesStore.recent()
+  DedaPlacesStore.toggleFavorite(place) PlaceDetailsPage(
+}
+class DedaPlacesStore {
+  DedaPrivateDataBridge.readList(prefs, key)
+  DedaPrivateDataBridge.write(prefs, key, encoded)
+}
+class DedaRegisteredPlacesStore {
+}
+class DedaPublicProfilePreviewPage extends StatelessWidget {
+  DedaSectionBoundary(builder: DedaPreferences.userName
+  DedaPreferences.profileBackgroundStyle DedaFramedAvatar( originalId: id
+}
+class _DedaAccountInfoPageState with DedaSectionState<DedaAccountInfoPage> {
+  dedaSectionExpiredView() DedaStage71OwnedIdsPanel( DedaPreferences.phone
+}
+class End {}
+"""
+        self.assertTrue(all(mod.audit_linked_routes(body).values()))
+        for needle in (
+            "DedaSectionState<SavedPlacesPage>",
+            "DedaPrivateDataBridge.readList(prefs, key)",
+            "DedaPrivateDataBridge.write(prefs, key, encoded)",
+            "DedaSectionBoundary(builder:",
+            "DedaStage71OwnedIdsPanel(",
+        ):
+            with self.subTest(needle=needle), self.assertRaises(ValueError):
+                mod.audit_linked_routes(body.replace(needle, "REMOVED"))
 
     def test_non_mutating_audit_fails_when_original_profile_missing(self):
         with self.assertRaises(ValueError):
