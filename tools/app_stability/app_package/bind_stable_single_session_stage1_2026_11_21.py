@@ -26,6 +26,112 @@ def change_variant(text: str, variants: list[tuple[str, str]], path: str) -> str
     before, after = matches[0]
     return text.replace(before, after, 1)
 
+def admin_authority_bounds(text, start, stop):
+    if text.count(start) != 1 or text.count(stop) != 1:
+        raise ValueError("STAGE1_ADMIN_AUTHORITY_BOUNDARY_CHANGED")
+    a = text.index(start)
+    z = text.index(stop, a + len(start))
+    return a, z
+
+def patch_admin_authority(text):
+    # One strict role predicate for the legacy authority reads. Keep the
+    # historical display normalizer intact and the isolated Admin Auth separate.
+    anchor = "  static bool adminHasPermission("
+    text = change_once(text, anchor, """  static String? _explicitAdminAuthorityRole(dynamic value) {
+    final raw = (value ?? '').toString().trim();
+    if (raw.isEmpty) return null;
+    final role = normalizeAdminRole(raw);
+    return const <String>{'general_manager', 'deputy_manager',
+      'employee', 'province_agent'}.contains(role) ? role : null;
+  }
+
+""" + anchor, BACKEND)
+    def scoped(start, stop, transform):
+        nonlocal text
+        a,z = admin_authority_bounds(text,start,stop)
+        text = text[:a]+transform(text[a:z])+text[z:]
+    def permission(body):
+        return change_once(body,
+            "    final role = normalizeAdminRole(profile['role'] ?? profile['jobTitle']);",
+            "    final role = _explicitAdminAuthorityRole(profile['role'] ?? profile['jobTitle']);\n    if (role == null) return false;", BACKEND)
+    scoped(anchor, "  static Future<Map<String, dynamic>> currentAdminProfile(", permission)
+    def profile(body):
+        body = change_once(body, "    if (!snapshot.exists ||",
+            "    if (!snapshot.exists || snapshot.metadata.isFromCache ||\n        snapshot.metadata.hasPendingWrites ||", BACKEND)
+        return change_once(body,
+            "    final role = normalizeAdminRole(data?['role'] ?? data?['jobTitle']);",
+            """    final role = _explicitAdminAuthorityRole(data?['role'] ?? data?['jobTitle']);
+    if (role == null) {
+      _clearAdminProfileCache();
+      throw StateError('deda-stability-explicit-admin-role-required');
+    }""", BACKEND)
+    scoped("  static Future<Map<String, dynamic>> currentAdminProfile(",
+           "  static Future<Map<String, String>> _adminIdentity(", profile)
+    def is_admin(body):
+        raw = "await FirebaseFirestore.instance.collection('admins').doc(uid).get();"
+        guarded = "await DedaAuthRuntime.wait(() => FirebaseFirestore.instance.collection('admins').doc(uid).get());"
+        body = change_variant(body, [(raw,raw.replace(".get();",".get(const GetOptions(source: Source.server));")),
+            (guarded,guarded.replace(".get());",".get(const GetOptions(source: Source.server)));"))], BACKEND)
+        return change_once(body, "    return admin.exists &&",
+            """    return FirebaseAuth.instance.currentUser?.uid == uid &&
+        !admin.metadata.isFromCache && !admin.metadata.hasPendingWrites &&
+        _explicitAdminAuthorityRole(data?['role'] ?? data?['jobTitle']) != null &&
+        admin.exists &&""", BACKEND)
+    scoped("  static Future<bool> currentUserIsAdmin()", "  // Administration entry visibility is separate", is_admin)
+    def gateway(body, kind):
+        if kind == 'visible':
+            return change_once(body, "          access.exists &&",
+                "          !access.metadata.isFromCache && !access.metadata.hasPendingWrites &&\n          access.exists &&", BACKEND)
+        body = change_once(body,"      if (!access.exists ||",
+            "      if (!access.exists || access.metadata.isFromCache ||\n          access.metadata.hasPendingWrites ||",BACKEND)
+        if kind == 'manager':
+            return change_once(body,"      final allowedRole = normalizeAdminRole(\n        data['allowedRole'] ?? data['role'],\n      );\n      return accessType == 'general_manager_gateway' ||\n          allowedRole == 'general_manager';",
+                """      final allowedRole = _explicitAdminAuthorityRole(
+        data['allowedRole'] ?? data['role'],
+      );
+      return allowedRole == 'general_manager' &&
+          (accessType == 'general_manager_gateway' || accessType == 'member');""",BACKEND)
+        # Preserve the historical repair code, but never let a bound UID be
+        # automatically reassigned by an email match in the protected assembly.
+        body = change_once(body,"      final allowedRole =\n          normalizeAdminRole(data['allowedRole'] ?? data['role']);",
+            "      final allowedRole =\n          _explicitAdminAuthorityRole(data['allowedRole'] ?? data['role']);",BACKEND)
+        body = change_once(body,"      if (!uidMatches && !emailMatches) return false;",
+            """      if (allowedUid.isNotEmpty && !uidMatches) return false;
+      if (!uidMatches && !emailMatches) return false;""",BACKEND)
+        return change_once(body,"        return role == 'general_manager' &&\n            (data['allowedRole'] ?? 'general_manager').toString() ==\n                'general_manager';",
+            """        final boundUid = (data['adminUid'] ?? '').toString().trim();
+        return role == 'general_manager' &&
+            _explicitAdminAuthorityRole(data['allowedRole']) == 'general_manager' &&
+            (boundUid.isEmpty || boundUid == profile['uid']);""",BACKEND)
+    scoped("  static Future<bool> currentDedaAccountCanSeeAdminEntry(",
+        "  static Future<bool> currentDedaAccountIsGeneralManager(",lambda b:gateway(b,'visible'))
+    scoped("  static Future<bool> currentDedaAccountIsGeneralManager(",
+        "  static Future<bool> currentAdminSessionMatchesDedaEntry(",lambda b:gateway(b,'manager'))
+    scoped("  static Future<bool> currentAdminSessionMatchesDedaEntry(",
+        "  static Stream<QuerySnapshot<Map<String, dynamic>>>\n      generalManagerAdminEntryPhones()",lambda b:gateway(b,'match'))
+    return text
+
+def verify_admin_authority(text):
+    for start, stop, markers in (
+        ("  static String? _explicitAdminAuthorityRole(", "  static bool adminHasPermission(",
+            ("if (raw.isEmpty) return null;", "normalizeAdminRole(raw)")),
+        ("  static bool adminHasPermission(", "  static Future<Map<String, dynamic>> currentAdminProfile(",
+            ("_explicitAdminAuthorityRole(", "if (role == null) return false;")),
+        ("  static Future<Map<String, dynamic>> currentAdminProfile(", "  static Future<Map<String, String>> _adminIdentity(",
+            ("snapshot.metadata.isFromCache","snapshot.metadata.hasPendingWrites","deda-stability-explicit-admin-role-required")),
+        ("  static Future<bool> currentUserIsAdmin()", "  // Administration entry visibility is separate",
+            ("Source.server","admin.metadata.isFromCache","admin.metadata.hasPendingWrites","_explicitAdminAuthorityRole(","currentUser?.uid == uid")),
+        ("  static Future<bool> currentDedaAccountCanSeeAdminEntry(", "  static Future<bool> currentDedaAccountIsGeneralManager(",
+            ("access.metadata.isFromCache","access.metadata.hasPendingWrites")),
+        ("  static Future<bool> currentDedaAccountIsGeneralManager(", "  static Future<bool> currentAdminSessionMatchesDedaEntry(",
+            ("access.metadata.isFromCache","access.metadata.hasPendingWrites","_explicitAdminAuthorityRole(","return allowedRole == 'general_manager' &&")),
+        ("  static Future<bool> currentAdminSessionMatchesDedaEntry(", "  static Stream<QuerySnapshot<Map<String, dynamic>>>\n      generalManagerAdminEntryPhones()",
+            ("access.metadata.isFromCache","access.metadata.hasPendingWrites","if (allowedUid.isNotEmpty && !uidMatches) return false;","boundUid == profile['uid']")),
+    ):
+        a,z = admin_authority_bounds(text,start,stop)
+        if any(text[a:z].count(marker) != 1 for marker in markers):
+            raise ValueError("STAGE1_VERIFY_ADMIN_AUTHORITY:" + start)
+
 def patch_backend(text: str) -> str:
     path = BACKEND
     # Public section retries can never create a Firebase identity.
@@ -164,6 +270,8 @@ def patch_backend(text: str) -> str:
         FirebaseAuth.instance.currentUser?.uid != confirmedAdminUid) {""",
         """    if (FirebaseAuth.instance.currentUser?.uid != confirmedAdminUid) {""", path)
     text = prefix + begin + body + end + suffix
+    text = patch_admin_authority(text)
+    verify_admin_authority(text)
     return text
 
 def patch_pin(text: str) -> str:
@@ -317,6 +425,7 @@ def bind(project: Path, *, verify_only: bool = False) -> dict:
                     )[1].split("  static Future<bool> _isCurrentGeneralManagerSession", 1)[0]
                 ):
                     raise ValueError("STAGE1_VERIFY_BACKEND_FAILED")
+                verify_admin_authority(original)
             else:
                 start = original.index("  static Future<User> _ensureAnonymousSession(")
                 stop = original.index("  static Future<User> _ensurePinSessionForAccount(", start)

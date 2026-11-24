@@ -67,6 +67,22 @@ class Stage1SessionBinding(unittest.TestCase):
         for name in FILES:
             self.assertEqual(fingerprint((REPO / name).read_bytes()), self.before[name])
 
+    def test_legacy_admin_authority_requires_explicit_role_and_fresh_proof(self):
+        binder.bind(self.root)
+        path = self.root / FILES[0]
+        original = path.read_text()
+        binder.verify_admin_authority(original)
+        for marker in ("if (raw.isEmpty) return null;",
+                       "deda-stability-explicit-admin-role-required",
+                       "if (allowedUid.isNotEmpty && !uidMatches) return false;"):
+            with self.subTest(marker=marker):
+                self.assertEqual(original.count(marker), 1)
+                path.write_text(original.replace(marker,"REMOVED",1))
+                with self.assertRaises(ValueError):
+                    binder.bind(self.root, verify_only=True)
+        path.write_text(original)
+        binder.bind(self.root, verify_only=True)
+
     def test_passive_trusted_refresh_never_changes_account_scope(self):
         binder.bind(self.root)
         pin_file = self.root / FILES[1]
