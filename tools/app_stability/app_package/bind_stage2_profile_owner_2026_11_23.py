@@ -486,6 +486,78 @@ def profile_member_patches(project, verify_only):
     return results
 
 
+
+PROFILE_CARD_FENCE = 'DEDA_STAGE2_PROFILE_CARD_ACCOUNT_EPOCH'
+FRIEND_FRAME_FENCE = 'DEDA_STAGE2_PROFILE_FRIEND_FRAME_ACCOUNT_EPOCH'
+
+
+def shared_route_parts(main):
+    start, stop = original_profile_span(main)
+    section = main[start:stop]
+    a = section.index('  Widget _featureCard({')
+    z = section.index('  Widget _bioCard()', a)
+    f = main.index('class _DedaFriendsPageState')
+    g = main.index('class _DedaFriendCompactCard', f)
+    return start+a, start+z, f, g
+
+
+def bind_shared_routes(main):
+    a, z, _, _ = shared_route_parts(main)
+    card = main[a:z]
+    if PROFILE_CARD_FENCE in card:
+        raise ValueError('PROFILE_SHARED_ROUTE_DUPLICATE')
+    card = once(card, '  }) {\n    return Material(',
+        '  }) {\n'
+        '    // ' + PROFILE_CARD_FENCE + '\n'
+        '    final routeEpoch = DedaPreferences.stabilityAccountEpoch;\n'
+        '    return Material(', 'profile-card-epoch')
+    card = once(card, '        onTap: onTap,',
+        '        onTap: () {\n'
+        '          if (!dedaSectionCurrent ||\n'
+        '              routeEpoch != DedaPreferences.stabilityAccountEpoch) return;\n'
+        '          onTap();\n'
+        '        },', 'profile-original-card-callback')
+    main = main[:a] + card + main[z:]
+    _, _, f, g = shared_route_parts(main)
+    friends = main[f:g]
+    old = '''                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || FirebaseAuth.instance.currentUser?.uid !=
+                      session.uid) return;'''
+    new = '''                // ''' + FRIEND_FRAME_FENCE + '''
+                final countEpoch = DedaPreferences.stabilityAccountEpoch;
+                final countGeneration = DedaSocialFriendCount.generation;
+                final countLoadGeneration = _friendsGeneration;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!dedaSectionCurrent ||
+                      countEpoch != DedaPreferences.stabilityAccountEpoch ||
+                      countGeneration != DedaSocialFriendCount.generation ||
+                      countLoadGeneration != _friendsGeneration ||
+                      !identical(session, _session) ||
+                      FirebaseAuth.instance.currentUser?.uid != session.uid) return;'''
+    friends = once(friends, old, new, 'profile-friend-count-pending-frame')
+    main = main[:f] + friends + main[g:]
+    verify_shared_routes(main)
+    return main
+
+
+def verify_shared_routes(main):
+    a, z, f, g = shared_route_parts(main)
+    card, friends = main[a:z], main[f:g]
+    for body, markers in (
+        (card, (PROFILE_CARD_FENCE, '!dedaSectionCurrent',
+                'routeEpoch != DedaPreferences.stabilityAccountEpoch',
+                'onTap();')),
+        (friends, (FRIEND_FRAME_FENCE, 'countEpoch != DedaPreferences.stabilityAccountEpoch',
+                   'countGeneration != DedaSocialFriendCount.generation',
+                   'countLoadGeneration != _friendsGeneration',
+                   '!identical(session, _session)',
+                   'DedaSocialFriendCount.notifier.value = verifiedCount;')),
+    ):
+        for marker in markers:
+            if body.count(marker) != 1:
+                raise ValueError('PROFILE_SHARED_ROUTE_VERIFY:' + marker)
+
+
 def bind(project: Path, verify_only: bool = False):
     project = project.resolve()
     if project == REPO or project in REPO.parents or REPO in project.parents:
@@ -505,6 +577,7 @@ def bind(project: Path, verify_only: bool = False):
     if verify_only:
         verify(main, old_store)
         verify_verified_owned_frame_art(main)
+        verify_shared_routes(main)
         if module_path.read_bytes() != expected.read_bytes():
             raise ValueError('PROFILE_GUARD_MODULE_CHANGED')
     else:
@@ -512,6 +585,7 @@ def bind(project: Path, verify_only: bool = False):
             raise ValueError('PROFILE_GUARD_MODULE_ALREADY_PRESENT')
         new_main = proposed(main, old_store)
         new_main = add_verified_owned_frame_art(new_main)
+        new_main = bind_shared_routes(new_main)
         # Check all originals before mutating only a disposable build directory.
         main_path.write_text(new_main)
         module_path.write_bytes(expected.read_bytes())

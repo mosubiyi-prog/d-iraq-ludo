@@ -255,6 +255,39 @@ class DedaOtherPage {}
             self.assertEqual(before.count(marker), after.count(marker))
         self.assertIn('if (!dedaSectionCurrent || _busy || rowGeneration != _generation', after)
 
+    def test_original_card_and_friend_count_reuse_account_epoch(self):
+        original = mod.archived_profile_member('lib/main.dart')
+        first, last = mod.original_profile_span(original)
+        section = original[first:last]
+        a = section.index('  Widget _featureCard({')
+        z = section.index('  Widget _bioCard()', a)
+        friend = """class _DedaFriendsPageState {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || FirebaseAuth.instance.currentUser?.uid !=
+                      session.uid) return;
+                  if (DedaSocialFriendCount.notifier.value != verifiedCount) {
+                    DedaSocialFriendCount.notifier.value = verifiedCount;
+                  }
+                });
+}
+class _DedaFriendCompactCard {}
+"""
+        source = mod.STATE + " {\n" + section[a:z] + "  Widget _bioCard() {}\n}\n" + friend
+        changed = mod.bind_shared_routes(source)
+        mod.verify_shared_routes(changed)
+        self.assertIn('height: 112,', changed)
+        self.assertIn('gradient: LinearGradient(', changed)
+        with self.assertRaises(ValueError):
+            mod.bind_shared_routes(changed)
+        for marker in (
+            'routeEpoch != DedaPreferences.stabilityAccountEpoch',
+            'countGeneration != DedaSocialFriendCount.generation',
+            'countLoadGeneration != _friendsGeneration',
+            '!identical(session, _session)',
+        ):
+            with self.subTest(marker=marker), self.assertRaises(ValueError):
+                mod.verify_shared_routes(changed.replace(marker, 'REMOVED'))
+
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
