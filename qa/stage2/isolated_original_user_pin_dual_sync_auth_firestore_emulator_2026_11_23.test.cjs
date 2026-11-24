@@ -113,6 +113,25 @@ test("candidate session admission binds canonical UID and fresh PIN across devic
   const firebase=require("firebase/compat/app");
   require("firebase/compat/firestore");
   const {initializeTestEnvironment,assertSucceeds,assertFails}=require("@firebase/rules-unit-testing");
+  assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST,"127.0.0.1:9097");
+  const clientApp=require("firebase/app");
+  const clientAuth=require("firebase/auth");
+  const clientStore=require("firebase/firestore");
+  const apps=[];
+  let adminApp;
+  function makeClient(label) {
+    const app=clientApp.initializeApp({
+      projectId:project,apiKey:"local-synthetic-demo-key",
+      authDomain:project+".firebaseapp.com",
+      appId:"1:1234567890:web:stage01_owner_"+label,
+    },"stage01-owner-device-"+label);
+    apps.push(app);
+    const auth=clientAuth.getAuth(app);
+    clientAuth.connectAuthEmulator(auth,"http://127.0.0.1:9097",{disableWarnings:true});
+    const db=clientStore.getFirestore(app);
+    clientStore.connectFirestoreEmulator(db,"127.0.0.1",8097);
+    return {auth,db};
+  }
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),"deda-owner-session-qa-"));
   let env;
   try {
@@ -161,7 +180,56 @@ test("candidate session admission binds canonical UID and fresh PIN across devic
     await assertFails(outsider.doc("deda_sessions/"+other).set(session(other,deviceA)));
     await assertSucceeds(a.doc("deda_account_profiles/"+account).get());
     await assertSucceeds(b.doc("deda_account_profiles/"+account).get());
+
+    // Authenticated test contexts alone cannot prove real SDK sign-out
+    // independence. Reuse the same synthetic canonical account and rules,
+    // but obtain separate actual Auth emulator tokens on two Firebase apps.
+    adminApp=initializeApp({projectId:project},"stage01-owner-sdk-fixture");
+    const adminAuth=getAuth(adminApp);
+    const ownerEmail=account+"@deda-login.invalid";
+    await adminAuth.createUser({uid:owner,email:ownerEmail,password:pin});
+    const property={accountKey:account,name:"QA owner",
+      sharePersonalId:"@DEDA-QA1234",level:13,points:347,diamonds:800,
+      coins:2300,frameIds:["synthetic-frame"]};
+    await env.withSecurityRulesDisabled(async ctx=>{
+      await ctx.firestore().doc("users/"+owner).set(property);
+    });
+    const first=makeClient("A"), second=makeClient("B");
+    const signIn=client=>clientAuth.signInWithEmailAndPassword(client.auth,ownerEmail,pin);
+    const profile=client=>clientStore.getDocFromServer(
+      clientStore.doc(client.db,"deda_account_profiles",account));
+    const wallet=client=>clientStore.getDocFromServer(
+      clientStore.doc(client.db,"users",owner));
+    const sessionRef=client=>clientStore.doc(client.db,"deda_sessions",owner);
+    const open=(client,installId)=>clientStore.setDoc(sessionRef(client),{
+      uid:owner,accountKey:account,installId,
+      signedInAt:clientStore.serverTimestamp(),lastSeenAt:clientStore.serverTimestamp(),
+    });
+    const [loginA,loginB]=await Promise.all([signIn(first),signIn(second)]);
+    assert.equal(loginA.user.uid,owner);
+    assert.equal(loginB.user.uid,owner);
+    await open(first,deviceA);
+    await open(second,deviceB);
+    assert.equal((await profile(first)).data().accountKey,account);
+    assert.deepEqual((await wallet(second)).data(),property);
+    await clientAuth.signOut(first.auth);
+    assert.equal(first.auth.currentUser,null);
+    assert.equal(second.auth.currentUser.uid,owner);
+    await assert.rejects(profile(first),/permission.denied|insufficient permissions/i);
+    assert.equal((await profile(second)).data().accountKey,account);
+    assert.deepEqual((await wallet(second)).data(),property);
+    assert.equal((await clientStore.getDocFromServer(sessionRef(second))).data().uid,owner);
+    assert.equal((await signIn(first)).user.uid,owner);
+    await open(first,deviceA);
+    assert.deepEqual((await wallet(first)).data(),property);
+    assert.equal(second.auth.currentUser.uid,owner);
+    assert.deepEqual((await wallet(second)).data(),property);
+    const users=await adminAuth.listUsers();
+    assert.equal(users.users.filter(u=>u.email===ownerEmail).length,1);
+    console.log("PASS_STAGE01_TWO_REAL_AUTH_EMULATOR_CLIENTS_SAME_UID_LOCAL_SIGNOUT_PRESERVED");
   } finally {
+    await Promise.allSettled(apps.map(app=>clientApp.deleteApp(app)));
+    if(adminApp) await deleteApp(adminApp);
     if(env) await env.cleanup();
     fs.rmSync(temp,{recursive:true,force:true});
   }
