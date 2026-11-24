@@ -278,51 +278,75 @@ class DedaOwnerUidContinuity {
     required String pin,
     required String originalId,
   }) async {
+    // Historical optional entry: never bypass the existing session guardian.
+    if (!DedaAuthRuntime.enabled || !dedaLinkedOwnerCompatEnabled) {
+      throw StateError('original-owner-login-requires-shared-auth-guardian');
+    }
     if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
     final accountKey = _account(phone);
     _pin(pin);
     _original(originalId);
-    final result = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: authEmail(phone), password: pin,
+    final auth = FirebaseAuth.instance;
+    if (auth.currentUser != null) {
+      throw StateError('original-owner-login-preserves-existing-session');
+    }
+    return DedaAuthRuntime.run<String>(
+      kind: DedaSessionTransitionKind.ownerLogin,
+      origin: DedaSessionTransitionOrigin.userAction,
+      verifiedOwnerLoginMaxWait: const Duration(seconds: 60),
+      action: () async {
+        DedaAuthRuntime.check();
+        if (auth.currentUser != null) {
+          throw StateError('original-owner-login-preserves-existing-session');
+        }
+        final result = await DedaAuthRuntime.controller.transition<UserCredential>(
+          kind: DedaSessionTransitionKind.ownerLogin,
+          action: () => auth.signInWithEmailAndPassword(
+            email: authEmail(phone), password: pin,
+          ),
+          accepts: (result, live) => result.user != null &&
+              result.user!.uid == live.uid &&
+              live.kind == DedaSessionAuthKind.authenticated,
+        );
+        final uid = result.user!.uid;
+        try {
+          DedaAuthRuntime.check();
+          await _verifyOriginalUid(
+            accountKey: accountKey, originalId: originalId, uid: uid,
+          );
+          DedaAuthRuntime.check();
+          if (auth.currentUser?.uid != uid ||
+              auth.currentUser?.isAnonymous != false ||
+              auth.currentUser?.email != authEmail(phone)) {
+            throw StateError('original-linked-auth-proof-lost');
+          }
+          final db = FirebaseFirestore.instance;
+          final install = await DedaPinAuth.installId();
+          DedaAuthRuntime.check();
+          if (auth.currentUser?.uid != uid) {
+            throw StateError('owner-switched-during-recovery');
+          }
+          await db.collection('deda_sessions').doc(uid).set({
+            'uid': uid,
+            'accountKey': accountKey,
+            'installId': install,
+            'signedInAt': FieldValue.serverTimestamp(),
+            'lastSeenAt': FieldValue.serverTimestamp(),
+          });
+          DedaAuthRuntime.check();
+          if (auth.currentUser?.uid != uid) {
+            throw StateError('owner-switched-during-recovery');
+          }
+          return uid;
+        } catch (_) {
+          // Never clean up a replaced/stale principal.
+          DedaAuthRuntime.check();
+          if (auth.currentUser?.uid == uid) {
+            await DedaAuthRuntime.signOut(auth);
+          }
+          rethrow;
+        }
+      },
     );
-    final uid = result.user?.uid;
-    if (uid == null || uid.isEmpty) {
-      throw StateError('verified-account-sign-in-unavailable');
-    }
-    try {
-      await _verifyOriginalUid(
-        accountKey: accountKey, originalId: originalId, uid: uid,
-      );
-      // The Firebase Auth password sign-in above is the credential proof
-      // for this *linked* original UID. Never re-send or persist its raw PIN
-      // into deda_auth_attempts on the replacement phone. This requires
-      // the separately QA-tested same-UID session rule, not a client bypass.
-      if (FirebaseAuth.instance.currentUser?.uid != uid ||
-          FirebaseAuth.instance.currentUser?.isAnonymous != false ||
-          FirebaseAuth.instance.currentUser?.email != authEmail(phone)) {
-        throw StateError('original-linked-auth-proof-lost');
-      }
-      final db = FirebaseFirestore.instance;
-      final install = await DedaPinAuth.installId();
-      await db.collection('deda_sessions').doc(uid).set({
-        'uid': uid,
-        'accountKey': accountKey,
-        'installId': install,
-        'signedInAt': FieldValue.serverTimestamp(),
-        'lastSeenAt': FieldValue.serverTimestamp(),
-      });
-      // Refuse silent identity changes after the Firestore round trips.
-      if (FirebaseAuth.instance.currentUser?.uid != uid) {
-        throw StateError('owner-switched-during-recovery');
-      }
-      return uid;
-    } catch (_) {
-      // This function is opt-in: failure must not leave the wrong
-      // provider-auth account as the visible app owner.
-      if (FirebaseAuth.instance.currentUser?.uid == uid) {
-        await FirebaseAuth.instance.signOut();
-      }
-      rethrow;
-    }
   }
 }

@@ -5,6 +5,7 @@ on:
       - deda-100451-owner-admin-session-safe-repair-2026-11-20
     paths:
       - 'tools/app_stability/app_package/bind_stable_single_session_stage1_2026_11_21.py'
+      - 'lib/deda_100430_owner_uid_continuity.dart'
       - 'test/test_deda_stability_stage1_bind_2026_11_21.py'
       - 'tools/app_stability/app_package/bind_stage2_google_admin_isolation_2026_11_21.py'
       - 'lib/deda_stable_google_login_2026_11_21.dart'
@@ -429,6 +430,7 @@ jobs:
             lib/deda_stage74_hadaya_identifier_section.dart \
             lib/deda_stage71_free_owned_use_profile.dart \
             lib/deda_100377_profile_free_inventory.dart \
+            lib/deda_100430_owner_uid_continuity.dart \
             lib/deda_100431_linked_owner_session_policy.dart
           python3 - <<'PY'
           from pathlib import Path

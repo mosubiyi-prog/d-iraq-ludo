@@ -102,6 +102,25 @@ class Stage1SessionBinding(unittest.TestCase):
                          pin_file.read_text().split("static Future<User> _ensureAnonymousSession(", 1)[1]
                          .split("static Future<User> _ensurePinSessionForAccount(", 1)[0])
 
+    def test_optional_original_owner_login_uses_existing_guardian(self):
+        source = (REPO / "lib/deda_100430_owner_uid_continuity.dart").read_text()
+        body = source.split("static Future<String> loginLinkedOriginalUid(", 1)[1]
+        guard = "original-owner-login-requires-shared-auth-guardian"
+        preserve = "original-owner-login-preserves-existing-session"
+        self.assertIn("!DedaAuthRuntime.enabled || !dedaLinkedOwnerCompatEnabled", body)
+        self.assertEqual(body.count(preserve), 2)
+        self.assertLess(body.index(guard), body.index("DedaAuthRuntime.run<String>"))
+        self.assertLess(body.index("DedaAuthRuntime.run<String>"), body.index("auth.signInWithEmailAndPassword"))
+        self.assertIn("DedaAuthRuntime.controller.transition<UserCredential>", body)
+        self.assertIn("DedaSessionTransitionKind.ownerLogin", body)
+        self.assertLess(body.index("await _verifyOriginalUid"), body.index("db.collection('deda_sessions')"))
+        before_write = body.split("final install = await DedaPinAuth.installId();", 1)[1].split("db.collection('deda_sessions')", 1)[0]
+        self.assertIn("DedaAuthRuntime.check();", before_write)
+        self.assertIn("auth.currentUser?.uid != uid", before_write)
+        self.assertIn("await DedaAuthRuntime.signOut(auth);", body)
+        self.assertNotIn("FirebaseAuth.instance.signInWithEmailAndPassword", body)
+        self.assertNotIn("FirebaseAuth.instance.signOut()", body)
+
     def test_unknown_backend_abort_without_modifying_pin(self):
         path = self.root / FILES[0]
         text = path.read_text().replace(
