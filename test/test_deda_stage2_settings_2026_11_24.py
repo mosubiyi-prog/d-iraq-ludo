@@ -52,6 +52,24 @@ class SettingsSourceTests(unittest.TestCase):
         self.assertIn('generation != _settingsAdminGeneration', changed)
         self.assertIn('DedaBackend.currentDedaAccountCanSeeAdminEntry(', changed)
 
+    def test_100413_single_gateway_optimization_is_preserved(self):
+        source = (ROOT/'tools/app_stability/app_package/bind_weekly_100413_owner_id_admin_response.py').read_text()
+        a = source.index('"""final gateAllowed = _adminEntryVisible &&') + 3
+        z = source.index('"""', a)
+        actual = source[a:z] + '''
+        if (dedaIsolatedAdminIdentityEnabled) {
+          DedaAdminLoginPage();
+        }
+        final isAdmin = await DedaBackend.currentUserIsAdmin();
+        await DedaBackend.currentAdminSessionMatchesDedaEntry(phone: phone);
+        '''
+        changed = mod.patch_admin_tap_gate(actual)
+        self.assertIn('FirebaseAuth.instance.currentUser?.uid == _settingsAdminUid', changed)
+        self.assertNotIn('currentDedaAccountCanSeeAdminEntry(', changed)
+        self.assertIn('currentUserIsAdmin()', changed)
+        with self.assertRaises(ValueError):
+            mod.patch_admin_tap_gate(actual + 'currentDedaAccountCanSeeAdminEntry(')
+
     def test_repository_write_refused(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

@@ -16,7 +16,7 @@ UI_MARK = 'DEDA_STAGE2_SETTINGS_ORIGINAL_CONTROL_GUARD'
 
 def one(s, old, new, label):
     if s.count(old) != 1:
-        raise ValueError('SETTINGS_SOURCE_STOP:' + label + ':' + str(s.count(old)))
+        raise ValueError('SETTINGS_SOURCE_STOP:' + label + ':' + str(s.count(old)) + ':anchor=' + repr(old))
     return s.replace(old, new, 1)
 
 # No new preferences or ownership scope. This serializes the four existing
@@ -176,6 +176,24 @@ def patch_admin_refresh(body):
     return body[:a] + rescue + body[z+1:]
 
 
+def patch_admin_tap_gate(part):
+    # 100413 deliberately removed the duplicate server gateway query on
+    # tapping the already-proven card. Preserve that optimization and the
+    # existing admin/session/phone checks, including the isolated route.
+    for marker in ('currentUserIsAdmin()', 'currentAdminSessionMatchesDedaEntry(',
+                   'dedaIsolatedAdminIdentityEnabled', 'DedaAdminLoginPage('):
+        if marker not in part:
+            raise ValueError('SETTINGS_SOURCE_STOP:existing-admin-gate:' + marker + ':' + repr(part))
+    if 'currentDedaAccountCanSeeAdminEntry(' in part:
+        raise ValueError('SETTINGS_SOURCE_STOP:duplicate-100413-gateway')
+    return one(part, '''final gateAllowed = _adminEntryVisible &&
+                                    DedaPreferences.isLoggedIn;''',
+        '''final gateAllowed = _adminEntryVisible && _settingsCurrent &&
+                                    _settingsAdminUid != null &&
+                                    FirebaseAuth.instance.currentUser?.uid == _settingsAdminUid;''',
+        'retain-single-original-gateway')
+
+
 def patch_ui(body):
     if 'DedaSectionState<DedaSettingsPage>' not in body or UI_MARK in body:
         raise ValueError('SETTINGS_SOURCE_STOP:existing-section')
@@ -213,8 +231,7 @@ def patch_ui(body):
     # Preserve existing admin permission check and both admin routes.
     a,z = callback_region(body, 'onPressed: () async {')
     part = body[a+1:z]
-    if 'currentDedaAccountCanSeeAdminEntry(' not in part or 'dedaIsolatedAdminIdentityEnabled' not in part:
-        raise ValueError('SETTINGS_SOURCE_STOP:existing-admin-gates')
+    part = patch_admin_tap_gate(part)
     # Keep the prior async/section operation intact, including its return
     # paths. Await the original callback inside the one navigation lock.
     # Wait for original route dismissal to release the entry lock; no
@@ -284,6 +301,8 @@ def verify_ui(body):
                    'DedaSessionRescueStage3Bridge.runForPhone(phone)', 'rescue?.mayRecheckAdminGateway == true',
                    'FirebaseAuth.instance.currentUser?.uid == _settingsAdminUid',
                    'DedaBackend.currentDedaAccountCanSeeAdminEntry(', 'dedaIsolatedAdminIdentityEnabled',
+                   'final gateAllowed = _adminEntryVisible && _settingsCurrent &&',
+                   'dedaPromptOriginalAccountForMissingSession(context)', 'DedaRescueStatus.temporarilyOffline',
                    'DedaAdminLoginPage(', 'DedaAdminDashboardPage(', 'Geolocator.openAppSettings()',
                    '_setNavigationVoice(', '_setTravelMode(', '_setMapStyle(', '_commitSpeechPreview(value)',
                    'min: 0.35,', 'max: 0.65,', 'divisions: 6,',
@@ -330,7 +349,13 @@ def bind(project, verify_only=False):
         a,z = home.span(main, 'class DedaPreferences ')
         main = main[:a] + patch_preferences(main[a:z]) + main[z:]
         a,z = home.span(main, 'class _DedaSettingsPageState ')
-        main = main[:a] + patch_ui(main[a:z]) + main[z:]
+        try:
+            main = main[:a] + patch_ui(main[a:z]) + main[z:]
+        except ValueError:
+            # Source-only CI diagnostics; this is the static protected Dart
+            # class, not app data, secrets, or a live account.
+            print('SETTINGS_ACTUAL_STATIC_SOURCE_BEGIN\n' + main[a:z] + '\nSETTINGS_ACTUAL_STATIC_SOURCE_END')
+            raise
     verify(main)
     if not verify_only:
         path.write_text(main)
