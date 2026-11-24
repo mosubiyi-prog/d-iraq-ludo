@@ -14,6 +14,8 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_friends_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_tasks_quiz_2026_11_24.py'
+      - 'tools/app_stability/app_package/bind_stage2_home_2026_11_24.py'
+      - 'test/test_deda_stage2_home_2026_11_24.py'
       - 'test/test_deda_stage2_tasks_quiz_2026_11_24.py'
       - 'lib/deda_stage2_task_mutation_lane_2026_11_24.dart'
       - 'test/deda_stage2_task_mutation_lane_test.dart'
@@ -75,6 +77,8 @@ jobs:
         run: python3 -m unittest discover -s test -p test_deda_stage2_weekly_league_2026_11_24.py -v
       - name: Verify original tasks, quiz, ledger and friend signal source
         run: python3 -m unittest discover -s test -p test_deda_stage2_tasks_quiz_2026_11_24.py -v
+      - name: Verify original home source routes and visual parity
+        run: python3 -m unittest discover -s test -p test_deda_stage2_home_2026_11_24.py -v
       - name: Ensure no production access, no Flutter APK or deploy in source binder
         run: |
           python3 - <<'PY'
@@ -185,6 +189,8 @@ jobs:
           python3 tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py "$project" --verify-only
           python3 tools/app_stability/app_package/bind_stage2_tasks_quiz_2026_11_24.py "$project"
           python3 tools/app_stability/app_package/bind_stage2_tasks_quiz_2026_11_24.py "$project" --verify-only
+          python3 tools/app_stability/app_package/bind_stage2_home_2026_11_24.py "$project"
+          python3 tools/app_stability/app_package/bind_stage2_home_2026_11_24.py "$project" --verify-only
           # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
           python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
           # Read-only check against the actual reconstructed profile appearance and bundled art.
