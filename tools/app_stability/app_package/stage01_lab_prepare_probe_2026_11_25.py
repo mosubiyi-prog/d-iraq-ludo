@@ -10,6 +10,24 @@ ET.register_namespace('android', ANDROID)
 ET.register_namespace('tools', TOOLS)
 
 
+def render_probe(gate, key):
+    # The key is written to the disposable tree only, never printed or committed.
+    dart_key = json.dumps(key)
+    dart = gate.PROBE.replace("bool matchesLab(FirebaseOptions options) =>", f'''const labOptions = FirebaseOptions(
+    apiKey: {dart_key}, appId: '{gate.APP_ID}', messagingSenderId: '{gate.NUMBER}',
+    projectId: '{gate.PROJECT}', storageBucket: '{gate.BUCKET}');
+
+bool matchesLab(FirebaseOptions options) =>
+    options.apiKey == labOptions.apiKey &&''').replace(
+        'final app = await Firebase.initializeApp();', '''if (Firebase.apps.isNotEmpty) {
+      throw StateError('Unexpected pre-initialized Firebase app');
+    }
+    final app = await Firebase.initializeApp(options: labOptions);''')
+    gate.require(dart != gate.PROBE and 'Firebase.initializeApp(options: labOptions)' in dart,
+                 'PROBE_ENTRY_ANCHOR_CHANGED')
+    return dart
+
+
 def prepare_probe(root, config, gate):
     root = Path(root).resolve()
     repo = Path(gate.ROOT).resolve()
@@ -46,21 +64,7 @@ def prepare_probe(root, config, gate):
             gate.require(app is not None, 'ANDROID_APPLICATION_REQUIRED')
             ET.SubElement(app, 'provider', {'{'+ANDROID+'}name':'com.google.firebase.provider.FirebaseInitProvider',
                                             '{'+TOOLS+'}node':'remove'})
-    key = config['client'][0]['api_key'][0]['current_key']
-    # The key is written to the disposable tree only, never printed or committed.
-    dart_key = json.dumps(key)
-    dart = gate.PROBE.replace("bool matchesLab(FirebaseOptions options) =>", f'''const labOptions = FirebaseOptions(
-    apiKey: {dart_key}, appId: '{gate.APP_ID}', messagingSenderId: '{gate.NUMBER}',
-    projectId: '{gate.PROJECT}', storageBucket: '{gate.BUCKET}');
-
-bool matchesLab(FirebaseOptions options) =>
-    options.apiKey == labOptions.apiKey &&''').replace(
-        'final app = await Firebase.initializeApp();', '''if (Firebase.apps.isNotEmpty) {
-      throw StateError('Unexpected pre-initialized Firebase app');
-    }
-    final app = await Firebase.initializeApp(options: labOptions);''')
-    gate.require(dart != gate.PROBE and 'Firebase.initializeApp(options: labOptions)' in dart,
-                 'PROBE_ENTRY_ANCHOR_CHANGED')
+    dart = render_probe(gate, config['client'][0]['api_key'][0]['current_key'])
     for p, tree in parsed:
         tree.write(p, encoding='utf-8', xml_declaration=True)
     pub.write_text('name: uiddevice\npublish_to: none\nversion: 0.1.0+1\nenvironment:\n  sdk: ">=3.6.0 <4.0.0"\ndependencies:\n  flutter:\n    sdk: flutter\n  firebase_core: 3.15.2\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\nflutter:\n  uses-material-design: true\n')
