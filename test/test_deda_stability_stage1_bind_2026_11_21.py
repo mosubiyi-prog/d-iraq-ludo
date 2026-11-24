@@ -86,13 +86,18 @@ class Stage1SessionBinding(unittest.TestCase):
         old_create = "auth.createUserWithEmailAndPassword("
         self.assertEqual(backend.count(old_create), 1)
         backend = backend.replace(old_create, "DedaAuthRuntime.createAdmin(auth,", 1)
+        backend = backend.replace("await user.updatePassword(newPassword);",
+            "await DedaAuthRuntime.wait(() => user.updatePassword(newPassword));", 1)
         backend_file.write_text(backend)
         pin_file = self.root / FILES[1]
         pin = pin_file.read_text()
         old = "      await auth.signOut();"
         new = "      await DedaAuthRuntime.wait(() => DedaAuthRuntime.signOut(auth));"
         self.assertEqual(pin.count(old), 1)
-        pin_file.write_text(pin.replace(old, new, 1))
+        pin = pin.replace(old, new, 1)
+        pin = pin.replace("    await auth.signOut();",
+            "    await DedaAuthRuntime.wait(() => DedaAuthRuntime.signOut(auth));", 1)
+        pin_file.write_text(pin)
         binder.bind(self.root)
         binder.bind(self.root, verify_only=True)
         after = backend_file.read_text()
@@ -124,6 +129,27 @@ class Stage1SessionBinding(unittest.TestCase):
             "    }\n", "", 1))
         with self.assertRaisesRegex(ValueError, "STAGE1_VERIFY_BACKEND_FAILED"):
             binder.bind(self.root, verify_only=True)
+
+    def test_device_logout_does_not_delete_uid_wide_documents(self):
+        binder.bind(self.root)
+        pin = (self.root / FILES[1]).read_text()
+        logout = pin.split("static Future<void> signOutFirebase() async {", 1)[1]
+        self.assertIn("await auth.signOut();", logout)
+        self.assertNotIn(".delete()", logout)
+        self.assertNotIn("unawaited(", logout)
+
+    def test_legacy_password_change_requires_fresh_admin_not_owner(self):
+        binder.bind(self.root)
+        backend = (self.root / FILES[0]).read_text()
+        password = backend.split("changeCurrentAdminPassword(", 1)[1].split(
+            "// Administration member password recovery.", 1)[0]
+        self.assertEqual(password.count("Source.server"), 2)
+        self.assertIn("owner.exists", password)
+        self.assertIn("role.isEmpty", password)
+        self.assertLess(password.index("deda-stability-admin-password-owner-preserved"),
+                        password.index("user.updatePassword("))
+        self.assertLess(password.index("user.updatePassword("),
+                        password.index("deda-stability-admin-password-principal-changed"))
 
     def test_optional_original_owner_login_uses_existing_guardian(self):
         source = (REPO / "lib/deda_100430_owner_uid_continuity.dart").read_text()

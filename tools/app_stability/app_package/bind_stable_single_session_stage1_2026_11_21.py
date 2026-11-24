@@ -102,6 +102,46 @@ def patch_backend(text: str) -> str:
     }
     UserCredential credential;""", path)
     text = prefix + invite_start + invite + invite_end + suffix
+    # Password mutation must verify the actual admin and absence of owner
+    # data on the shared default Auth. No cached role or blank role accepted.
+    password_start = "  static Future<void> changeCurrentAdminPassword("
+    password_end = "  // Administration member password recovery."
+    if text.count(password_start) != 1 or text.count(password_end) != 1:
+        raise ValueError("STAGE1_PASSWORD_BOUNDARY_CHANGED")
+    prefix, rest = text.split(password_start, 1)
+    password, suffix = rest.split(password_end, 1)
+    password_proof = """    final proof = await FirebaseFirestore.instance.collection('admins')
+        .doc(user.uid).get(const GetOptions(source: Source.server));
+    final owner = await FirebaseFirestore.instance.collection('deda_sessions')
+        .doc(user.uid).get(const GetOptions(source: Source.server));
+    final role = (proof.data()?['role'] ?? proof.data()?['jobTitle'] ?? '').toString().trim();
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid ||
+        !proof.exists || proof.metadata.isFromCache || proof.metadata.hasPendingWrites ||
+        owner.exists || owner.metadata.isFromCache || owner.metadata.hasPendingWrites ||
+        proof.data()?['active'] != true || normalizeAdminStatus(proof.data()) != 'active' ||
+        role.isEmpty || !const {'general_manager', 'deputy_manager', 'employee', 'province_agent'}.contains(normalizeAdminRole(role))) {
+      throw StateError('deda-stability-admin-password-owner-preserved');
+    }
+"""
+    post_password = """
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+      throw StateError('deda-stability-admin-password-principal-changed');
+    }"""
+    raw_password = "    await user.updatePassword(newPassword);"
+    guarded_password = "    await DedaAuthRuntime.wait(() => user.updatePassword(newPassword));"
+    guarded_proof = password_proof.replace(
+        "await FirebaseFirestore.instance.collection('admins')",
+        "await DedaAuthRuntime.wait(() => FirebaseFirestore.instance.collection('admins')"
+    ).replace(
+        "await FirebaseFirestore.instance.collection('deda_sessions')",
+        "await DedaAuthRuntime.wait(() => FirebaseFirestore.instance.collection('deda_sessions')"
+    ).replace("get(const GetOptions(source: Source.server));",
+              "get(const GetOptions(source: Source.server)));")
+    password = change_variant(password, [
+        (raw_password, password_proof + raw_password + post_password),
+        (guarded_password, guarded_proof + guarded_password + post_password),
+    ], path)
+    text = prefix + password_start + password + password_end + suffix
     # Scope all admin-logout changes to its existing function.
     begin = "  static Future<void> signOutAdmin() async {"
     end = "  // DEDA in-app location sharing v1."
@@ -166,7 +206,34 @@ def patch_pin(text: str) -> str:
       await DedaAuthRuntime.wait(() => DedaAuthRuntime.signOut(auth));
     }""", replacement),
     ], path)
-    return text
+    # Local logout must not delete a UID-wide server session.
+    logout_start = "  static Future<void> signOutFirebase() async {"
+    if text.count(logout_start) != 1:
+        raise ValueError("STAGE1_PIN_LOGOUT_BOUNDARY_CHANGED")
+    prefix, logout = text.split(logout_start, 1)
+    old = """    final current = auth.currentUser;
+    final anonymousUid =
+        current != null && current.isAnonymous ? current.uid : null;
+
+    // End the local Firebase session immediately. Remote housekeeping is
+    // best-effort and must never hold the logout screen open.
+"""
+    logout = change_once(logout, old,
+        """    // deda-stability-device-logout-preserve-shared-session:
+    // Explicit local sign-out does not delete UID-wide server documents.
+""", path)
+    cleanup = """
+    if (anonymousUid != null) {
+      final firestore = FirebaseFirestore.instance;
+      unawaited(
+        Future.wait([
+          firestore.collection('deda_sessions').doc(anonymousUid).delete(),
+          firestore.collection('deda_auth_attempts').doc(anonymousUid).delete(),
+        ]).catchError((_) => <void>[]),
+      );
+    }"""
+    logout = change_once(logout, cleanup, "", path)
+    return prefix + logout_start + logout
 
 def bind(project: Path, *, verify_only: bool = False) -> dict:
     project = project.resolve()
@@ -201,6 +268,16 @@ def bind(project: Path, *, verify_only: bool = False) -> dict:
     UserCredential credential;"""
                 if invite.count(invite_guard) != 1:
                     raise ValueError("STAGE1_VERIFY_BACKEND_FAILED")
+                password = original.split(
+                    "  static Future<void> changeCurrentAdminPassword(", 1
+                )[1].split("  // Administration member password recovery.", 1)[0]
+                if ("deda-stability-admin-password-owner-preserved" not in password
+                    or "owner.exists" not in password
+                    or "role.isEmpty" not in password
+                    or "deda-stability-admin-password-principal-changed" not in password
+                    or password.index("deda-stability-admin-password-owner-preserved") >
+                        password.index("user.updatePassword(")):
+                    raise ValueError("STAGE1_VERIFY_BACKEND_FAILED")
                 if any(mark not in original for mark in checks) or (
                     "linkedOwnerPilotEnabled: true," not in logout or
                     "FirebaseAuth.instance.currentUser?.uid != confirmedAdminUid" not in logout or
@@ -218,6 +295,12 @@ def bind(project: Path, *, verify_only: bool = False) -> dict:
                     or "deda-stability-explicit-session-switch-required" not in part
                     or "await auth.signOut();" in part
                     or "DedaAuthRuntime.signOut(auth)" in part):
+                    raise ValueError("STAGE1_VERIFY_PIN_FAILED")
+                pin_logout = original.split("  static Future<void> signOutFirebase() async {", 1)[1]
+                if ("deda-stability-device-logout-preserve-shared-session" not in pin_logout
+                    or ".delete()" in pin_logout
+                    or "unawaited(" in pin_logout
+                    or not any(call in pin_logout for call in ("auth.signOut()", "DedaAuthRuntime.signOut(auth)"))):
                     raise ValueError("STAGE1_VERIFY_PIN_FAILED")
             continue
         proposed[relative] = patch(original)
