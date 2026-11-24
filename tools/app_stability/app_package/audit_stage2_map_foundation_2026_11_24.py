@@ -124,6 +124,102 @@ def verify(main, reference, require_bound=True):
             raise ValueError('MAP_FOUNDATION_LIVE_GPS_STREAM_COUNT')
     return inventory
 
+
+# Part 2: prove that the already integrated search screens and services differ
+# from the immutable archive only by the existing approved lifetime/GPS binder.
+# No operational source changes, no new search/cache/provider or account lane.
+PART2_WIDGETS = ('NearbyPlacesPage', 'DedaPlaceSearchPage',
+                 'PlaceDetailsPage', 'DedaMapPlaceMarker')
+PART2_STATES = ('_NearbyPlacesPageState', '_DedaPlaceSearchPageState',
+                '_PlaceDetailsPageState')
+PART2_UNCHANGED = ('deda_geo_window.dart', 'deda_geo_firestore_reader.dart',
+                   'deda_place_logo.dart', 'deda_place_palette.dart',
+                   'deda_place_activity_symbol.dart', 'deda_place_engagement_bar.dart',
+                   'deda_place_suggestions.dart')
+PART2_GUARDED = ('places_service.dart', 'deda_place_engagement_service.dart',
+                 'deda_place_branding_service.dart')
+
+
+def part2_expected(reference, archive_member):
+    from bind_location_entries import bind as bind_location
+    from bind_all_sections import bind_file, bind_service
+    # GPS patch was applied before the shared State lifetime transformation.
+    # Apply to the complete archive because the existing GPS binder validates
+    # all eight original call sites; never alter its anchors or its policy.
+    gps = bind_location(reference)
+    expected = {}
+    for name in PART2_WIDGETS:
+        expected[name] = member(reference, 'class ' + name + ' ')
+    for name in PART2_STATES:
+        original = member(gps, 'class ' + name + ' ')
+        bound, report = bind_file("import 'dart:async';\n" + original)
+        if len(report) != 1 or report[0]['binding'] != 'section-lifetime':
+            raise ValueError('MAP_PART2_EXPECTED_SECTION_BINDING:' + name)
+        expected[name] = member(bound, 'class ' + name + ' ')
+    for name in PART2_UNCHANGED:
+        expected[name] = archive_member('lib/' + name)
+    for name in PART2_GUARDED:
+        expected[name] = bind_service(archive_member('lib/' + name))
+    return expected
+
+
+def part2_equal(name, expected, actual):
+    import difflib
+    # Strict whole-member comparison: do not whitelist arbitrary edits merely
+    # because they contain a guard name. Preserve all original behavior tokens.
+    if tokens(expected) != tokens(actual):
+        difference = difflib.unified_diff(
+            expected.splitlines(), actual.splitlines(),
+            fromfile='archive-plus-approved-binders/' + name,
+            tofile='assembled/' + name, lineterm='', n=3)
+        print('\n'.join(list(difference)[:100]))
+        raise ValueError('MAP_PART2_UNEXPLAINED_TOKEN_DRIFT:' + name)
+    # The eleven originally exact members must remain byte-for-byte identical.
+    if name in PART2_WIDGETS + PART2_UNCHANGED and expected != actual:
+        raise ValueError('MAP_PART2_EXACT_MEMBER_DRIFT:' + name)
+
+
+def audit_part2(project, main, reference):
+    spec = importlib.util.spec_from_file_location(
+        'map_part2_archive', ROOT/'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py')
+    profile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(profile)
+    expected = part2_expected(reference, profile.archived_profile_member)
+    actual = {name: member(main, 'class ' + name + ' ')
+              for name in PART2_WIDGETS + PART2_STATES}
+    actual.update({name: (project/'lib'/name).read_text()
+                   for name in PART2_UNCHANGED + PART2_GUARDED})
+    if set(expected) != set(actual) or len(actual) != 17:
+        raise ValueError('MAP_PART2_INVENTORY_INCOMPLETE')
+    failed = []
+    for name, body in expected.items():
+        try:
+            part2_equal(name, body, actual[name])
+            print('MAP_PART2_PARITY_PASS', name, digest(actual[name]))
+        except ValueError as error:
+            failed.append(str(error))
+    if failed:
+        raise ValueError('MAP_PART2_STOP:' + ';'.join(failed))
+    # Negative controls: guard loss and changes to provider/palette must fail.
+    for name, before, after in (
+        ('_DedaPlaceSearchPageState', 'dedaSectionExpiredView()', 'otherExpiredView()'),
+        ('places_service.dart', 'https://overpass-api.de/api/interpreter',
+         'https://different.invalid/api/interpreter'),
+        ('deda_place_palette.dart', '0xFFD83C46', '0xFFFFFFFF'),
+    ):
+        body = actual[name]
+        changed = body.replace(before, after, 1)
+        if changed == body:
+            raise ValueError('MAP_PART2_NEGATIVE_CONTROL_ANCHOR:' + name)
+        try:
+            part2_equal(name, expected[name], changed)
+        except ValueError:
+            pass
+        else:
+            raise ValueError('MAP_PART2_NEGATIVE_CONTROL_ACCEPTED:' + name)
+    print('PASS_STAGE2_MAP_PART2_17_MEMBERS_EXISTING_BINDERS_PARITY_NO_RUNTIME_CHANGE')
+
+
 def audit(project):
     project = Path(project).resolve()
     if project == ROOT or ROOT in project.parents or project in ROOT.parents:
@@ -145,6 +241,7 @@ def audit(project):
         print('MAP_MEMBER_SHA256', file, hashlib.sha256(path.read_bytes()).hexdigest())
     print('MAP_FIVE_PART_INVENTORY=' + json.dumps(inventory, sort_keys=True))
     print('PASS_STAGE2_MAP_PART1_PROVIDER_CACHE_GPS_CORE_VISUAL_PARITY_READ_ONLY')
+    audit_part2(project, main, reference)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
