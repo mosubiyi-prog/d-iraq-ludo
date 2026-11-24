@@ -121,12 +121,14 @@ def support(reference, project):
                    'DedaBackend.syncCurrentUserProfile(', "item['adminReply']",
                    'rawImagePaths.take(1)', "data['imagePath']",
                    'DedaSectionState<DedaContactPage>', 'dedaRunSectionVoid(',
-                   'dedaSectionCurrent', 'prefs.setString(_draftKey!,',
-                   'getString(_legacyDraftKey)', 'savedAccount == currentAccount'):
+                   'dedaSectionCurrent', 'DedaPrivateDataBridge.readString(prefs, _draftKey)',
+                   'DedaPrivateDataBridge.write(prefs, _draftKey, null)'):
         if marker not in current:
             raise ValueError('SUPPORT_MISSING:' + marker)
     if home.visual_signature(baseline) != home.visual_signature(current):
         raise ValueError('SUPPORT_CONTACT_VISUAL_DRIFT')
+    equal('existing_private_data_bridge_contact_scope',
+          contact.patch_bridge(read(reference, contact.BRIDGE)), read(project, contact.BRIDGE))
     team = 'deda_team_page.dart'
     equal(team, read(reference, team), read(project, team))
     team_source = read(project, team)

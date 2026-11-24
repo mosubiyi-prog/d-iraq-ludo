@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:d_iraq_ludo/main.dart';
 import 'package:d_iraq_ludo/deda_team_page.dart';
+import 'package:d_iraq_ludo/deda_private_data_bridge.dart';
 
 void main() {
   const legacy = 'deda_contact_draft_v1';
@@ -73,6 +74,25 @@ void main() {
     await openContact(tester, '07700000001', signedIn: true);
     expect(message(tester), 'owner message');
     await tester.pumpWidget(const SizedBox());
+  });
+
+  test('existing bridge writes and clears only the current scoped draft', () async {
+    SharedPreferences.setMockInitialValues({
+      legacy: draft('07700000001', 'legacy retained'),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    DedaPreferences.isLoggedIn = true;
+    DedaPreferences.phone = '07700000001';
+    expect(await DedaPrivateDataBridge.readString(prefs, legacy), contains('legacy retained'));
+    expect(await DedaPrivateDataBridge.write(prefs, legacy, draft('07700000001', 'new draft')), isTrue);
+    DedaPreferences.phone = '07700000002';
+    expect(await DedaPrivateDataBridge.readString(prefs, legacy), isNull);
+    await DedaPrivateDataBridge.write(prefs, legacy, draft('07700000002', 'second owner'));
+    DedaPreferences.phone = '07700000001';
+    await DedaPrivateDataBridge.write(prefs, legacy, null);
+    expect(await DedaPrivateDataBridge.readString(prefs, legacy), '');
+    expect(prefs.getString(legacy), contains('legacy retained'));
+    expect(prefs.getString('$legacy:account:07700000002'), contains('second owner'));
   });
 
   testWidgets('original team shows seven cards at phone and tablet widths',
