@@ -13,3 +13,17 @@
 - تم جرد 35 صنفاً تقريباً موزعة حسب الاختصاص، ودراسة الأرشيف الحقيقي وأكواد الموقع السابقة. مهلة GPS الأصلية المحسنة موجودة بالفعل في bind_location_entries.py؛ لا تكرارها. المرحلة الأولى تضيف فاحصاً للقراءة فقط يتحقق من كل وظائف مزود الطبقات والتخزين المؤقت والإسناد على مستوى tokens مقابل الأرشيف الموثق، وحفظ ألوان وأيقونات وعبارات الواجهتين، والتدوير والاختيار وGPS وحارس القسم، ويجرد الأصناف والملفات وبصماتها. لا استبدال لشاشة أو مزود أو خدمة. لا ادعاء بأن جرد الأجزاء الأخرى يعني اكتمالها.
 - تضاف اختبارات منع فقد المزود واللون/التدوير/الإذن والصفحات، ويعاد تشغيل اختبارات GPS الأصلية (محاكاة قناة Android والإلغاء) والتدوير الأصلية على التجميع الفعلي. لا اتصال GPS حقيقي أو تحميل بلاطات إنتاجية في الاختبارات. أي اختلاف غير مفسر يوقف الاعتماد، لا يُرخّى الفاحص لإخفائه.
 - الحالة: PART1_QA_PENDING / PARTS_2_TO_5_PENDING / RELEASE_HOLD. لا تعديل Firebase إنتاجي أو Play أو APK أو فوترة. يجب توثيق نتيجة GitHub Actions الفعلية قبل اعتماد الجزء الأول. لا تفعيل للميزات المقيدة سابقاً.
+
+## اعتماد الجزء الأول بمستوى المصدر — 24-11-2026
+- GitHub Actions #45404659230: actual-source-safety (138481981487) SUCCESS؛ assembled-full-app-source (138482423219) SUCCESS، بما في ذلك GPS والتدوير والتحليل البرمجي. مرجع الكود 907eae7abfc4569ff95677b0c274577db74e6b33.
+- PART1_SOURCE_QA_PASS / DEVICE_QA_PENDING / RELEASE_HOLD. لم يُجر اختبار GPS حقيقي أو نشر أو بناء APK موقع.
+- الدليل: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/45404659230
+
+## الجزء الثاني — مراجعة أولية فعلية، قبل أي تعديل تشغيلي
+تمت مطابقة MAP_FIVE_PART_INVENTORY وMAP_MEMBER_SHA256 من سجل التجميع الناجح مع بصمات الأرشيف 100380 الموثق في 100380-baseline-manifest.json.
+- 4 أصناف متطابقة حرفياً: NearbyPlacesPage، DedaPlaceSearchPage، PlaceDetailsPage، DedaMapPlaceMarker.
+- 7 ملفات متطابقة حرفياً: deda_geo_window.dart، deda_geo_firestore_reader.dart، deda_place_logo.dart، deda_place_palette.dart، deda_place_activity_symbol.dart، deda_place_engagement_bar.dart، deda_place_suggestions.dart.
+- 6 عناصر غير متطابقة تحتاج تدقيق الفرق الفعلي قبل الاعتماد: _NearbyPlacesPageState، _DedaPlaceSearchPageState، _PlaceDetailsPageState، places_service.dart، deda_place_engagement_service.dart، deda_place_branding_service.dart. اختلاف البصمة وحده ليس دليلاً على وجود خلل أو فقد وظيفة.
+- مراجعة الملفات المتاحة في الفرع تؤكد وجود منطق البحث العام، تحديد النطاق، الألوان الأربعة عشر، صور الأماكن، الاقتراحات، والمتابعة والإعجاب؛ يجب تدقيق مسار التجميع الفعلي للحالات الثلاث والخدمات الثلاث، بما في ذلك حماية النتائج المتأخرة، والتفاعل مع الاسم والصورة، قبل اعتبار الجزء الثاني ناجحاً. لا يُستبدل المصدر المجمّع بملف main.dart الخام الأقدم، ولا تفعّل أعلام النشر والتفاعل المقيدة.
+- الحالة: PART2_PRELIMINARY_PARITY_REVIEW / SIX_DIFFS_PENDING / PARTS_3_TO_5_PENDING / RELEASE_HOLD.
+- هذا التوثيق لا يغيّر أي كود تشغيلي أو نسخة محمية أو إعدادات Firebase أو Play.
