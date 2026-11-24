@@ -409,6 +409,17 @@ def profile_member_patches(project, verify_only):
         expected = transform(original)
         current = (project / path).read_text(encoding='utf-8')
         if current != (expected if verify_only else original):
+            import difflib
+            import hashlib
+            baseline = expected if verify_only else original
+            print('PROFILE_ASSEMBLED_MEMBER_DIFF', path,
+                  'expected=' + hashlib.sha256(baseline.encode()).hexdigest(),
+                  'actual=' + hashlib.sha256(current.encode()).hexdigest(),
+                  flush=True)
+            print(''.join(difflib.unified_diff(
+                baseline.splitlines(keepends=True), current.splitlines(keepends=True),
+                fromfile='expected/' + path, tofile='assembled/' + path, n=3)),
+                flush=True)
             raise ValueError('PROFILE_ASSEMBLED_MEMBER_STOP:unexpected-source:' + path)
         results[project / path] = expected
     owned = (project / OWNED_IDS).read_text(encoding='utf-8')
