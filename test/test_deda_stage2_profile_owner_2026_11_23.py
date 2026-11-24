@@ -288,6 +288,28 @@ class _DedaFriendCompactCard {}
             with self.subTest(marker=marker), self.assertRaises(ValueError):
                 mod.verify_shared_routes(changed.replace(marker, 'REMOVED'))
 
+    def test_frame_purchase_reuses_existing_epoch_without_second_checkout(self):
+        for path in mod.FRAME_PURCHASE_ACTIONS:
+            with self.subTest(path=path):
+                original = (ROOT/path).read_text(encoding='utf-8')
+                for source in (original, mod.bind_existing_section_lifetime(original)):
+                    updated = mod.patch_frame_purchase_epoch(source)
+                    mod.verify_frame_purchase_epoch(updated)
+                    a,z=mod.frame_purchase_bounds(source)
+                    b,y=mod.frame_purchase_bounds(updated)
+                    self.assertEqual(source[:a],updated[:b])
+                    self.assertEqual(source[z:],updated[y:])
+                    self.assertEqual(source.count('DedaOwner18FrameCheckout.buyOnce('),
+                                     updated.count('DedaOwner18FrameCheckout.buyOnce('))
+                    self.assertEqual(source.count('dedaRunSectionVoid('),
+                                     updated.count('dedaRunSectionVoid('))
+                    with self.assertRaises(ValueError):
+                        mod.patch_frame_purchase_epoch(updated)
+                    with self.assertRaises(ValueError):
+                        mod.verify_frame_purchase_epoch(updated.replace(
+                            'purchaseEpoch == _verificationEpoch && _sameItem(owner, frame, uid)',
+                            '_sameItem(owner, frame, uid)'))
+
     def test_repo_checkout_not_mutated(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

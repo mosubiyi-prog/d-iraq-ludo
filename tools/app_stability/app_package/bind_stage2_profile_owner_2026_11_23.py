@@ -445,6 +445,70 @@ def verify_hadaya_section_lifetime(original, expected):
         raise ValueError('PROFILE_HADAYA_SHARED_GUARD_STOP:new-guard-or-cleanup')
 
 
+FRAME_PURCHASE_ACTIONS = (
+    'lib/deda_owner18_frame_purchase_action.dart',
+    'lib/deda_six_frame_purchase_action.dart',
+)
+
+def frame_purchase_bounds(source):
+    start = '  Future<void> _buy() async {'
+    end = '  @override\n  Widget build(BuildContext context) {'
+    if source.count(start) != 1 or source.count(end) != 1:
+        raise ValueError('FRAME_PURCHASE_SCOPE_DRIFT')
+    a, z = source.index(start), source.index(end)
+    if z <= a:
+        raise ValueError('FRAME_PURCHASE_SCOPE_DRIFT')
+    return a, z
+
+def verify_frame_purchase_epoch(source):
+    a, z = frame_purchase_bounds(source)
+    body = source[a:z]
+    for marker, count in (
+        ('final purchaseEpoch = _verificationEpoch;', 1),
+        ('bool purchaseStillCurrent() =>', 1),
+        ('purchaseEpoch == _verificationEpoch && _sameItem(owner, frame, uid)', 1),
+        ('purchaseStillCurrent()', 7),
+        ('if (purchaseEpoch == _verificationEpoch)', 2),
+        ('else if (purchaseEpoch == _verificationEpoch)', 1),
+        ('DedaOwner18FrameCheckout.buyOnce(', 1),
+        ('DedaOwner18FrameCheckout.isOwned(', 1),
+    ):
+        if body.count(marker) != count:
+            raise ValueError('FRAME_PURCHASE_EPOCH_VERIFY:' + marker)
+    if not (body.index('final purchaseEpoch') < body.index('showDialog<bool>') <
+            body.index('if (!purchaseStillCurrent())') <
+            body.index('DedaOwner18FrameCheckout.buyOnce(')):
+        raise ValueError('FRAME_PURCHASE_EPOCH_ORDER')
+    if body.count('_sameItem(owner, frame, uid)') != 1:
+        raise ValueError('FRAME_PURCHASE_EPOCH_BYPASS')
+
+def patch_frame_purchase_epoch(source):
+    a, z = frame_purchase_bounds(source)
+    body = source[a:z]
+    if 'purchaseEpoch' in body or body.count('_sameItem(owner, frame, uid)') != 6:
+        raise ValueError('FRAME_PURCHASE_EPOCH_SOURCE_DRIFT')
+    # Keep the existing section guard, checkout and receipt recovery. Reuse
+    # the widget's existing epoch for card A -> B -> A while an await is open.
+    body = body.replace('_sameItem(owner, frame, uid)', 'purchaseStillCurrent()')
+    body = once(body, '    final uid = _currentUid();',
+        '    final uid = _currentUid();\n'
+        '    final purchaseEpoch = _verificationEpoch;\n'
+        '    bool purchaseStillCurrent() =>\n'
+        '        purchaseEpoch == _verificationEpoch && _sameItem(owner, frame, uid);',
+        'frame-purchase-epoch')
+    body = once(body, '    if (!purchaseStillCurrent()) {\n'
+        '      _clearIfAccountChanged(owner, frame, uid);',
+        '    if (!purchaseStillCurrent()) {\n'
+        '      if (purchaseEpoch == _verificationEpoch) {\n'
+        '        _clearIfAccountChanged(owner, frame, uid);\n'
+        '      }', 'frame-purchase-stale-dialog')
+    body = once(body, '      } else {\n        _clearIfAccountChanged(owner, frame, uid);',
+        '      } else if (purchaseEpoch == _verificationEpoch) {\n'
+        '        _clearIfAccountChanged(owner, frame, uid);', 'frame-purchase-stale-finally')
+    result = source[:a] + body + source[z:]
+    verify_frame_purchase_epoch(result)
+    return result
+
 def profile_member_patches(project, verify_only):
     # Compute every proposed edit before writing any part of the disposable app.
     # Fail closed if an earlier recipe has changed either protected member.
@@ -478,6 +542,12 @@ def profile_member_patches(project, verify_only):
                 flush=True)
             raise ValueError('PROFILE_ASSEMBLED_MEMBER_STOP:unexpected-source:' + path)
         results[project / path] = expected
+    for path in FRAME_PURCHASE_ACTIONS:
+        current = (project / path).read_text(encoding='utf-8')
+        if verify_only:
+            verify_frame_purchase_epoch(current)
+        else:
+            results[project / path] = patch_frame_purchase_epoch(current)
     owned = (project / OWNED_IDS).read_text(encoding='utf-8')
     if verify_only:
         verify_owned_row_guard(owned)
