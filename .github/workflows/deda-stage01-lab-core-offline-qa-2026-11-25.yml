@@ -110,20 +110,25 @@ jobs:
           export PYTHONPATH="$GITHUB_WORKSPACE/tools/app_stability/app_package"
           python3 - <<'PY'
           import hashlib, json, os, urllib.parse, urllib.request
-          from stage01_lab_gate_2026_11_25 import validate, PROJECT, PACKAGE, PRODUCTION
+          from stage01_lab_gate_2026_11_25 import validate, PROJECT, NUMBER, PACKAGE, PRODUCTION
           raw = os.environ.get('LAB_CONFIG', '')
           if not raw:
               print('HOLD_LIVE_CHECK_CONFIG_NOT_PROVISIONED')
-              raise SystemExit(0)
+              raise SystemExit(1)
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, req, fp, code, msg, headers, newurl):
                   return None
+          stage = 'parse_config'
           try:
               data = json.loads(raw)
+              stage = 'config_fingerprint'
               canonical = json.dumps(data, sort_keys=True, separators=(',', ':')).encode()
               if hashlib.sha256(canonical).hexdigest() != '705e70c89ef87374a56ed7cf1f31fc408050935b04a9b4120b8b11685872a323':
                   raise ValueError('config fingerprint mismatch')
+              stage = 'config_validation'
               validate(data, PACKAGE)
+              print('PASS_LAB_CONFIG_FINGERPRINT_AND_VALIDATION')
+              stage = 'metadata_request'
               key = data['client'][0]['api_key'][0]['current_key']
               url = 'https://identitytoolkit.googleapis.com/v1/projects?' + urllib.parse.urlencode({'key': key})
               request = urllib.request.Request(url, method='GET', headers={'Accept':'application/json'})
@@ -132,16 +137,20 @@ jobs:
                   if response.status != 200:
                       raise ValueError('unexpected status')
                   payload = json.loads(response.read(65536))
+              stage = 'metadata_lab_domain'
               domains = payload.get('authorizedDomains', [])
               if not isinstance(domains, list) or PROJECT+'.firebaseapp.com' not in domains:
                   raise ValueError('lab default domain absent')
+              stage = 'metadata_production_domain'
               if any(PRODUCTION in str(domain).lower() for domain in domains):
                   raise ValueError('production domain present')
-              if 'projectId' in payload and str(payload['projectId']) != PROJECT:
+              stage = 'metadata_project_identifier'
+              # The service may represent the project by its numeric identifier.
+              if 'projectId' in payload and str(payload['projectId']) not in (PROJECT, NUMBER):
                   raise ValueError('project ID mismatch')
           except Exception as exc:
               # Do not print exception messages, URLs, keys, or response bodies.
-              print('BLOCK_LIVE_LAB_METADATA_CHECK', type(exc).__name__)
+              print('BLOCK_LIVE_LAB_METADATA_CHECK', stage, type(exc).__name__)
               raise SystemExit(1) from None
           print('PASS_APPROVED_LAB_PUBLIC_METADATA_GET_NO_SIGNIN_NO_UID')
           print('LIMITATION_NOT_FULL_APP_RUNTIME_OR_ACCOUNT_SECURITY_PROOF')
