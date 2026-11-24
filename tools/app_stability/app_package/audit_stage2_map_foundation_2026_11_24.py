@@ -296,6 +296,93 @@ def audit_part3(project, main, reference):
     print('PASS_STAGE2_MAP_PART3_13_MEMBERS_OWNER_STORAGE_AND_LIFETIME_PARITY')
 
 
+
+# Part 4: reconstruct the approved location account/section guards, not an
+# alternate sending pipeline. Compare entire UI classes and shared backend
+# operations in the assembled application, without performing any live send.
+PART4_EXACT = ('DedaShareLocationPage', 'DedaReceivedLocationsPage')
+
+
+def part4_expected(reference):
+    from bind_auth_runtime import bind_main
+    from bind_location_entries import bind as bind_location
+    from bind_location_identity import bind as bind_identity
+    from bind_all_sections import bind_file
+    guarded, _ = bind_file(bind_identity(bind_location(bind_main(reference))))
+    return {name: member(reference if name in PART4_EXACT else guarded,
+                         'class ' + name + ' ')
+            for name in INVENTORY['4']}
+
+
+def part4_equal(name, expected, actual):
+    import difflib
+    if tokens(expected) != tokens(actual):
+        diff = difflib.unified_diff(
+            expected.splitlines(), actual.splitlines(),
+            fromfile='archive-plus-approved-binders/' + name,
+            tofile='assembled/' + name, lineterm='', n=3)
+        print('\n'.join(list(diff)[:100]))
+        raise ValueError('MAP_PART4_UNEXPLAINED_TOKEN_DRIFT:' + name)
+    if name in PART4_EXACT and expected != actual:
+        raise ValueError('MAP_PART4_EXACT_MEMBER_DRIFT:' + name)
+
+
+def audit_part4(project, main, reference):
+    from bind_auth_runtime import bind_backend, body_range
+    expected = part4_expected(reference)
+    if len(expected) != 4:
+        raise ValueError('MAP_PART4_INVENTORY_INCOMPLETE')
+    actual = {name: member(main, 'class ' + name + ' ') for name in expected}
+    for name in expected:
+        part4_equal(name, expected[name], actual[name])
+        print('MAP_PART4_PARITY_PASS', name, digest(actual[name]))
+    # Server-facing read/decision/sending contracts are compared against the
+    # immutable backend with its original approved auth-await transformation.
+    # Identity registration has additional later reviewed UID protections and
+    # is deliberately not replaced with an older archive implementation.
+    spec = importlib.util.spec_from_file_location(
+        'map_part4_archive', ROOT/'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py')
+    profile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(profile)
+    old_backend = bind_backend(profile.archived_profile_member('lib/deda_backend.dart'))
+    backend = (project/'lib/deda_backend.dart').read_text()
+    for name in ('locationShareIdInfo', 'createLocationShare', 'decideLocationShare'):
+        def future_body(src):
+            opening, closing, _, start = body_range(src, name)
+            return src[start:closing+1]
+        part4_equal(name, future_body(old_backend), future_body(backend))
+        print('MAP_PART4_BACKEND_PARITY_PASS', name)
+    for marker in ('static Stream<List<Map<String, dynamic>>> locationSharesStream(',
+                   'static Stream<int> pendingLocationSharesCountStream('):
+        part4_equal(marker, member(old_backend, marker), member(backend, marker))
+        print('MAP_PART4_BACKEND_PARITY_PASS', marker)
+    opening, closing, _, _ = body_range(backend, 'ensureLocationShareIdentity')
+    registration = backend[opening:closing]
+    require(registration, ('_ensureOwnerSessionForAccountKey(accountKey)',
+                           'personalShareIdForPhone(phone)', 'placeShareIdForPhone(phone)',
+                           'original-share-uid-conflict-recovery-required',
+                           'canStageOriginalShareProjection(',
+                           'original-share-session-changed-before-user-write',
+                           'original-share-session-changed-before-route-write'), 'share-owner-registration')
+    home.verify_home(member(main, 'class _HomePageState '))
+    for name, before, after in (
+        ('_DedaShareLocationPageState', 'DedaAuthRuntime.checkSnapshot(requestPrincipal)',
+         'otherCheck(requestPrincipal)'),
+        ('_DedaReceivedLocationsPageState', 'dedaSectionExpiredView()',
+         'otherExpiredView()'),
+    ):
+        changed = actual[name].replace(before, after, 1)
+        if changed == actual[name]:
+            raise ValueError('MAP_PART4_NEGATIVE_CONTROL_ANCHOR:' + name)
+        try:
+            part4_equal(name, expected[name], changed)
+        except ValueError:
+            pass
+        else:
+            raise ValueError('MAP_PART4_NEGATIVE_CONTROL_ACCEPTED:' + name)
+    print('PASS_STAGE2_MAP_PART4_UI_BACKEND_SHARE_CONTRACT_AND_ACCOUNT_LIFETIME_PARITY')
+
+
 def audit(project):
     project = Path(project).resolve()
     if project == ROOT or ROOT in project.parents or project in ROOT.parents:
@@ -319,6 +406,7 @@ def audit(project):
     print('PASS_STAGE2_MAP_PART1_PROVIDER_CACHE_GPS_CORE_VISUAL_PARITY_READ_ONLY')
     audit_part2(project, main, reference)
     audit_part3(project, main, reference)
+    audit_part4(project, main, reference)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

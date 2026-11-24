@@ -19,6 +19,8 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py'
       - 'tools/app_stability/app_package/audit_stage2_map_foundation_2026_11_24.py'
       - 'test/test_deda_stage2_map_foundation_2026_11_24.py'
+      - 'test/deda_location_identity_entry_test.dart'
+      - 'test/deda_original_share_uid_prewrite_guard_100443_test.dart'
       - 'test/deda_makani_100337_test.dart'
       - 'test/deda_published_place_recovery_test.dart'
       - 'test/deda_private_data_sync_test.dart'
@@ -276,6 +278,10 @@ jobs:
           flutter test --no-pub --reporter expanded test/deda_makani_100337_test.dart test/deda_private_data_sync_test.dart test/deda_step2_global_places_settings_archive_private_test.dart test/deda_step2_global_places_settings_restore_private_test.dart test/deda_step2_local_places_settings_evidence_private_test.dart
           flutter test --no-pub --reporter expanded --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true test/deda_published_place_recovery_test.dart
           flutter test --no-pub --reporter expanded --dart-define=DEDA_STABILITY_PRIVATE_DATA=true test/deda_private_data_page_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_location_identity_entry_test.dart" test/deda_location_identity_entry_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_original_share_uid_prewrite_guard_100443_test.dart" test/deda_original_share_uid_prewrite_guard_100443_test.dart
+          flutter test --no-pub --reporter expanded --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STABILITY_SECTION_ENTRY=true test/deda_location_identity_entry_test.dart
+          flutter test --no-pub --reporter expanded test/deda_original_share_uid_prewrite_guard_100443_test.dart
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
             lib/deda_social_service.dart lib/deda_stage51_verified_friend_alias_search.dart \
