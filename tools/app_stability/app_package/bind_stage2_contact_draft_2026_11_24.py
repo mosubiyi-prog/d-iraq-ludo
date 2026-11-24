@@ -91,7 +91,21 @@ def bind(project):
     path = project/'lib/main.dart'
     source = path.read_text(encoding='utf-8')
     a,z = home.span(source, MARKER)
-    result = patch(source[a:z])
+    try:
+        result = patch(source[a:z])
+    except ValueError:
+        # Static application code only, never user data or Firebase reads.
+        print('CONTACT_ACTUAL_DRAFT_SOURCE_BEGIN', flush=True)
+        for marker in ('  Future<void> _loadDraft() async ',
+                       '  Future<void> _saveDraft() async ',
+                       '  Future<void> _prepareMessage() async '):
+            try:
+                m,n = home.span(source[a:z], marker)
+                print(source[a:z][m:n], flush=True)
+            except ValueError as error:
+                print(str(error), flush=True)
+        print('CONTACT_ACTUAL_DRAFT_SOURCE_END', flush=True)
+        raise
     path.write_text(source[:a] + result + source[z:], encoding='utf-8')
     print('PASS_CONTACT_LOCAL_DRAFT_SCOPE_LEGACY_RETAINED_NO_TRANSPORT_CHANGE', flush=True)
 
