@@ -103,13 +103,70 @@ def assistant(reference, project):
     print('PASS_ASSISTANT_100450_BOTH_GUIDES_VISUALS_ROUTES_OWNER_INSTRUCTION', flush=True)
 
 
+
+def support(reference, project):
+    import sys
+    sys.path.insert(0, str(ROOT/'tools/app_stability'))
+    from bind_auth_runtime import body_range
+    import bind_stage2_contact_draft_2026_11_24 as contact
+    old, new = read(reference, 'main.dart'), read(project, 'main.dart')
+    equal('DedaContactPage', member(old, 'class DedaContactPage '),
+          member(new, 'class DedaContactPage '))
+    baseline = member(old, contact.MARKER)
+    current = member(new, contact.MARKER)
+    equal('contact_existing_page_plus_draft_scope', contact.patch(baseline), current)
+    for marker in ("'code': 'company'", "'code': 'problem'", "'code': 'case'",
+                   "'code': 'photo'", 'DedaBackend.submitSupport(',
+                   'DedaBackend.mySupportRequests(', 'ImagePicker().pickImage(',
+                   'DedaBackend.syncCurrentUserProfile(', "item['adminReply']",
+                   'rawImagePaths.take(1)', "data['imagePath']",
+                   'DedaSectionState<DedaContactPage>', 'dedaRunSectionVoid(',
+                   'dedaSectionCurrent', 'prefs.setString(_draftKey!,',
+                   'getString(_legacyDraftKey)', 'savedAccount == currentAccount'):
+        if marker not in current:
+            raise ValueError('SUPPORT_MISSING:' + marker)
+    if home.visual_signature(baseline) != home.visual_signature(current):
+        raise ValueError('SUPPORT_CONTACT_VISUAL_DRIFT')
+    team = 'deda_team_page.dart'
+    equal(team, read(reference, team), read(project, team))
+    team_source = read(project, team)
+    if team_source.count('number: ') != 7:
+        raise ValueError('SUPPORT_TEAM_ORIGINAL_SEVEN_MEMBERS')
+    bg = 'assets/deda_home_bg.jpg'
+    if (reference/bg).read_bytes() != (project/bg).read_bytes():
+        raise ValueError('SUPPORT_TEAM_BACKGROUND_DRIFT')
+    old_backend, new_backend = read(reference, 'deda_backend.dart'), read(project, 'deda_backend.dart')
+    for name in ('submitSupport', 'mySupportRequests'):
+        def method(src):
+            a,z,_,start = body_range(src,name)
+            return src[start:z+1]
+        equal('backend:' + name, method(old_backend), method(new_backend))
+    body = member(new, 'class _HomePageState ')
+    home.verify_home(body)
+    if body.count('const DedaTeamPage()') != 2 or body.count('DedaContactPage(') != 2:
+        raise ValueError('SUPPORT_PHONE_TABLET_ENTRY_DRIFT')
+    dash = read(project, 'deda_stage2_isolated_admin_dashboard_2026_11_21.dart')
+    for marker in ("collection: 'support_requests'", 'replyToScopedSupport(',
+                   'updateScopedSupportStatus(', 'mutateScopedSupportTrash(',
+                   'DedaStage2IsolatedSupportTrashPage('):
+        if marker not in dash:
+            raise ValueError('SUPPORT_ISOLATED_ADMIN_LINK:' + marker)
+    # Explicit release blocker: preserve the first-stage no-passive-UID rule.
+    # Guest form remains reachable, but a fully signed-out sender cannot
+    # be assumed authorized to submit to Firebase. Do not bypass the guard.
+    if 'deda-stability-explicit-auth-entry-no-new-uid' not in new_backend:
+        raise ValueError('SUPPORT_NO_NEW_UID_GUARD_LOST')
+    print('SUPPORT_GUEST_SEND_REQUIRES_EXPLICIT_AUTH_OR_APPROVED_GUEST_TRANSPORT_RELEASE_HOLD', flush=True)
+    print('PASS_SUPPORT_100450_CONTACT_TEAM_ADMIN_SOURCE_PARITY_DRAFT_SCOPE', flush=True)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('reference', type=Path)
     parser.add_argument('project', type=Path)
-    parser.add_argument('--section', choices=['gifts', 'assistant'], required=True)
+    parser.add_argument('--section', choices=['gifts', 'assistant', 'support'], required=True)
     args = parser.parse_args()
     reference, project = args.reference.resolve(), args.project.resolve()
     if reference == project or ROOT in reference.parents or ROOT in project.parents:
         raise ValueError('REMAINING_AUDIT_REQUIRES_TWO_DISPOSABLE_ASSEMBLIES')
-    {'gifts': gifts, 'assistant': assistant}[args.section](reference, project)
+    {'gifts': gifts, 'assistant': assistant, 'support': support}[args.section](reference, project)

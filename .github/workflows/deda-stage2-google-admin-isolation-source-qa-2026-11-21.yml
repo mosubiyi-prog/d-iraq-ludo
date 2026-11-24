@@ -19,6 +19,8 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py'
       - 'tools/app_stability/app_package/audit_stage2_map_foundation_2026_11_24.py'
       - 'tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py'
+      - 'tools/app_stability/app_package/bind_stage2_contact_draft_2026_11_24.py'
+      - 'test/deda_stage2_contact_team_test.dart'
       - 'test/test_deda_stage2_map_foundation_2026_11_24.py'
       - 'test/deda_route_hazard_corridor_test.dart'
       - 'test/deda_stage2_map_route_contract_test.dart'
@@ -301,6 +303,8 @@ jobs:
           python3 tools/app_stability/app_package/audit_stage2_map_foundation_2026_11_24.py "$project"
           python3 tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py "$DEDA_REFERENCE_100450" "$project" --section gifts
           python3 tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py "$DEDA_REFERENCE_100450" "$project" --section assistant
+          python3 tools/app_stability/app_package/bind_stage2_contact_draft_2026_11_24.py "$project"
+          python3 tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py "$DEDA_REFERENCE_100450" "$project" --section support
           # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
           python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
           # Read-only check against the actual reconstructed profile appearance and bundled art.
@@ -362,6 +366,8 @@ jobs:
           cp "$GITHUB_WORKSPACE/test/deda_official_gift_logo_test.dart" test/deda_official_gift_logo_test.dart
           cp "$GITHUB_WORKSPACE/test/deda_gift_recipient_preview_test.dart" test/deda_gift_recipient_preview_test.dart
           flutter test --no-pub --reporter expanded test/deda_100374_nonid_diamond_gift_nav_test.dart test/deda_stage75_gift_unread_badge_test.dart test/deda_official_gift_logo_test.dart test/deda_gift_recipient_preview_test.dart
+          cp "$GITHUB_WORKSPACE/test/deda_stage2_contact_team_test.dart" test/deda_stage2_contact_team_test.dart
+          flutter test --no-pub --reporter expanded test/deda_stage2_contact_team_test.dart
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
             lib/deda_social_service.dart lib/deda_stage51_verified_friend_alias_search.dart \
