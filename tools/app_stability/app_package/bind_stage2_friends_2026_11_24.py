@@ -139,9 +139,14 @@ FEED = '''  /// Both existing directions must finish their first server snapshot
     if (uid.isEmpty) return Stream.error(StateError('social-personal-id-missing'));
     final owner = FirebaseAuth.instance.currentUser?.uid;
     final principal = DedaAuthRuntime.capture();
+    final accountEpoch = DedaPreferences.stabilityAccountEpoch;
     bool current() {
       if (owner == null || FirebaseAuth.instance.currentUser?.uid != owner) return false;
-      try { DedaAuthRuntime.checkSnapshot(principal); return true; }
+      try {
+        DedaAuthRuntime.checkSnapshot(principal);
+        return DedaPreferences.isLoggedIn &&
+            DedaPreferences.stabilityAccountEpoch == accountEpoch;
+      }
       catch (_) { return false; }
     }
     Stream<List<DedaFriendshipRecord>> direction(String field) => _db
@@ -149,7 +154,24 @@ FEED = '''  /// Both existing directions must finish their first server snapshot
         .where(field, isEqualTo: uid)
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map(DedaFriendshipRecord.fromDoc).toList());
+        .map((snapshot) {
+          // DEDA_STAGE2_FRIEND_ACCEPTED_TASK_SIGNAL_RETAINED
+          // Restore the original 100383 sender-side accepted-today event.
+          // This is a completion signal only; the existing task engine owns
+          // all award keys and deduplication.
+          final today = DateTime.now().toLocal();
+          if (current() && snapshot.docs.any((doc) {
+            final data = doc.data();
+            final when = data['respondedAt'];
+            if (data['status'] != 'accepted' || when is! Timestamp ||
+                (data['requesterPublicId'] != uid && data['recipientPublicId'] != uid)) return false;
+            final day = when.toDate().toLocal();
+            return day.year == today.year && day.month == today.month && day.day == today.day;
+          })) {
+            unawaited(DedaTaskSignalBridge.friendAccepted());
+          }
+          return snapshot.docs.map(DedaFriendshipRecord.fromDoc).toList();
+        });
     return mergeRelationFeeds(uid, direction('requesterPublicId'),
         direction('recipientPublicId'), isCurrent: current);
   }
@@ -256,6 +278,9 @@ def patch_service(src):
     imp = "import 'deda_auth_session_runtime.dart';"
     if imp not in src:
         src = imp + '\n' + src
+    for dependency in ("import 'main.dart' show DedaPreferences;", "import 'deda_task_signal_bridge.dart';"):
+        if dependency not in src:
+            src = dependency + '\n' + src
     def feeds(old):
         for required in ("'requesterPublicId'", "'recipientPublicId'", 'StreamController', 'sentSub', 'receivedSub'):
             if required not in old:
