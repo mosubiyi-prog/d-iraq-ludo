@@ -20,11 +20,20 @@ def one(s, old, new, label):
     return s.replace(old, new, 1)
 
 
+def bottom_parts(s):
+    # The previous home binder deliberately accepted only the untouched void
+    # callback. This phase also validates the guarded asynchronous route.
+    marker = '    // ' + MARK if MARK in s else '    void openBottomDestination('
+    return (s[s.index(marker):s.index('    Widget topAction(')],
+            s[s.index('    Widget premiumBottomItem('):s.index('    final map = category(')],
+            s[s.index('      bottomNavigationBar: SafeArea('):])
+
+
 def patch_home(body):
     if home.MARK not in body or MARK in body:
         raise ValueError('BOTTOM_SOURCE_STOP:previous-home-required')
     before = body
-    routes, item, bar = home.bottom_parts(body)
+    routes, item, bar = bottom_parts(body)
     for marker in ('case 0:', 'const DedaSocialHubPage()', 'case 1:', 'openSettings();',
                    'case 2:', 'case 3:', 'const DedaMyGiftsPage()', 'case 4:', 'const DedaMakaniPage()'):
         if routes.count(marker) != 1:
@@ -91,7 +100,7 @@ def patch_home(body):
         'onTap: _homeAction(() => openBottomDestination(index)),', 'ordinary-bottom-tap')
     body = one(body, 'onTap: () => openBottomDestination(3),',
         'onTap: _homeAction(() => openBottomDestination(3)),', 'gift-bottom-tap')
-    _, new_item, new_bar = home.bottom_parts(body)
+    _, new_item, new_bar = bottom_parts(body)
     if new_item != item.replace('onTap: () => openBottomDestination(index),',
                                'onTap: _homeAction(() => openBottomDestination(index)),'):
         raise ValueError('BOTTOM_SOURCE_STOP:ordinary-item-appearance')
@@ -111,7 +120,7 @@ def patch_home(body):
 
 
 def verify_home(body):
-    routes, item, bar = home.bottom_parts(body)
+    routes, item, bar = bottom_parts(body)
     for marker in (MARK, 'if (!current()) return;', '_bottomRouteOpening = true;',
                    '_bottomRouteOpening = false;', 'finally {',
                    'DedaAuthRuntime.checkSnapshot(principal)', 'index == 2',
@@ -253,8 +262,8 @@ def verify(main, badge, reference):
     verify_home(body)
     a,z = home.home_span(reference)
     old = reference[a:z]
-    _,old_item,old_bar = home.bottom_parts(old)
-    _,item,bar = home.bottom_parts(body)
+    _,old_item,old_bar = bottom_parts(old)
+    _,item,bar = bottom_parts(body)
     if home.visual_signature(old_item) != home.visual_signature(item) or \
        home.visual_signature(old_bar) != home.visual_signature(bar):
         raise ValueError('BOTTOM_VERIFY:reference-colors-and-icons')
