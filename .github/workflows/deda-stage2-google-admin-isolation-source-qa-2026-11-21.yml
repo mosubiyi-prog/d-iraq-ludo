@@ -19,6 +19,7 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py'
       - 'tools/app_stability/app_package/audit_stage2_map_foundation_2026_11_24.py'
       - 'tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py'
+      - 'tools/app_stability/app_package/audit_full_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_contact_draft_2026_11_24.py'
       - 'test/deda_stage2_contact_team_test.dart'
       - 'test/test_deda_stage2_map_foundation_2026_11_24.py'
@@ -312,6 +313,18 @@ jobs:
           python3 tools/app_stability/app_package/audit_stage2_profile_visual_parity_2026_11_24.py "$project"
           echo "DEDA_STAGE1_SOURCE=$project" >> "$GITHUB_ENV"
           echo 'PASS_PROTECTED_FULL_APPLICATION_SOURCE_SESSION_PATCH_APPLIED'
+      - name: Read-only comprehensive three-way source inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/audit_full_inventory_2026_11_24.py "$DEDA_REFERENCE_100450" "$DEDA_STAGE1_SOURCE" "$RUNNER_TEMP/deda-inventory" --baseline 2c14c5e23fcca50312289697043b03ffe094dc43 --head "$GITHUB_SHA"
+      - name: Archive detailed inventory evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-comprehensive-source-inventory-no-apk
+          path: ${{ runner.temp }}/deda-inventory/*.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Analyze real assembled Flutter backend, entry, admin, map and PIN paths
         shell: bash
         run: |
