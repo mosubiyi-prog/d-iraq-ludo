@@ -47,3 +47,10 @@
 - الملفات المعدلة في commit الفحص: audit_stage2_map_foundation_2026_11_24.py وملف workflow القائم؛ لا تعديل تشغيلي أو تغيير تصميم أو تفعيل ميزات أو مساس بالنسخ المحمية أو Firebase أو Play. اختبار الأجهزة والخدمات الفعلية والبناء والتوقيع مؤجل إلى الفحص النهائي. لم تبدأ أعمال الجزء الرابع.
 - الحالة: PART1_SOURCE_QA_PASS / PART2_EXTENDED_FLUTTER_QA_PASS / PART3_SOURCE_QA_PASS / PART3_EXTENDED_FLUTTER_QA_PASS / DEVICE_QA_PENDING / RELEASE_HOLD. نقطة توقف 3/5، انتظار أمر المالك للجزء الرابع.
 - الدليل: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/45408990444
+
+## الجزء الرابع — مشاركة الموقع والاستلام — 24-11-2026
+- تم استئناف العمل بأمر المالك بعد اعتماد الجزء الثالث، من be31ba6a9d6d4d6c734b3a846be97ff014347e13 على الفرع الوحيد المعتمد، وقراءة تعليمات 01 كاملة.
+- سجل التجميع السابق يثبت تطابق DedaShareLocationPage وDedaReceivedLocationsPage حرفياً مع الأرشيف المحمي. الحالتان الداخليتان تخضعان لفحص إعادة توليد الحماية السابقة من المصدر الأصلي، دون إضافة مسار إرسال جديد.
+- commit 2718468a141376047b975f25603c6f7c58bd7053 يعدل فاحص audit_stage2_map_foundation_2026_11_24.py وworkflow الموجود فقط: فحص مطابقة الصفحات الأربع، عقود البحث عن المستلم وإنشاء المشاركة والقرار والعداد، وجود حماية تسجيل هوية الآيدي الأصلية، وربط عداد الرئيسية السابق. يضيف تشغيل اختبار deda_location_identity_entry_test.dart مع حراس الجلسة، واختبار deda_original_share_uid_prewrite_guard_100443_test.dart. لا تعديل على الأكواد التشغيلية أو Firebase أو Play أو النسخ المحمية، ولا إرسال حقيقي للمواقع. لم يبدأ الجزء الخامس.
+- الفحص #45412385667 قيد التنفيذ عند التوثيق؛ لا اعتماد للنتيجة قبل قراءة السجل. الحالة PART4_QA_PENDING / DEVICE_QA_PENDING / RELEASE_HOLD.
+- الدليل: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/45412385667
