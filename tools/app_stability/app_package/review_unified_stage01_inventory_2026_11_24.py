@@ -81,6 +81,43 @@ def review_repeat_context(index, fingerprints):
                          'disposition':'preserve_pending_semantic_review'})
     return reviewed
 
+def verify_store_route_separation(index):
+    """Prevent the historical proof-only renderer joining the active route.
+    Both original declarations are intentionally retained; never rename or
+    delete the inactive library just to reduce a lexical duplicate count.
+    """
+    active = 'lib/deda_100377_my_store_page_staged.dart'
+    proof = 'lib/deda_100377_my_store_owned_profile_staged.dart'
+    gate = 'lib/deda_stage2_profile_owner_my_store_gate_2026_11_23.dart'
+    reachable = set(index['reachable_local_dart'])
+    names = index['duplicate_declaration_name_candidates'].get('class:DedaMyStorePage', [])
+    if {p for p, _ in names} != {active, proof} or len(names) != 2:
+        raise ValueError('STAGE01_STORE_DECLARATION_DRIFT')
+    if active not in reachable or gate not in reachable or proof in reachable:
+        raise ValueError('STAGE01_STORE_PROOF_ROUTE_ACTIVATION_HOLD')
+    imports = index['imports']
+    if active.rsplit('/', 1)[1] not in imports.get(gate, []):
+        raise ValueError('STAGE01_STORE_ORIGINAL_RENDERER_ROUTE_DRIFT')
+    return {'active_renderer':active,'preserved_proof_only_renderer':proof,
+            'owner_route_gate':gate,'static_import_graph_only':True}
+
+def group_priority_contexts(contexts):
+    """Group overlapping fingerprints by their indexed context anchors.
+    This is an inspection queue, not a semantic-equivalence verdict.
+    """
+    groups = defaultdict(list)
+    for item in contexts:
+        key = tuple(sorted((c['file'], (c['preceding_symbol'] or {}).get('name','?'))
+                           for c in item['contexts']))
+        groups[key].append(item['fingerprint'])
+    result = [{'anchors':[{'file':f,'symbol':n} for f,n in key],
+               'fingerprints':sorted(values),'count':len(values)}
+              for key,values in sorted(groups.items())]
+    if sorted(fp for group in result for fp in group['fingerprints']) != sorted(
+            x['fingerprint'] for x in contexts):
+        raise ValueError('STAGE01_PRIORITY_GROUP_COVERAGE')
+    return result
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('reference',type=Path);p.add_argument('candidate',type=Path);p.add_argument('inventory',type=Path)
@@ -110,6 +147,11 @@ def main():
     if {x['fingerprint'] for x in contexts} != {x['fingerprint'] for x in result if x['risk'] in ('identity_or_session_review','persistence_or_entitlement_review')}:
         raise ValueError('STAGE01_PRIORITY_REVIEW_FINGERPRINT_MISMATCH')
     print('STAGE01_PRIORITY_CONTEXT_INDEXED',len(contexts),flush=True)
+    priority_groups=group_priority_contexts(contexts)
+    store_separation=verify_store_route_separation(iy)
+    print('STAGE01_PRIORITY_ANCHOR_GROUPS',len(priority_groups),flush=True)
+    print('STAGE01_STORE_SINGLE_ACTIVE_RENDERER_PROOF_LIBRARY_PRESERVED',
+          json.dumps(store_separation),flush=True)
     if data['assembly']['missing'] or data['symbol_delta']['declarations']['missing'] or data['symbol_delta']['method_candidates']['missing'] or iy['unresolved_local_imports']:
         raise ValueError('REFERENCE_PARITY_HOLD')
     # Index all lexical mutation entrypoints. Do not confuse occurrence with execution.
@@ -149,6 +191,7 @@ def main():
     report={'counts':dict(counts),'new_counts':dict(new_counts),'all_fingerprints':result,
             'new_ranges':group_locations(b,current-prior),'old_only_count':len(prior-current),
             'priority_repeat_contexts':contexts,
+            'priority_anchor_groups':priority_groups,'store_route_separation':store_separation,
             'duplicate_declarations':iy['duplicate_declaration_name_candidates'],
             'outside_import_graph':iy['outside_static_import_graph'],'auth_and_storage_sites':sites,
             'qa_configs':configs,'runtime_release_hold':True,
