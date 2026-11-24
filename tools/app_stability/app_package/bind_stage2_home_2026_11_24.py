@@ -99,6 +99,25 @@ def bottom_parts(s):
             s[s.index('      bottomNavigationBar: SafeArea('):])
 
 
+# The assistant is an existing offline guide, not a new chat or service.
+# Only correct the outdated instruction about where owner mode is enabled.
+ASSISTANT_ENTRY = '  void openDedaAssistant() {'
+ASSISTANT_OLD_AR = 'اختر نوع الحساب «صاحب مكان» من الإعدادات إذا لم يكن مفعلاً.'
+ASSISTANT_OLD_EN = 'Choose “Place owner” as the account type in Settings if it is not enabled.'
+ASSISTANT_NEW_AR = 'افتح «مكاني» من الشريط السفلي وفعّل نوع حساب صاحب مكان إذا لم يكن مفعلاً.'
+ASSISTANT_NEW_EN = 'Open “My place” from the bottom bar and enable the Place owner account type if it is not enabled.'
+
+
+def patch_assistant_guide(body):
+    a,z = span(body, ASSISTANT_ENTRY)
+    guide = body[a:z]
+    corrected = one(guide, ASSISTANT_OLD_AR, ASSISTANT_NEW_AR, 'assistant-owner-guide-ar')
+    corrected = one(corrected, ASSISTANT_OLD_EN, ASSISTANT_NEW_EN, 'assistant-owner-guide-en')
+    if visual_signature(guide) != visual_signature(corrected):
+        raise ValueError('HOME_SOURCE_STOP:assistant-appearance')
+    return body[:a] + corrected + body[z:]
+
+
 def patch_home(body):
     if MARK in body or 'DedaSectionState<HomePage>' not in body:
         raise ValueError('HOME_SOURCE_STOP:existing-section-guard')
@@ -171,6 +190,7 @@ def patch_home(body):
                   'void openSavedPlaces({required bool favorites}) {',
                   'void openDedaAssistant() {'):
         body = one(body, entry, entry + '\n    if (!dedaSectionCurrent) return;', 'direct-route:' + entry)
+    body = patch_assistant_guide(body)
     if bottom_parts(body) != bottom:
         raise ValueError('HOME_SOURCE_STOP:bottom-navigation-modified')
     if visual_signature(body) != visual_signature(original):

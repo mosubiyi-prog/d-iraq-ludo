@@ -300,6 +300,7 @@ jobs:
           python3 tools/app_stability/app_package/bind_stage2_settings_2026_11_24.py "$project" --verify-only
           python3 tools/app_stability/app_package/audit_stage2_map_foundation_2026_11_24.py "$project"
           python3 tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py "$DEDA_REFERENCE_100450" "$project" --section gifts
+          python3 tools/app_stability/app_package/audit_stage2_remaining_sections_100450_2026_11_24.py "$DEDA_REFERENCE_100450" "$project" --section assistant
           # Read-only: examine the real reconstructed profile, never checked-in raw main.dart.
           python3 tools/app_stability/app_package/audit_stage2_profile_full_2026_11_24.py "$project"
           # Read-only check against the actual reconstructed profile appearance and bundled art.

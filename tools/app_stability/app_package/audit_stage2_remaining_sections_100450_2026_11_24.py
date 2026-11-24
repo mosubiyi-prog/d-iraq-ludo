@@ -63,13 +63,53 @@ def gifts(reference, project):
     print('PASS_GIFTS_100450_SOURCE_PARITY_ID_DIAMOND_INBOX_BADGES_NO_CLAIM', flush=True)
 
 
+
+def assistant(reference, project):
+    old, new = read(reference, 'main.dart'), read(project, 'main.dart')
+    original = member(old, home.ASSISTANT_ENTRY)
+    expected = original.replace(home.ASSISTANT_ENTRY,
+        home.ASSISTANT_ENTRY + '\n    if (!dedaSectionCurrent) return;', 1)
+    expected = home.patch_assistant_guide(expected)
+    actual = member(new, home.ASSISTANT_ENTRY)
+    equal('offline_assistant_guide', expected, actual)
+    for marker in ('showModalBottomSheet<void>(', 'showDragHandle: true',
+                   'isScrollControlled: true', 'SingleChildScrollView(',
+                   "title: dedaText('مستخدم', 'User')",
+                   "title: dedaText('صاحب مكان', 'Place owner')",
+                   'if (!dedaSectionCurrent) return;', home.ASSISTANT_NEW_AR,
+                   home.ASSISTANT_NEW_EN):
+        if marker not in actual:
+            raise ValueError('ASSISTANT_MISSING:' + marker)
+    if actual.count('guideCard(') != 3 or actual.count('steps: [') != 2:
+        raise ValueError('ASSISTANT_ORIGINAL_TWO_GUIDES')
+    if actual.count('showModalBottomSheet<void>(') != 1:
+        raise ValueError('ASSISTANT_DUPLICATE_SHEET')
+    if home.visual_signature(original) != home.visual_signature(actual):
+        raise ValueError('ASSISTANT_VISUAL_DRIFT')
+    # Verify actual assembled destination rather than trusting old help copy.
+    settings = member(new, 'class _DedaSettingsPageState ')
+    makani = member(new, 'class _DedaMakaniPageState ')
+    if 'DedaPreferences.setAccountType(' in settings:
+        raise ValueError('ASSISTANT_SETTINGS_OWNER_MODE_CONFLICT')
+    if 'DedaPreferences.setAccountType(DedaAccountType.placeOwner)' not in makani:
+        raise ValueError('ASSISTANT_OWNER_MODE_DESTINATION_MISSING')
+    if 'const OwnerPlacePage()' not in makani:
+        raise ValueError('ASSISTANT_OWNER_MANAGEMENT_DESTINATION_MISSING')
+    body = member(new, 'class _HomePageState ')
+    home.verify_home(body)
+    bottom.verify_home(body)
+    if body.count('onPressed: openDedaAssistant') != 2:
+        raise ValueError('ASSISTANT_PHONE_TABLET_ENTRY_MISSING')
+    print('PASS_ASSISTANT_100450_BOTH_GUIDES_VISUALS_ROUTES_OWNER_INSTRUCTION', flush=True)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('reference', type=Path)
     parser.add_argument('project', type=Path)
-    parser.add_argument('--section', choices=['gifts'], required=True)
+    parser.add_argument('--section', choices=['gifts', 'assistant'], required=True)
     args = parser.parse_args()
     reference, project = args.reference.resolve(), args.project.resolve()
     if reference == project or ROOT in reference.parents or ROOT in project.parents:
         raise ValueError('REMAINING_AUDIT_REQUIRES_TWO_DISPOSABLE_ASSEMBLIES')
-    gifts(reference, project)
+    {'gifts': gifts, 'assistant': assistant}[args.section](reference, project)

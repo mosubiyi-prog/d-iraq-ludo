@@ -46,6 +46,26 @@ class HomeSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.verify_reference(home.replace('Color(0xFF0B355E)', 'Color(0xFF000000)'), raw)
 
+    def test_assistant_corrects_only_obsolete_owner_instruction(self):
+        raw = mod.archive_reference()
+        a,z = mod.span(raw, mod.ASSISTANT_ENTRY)
+        guide = raw[a:z]
+        corrected = mod.patch_assistant_guide(guide)
+        self.assertIn(mod.ASSISTANT_NEW_AR, corrected)
+        self.assertIn(mod.ASSISTANT_NEW_EN, corrected)
+        self.assertEqual(corrected.replace(mod.ASSISTANT_NEW_AR, mod.ASSISTANT_OLD_AR)
+            .replace(mod.ASSISTANT_NEW_EN, mod.ASSISTANT_OLD_EN), guide)
+        self.assertEqual(mod.visual_signature(guide), mod.visual_signature(corrected))
+
+    def test_assistant_rejects_duplicate_or_missing_original_instruction(self):
+        raw = mod.archive_reference()
+        a,z = mod.span(raw, mod.ASSISTANT_ENTRY)
+        guide = raw[a:z]
+        for bad in (guide.replace(mod.ASSISTANT_OLD_AR, 'unknown'),
+                    guide.replace(mod.ASSISTANT_OLD_EN, mod.ASSISTANT_OLD_EN * 2)):
+            with self.assertRaises(ValueError):
+                mod.patch_assistant_guide(bad)
+
     def test_repository_cannot_be_patched(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
