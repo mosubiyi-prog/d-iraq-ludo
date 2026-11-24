@@ -1,0 +1,94 @@
+name: DEDA Stage01 isolated lab core offline QA
+on:
+  push:
+    branches:
+      - deda-100451-owner-admin-session-safe-repair-2026-11-20
+    paths:
+      - 'tools/app_stability/app_package/stage01_lab_gate_2026_11_25.py'
+      - 'tools/app_stability/app_package/stage01_lab_prepare_probe_2026_11_25.py'
+      - '.github/workflows/deda-stage01-lab-core-offline-qa-2026-11-25.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-core-probe:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Exercise exact lab gate and prepare synthetic-only scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate="$GITHUB_WORKSPACE/tools/app_stability/app_package/stage01_lab_gate_2026_11_25.py"
+          python3 "$gate" --self-test
+          export PYTHONPATH="$(dirname "$gate")"
+          export CONFIG="$RUNNER_TEMP/stage01-synthetic.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          from stage01_lab_gate_2026_11_25 import Tests
+          fixture = Tests()
+          fixture.setUp()
+          Path(os.environ['CONFIG']).write_text(json.dumps(fixture.data))
+          PY
+          project="$RUNNER_TEMP/stage01-offline-probe"
+          flutter create --no-pub --platforms=android --org com.deda.qa --project-name uiddevice "$project"
+          python3 "$gate" --config "$CONFIG" --build-package com.deda.qa.uiddevice --prepare-probe "$project"
+          test ! -e "$project/android/app/google-services.json"
+          echo "STAGE01_PROBE=$project" >> "$GITHUB_ENV"
+      - name: Compile disposable Android probe without real Firebase credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$STAGE01_PROBE"
+          flutter pub get
+          flutter analyze lib
+          flutter build apk --debug --no-pub
+      - name: Verify final packaged permissions, package and dependency isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$STAGE01_PROBE"
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          test -f "$apk"
+          sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          analyzer="$(find "$sdk/cmdline-tools" -type f -name apkanalyzer | head -n 1)"
+          test -x "$analyzer"
+          "$analyzer" manifest print "$apk" > "$RUNNER_TEMP/stage01-final-manifest.xml"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import xml.etree.ElementTree as ET
+          root=ET.parse(Path(os.environ['RUNNER_TEMP'])/'stage01-final-manifest.xml').getroot()
+          ns='{http://schemas.android.com/apk/res/android}'
+          assert root.get('package') == 'com.deda.qa.uiddevice', 'Wrong packaged application ID'
+          for node in root.iter():
+              name=node.get(ns+'name','')
+              if node.tag.startswith('uses-permission'):
+                  assert name not in ('android.permission.INTERNET','android.permission.ACCESS_NETWORK_STATE'), name
+              if node.tag == 'provider':
+                  assert name != 'com.google.firebase.provider.FirebaseInitProvider', name
+          lock=Path('pubspec.lock').read_text()
+          packages=set(re.findall(r'^  ([a-z0-9_]+):\s*$',lock,re.M))
+          assert 'firebase_core' in packages
+          assert not any(p.startswith(('firebase_auth','cloud_firestore','cloud_functions','firebase_storage','firebase_messaging','firebase_app_check','google_sign_in','google_mobile_ads')) for p in packages)
+          print('PASS_STAGE01_OFFLINE_PACKAGED_MANIFEST_AND_CORE_ONLY_DEPENDENCIES')
+          print('SYNTHETIC_ONLY_NO_LIVE_CONNECTION_NO_AUTH_NO_OWNER_DELIVERY')
+          PY
+          (cd android && ./gradlew :app:dependencies --configuration debugRuntimeClasspath --offline) > "$RUNNER_TEMP/stage01-dependencies.txt"
+          if grep -Ei 'com\.google\.firebase:firebase-(auth|firestore|functions|storage|messaging|analytics|appcheck)(:|[[:space:]])' "$RUNNER_TEMP/stage01-dependencies.txt"; then
+            echo 'BLOCK_UNEXPECTED_NATIVE_FIREBASE_SERVICE'
+            exit 1
+          fi
+          rm -f "$apk"
+          echo 'PASS_STAGE01_NO_APK_DELIVERY_NO_DEPLOY'
