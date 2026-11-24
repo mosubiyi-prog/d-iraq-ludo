@@ -50,6 +50,37 @@ def group_locations(idx,keys):
             else: merged.append([a,b])
         out[p]=merged
     return out
+def review_repeat_context(index, fingerprints):
+    """Associate repeat locations with nearest lexical declaration/method.
+    This is navigation evidence only, never a semantic or deletion decision.
+    """
+    symbols=defaultdict(list)
+    for kind in ('declarations','method_candidates'):
+        for name,locs in index[kind].items():
+            for file,line in locs:
+                symbols[file].append((line,kind,name))
+    for entries in symbols.values():
+        entries.sort()
+    reviewed=[]
+    for entry in fingerprints:
+        if entry['risk'] not in ('identity_or_session_review','persistence_or_entitlement_review'):
+            continue
+        contexts=[]
+        for file,start,end in entry['locations']:
+            before=[x for x in symbols[file] if x[0]<=start]
+            nearest=before[-1] if before else None
+            within=[{'line':line,'kind':kind,'name':name}
+                    for line,kind,name in symbols[file] if start<line<=end]
+            contexts.append({'file':file,'start':start,'end':end,
+                             'preceding_symbol':dict(zip(('line','kind','name'),nearest)) if nearest else None,
+                             'symbols_inside_range':within})
+        keys={(c['file'], (c['preceding_symbol'] or {}).get('line')) for c in contexts}
+        reviewed.append({'fingerprint':entry['fingerprint'],'status':entry['status'],
+                         'risk':entry['risk'],'contexts':contexts,
+                         'lexical_context_relation':'different_anchors' if len(keys)>1 else 'same_anchor',
+                         'disposition':'preserve_pending_semantic_review'})
+    return reviewed
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('reference',type=Path);p.add_argument('candidate',type=Path);p.add_argument('inventory',type=Path)
@@ -72,6 +103,13 @@ def main():
         result.append({'fingerprint':key,'status':state,'risk':risk,'relation':relation,'locations':locs})
     assert len(result)==len(b) and sum(counts.values())==len(b)
     assert len(current-prior)==sum(new_counts.values())
+    contexts=review_repeat_context(iy,result)
+    priority_count=counts['identity_or_session_review']+counts['persistence_or_entitlement_review']
+    if len(contexts)!=priority_count:
+        raise ValueError('STAGE01_PRIORITY_REVIEW_COVERAGE_MISMATCH')
+    if {x['fingerprint'] for x in contexts} != {x['fingerprint'] for x in result if x['risk'] in ('identity_or_session_review','persistence_or_entitlement_review')}:
+        raise ValueError('STAGE01_PRIORITY_REVIEW_FINGERPRINT_MISMATCH')
+    print('STAGE01_PRIORITY_CONTEXT_INDEXED',len(contexts),flush=True)
     if data['assembly']['missing'] or data['symbol_delta']['declarations']['missing'] or data['symbol_delta']['method_candidates']['missing'] or iy['unresolved_local_imports']:
         raise ValueError('REFERENCE_PARITY_HOLD')
     # Index all lexical mutation entrypoints. Do not confuse occurrence with execution.
@@ -110,6 +148,7 @@ def main():
         if list(root.rglob('google-services.json')): raise ValueError('remaining android Firebase config')
     report={'counts':dict(counts),'new_counts':dict(new_counts),'all_fingerprints':result,
             'new_ranges':group_locations(b,current-prior),'old_only_count':len(prior-current),
+            'priority_repeat_contexts':contexts,
             'duplicate_declarations':iy['duplicate_declaration_name_candidates'],
             'outside_import_graph':iy['outside_static_import_graph'],'auth_and_storage_sites':sites,
             'qa_configs':configs,'runtime_release_hold':True,
