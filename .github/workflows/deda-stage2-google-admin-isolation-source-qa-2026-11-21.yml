@@ -23,6 +23,8 @@ on:
       - 'tools/app_stability/app_package/audit_full_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/review_unified_stage01_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/stage01_lab_bind_full_2026_11_25.py'
+      - 'lib/deda_stage02_lab_single_uid_2026_11_25.dart'
+      - 'test/deda_stage02_lab_single_uid_2026_11_25_test.dart'
       - 'tools/app_stability/app_package/stage01_lab_prepare_probe_2026_11_25.py'
       - 'tools/app_stability/app_package/bind_stage2_contact_draft_2026_11_24.py'
       - 'test/deda_stage2_contact_team_test.dart'
@@ -356,6 +358,11 @@ jobs:
           }
           sudo -n unshare --net -- bash -c 'ip link set lo up; test "$(ip -o link show | wc -l)" -eq 1; test -z "$(ip route show default)"; test -z "$(ip -6 route show default)"'
           echo 'STAGE01_OFFLINE_NETWORK_NAMESPACE_VERIFIED_NO_EXTERNAL_ROUTE'
+          test ! -e lib/deda_stage02_lab_single_uid_2026_11_25.dart
+          cp "$GITHUB_WORKSPACE/lib/deda_stage02_lab_single_uid_2026_11_25.dart" lib/deda_stage02_lab_single_uid_2026_11_25.dart
+          cp "$GITHUB_WORKSPACE/test/deda_stage02_lab_single_uid_2026_11_25_test.dart" test/deda_stage02_lab_single_uid_2026_11_25_test.dart
+          flutter test --no-pub --reporter expanded --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true test/deda_stage02_lab_single_uid_2026_11_25_test.dart
+          flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/deda_stage02_lab_single_uid_2026_11_25.dart
           cp "$GITHUB_WORKSPACE/test/deda_stage2_profile_store_lifetime_test.dart" test/deda_stage2_profile_store_lifetime_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_profile_store_lifetime_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_google_and_admin_isolation_policy_test.dart
