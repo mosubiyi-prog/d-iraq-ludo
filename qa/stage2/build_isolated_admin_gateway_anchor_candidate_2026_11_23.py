@@ -516,16 +516,49 @@ def add_invite_email_reservation(source):
     return result
 
 
+def owner_session_candidate(source):
+    """Separate local-only candidate; not applied to the admin test rules.
+    Require canonical account UID on session admission and expire PIN proof.
+    Keep the existing trusted-install branch and account-key schema.
+    """
+    start = "    match /deda_sessions/{uid} {"
+    end = "    match /deda_account_profiles/{accountKey} {"
+    if source.count(start) != 1 or source.count(end) != 1:
+        raise ValueError("FAIL_OWNER_SESSION_MATCH_DRIFT")
+    prefix, remainder = source.split(start, 1)
+    block, suffix = remainder.split(end, 1)
+    anchor = "        && request.resource.data.accountKey is string\n"
+    if block.count(anchor) != 1:
+        raise ValueError("FAIL_OWNER_SESSION_ACCOUNT_ANCHOR")
+    block = block.replace(anchor, anchor + """        && exists(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.accountKey == request.resource.data.accountKey
+        && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.createdUid == uid
+        && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.active == true
+        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.active == true
+""", 1)
+    proof = "            exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))\n"
+    if block.count(proof) != 1:
+        raise ValueError("FAIL_OWNER_SESSION_PROOF_ANCHOR")
+    block = block.replace(proof, proof + """            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.uid == uid
+            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.createdAt is timestamp
+            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.createdAt <= request.time
+            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.createdAt > request.time - duration.value(2, 'm')
+""", 1)
+    return prefix + start + block + end + suffix
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--output", required=True)
+    p.add_argument("--owner-session-only", action="store_true")
     args = p.parse_args()
     out = Path(args.output).resolve()
     if out == ROOT or out in ROOT.parents or ROOT in out.parents:
         raise SystemExit("FAIL_CANDIDATE_MUST_BE_OUTSIDE_GIT_REPOSITORY")
     source = ORIGINAL.read_text()
     original_digest = hashlib.sha256(source.encode()).hexdigest()
-    out.write_text(candidate(source))
+    out.write_text(owner_session_candidate(source) if args.owner_session_only else candidate(source))
     if hashlib.sha256(ORIGINAL.read_bytes()).hexdigest() != original_digest:
         raise SystemExit("FAIL_CANDIDATE_PRODUCTION_RULES_CHANGED")
     print("PASS_ISOLATED_GATEWAY_ANCHOR_CANDIDATE_CREATED_OUTSIDE_REPO")

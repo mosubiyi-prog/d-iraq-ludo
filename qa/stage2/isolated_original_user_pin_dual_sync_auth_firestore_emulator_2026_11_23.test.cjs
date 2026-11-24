@@ -96,3 +96,73 @@ test("original UID keeps profile and wallets while AUTH and Firestore PIN rotate
     await deleteApp(app);
   }
 });
+
+/* Local candidate only: same canonical UID on two independent clients,
+ * expired proof denied, existing trusted installations retained.
+ * No real account or deployed rules; do not confuse with Flutter integration. */
+test("candidate session admission binds canonical UID and fresh PIN across devices",{
+  timeout: 120000,
+},async()=>{
+  assert.equal(process.env.DEDA_EMULATOR_ONLY,"true");
+  assert.equal(process.env.FIRESTORE_EMULATOR_HOST,"127.0.0.1:8097");
+  assert.equal(process.env.GOOGLE_CLOUD_PROJECT,project);
+  const fs=require("node:fs");
+  const os=require("node:os");
+  const path=require("node:path");
+  const {execFileSync}=require("node:child_process");
+  const firebase=require("firebase/compat/app");
+  require("firebase/compat/firestore");
+  const {initializeTestEnvironment,assertSucceeds,assertFails}=require("@firebase/rules-unit-testing");
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),"deda-owner-session-qa-"));
+  let env;
+  try {
+    const output=path.join(temp,"owner-session.rules");
+    execFileSync("python3",[
+      "qa/stage2/build_isolated_admin_gateway_anchor_candidate_2026_11_23.py",
+      "--owner-session-only","--output",output,
+    ],{stdio:"inherit"});
+    env=await initializeTestEnvironment({projectId:project,firestore:{
+      host:"127.0.0.1",port:8097,rules:fs.readFileSync(output,"utf8"),
+    }});
+    const account="07712345987", owner="qa-stage01-canonical-owner", other="qa-stage01-other";
+    const deviceA="qa-install-A",deviceB="qa-install-B";
+    const pin="246810";
+    const sent=()=>firebase.firestore.FieldValue.serverTimestamp();
+    const stale=firebase.firestore.Timestamp.fromMillis(Date.now()-600000);
+    const a=env.authenticatedContext(owner).firestore();
+    const b=env.authenticatedContext(owner).firestore();
+    const outsider=env.authenticatedContext(other).firestore();
+    const session=(id,installId)=>({uid:id,accountKey:account,installId,
+      signedInAt:sent(),lastSeenAt:sent()});
+    await env.withSecurityRulesDisabled(async ctx=>{
+      const db=ctx.firestore();
+      await db.doc("deda_account_directory/"+account).set({accountKey:account,createdUid:owner,active:true});
+      await db.doc("deda_credentials/"+account).set({accountKey:account,createdUid:owner,active:true,pin});
+      await db.doc("deda_account_profiles/"+account).set({accountKey:account,name:"QA owner",trustedInstallIds:[]});
+      await db.doc("deda_auth_attempts/"+owner).set({uid:owner,accountKey:account,pin,createdAt:stale});
+    });
+    await assertFails(a.doc("deda_sessions/"+owner).set(session(owner,deviceA)));
+    await assertSucceeds(a.doc("deda_auth_attempts/"+owner).set({uid:owner,accountKey:account,pin,createdAt:sent()}));
+    await assertSucceeds(a.doc("deda_sessions/"+owner).set(session(owner,deviceA)));
+    await assertSucceeds(b.doc("deda_sessions/"+owner).set(session(owner,deviceB)));
+    await assertSucceeds(a.doc("deda_account_profiles/"+account).get());
+    await assertSucceeds(b.doc("deda_account_profiles/"+account).get());
+    await assertSucceeds(outsider.doc("deda_auth_attempts/"+other).set({uid:other,accountKey:account,pin,createdAt:sent()}));
+    await assertFails(outsider.doc("deda_sessions/"+other).set(session(other,deviceA)));
+    await assertFails(outsider.doc("deda_account_profiles/"+account).get());
+    await env.withSecurityRulesDisabled(async ctx=>{
+      const db=ctx.firestore();
+      await db.doc("deda_account_profiles/"+account).update({trustedInstallIds:[deviceA,deviceB]});
+      await db.doc("deda_auth_attempts/"+owner).update({createdAt:stale});
+    });
+    await assertSucceeds(a.doc("deda_sessions/"+owner).set(session(owner,deviceA)));
+    await assertSucceeds(b.doc("deda_sessions/"+owner).set(session(owner,deviceB)));
+    await assertFails(a.doc("deda_sessions/"+owner).set(session(owner,"untrusted-device")));
+    await assertFails(outsider.doc("deda_sessions/"+other).set(session(other,deviceA)));
+    await assertSucceeds(a.doc("deda_account_profiles/"+account).get());
+    await assertSucceeds(b.doc("deda_account_profiles/"+account).get());
+  } finally {
+    if(env) await env.cleanup();
+    fs.rmSync(temp,{recursive:true,force:true});
+  }
+});
