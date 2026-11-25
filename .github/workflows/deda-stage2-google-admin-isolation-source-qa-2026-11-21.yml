@@ -23,6 +23,8 @@ on:
       - 'tools/app_stability/app_package/audit_full_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/review_unified_stage01_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/stage01_lab_bind_full_2026_11_25.py'
+      - 'lib/deda_stage02_lab_entry_2026_11_25.dart'
+      - 'tools/app_stability/app_package/stage02_lab_bind_entry_2026_11_25.py'
       - 'lib/deda_stage02_lab_single_uid_2026_11_25.dart'
       - 'test/deda_stage02_lab_single_uid_2026_11_25_test.dart'
       - 'tools/app_stability/app_package/stage01_lab_prepare_probe_2026_11_25.py'
@@ -502,6 +504,42 @@ jobs:
           PY
           rm -f "$apk"
           echo 'NO_DEVICE_LAUNCH_NO_AUTH_NO_APK_DELIVERY'
+      - name: Bind guarded phase 02 entry into full app, test and compile offline only
+        env:
+          LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/stage02_lab_bind_entry_2026_11_25.py "$DEDA_STAGE1_SOURCE" full-offline
+          unset LAB_CONFIG
+          cd "$DEDA_STAGE1_SOURCE"
+          flutter_bin="$(command -v flutter)"
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ip -o link show | wc -l)" -eq 1
+            exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" test --no-pub --reporter expanded --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true test/deda_stage02_full_entry_test.dart
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin"
+          flutter build apk --debug --no-pub --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          analyzer="$(find "$sdk/cmdline-tools" -type f -name apkanalyzer | head -n 1)"
+          "$analyzer" manifest print "$apk" > "$RUNNER_TEMP/stage02-full-manifest.xml"
+          python3 - <<'PY'
+          import os,xml.etree.ElementTree as ET
+          from pathlib import Path
+          root=ET.parse(Path(os.environ['RUNNER_TEMP'])/'stage02-full-manifest.xml').getroot()
+          ns='{http://schemas.android.com/apk/res/android}'
+          assert root.get('package')=='com.deda.qa.uiddevice'
+          assert root.find('application').get(ns+'allowBackup')=='false'
+          for n in root.iter():
+              if n.tag.startswith('uses-permission'):
+                  assert n.get(ns+'name') not in ('android.permission.INTERNET','android.permission.ACCESS_NETWORK_STATE')
+              if n.tag=='provider':
+                  assert n.get(ns+'name')!='com.google.firebase.provider.FirebaseInitProvider'
+          print('PASS_STAGE02_FULL_ENTRY_PACKAGED_OFFLINE_NO_ORIGINAL_STARTUP')
+          PY
+          rm -f "$apk"
       - name: No Firebase or app deployment, no signing, no final APK
         if: always()
         run: |

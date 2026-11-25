@@ -1,0 +1,81 @@
+name: DEDA Stage02 Android Auth runtime NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100451-owner-admin-session-safe-repair-2026-11-20
+    paths:
+      - 'lib/deda_stage02_lab_entry_2026_11_25.dart'
+      - 'tools/app_stability/app_package/stage02_lab_bind_entry_2026_11_25.py'
+      - 'tools/app_stability/app_package/stage02_lab_android_runtime_2026_11_25.py'
+      - '.github/workflows/deda-stage02-lab-android-runtime-2026-11-25.yml'
+      - 'lib/deda_stage02_lab_single_uid_2026_11_25.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage02-android-auth
+  cancel-in-progress: false
+jobs:
+  auth-only-android:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Prepare exact same guarded entry with only Auth and Core
+        env:
+          LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/stage02-auth-runtime"
+          flutter create --no-pub --platforms=android --org com.deda.qa --project-name uiddevice "$project"
+          python3 tools/app_stability/app_package/stage02_lab_bind_entry_2026_11_25.py "$project" auth-runtime
+          unset LAB_CONFIG
+          cd "$project"
+          flutter pub get
+          flutter analyze lib --no-fatal-infos --no-fatal-warnings
+          flutter build apk --debug --no-pub --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STAGE02_DISPOSABLE_RUNNER=true
+          apk="$project/build/app/outputs/flutter-apk/app-debug.apk"
+          sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          analyzer="$(find "$sdk/cmdline-tools" -type f -name apkanalyzer | head -n 1)"
+          "$analyzer" manifest print "$apk" > "$RUNNER_TEMP/stage02-runtime-manifest.xml"
+          python3 - <<'PY'
+          import os,re,xml.etree.ElementTree as ET
+          from pathlib import Path
+          ns='{http://schemas.android.com/apk/res/android}'
+          root=ET.parse(Path(os.environ['RUNNER_TEMP'])/'stage02-runtime-manifest.xml').getroot()
+          assert root.get('package')=='com.deda.qa.uiddevice'
+          assert root.find('application').get(ns+'allowBackup')=='false'
+          assert not any(n.get(ns+'name')=='com.google.firebase.provider.FirebaseInitProvider' for n in root.iter('provider'))
+          packages=set(re.findall(r'^  ([a-z0-9_]+):\s*$',Path('pubspec.lock').read_text(),re.M))
+          assert {'firebase_core','firebase_auth'}<=packages
+          assert not any(p.startswith(('cloud_firestore','cloud_functions','firebase_storage','firebase_messaging','firebase_app_check','google_sign_in','google_mobile_ads','shared_preferences')) for p in packages)
+          print('PASS_AUTH_ONLY_RUNTIME_PACKAGE_NO_DATA_SDKS')
+          PY
+          echo "STAGE02_APK=$apk" >> "$GITHUB_ENV"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Real Android login, restart, offline and reconnect
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 tools/app_stability/app_package/stage02_lab_android_runtime_2026_11_25.py
+      - name: Remove disposable credential-free APK and generated configuration
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/stage02-auth-runtime"
