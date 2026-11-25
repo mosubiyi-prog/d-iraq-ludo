@@ -46,6 +46,36 @@ void main(){
     expect((await restore(DedaPrivateDataSync.uidScoped(b))).revision.payload!.encode(),data('a').encode());
     expect(server.writes,1);
   });
+  test('all currently supported nonfinancial fields survive one UID backup and fresh-device restore',() async {
+    final server=Server(), a=Port(server,1), b=Port(server,2);
+    final input=DedaPrivateDataPayload({
+      'favorites': <String>['{"name":"مكان تجريبي"}','legacy-malformed-fixture'],
+      'recent': <String>['recent-fixture'],
+      'personalPlaces': '{"places":["fixture"]}',
+      'contactDraft': 'مسودة اختبار',
+      'quizSeen': <String>['q1','q2'],
+      'quiz:ids:2026-11-25': <String>['q1','q2'],
+      'quiz:progress:2026-11-25': '{"answered":1}',
+      'quiz:completed:2026-11-25': false,
+      'quiz:ids:2026-11-24': <String>['q3'],
+      'quiz:progress:2026-11-24': '{"answered":1}',
+      'quiz:completed:2026-11-24': true,
+    });
+    final writer=DedaPrivateDataSync.uidScoped(a);
+    final result=await writer.backup(account:uid,original:uid,payload:input,isCurrent:()=>true);
+    expect(result.status,DedaPrivateDataStatus.saved);
+    expect(b.journal,isNull);
+    final read=await restore(DedaPrivateDataSync.uidScoped(b));
+    expect(read.status,DedaPrivateDataStatus.saved);
+    expect(read.revision.payload!.encode(),input.encode());
+    expect(read.revision.payload!.fields.length,11);
+    expect(server.writes,1);
+  });
+  test('unverified profile, friendship, task and league authority cannot enter private payload',(){
+    for(final field in ['profile','originalId','activeId','friends','weeklyPoints','taskCompletions','taskClaims','settings','giftBalance']){
+      expect(()=>DedaPrivateDataPayload({field:'fixture'}),throwsFormatException,reason:field);
+    }
+  });
   test('lost acknowledgement retries same ID, never double commits',() async {
     final server=Server(), a=Port(server,1)..lost=true;
     final sync=DedaPrivateDataSync.uidScoped(a);
