@@ -38,3 +38,17 @@ jobs:
           printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > firebase.json
           npm install --no-audit --no-fund --ignore-scripts --no-package-lock @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
           GCLOUD_PROJECT=demo-deda-stage03-uid npx --yes firebase-tools@13.35.1 emulators:exec --project demo-deda-stage03-uid --only firestore --config firebase.json --non-interactive 'node --test uid-spark-fixture-rules.test.cjs'
+      - name: Package the exact tested candidate only, never publish
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-spark-fixed"
+          mkdir -p "$RUNNER_TEMP/stage03-reviewed-candidate"
+          cp "$work/firestore.rules" "$RUNNER_TEMP/stage03-reviewed-candidate/firestore.rules"
+          cd "$RUNNER_TEMP/stage03-reviewed-candidate"
+          sha256sum firestore.rules > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage03-spark-reviewed-candidate-NO-DEPLOY
+          path: ${{ runner.temp }}/stage03-reviewed-candidate/
+          if-no-files-found: error
+          retention-days: 7
