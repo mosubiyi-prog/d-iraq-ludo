@@ -10,7 +10,12 @@ const projectId='demo-deda-stage03-uid',view=base+'/inventory/current',docs=buil
 let env;
 const client=(id=uid,provider='password')=>env.authenticatedContext(id,{firebase:{sign_in_provider:provider}}).firestore();
 const seed=async(value=marker)=>env.withSecurityRulesDisabled(async c=>setDoc(doc(c.firestore(),markerPath),value));
-const serverRead=async(path)=>env.withSecurityRulesDisabled(async c=>getDocFromServer(doc(c.firestore(),path)));
+const serverRead=async(path)=>{
+  let snapshot;
+  await env.withSecurityRulesDisabled(async c=>{snapshot=await getDocFromServer(doc(c.firestore(),path));});
+  assert.ok(snapshot,'privileged emulator read must return a snapshot');
+  return snapshot;
+};
 const batch=(db,entries=docs)=>{
   const b=writeBatch(db);
   for(const [p,d] of Object.entries(entries))b.set(doc(db,p),p.startsWith(base+'/events/')?{...d,createdAt:serverTimestamp()}:d);
