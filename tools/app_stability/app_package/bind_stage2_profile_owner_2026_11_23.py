@@ -665,9 +665,376 @@ def bind(project: Path, verify_only: bool = False):
     return 'PASS_PROFILE_SINGLE_ORIGINAL_STORE_PUBLIC_UID_GUARD_NO_PRODUCTION_WRITE'
 
 
+
+# Stage 04/01 extends the existing original-profile binder only in disposable
+# QA. The default path and the original production-facing source are unchanged.
+STAGE04_IMPORT = "import 'deda_stage03_lab_uid_storage_2026_11_25.dart';\n"
+STAGE04_MARK = 'DEDA_STAGE04_PROFILE_UID_READ_ONLY'
+
+STAGE04_FIELDS = """ 
+  // DEDA_STAGE04_PROFILE_UID_READ_ONLY: original renderer; no old phone I/O.
+  static const _stage04LabMode = bool.fromEnvironment('DEDA_STAGE04_PROFILE_LAB')
+      || DedaStage03LabStorage.enabled;
+  DedaStage04ProfileRead? _stage04Read;
+  DedaAuthSnapshot? _stage04Principal;
+  StreamSubscription<User?>? _stage04Auth;
+  bool _stage04Expired = false;
+  bool _stage04Loading = false;
+  ValueNotifier<int>? _stage04Xp, _stage04Points, _stage04Friends;
+  DedaStage04ProfileView? get _stage04View {
+    if (_stage04Expired) return null;
+    try { return _stage04Read?.requireCurrent(); } catch (_) { return null; }
+  }
+  void _stage04Expire() {
+    if (_stage04Expired) return;
+    _stage04Expired = true;
+    _stage04Read = null;
+    if (mounted) setState(() { _stage04Loading = false; });
+  }
+  bool _stage04SameSession() {
+    try {
+      final first = _stage04Principal;
+      final current = DedaAuthRuntime.capture();
+      return !_stage04Expired && first != null && current != null &&
+          first.uid == DedaStage03LabStorage.uid && first.matches(current);
+    } catch (_) { return false; }
+  }
+  void _stage04Start() {
+    try {
+      _stage04Principal = DedaAuthRuntime.capture();
+      if (!_stage04SameSession() || Firebase.apps.isEmpty) {
+        _stage04Expired = true;
+        return;
+      }
+      _stage04Auth = FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (user == null || user.isAnonymous ||
+            user.uid != DedaStage03LabStorage.uid || !_stage04SameSession()) {
+          _stage04Expire();
+        }
+      }, onError: (Object _) => _stage04Expire(), onDone: _stage04Expire);
+      unawaited(_stage04Refresh());
+    } catch (_) { _stage04Expired = true; }
+  }
+  Future<void> _stage04Refresh() async {
+    if (!mounted || _stage04Loading || !_stage04SameSession()) return;
+    setState(() { _stage04Loading = true; _stage04Read = null; });
+    try {
+      final read = await DedaStage03LabStorage.readProfile();
+      final view = read.requireCurrent();
+      if (!mounted || !_stage04SameSession()) return;
+      setState(() {
+        (_stage04Xp ??= ValueNotifier<int>(view.xp)).value = view.xp;
+        (_stage04Points ??= ValueNotifier<int>(view.taskPoints)).value = view.taskPoints;
+        (_stage04Friends ??= ValueNotifier<int>(view.acceptedFriends)).value = view.acceptedFriends;
+        _stage04Read = read;
+        _stage04Loading = false;
+      });
+    } catch (_) {
+      if (mounted && _stage04SameSession()) {
+        setState(() { _stage04Read = null; _stage04Loading = false; });
+      }
+    }
+  }
+  Widget _stage04HeldProfile() => Scaffold(
+    backgroundColor: _cream,
+    appBar: AppBar(title: Text(dedaText('ملفي', 'My profile')),
+        backgroundColor: _navy, foregroundColor: Colors.white),
+    body: Center(child: _stage04Loading
+      ? const CircularProgressIndicator()
+      : Text(dedaText('الملف محجوب حتى التحقق من الحساب الموحد.',
+          'Profile held until the unified account is verified.'),
+          key: const Key('deda_stage04_profile_held'),
+          textAlign: TextAlign.center)),
+  );
+  void _stage04CopyId() {
+    final view = _stage04View;
+    if (!_stage04SameSession() || view == null) return;
+    unawaited(Clipboard.setData(ClipboardData(text: view.activeId)));
+  }
+  void _stage04OpenCard(String title) {
+    final read = _stage04Read;
+    final view = _stage04View;
+    if (read == null || view == null || !_stage04SameSession()) return;
+    Widget child;
+    if (title == dedaText('الشارات', 'Badges')) {
+      child = DedaSixAchievementsPage(
+          level: DedaSocialProgressWallet.levelForXp(
+              view.xp.clamp(0, 1 << 30).toInt()),
+          isArabic: DedaLanguageState.isArabic);
+    } else if (title == dedaText('المفضلة', 'Favorites') ||
+        title == dedaText('نشاطاتي', 'My activity')) {
+      child = SavedPlacesPage(
+          showFavorites: title == dedaText('المفضلة', 'Favorites'),
+          stage04ProfileRead: read);
+    } else {
+      // Do not open a legacy phone editor, acquisition shop, or public
+      // preview while their full authoritative inputs are unavailable.
+      _showPhase2Notice('هذه الوظيفة بانتظار مصدر موحد مؤمّن.',
+          'This function is held until its unified source is secured.');
+      return;
+    }
+    Navigator.push<void>(context, MaterialPageRoute<void>(
+      builder: (_) => StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, auth) {
+          try {
+            if (auth.hasError || auth.connectionState == ConnectionState.waiting ||
+                auth.data?.uid != DedaStage03LabStorage.uid ||
+                !_stage04SameSession()) return _stage04HeldProfile();
+            read.requireCurrent();
+            return child;
+          } catch (_) { return _stage04HeldProfile(); }
+        })));
+  }
+"""
+
+def _stage04_region(source, marker, next_marker, transform):
+    if source.count(marker) != 1:
+        raise ValueError('STAGE04_PROFILE_STOP:region:' + marker)
+    start = source.index(marker)
+    end = source.find(next_marker, start + len(marker))
+    if end < 0:
+        raise ValueError('STAGE04_PROFILE_STOP:region-end:' + marker)
+    return source[:start] + transform(source[start:end]) + source[end:]
+
+def _stage04_hero(body):
+    import re
+    # Retain the original hero gradient, typography and level/badge widgets.
+    # The incomplete lab record has no selected appearance. Never show a
+    # device's saved avatar/frame/background as if it belonged to this UID.
+    for name, field in [('name','displayName'), ('id','originalId')]:
+        pattern = r'final ' + name + r'\s*=\s*([^;]+);'
+        matches = list(re.finditer(pattern, body))
+        if len(matches) != 1:
+            raise ValueError('STAGE04_PROFILE_STOP:hero-' + name)
+        match = matches[0]
+        body = body[:match.start()] + (
+            'final ' + name + ' = _stage04LabMode ? _stage04View!.' +
+            field + ' : (' + match.group(1) + ');') + body[match.end():]
+    if body.count('DedaPreferences.profileBackgroundStyle') < 2:
+        raise ValueError('STAGE04_PROFILE_STOP:hero-background')
+    body = body.replace('DedaPreferences.profileBackgroundStyle',
+        '(_stage04LabMode ? 0 : DedaPreferences.profileBackgroundStyle)')
+    avatar = 'child: ValueListenableBuilder<int>('
+    body = once(body, avatar, """child: _stage04LabMode
+                          ? SizedBox(width: avatarSize, height: avatarSize,
+                              child: Center(child: Icon(Icons.person_outline,
+                                size: avatarSize * 0.45, color: Colors.white,
+                                semanticLabel: dedaText('المظهر غير متاح',
+                                    'Appearance unavailable'))))
+                          : ValueListenableBuilder<int>(""", 'stage04-hero-avatar')
+    body = once(body, '                    DedaStage48ActiveInkProfileSlot(',
+        """                    if (_stage04LabMode)
+                      GestureDetector(
+                        onTap: _stage04CopyId,
+                        child: Text(_stage04View!.activeId,
+                            key: const Key('deda_stage04_verified_id'),
+                            style: const TextStyle(color: Color(0xFFFFD76A),
+                                fontWeight: FontWeight.w900, fontSize: 18)),
+                      )
+                    else
+                    DedaStage48ActiveInkProfileSlot(""", 'stage04-hero-id')
+    if body.count('DedaSocialProgressWallet.xpNotifier') < 2:
+        raise ValueError('STAGE04_PROFILE_STOP:hero-xp')
+    return body.replace('DedaSocialProgressWallet.xpNotifier',
+        '(_stage04LabMode ? _stage04Xp! : DedaSocialProgressWallet.xpNotifier)')
+
+def _stage04_level(body):
+    return once(body, 'valueListenable: DedaSocialProgressWallet.xpNotifier,',
+        'valueListenable: _stage04LabMode ? _stage04Xp! : DedaSocialProgressWallet.xpNotifier,',
+        'stage04-level-xp')
+
+def _stage04_stats(body):
+    body = once(body, 'child: ValueListenableBuilder<int>(\n            valueListenable: DedaDiamondsWallet.balanceNotifier,',
+        """child: _stage04LabMode
+              ? _statCard(icon: Icons.diamond_rounded, value: '—',
+                  label: dedaText('الماسات', 'Diamonds'),
+                  color: const Color(0xFF7639D4), surface: const Color(0xFFF1E8FF))
+              : ValueListenableBuilder<int>(
+            valueListenable: DedaDiamondsWallet.balanceNotifier,""", 'stage04-full-wallet-held')
+    body = once(body, 'valueListenable: DedaSocialFriendCount.notifier,',
+        'valueListenable: _stage04LabMode ? _stage04Friends! : DedaSocialFriendCount.notifier,',
+        'stage04-friends')
+    body = once(body, 'valueListenable: DedaTaskEngine.totalPointsNotifier,',
+        'valueListenable: _stage04LabMode ? _stage04Points! : DedaTaskEngine.totalPointsNotifier,',
+        'stage04-task-points')
+    return once(body, 'onTap: () => setState(', 'onTap: _stage04LabMode ? null : () => setState(',
+        'stage04-no-local-point-reward')
+
+def _stage04_build(body):
+    body = once(body, 'if (!dedaSectionCurrent) return dedaSectionExpiredView();',
+        'if (!dedaSectionCurrent) return dedaSectionExpiredView();\n'
+        '    if (_stage04LabMode && _stage04View == null) return _stage04HeldProfile();',
+        'stage04-before-render')
+    body = once(body, 'onPressed: _openEditProfile,',
+        'onPressed: _stage04LabMode ? null : _openEditProfile,', 'stage04-edit-held')
+    return once(body, '          ValueListenableBuilder<int>(\n            valueListenable: DedaTaskEngine.totalPointsNotifier,',
+        '          if (!_stage04LabMode)\n          ValueListenableBuilder<int>(\n            valueListenable: DedaTaskEngine.totalPointsNotifier,',
+        'stage04-local-reward-panel-held')
+
+def _stage04_profile(source):
+    a,z = original_profile_span(source)
+    profile = source[a:z]
+    if STAGE04_MARK in profile or STAGE04_IMPORT in source:
+        raise ValueError('STAGE04_PROFILE_ALREADY_BOUND')
+    brace = profile.index('{')
+    profile = profile[:brace+1] + STAGE04_FIELDS + profile[brace+1:]
+    profile = once(profile, '    super.initState();', """    super.initState();
+    if (_stage04LabMode) {
+      WidgetsBinding.instance.addObserver(this);
+      _stage04Start();
+      return;
+    }""", 'stage04-no-legacy-init')
+    profile = once(profile, 'void didChangeAppLifecycleState(AppLifecycleState state) {',
+        """void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_stage04LabMode) {
+      if (state == AppLifecycleState.resumed) unawaited(_stage04Refresh());
+      return;
+    }""", 'stage04-no-legacy-resume')
+    profile = once(profile, 'void dispose() {', """void dispose() {
+    if (_stage04LabMode) {
+      _stage04Expired = true;
+      unawaited(_stage04Auth?.cancel());
+      _stage04Xp?.dispose();
+      _stage04Points?.dispose();
+      _stage04Friends?.dispose();
+    }""", 'stage04-dispose')
+    # New helper uses an expression-bodied widget, so the existing build anchor
+    # still selects the one original build method.
+    profile = _stage04_region(profile, 'Widget build(BuildContext context) {',
+        '  Widget _profileBackdrop()', _stage04_build)
+    profile = _stage04_region(profile, '  Widget _profileHeroCard() {',
+        '  Widget _avatar(', _stage04_hero)
+    profile = _stage04_region(profile, '  Widget _profileLevelProgressCard() {',
+        '  Widget _statsRow() {', _stage04_level)
+    profile = _stage04_region(profile, '  Widget _statsRow() {',
+        '  Widget _statCard(', _stage04_stats)
+    profile = _stage04_region(profile, '  Widget _featureCard(', '  Widget _bioCard() {',
+        lambda body: once(body, '          onTap();',
+          '          if (_stage04LabMode) { _stage04OpenCard(title); return; }\n          onTap();',
+          'stage04-original-card-routing'))
+    return STAGE04_IMPORT + source[:a] + profile + source[z:]
+
+STAGE04_PLACES_FIELDS = """
+  bool _stage04PlacesError = false;
+  Future<void> _stage04LoadPlaces() async {
+    final read = widget.stage04ProfileRead!;
+    try {
+      final raw = await DedaStage03LabStorage.readProfilePlaceRecords(read,
+          favorites: widget.showFavorites);
+      final items = <PlaceInfo>[];
+      for (final row in raw) {
+        final decoded = jsonDecode(row);
+        if (decoded is! Map<String, dynamic>) {
+          throw const FormatException('profile-place-record');
+        }
+        items.add(PlaceInfo.fromJson(decoded));
+      }
+      read.requireCurrent();
+      if (!dedaSectionCurrent) return;
+      setState(() { _places = items; _loading = false; _stage04PlacesError = false; });
+    } catch (_) {
+      if (!dedaSectionCurrent) return;
+      setState(() { _loading = false; _stage04PlacesError = true; });
+    }
+  }
+"""
+
+def _stage04_places_widget(body):
+    body = once(body, '  final bool showFavorites;',
+        '  final bool showFavorites;\n  final DedaStage04ProfileRead? stage04ProfileRead;',
+        'stage04-places-input')
+    return once(body, '    required this.showFavorites,',
+        '    required this.showFavorites,\n    this.stage04ProfileRead,', 'stage04-places-ctor')
+
+def _stage04_places_state(body):
+    brace = body.index('{')
+    body = body[:brace+1] + STAGE04_PLACES_FIELDS + body[brace+1:]
+    body = once(body, 'Future<void> _load() async {',
+        'Future<void> _load() async {\n'
+        '    if (widget.stage04ProfileRead != null) return _stage04LoadPlaces();',
+        'stage04-places-read')
+    body = once(body, 'Future<void> _removeFavorite(PlaceInfo place) async {',
+        'Future<void> _removeFavorite(PlaceInfo place) async {\n'
+        '    if (widget.stage04ProfileRead != null) return;',
+        'stage04-places-no-legacy-write')
+    body = once(body, 'onTap: () async {',
+        'onTap: () async {\n'
+        '                          if (widget.stage04ProfileRead != null) return;',
+        'stage04-places-no-legacy-details')
+    body = once(body, 'onPressed: () => _removeFavorite(place),',
+        'onPressed: widget.stage04ProfileRead == null ? () => _removeFavorite(place) : null,',
+        'stage04-places-no-remove')
+    return once(body, 'if (!dedaSectionCurrent) return dedaSectionExpiredView();',
+        """if (!dedaSectionCurrent) return dedaSectionExpiredView();
+    if (widget.stage04ProfileRead != null) {
+      try { widget.stage04ProfileRead!.requireCurrent(); }
+      catch (_) { return dedaSectionExpiredView(); }
+      if (_stage04PlacesError) {
+        return Scaffold(appBar: AppBar(title: Text(dedaText('الأماكن المحفوظة', 'Saved places'))),
+          body: Center(child: Text(dedaText('تعذر التحقق من سجل الأماكن الموحد.',
+            'The unified places record could not be verified.'), textAlign: TextAlign.center)));
+      }
+    }""", 'stage04-places-no-empty-fallback')
+
+def bind_stage04_lab(project: Path):
+    project = project.resolve()
+    if project == REPO or project in REPO.parents or REPO in project.parents:
+        raise ValueError('STAGE04_PROFILE_DISPOSABLE_REQUIRED')
+    main_path = project/'lib/main.dart'
+    original = main_path.read_text()
+    # The previously approved profile binder and source-parity audit must run first.
+    verify(original, (project/'lib/deda_100377_my_store_page_staged.dart').read_text())
+    verify_verified_owned_frame_art(original)
+    verify_shared_routes(original)
+    modified = _stage04_profile(original)
+    modified = _stage04_region(modified, 'class SavedPlacesPage extends StatefulWidget',
+        '\nclass ', _stage04_places_widget)
+    modified = _stage04_region(modified, 'class _SavedPlacesPageState',
+        '\nclass ', _stage04_places_state)
+    for name in ('deda_stage03_lab_uid_storage_2026_11_25.dart',
+                 'deda_stage02_lab_single_uid_2026_11_25.dart',
+                 'deda_private_data_sync.dart',
+                 'deda_step2_local_places_settings_evidence.dart'):
+        target = project/'lib'/name
+        source = REPO/'lib'/name
+        if target.exists() and target.read_bytes() != source.read_bytes():
+            raise ValueError('STAGE04_PROFILE_STOP:dependency-drift:' + name)
+    for name in ('deda_stage03_lab_uid_storage_2026_11_25.dart',
+                 'deda_stage02_lab_single_uid_2026_11_25.dart',
+                 'deda_private_data_sync.dart',
+                 'deda_step2_local_places_settings_evidence.dart'):
+        target = project/'lib'/name
+        if not target.exists(): target.write_bytes((REPO/'lib'/name).read_bytes())
+    main_path.write_text(modified)
+    test = project/'test/deda_stage04_original_profile_hold_test.dart'
+    if test.exists():
+        raise ValueError('STAGE04_PROFILE_TEST_ALREADY_EXISTS')
+    test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:d_iraq_ludo/main.dart' as app;
+void main() {
+  testWidgets('original profile remains held without an approved lab principal',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: app.DedaProfilePhase2Page()));
+    await tester.pump();
+    expect(find.byKey(const Key('deda_stage04_profile_held')), findsOneWidget);
+    expect(find.byKey(const Key('deda_stage04_verified_id')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+}
+""")
+    print('PASS_STAGE04_ORIGINAL_PROFILE_SOURCE_BINDING_NO_LEGACY_INIT_OR_PLACE_WRITE')
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('project', type=Path)
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--stage04-lab', action='store_true')
     args = parser.parse_args()
-    print(bind(args.project, args.verify_only))
+    if args.stage04_lab:
+        if args.verify_only: raise ValueError('stage04-lab and verify-only are exclusive')
+        bind_stage04_lab(args.project)
+    else:
+        print(bind(args.project, args.verify_only))

@@ -464,6 +464,26 @@ jobs:
           print('PASS_FULL_ASSEMBLY_MAP_AND_ADMIN_SOURCE_RETAINED_STAGE2_GOOGLE_ADMIN_ISOLATED')
           print('NOT_PHONE_TESTED_STAGE2_GOOGLE_AND_ADMIN_DASHBOARD_NOT_ACTIVATED_NO_APK_NO_PLAY')
           PY
+      - name: Stage04 01 bind original profile and verify fail-closed offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py "$DEDA_STAGE1_SOURCE" --stage04-lab
+          cd "$DEDA_STAGE1_SOURCE"
+          flutter_bin="$(command -v flutter)"
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ip -o link show | wc -l)" -eq 1
+            exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_stage03_lab_uid_storage_2026_11_25.dart
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ip -o link show | wc -l)" -eq 1
+            exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" test --no-pub --reporter expanded --dart-define=DEDA_STAGE04_PROFILE_LAB=true --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STABILITY_SECTION_ENTRY=true test/deda_stage04_original_profile_hold_test.dart
+          echo 'PASS_STAGE04_ORIGINAL_PROFILE_COMPILES_AND_HOLDS_WITHOUT_UID_NO_PRODUCTION'
       - name: Bind phase 01 hold into the complete assembled DEDA entry and compile isolated debug QA
         env:
           LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}

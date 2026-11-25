@@ -224,6 +224,25 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     return DedaStage04ProfileRead._(view, current);
   }
 
+  /// Profile Favorites/Activity: use the existing UID restore journal.
+  /// Do not reinterpret a missing or conflicting field as an empty list.
+  /// The original place renderer must independently decode each record.
+  static Future<List<String>> readProfilePlaceRecords(
+      DedaStage04ProfileRead profile, {required bool favorites}) async {
+    profile.requireCurrent();
+    final current = _intent();
+    final result = await restore();
+    if (!current()) throw const DedaPrivateDataStale();
+    profile.requireCurrent();
+    final key = favorites ? 'favorites' : 'recent';
+    final records = result.revision.payload?.fields[key];
+    if (result.status != DedaPrivateDataStatus.saved ||
+        records is! List || !records.every((v) => v is String)) {
+      throw StateError('stage04-profile-places-not-confirmed');
+    }
+    return List<String>.unmodifiable(records.cast<String>());
+  }
+
   void _check(String account, [String? original]) {
     if (!_matches() || account != uid || (original != null && original != uid)) {
       throw const DedaPrivateDataStale();
