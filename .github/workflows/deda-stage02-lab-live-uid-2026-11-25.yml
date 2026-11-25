@@ -1,0 +1,28 @@
+name: DEDA Stage02 pinned lab UID live Auth only
+on:
+  push:
+    branches:
+      - deda-100451-owner-admin-session-safe-repair-2026-11-20
+    paths:
+      - 'tools/app_stability/app_package/stage02_lab_live_uid_2026_11_25.py'
+      - '.github/workflows/deda-stage02-lab-live-uid-2026-11-25.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage02-lab-auth
+  cancel-in-progress: false
+jobs:
+  pinned-lab-auth:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Authenticate only the pre-provisioned lab UID twice
+        env:
+          LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
+          LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
+        run: python3 tools/app_stability/app_package/stage02_lab_live_uid_2026_11_25.py

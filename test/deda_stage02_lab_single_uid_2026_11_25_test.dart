@@ -12,7 +12,7 @@ void main() {
         senderId: sender, storageBucket: bucket, appName: name, appCount: count);
 
   bool principal(String? uid, DedaSessionAuthKind kind,
-      {String expected = 'approved-test-uid'}) =>
+      {String expected = DedaStage02LabSingleUid.approvedUid}) =>
       DedaStage02LabSingleUid.matchesPrincipal(expectedUid: expected,
         uid: uid, kind: kind);
 
@@ -26,17 +26,18 @@ void main() {
     expect(lab(count: 2), isFalse);
   });
   test('same UID is required and signed-out or anonymous never qualifies', () {
-    expect(principal('approved-test-uid', DedaSessionAuthKind.authenticated), isTrue);
+    expect(principal(DedaStage02LabSingleUid.approvedUid, DedaSessionAuthKind.authenticated), isTrue);
     expect(principal('different', DedaSessionAuthKind.authenticated), isFalse);
+    expect(principal('different', DedaSessionAuthKind.authenticated, expected: 'different'), isFalse);
     expect(principal(null, DedaSessionAuthKind.none), isFalse);
-    expect(principal('approved-test-uid', DedaSessionAuthKind.anonymous), isFalse);
+    expect(principal(DedaStage02LabSingleUid.approvedUid, DedaSessionAuthKind.anonymous), isFalse);
     expect(principal('', DedaSessionAuthKind.authenticated, expected: ''), isFalse);
     expect(principal(' approved-test-uid ', DedaSessionAuthKind.authenticated,
         expected: ' approved-test-uid '), isFalse);
   });
   test('independent inspections of the same UID remain stable', () {
     for (var i = 0; i < 100; i++) {
-      expect(principal('approved-test-uid', DedaSessionAuthKind.authenticated), isTrue);
+      expect(principal(DedaStage02LabSingleUid.approvedUid, DedaSessionAuthKind.authenticated), isTrue);
     }
   });
 }

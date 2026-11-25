@@ -11,6 +11,9 @@ import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
 class DedaStage02LabSingleUid {
   const DedaStage02LabSingleUid._();
 
+  static const approvedUid = 'PLmG06Uhhheef1hDE2MLfX6DEpg2';
+  static const approvedEmail = 'deda-qa-test@example.com';
+
   static bool matchesLab({
     required String projectId,
     required String appId,
@@ -28,8 +31,7 @@ class DedaStage02LabSingleUid {
     required String expectedUid,
     required String? uid,
     required DedaSessionAuthKind kind,
-  }) => expectedUid.isNotEmpty &&
-      expectedUid.trim() == expectedUid &&
+  }) => expectedUid == approvedUid &&
       uid == expectedUid && kind == DedaSessionAuthKind.authenticated;
 
   static void requireLab(FirebaseApp app) {
@@ -66,9 +68,8 @@ class DedaStage02LabSingleUid {
   }) async {
     final app = Firebase.app();
     requireLab(app);
-    if (!explicitUserAction || expectedUid.isEmpty ||
-        expectedUid.trim() != expectedUid ||
-        email.trim().isEmpty || password.isEmpty) {
+    if (!explicitUserAction || expectedUid != approvedUid ||
+        email.trim() != approvedEmail || password.isEmpty) {
       throw StateError('stage02-explicit-lab-account-required');
     }
     final auth = FirebaseAuth.instanceFor(app: app);
