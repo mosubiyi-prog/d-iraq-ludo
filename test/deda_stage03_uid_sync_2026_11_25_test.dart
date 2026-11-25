@@ -49,6 +49,52 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/01 profile binds exact protected UID, IDs, distinct progress and ownership views',(){
+    final account=protectedAccount();
+    final peer='synthetic-peer-001';
+    final pair=[uid,peer]..sort();
+    account['friends']=[{'pairKey':pair.join('__'),'members':[uid,peer],
+      'requesterUid':uid,'recipientUid':peer,'status':'accepted'}];
+    final source=DedaStage03ProtectedSnapshot.decode(expectedUid:uid,
+      progress:protectedProgress(),inventory:protectedInventory(),account:account);
+    final view=DedaStage04ProfileView.fromProtected(source);
+    expect(view.uid,uid);
+    expect(view.displayName,'Synthetic QA');
+    expect(view.originalId,'@DEDA-QA1234');
+    expect(view.activeId,view.originalId);
+    expect(view.fixedColor,isNull);
+    expect(view.taskPoints,5);
+    expect(view.coins,10);
+    expect(view.xp,20);
+    expect(view.earnedDiamonds,200);
+    expect(view.acceptedFriends,1);
+    expect(view.frameRecords.single,{'frameId':'FRAME_03'});
+    expect(()=>view.frameRecords.clear(),throwsUnsupportedError);
+    expect(view.accountRevision,1);
+    expect(view.inventoryRevision,1);
+    expect(view.progressRevision,4);
+  });
+  test('04/01 profile refuses inconsistent ID color, wrong and duplicate relationships',(){
+    DedaStage04ProfileView project(Map<String,Object?> account)=>
+      DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:account));
+    final invalidColor=protectedAccount();
+    (invalidColor['profile'] as Map)['fixedColor']='gold';
+    expect(()=>project(invalidColor),throwsFormatException);
+    final invalidPeer=protectedAccount()..['friends']=[{'requesterUid':'foreign','recipientUid':'other',
+      'members':['foreign','other'],'status':'accepted','pairKey':'foreign__other'}];
+    expect(()=>project(invalidPeer),throwsFormatException);
+    final peer='synthetic-peer-001', pair=[uid,'synthetic-peer-001']..sort();
+    final row={'pairKey':pair.join('__'),'members':[uid,peer],'requesterUid':uid,'recipientUid':peer,
+      'status':'pending'};
+    final pending=protectedAccount()..['friends']=[row];
+    expect(project(pending).acceptedFriends,0);
+    final duplicate=protectedAccount()..['friends']=[row,row];
+    expect(()=>project(duplicate),throwsFormatException);
+  });
+  test('04/01 live profile read is closed by default without an approved lab session',() async {
+    await expectLater(DedaStage03LabStorage.readProfile(),throwsStateError);
+  });
   test('protected read envelope preserves all three same-UID projections and is immutable',(){
     final progress=protectedProgress(), inventory=protectedInventory(), account=protectedAccount();
     final snapshot=DedaStage03ProtectedSnapshot.decode(expectedUid:uid,

@@ -76,6 +76,80 @@ class DedaStage03ProtectedSnapshot {
   }
 }
 
+/// Section 04/01: read-only profile data contract over the existing protected
+/// snapshot. It does not mint, equip, edit, infer a full wallet or create a UID.
+/// No local-phone fallback. The original profile renderer is still held until
+/// its actual compiled callsites consume this contract.
+class DedaStage04ProfileView {
+  DedaStage04ProfileView._(this._source, this.acceptedFriends);
+  final DedaStage03ProtectedSnapshot _source;
+  final int acceptedFriends;
+  String get uid => _source.uid;
+  Map get _profile => _source.account['profile'] as Map;
+  Map get _balances => _source.progress['balances'] as Map;
+  String get displayName => _profile['displayName'] as String;
+  String get originalId => _profile['originalId'] as String;
+  String get activeId => _profile['activeId'] as String;
+  String? get fixedColor => _profile['fixedColor'] as String?;
+  int get taskPoints => _balances['points'] as int;
+  int get coins => _balances['coins'] as int;
+  int get xp => _balances['xp'] as int;
+  // Only the protected earned balance, NOT the complete displayed wallet.
+  int get earnedDiamonds => _balances['earnedDiamonds'] as int;
+  List get frameRecords => _source.inventory['frames'] as List;
+  List get identifierGiftRecords => _source.inventory['idGifts'] as List;
+  List get diamondGiftRecords => _source.inventory['diamondGifts'] as List;
+  int get accountRevision => _source.account['revision'] as int;
+  int get inventoryRevision => _source.inventory['revision'] as int;
+  int get progressRevision => _source.progress['version'] as int;
+
+  static DedaStage04ProfileView fromProtected(DedaStage03ProtectedSnapshot s) {
+    final p = s.account['profile'] as Map;
+    final color = p['fixedColor'];
+    if (p['activeId'] == p['originalId']
+        ? color != null
+        : !const {'gold', 'diamond', 'royal', 'pink'}.contains(color)) {
+      throw const FormatException('profile-id-color-inconsistent');
+    }
+    // Only a full accepted relationship involving this UID counts. Do not
+    // substitute an empty list when a record is incomplete or duplicated.
+    final peers = <String>{};
+    var accepted = 0;
+    for (final row in s.account['friends'] as List) {
+      if (row is! Map) throw const FormatException('profile-invalid-friend');
+      final a = row['requesterUid'], b = row['recipientUid'];
+      final members = row['members'], status = row['status'];
+      if (a is! String || b is! String || a.isEmpty || b.isEmpty ||
+          a == b || (a != s.uid && b != s.uid) ||
+          members is! List || members.length != 2 ||
+          !members.contains(a) || !members.contains(b) ||
+          !const {'pending','accepted','rejected'}.contains(status)) {
+        throw const FormatException('profile-invalid-friend');
+      }
+      final pair = [a,b]..sort();
+      if (row['pairKey'] != pair.join('__') ||
+          !peers.add(a == s.uid ? b : a)) {
+        throw const FormatException('profile-duplicate-or-invalid-friend');
+      }
+      if (status == 'accepted') accepted++;
+    }
+    return DedaStage04ProfileView._(s, accepted);
+  }
+}
+
+/// A view admitted only by the current lab session. The caller must use
+/// requireCurrent at presentation and action boundaries, not retain an old
+/// view across a session transition.
+class DedaStage04ProfileRead {
+  DedaStage04ProfileRead._(this._view, this._current);
+  final DedaStage04ProfileView _view;
+  final bool Function() _current;
+  DedaStage04ProfileView requireCurrent() {
+    if (!_current()) throw const DedaPrivateDataStale();
+    return _view;
+  }
+}
+
 /// Lab only, default off. No legacy account/phone/ID routing, no wallet,
 /// rewards, role, ownership or authoritative score writes from this class.
 /// Existing DedaPrivateDataSync provides revision and journal coordination.
@@ -137,6 +211,17 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     }, timeout: const Duration(seconds: 15));
     check();
     return result;
+  }
+
+  /// Stage 04/01 read binding, using the one existing session and storage
+  /// transaction. No new collection, notifier, write or implicit login.
+  static Future<DedaStage04ProfileRead> readProfile() async {
+    final current = _intent();
+    final protected = await readProtected();
+    if (!current()) throw const DedaPrivateDataStale();
+    final view = DedaStage04ProfileView.fromProtected(protected);
+    if (!current()) throw const DedaPrivateDataStale();
+    return DedaStage04ProfileRead._(view, current);
   }
 
   void _check(String account, [String? original]) {
