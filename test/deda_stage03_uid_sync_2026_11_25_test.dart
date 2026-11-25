@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/deda_private_data_sync.dart';
 import '../lib/deda_stage03_lab_uid_storage_2026_11_25.dart';
@@ -257,6 +258,50 @@ void main(){
     expect(server.writes,2);
     expect(server.value.payload!.fields['favorites'],['fixture']);
     expect(server.value.payload!.fields['deda_language_v1'],'ar');
+  });
+  test('04/01 saved place records use the original shape and explicit private edits preserve other data',() async {
+    String row(String name,num lat,num lon) => jsonEncode({'name':name,'type':'مكان',
+      'lat':lat,'lon':lon,'address':null,'phone':null,'website':null,'openingHours':null,
+      'isDedaRegistered':false,'isAvailableNow':false});
+    String key(String raw) {
+      final d=DedaStage04PlaceData.decodeRecord(raw);
+      return '${d['name']}|${d['lat']}|${d['lon']}';
+    }
+    final a=row('Synthetic favorite',35,44), b=row('Synthetic recent',35.1,44.1);
+    final fields=<String,Object?>{'favorites':[a],'recent':[b],'contactDraft':'untouched',
+      'deda_language_v1':'ar'};
+    final server=Server(), first=Port(server,1), second=Port(server,2);
+    final one=DedaPrivateDataSync.uidScoped(first), two=DedaPrivateDataSync.uidScoped(second);
+    final initial=await one.backup(account:uid,original:uid,
+      payload:DedaPrivateDataPayload(fields,uidScoped:true),isCurrent:()=>true);
+    final opening=DedaStage04PlaceData.fromRevision(initial.revision,key);
+    expect(opening.favorites,[a]);expect(opening.recent,[b]);
+    final edit=opening.prepare(a,keyOf:key,favorite:false,recordRecent:true);
+    expect(edit.fields['favorites'],isEmpty);expect(edit.fields['recent'],[a,b]);
+    expect(edit.fields['contactDraft'],'untouched');
+    expect(edit.fields['deda_language_v1'],'ar');
+    final saved=await one.backup(account:uid,original:uid,payload:edit,
+      expectedBase:opening.revision,isCurrent:()=>true);
+    expect(saved.status,DedaPrivateDataStatus.saved);
+    final restored=await restore(two);
+    final view=DedaStage04PlaceData.fromRevision(restored.revision,key);
+    expect(view.favorites,isEmpty);expect(view.recent,[a,b]);
+    expect(view.prepare(a,keyOf:key,favorite:false).encode(),edit.encode());
+    final stale=await two.backup(account:uid,original:uid,payload:initial.revision.payload!,
+      expectedBase:opening.revision,isCurrent:()=>true);
+    expect(stale.status,DedaPrivateDataStatus.conflict);
+    expect(server.writes,2);
+    expect(()=>opening.prepare(row('Unknown',1,2),keyOf:key,favorite:true),throwsFormatException);
+    expect(()=>DedaStage04PlaceData.decodeRecord('{"name":"missing coords"}'),throwsFormatException);
+    expect(()=>DedaStage04PlaceData.decodeRecord(row('Bad',91,1)),throwsFormatException);
+    for(final bad in [
+      {...fields,'favorites':[a,a]}, {...fields,'recent':['not-json']},
+      {...fields,'favorites':null}, Map<String,Object?>.from(fields)..remove('recent'),
+    ]){
+      final revision=DedaPrivateDataRevision(1,List.filled(48,'a').join(),
+        DedaPrivateDataPayload(bad,uidScoped:true));
+      expect(()=>DedaStage04PlaceData.fromRevision(revision,key),throwsFormatException);
+    }
   });
   test('04/01 live profile read is closed by default without an approved lab session',() async {
     await expectLater(DedaStage03LabStorage.readProfile(),throwsStateError);

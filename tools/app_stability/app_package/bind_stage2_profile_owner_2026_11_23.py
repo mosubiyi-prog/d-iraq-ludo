@@ -1024,25 +1024,43 @@ def _stage04_profile(source):
 
 STAGE04_PLACES_FIELDS = """
   bool _stage04PlacesError = false;
+  bool _stage04PlacesBusy = false;
+  DedaStage04PlacesRead? _stage04Places;
+  String _stage04PlaceKey(String row) => DedaPlacesStore.placeId(
+      PlaceInfo.fromJson(DedaStage04PlaceData.decodeRecord(row)));
   Future<void> _stage04LoadPlaces() async {
     final read = widget.stage04ProfileRead!;
     try {
-      final raw = await DedaStage03LabStorage.readProfilePlaceRecords(read,
-          favorites: widget.showFavorites);
-      final items = <PlaceInfo>[];
-      for (final row in raw) {
-        final decoded = jsonDecode(row);
-        if (decoded is! Map<String, dynamic>) {
-          throw const FormatException('profile-place-record');
-        }
-        items.add(PlaceInfo.fromJson(decoded));
-      }
+      final opening = await DedaStage03LabStorage.readProfilePlaces(read, _stage04PlaceKey);
+      final data = opening.requireCurrent();
+      final raw = widget.showFavorites ? data.favorites : data.recent;
+      final items = raw.map((row) => PlaceInfo.fromJson(
+          DedaStage04PlaceData.decodeRecord(row))).toList();
       read.requireCurrent();
       if (!dedaSectionCurrent) return;
-      setState(() { _places = items; _loading = false; _stage04PlacesError = false; });
+      setState(() { _stage04Places = opening; _places = items; _loading = false; _stage04PlacesError = false; });
     } catch (_) {
       if (!dedaSectionCurrent) return;
-      setState(() { _loading = false; _stage04PlacesError = true; });
+      setState(() { _stage04Places = null; _places = []; _loading = false; _stage04PlacesError = true; });
+    }
+  }
+  Future<void> _stage04RemoveFavorite(PlaceInfo place) async {
+    final opening = _stage04Places;
+    if (_stage04PlacesBusy || opening == null || !dedaSectionCurrent) return;
+    setState(() => _stage04PlacesBusy = true);
+    try {
+      final id = DedaPlacesStore.placeId(place);
+      final raw = opening.requireCurrent().favorites.singleWhere((row) => _stage04PlaceKey(row) == id);
+      final result = await DedaStage03LabStorage.saveProfilePlace(opening, raw, _stage04PlaceKey, favorite:false);
+      if (!dedaSectionCurrent) return;
+      if (result.status != DedaPrivateDataStatus.saved) throw const DedaPrivateDataConflict();
+      await _stage04LoadPlaces();
+    } catch (_) {
+      if (dedaSectionCurrent) {
+        setState(() { _stage04Places = null; _places = []; _stage04PlacesError = true; });
+      }
+    } finally {
+      if (dedaSectionCurrent) setState(() => _stage04PlacesBusy = false);
     }
   }
 """
@@ -1063,14 +1081,19 @@ def _stage04_places_state(body):
         'stage04-places-read')
     body = once(body, 'Future<void> _removeFavorite(PlaceInfo place) async {',
         'Future<void> _removeFavorite(PlaceInfo place) async {\n'
-        '    if (widget.stage04ProfileRead != null) return;',
+        '    if (widget.stage04ProfileRead != null) return _stage04RemoveFavorite(place);',
         'stage04-places-no-legacy-write')
     body = once(body, 'onTap: () async {',
         'onTap: () async {\n'
-        '                          if (widget.stage04ProfileRead != null) return;',
+        """                          if (widget.stage04ProfileRead != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+                              dedaText('تفاصيل المكان والطريق بانتظار ربط الخارطة بالهوية الموحدة.',
+                                'Place details and routing await the unified map binding.'))));
+                            return;
+                          }""",
         'stage04-places-no-legacy-details')
     body = once(body, 'onPressed: () => _removeFavorite(place),',
-        'onPressed: widget.stage04ProfileRead == null ? () => _removeFavorite(place) : null,',
+        'onPressed: _stage04PlacesBusy ? null : () => _removeFavorite(place),',
         'stage04-places-no-remove')
     return once(body, 'if (!dedaSectionCurrent) return dedaSectionExpiredView();',
         """if (!dedaSectionCurrent) return dedaSectionExpiredView();

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -356,6 +357,87 @@ class DedaStage04AppearanceRead {
   DedaStage04ProfileView requireCurrent() => _profile.requireCurrent();
 }
 
+/// Original PlaceInfo-shaped private records; no local phone fallback.
+/// Keep untouched serialized records byte-for-byte; identity is supplied
+/// by the existing DedaPlacesStore.placeId at the original UI boundary.
+class DedaStage04PlaceData {
+  DedaStage04PlaceData._(this.revision, this.favorites, this.recent);
+  final DedaPrivateDataRevision revision;
+  final List<String> favorites, recent;
+
+  static Map<String,dynamic> decodeRecord(String raw) {
+    final row=jsonDecode(raw);
+    if (row is! Map<String,dynamic>) throw const FormatException('profile-place-record');
+    const fields={'name','type','lat','lon','address','phone','website','openingHours',
+      'isDedaRegistered','isAvailableNow'};
+    bool coordinate(Object? v,num min,num max) => v is num && v.isFinite && v>=min && v<=max;
+    if (!row.keys.every(fields.contains) || row['name'] is! String ||
+        (row['name'] as String).trim().isEmpty || row['type'] is! String ||
+        (row['type'] as String).trim().isEmpty ||
+        !coordinate(row['lat'],-90,90) || !coordinate(row['lon'],-180,180) ||
+        ['address','phone','website','openingHours'].any((k)=>row[k]!=null && row[k] is! String) ||
+        ['isDedaRegistered','isAvailableNow'].any((k)=>row.containsKey(k) && row[k] is! bool)) {
+      throw const FormatException('profile-place-record');
+    }
+    return row;
+  }
+
+  static DedaStage04PlaceData fromRevision(DedaPrivateDataRevision revision,
+      String Function(String) keyOf) {
+    revision.validate();
+    final fields=revision.payload?.fields;
+    if (fields==null) throw StateError('profile-places-source-held');
+    List<String> records(String key,int limit) {
+      final raw=fields[key];
+      if (raw is! List || raw.length>limit || !raw.every((v)=>v is String)) {
+        throw const FormatException('profile-places-source-held');
+      }
+      final seen=<String>{}, rows=raw.cast<String>();
+      for(final row in rows){
+        decodeRecord(row);
+        if(!seen.add(keyOf(row))) throw const FormatException('profile-place-duplicate');
+      }
+      return List<String>.unmodifiable(rows);
+    }
+    return DedaStage04PlaceData._(revision,records('favorites',100),records('recent',30));
+  }
+
+  /// Only a place already present in the opened account list can be edited.
+  /// Explicit removal never toggles an absent favorite back on.
+  DedaPrivateDataPayload prepare(String raw, {required String Function(String) keyOf,
+      bool? favorite, bool recordRecent=false}) {
+    if(favorite==null && !recordRecent) throw const FormatException('profile-place-no-action');
+    decodeRecord(raw);
+    if(!favorites.contains(raw) && !recent.contains(raw)) {
+      throw const FormatException('profile-place-not-in-opening');
+    }
+    final id=keyOf(raw), f=List<String>.of(favorites), r=List<String>.of(recent);
+    final wasFavorite=f.any((v)=>keyOf(v)==id);
+    if(favorite==false && wasFavorite) f.removeWhere((v)=>keyOf(v)==id);
+    if(favorite==true && !wasFavorite) {
+      f.insert(0,raw);
+      if(f.length>100) throw StateError('profile-favorites-limit');
+    }
+    if(recordRecent){
+      r.removeWhere((v)=>keyOf(v)==id);
+      r.insert(0,raw);
+      if(r.length>30) r.removeRange(30,r.length);
+    }
+    return DedaPrivateDataPayload({...revision.payload!.fields,'favorites':f,'recent':r},
+      uidScoped:true);
+  }
+}
+
+class DedaStage04PlacesRead {
+  DedaStage04PlacesRead._(this._profile,this._data);
+  final DedaStage04ProfileRead _profile;
+  final DedaStage04PlaceData _data;
+  DedaStage04PlaceData requireCurrent() {
+    _profile.requireCurrent();
+    return _data;
+  }
+}
+
 /// Lab only, default off. No legacy account/phone/ID routing, no wallet,
 /// rewards, role, ownership or authoritative score writes from this class.
 /// Existing DedaPrivateDataSync provides revision and journal coordination.
@@ -605,23 +687,35 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     });
   }
 
-  /// Profile Favorites/Activity: use the existing UID restore journal.
-  /// Do not reinterpret a missing or conflicting field as an empty list.
-  /// The original place renderer must independently decode each record.
-  static Future<List<String>> readProfilePlaceRecords(
-      DedaStage04ProfileRead profile, {required bool favorites}) async {
+  /// Both lists share the same existing UID private journal. Never convert
+  /// a missing or malformed list into an empty list.
+  static Future<DedaStage04PlacesRead> readProfilePlaces(
+      DedaStage04ProfileRead profile, String Function(String) keyOf) async {
     profile.requireCurrent();
-    final current = _intent();
-    final result = await restore();
-    if (!current()) throw const DedaPrivateDataStale();
+    final current=_intent(), result=await restore();
+    if(!current()) throw const DedaPrivateDataStale();
     profile.requireCurrent();
-    final key = favorites ? 'favorites' : 'recent';
-    final records = result.revision.payload?.fields[key];
-    if (result.status != DedaPrivateDataStatus.saved ||
-        records is! List || !records.every((v) => v is String)) {
+    if(result.status!=DedaPrivateDataStatus.saved) {
       throw StateError('stage04-profile-places-not-confirmed');
     }
-    return List<String>.unmodifiable(records.cast<String>());
+    return DedaStage04PlacesRead._(profile,DedaStage04PlaceData.fromRevision(result.revision,keyOf));
+  }
+
+  /// Original user-initiated private action, guarded by the opening
+  /// revision. No monetary, role, map or authoritative document is written.
+  static Future<DedaPrivateDataResult> saveProfilePlace(
+      DedaStage04PlacesRead opening, String raw, String Function(String) keyOf,
+      {bool? favorite, bool recordRecent=false}) async {
+    final current=_intent(), data=opening.requireCurrent();
+    final payload=data.prepare(raw,keyOf:keyOf,favorite:favorite,recordRecent:recordRecent);
+    bool valid(){
+      if(!current()) return false;
+      try { opening.requireCurrent(); return true; } catch(_) { return false; }
+    }
+    if(!valid()) throw const DedaPrivateDataStale();
+    // The existing compare-and-set path also handles identical payloads.
+    return _sync.backup(account:uid,original:uid,payload:payload,
+      expectedBase:data.revision,isCurrent:valid);
   }
 
   void _check(String account, [String? original]) {
