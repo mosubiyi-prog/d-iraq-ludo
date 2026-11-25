@@ -11,17 +11,22 @@ function exact(value,keys,code){
   if(!value||Array.isArray(value)||typeof value!=='object'||Object.keys(value).length!==keys.length||
     !keys.every(key=>Object.hasOwn(value,key)))fail(code);
 }
-function account(value){if(typeof value!=='string'||!/^[0-9]+$/.test(value))fail('invalid-account');return value;}
+const LAB_UID='PLmG06Uhhheef1hDE2MLfX6DEpg2';
+function account(value,scope='legacy'){
+  if(scope==='lab-uid'){if(value!==LAB_UID)fail('invalid-account');return value;}
+  if(scope!=='legacy'||typeof value!=='string'||!/^[0-9]+$/.test(value))fail('invalid-account');return value;
+}
 function vector(value,{signed=false}={}){
   exact(value,units,'invalid-units');
   for(const unit of units)if(!Number.isSafeInteger(value[unit])||(!signed&&value[unit]<0))fail('invalid-amount');
   return Object.freeze({...value});
 }
-function parseReceipt(value,expectedAccount){
-  account(expectedAccount);
+function parseReceipt(value,expectedAccount,scope='legacy'){
+  account(expectedAccount,scope);
   exact(value,['format','accountKey','source','sourceId','kind','delta'],'invalid-receipt');
   if(value.format!==1||value.accountKey!==expectedAccount)fail('receipt-account-or-format');
   if(!Object.hasOwn(sources,value.source)||sources[value.source]!==value.kind)fail('unsupported-event-source');
+  if(scope==='lab-uid'&&value.source==='legacy-baseline-v1')fail('lab-legacy-baseline-forbidden');
   if(typeof value.sourceId!=='string'||value.sourceId.length<1||value.sourceId.length>256)fail('invalid-source-id');
   const delta=vector(value.delta,{signed:true});
   const values=units.map(unit=>delta[unit]);
@@ -48,17 +53,18 @@ function sameEvent(a,b){
   return ['format','accountKey','source','sourceId','kind'].every(key=>a[key]===b[key])&&
     units.every(unit=>a.delta[unit]===b.delta[unit]);
 }
-function parseState(value,expectedAccount){
+function parseState(value,expectedAccount,scope='legacy'){
+  account(expectedAccount,scope);
   exact(value,['format','accountKey','version','balances','initializedBy'],'invalid-state');
   if(value.format!==1||value.accountKey!==expectedAccount||!Number.isSafeInteger(value.version)||value.version<1||
     typeof value.initializedBy!=='string'||!/^[0-9a-f]{64}$/.test(value.initializedBy))fail('invalid-state');
   return Object.freeze({...value,balances:vector(value.balances)});
 }
-function applyEvent(prior,receipt){
-  receipt=parseReceipt(receipt,receipt?.accountKey);
+function applyEvent(prior,receipt,scope='legacy'){
+  receipt=parseReceipt(receipt,receipt?.accountKey,scope);
   if(prior===null&&receipt.kind!=='baseline')fail('progress-initialization-required');
   if(prior!==null&&receipt.kind==='baseline')fail('baseline-already-initialized');
-  const current=prior===null?{points:0,coins:0,xp:0,earnedDiamonds:0}:parseState(prior,receipt.accountKey).balances;
+  const current=prior===null?{points:0,coins:0,xp:0,earnedDiamonds:0}:parseState(prior,receipt.accountKey,scope).balances;
   const balances={};
   for(const unit of units){
     const value=current[unit]+receipt.delta[unit];
@@ -71,4 +77,4 @@ function applyEvent(prior,receipt){
   return Object.freeze({format:1,accountKey:receipt.accountKey,version,
     balances:Object.freeze(balances),initializedBy:prior?.initializedBy??eventKey(receipt)});
 }
-module.exports={units,account,parseReceipt,eventKey,sameEvent,parseState,applyEvent};
+module.exports={units,account,parseReceipt,eventKey,sameEvent,parseState,applyEvent,LAB_UID};

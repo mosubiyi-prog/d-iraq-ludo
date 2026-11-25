@@ -1,0 +1,43 @@
+name: DEDA Stage03 protected authority core emulator NO DEPLOY
+on:
+  push:
+    branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]
+    paths:
+      - 'tools/app_stability/progress_archive/reconcile-core.cjs'
+      - 'tools/app_stability/progress_archive/reconcile-store.cjs'
+      - 'qa/stage03/uid-authority.test.cjs'
+      - '.github/workflows/deda-stage03-authority-qa-2026-11-25.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authority:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Existing trusted core regression tests
+        run: node --test tools/app_stability/progress_archive/reconcile-core.test.cjs
+      - name: Protected UID authority on local demo Firestore only
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-authority"
+          mkdir -p "$work"
+          cp tools/app_stability/progress_archive/reconcile-core.cjs tools/app_stability/progress_archive/reconcile-store.cjs qa/stage03/uid-authority.test.cjs "$work/"
+          cp qa/stage03/firestore.lab-candidate.rules "$work/firestore.rules"
+          cd "$work"
+          printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > firebase.json
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock @firebase/rules-unit-testing@4.0.0 firebase@11.10.0 firebase-admin@13.0.0
+          node --check reconcile-core.cjs
+          node --check reconcile-store.cjs
+          GCLOUD_PROJECT=demo-deda-stage03-uid npx --yes firebase-tools@13.35.1 emulators:exec --project demo-deda-stage03-uid --only firestore --config firebase.json --non-interactive 'node --test uid-authority.test.cjs'

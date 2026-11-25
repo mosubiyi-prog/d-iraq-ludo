@@ -11,24 +11,27 @@ function receiptPath(account,id){
 }
 async function reconcileVerifiedReceipt({store,accountKey,receiptId}){
   const path=receiptPath(accountKey,receiptId);
+  return reconcileScoped({store,accountKey,receiptId,path,statePath:`deda_verified_progress/${accountKey}`,scope:'legacy'});
+}
+// No callable/export to a client. The lab wrapper below never touches legacy paths.
+async function reconcileScoped({store,accountKey,receiptId,path,statePath,scope}){
   return store.runTransaction(async tx=>{
     const raw=await tx.get(path);
     if(raw===null)fail('verified-receipt-missing');
-    const receipt=core.parseReceipt(raw,accountKey);
+    const receipt=core.parseReceipt(raw,accountKey,scope);
     const key=core.eventKey(receipt);
-    const statePath=`deda_verified_progress/${accountKey}`;
     const eventPath=`${statePath}/events/${key}`;
     const applied=await tx.get(eventPath);
     const state=await tx.get(statePath);
     if(applied!==null){
-      if(applied.eventKey!==key||!core.sameEvent(core.parseReceipt(applied.receipt,accountKey),receipt))fail('source-event-conflict');
-      const current=core.parseState(state,accountKey);
+      if(applied.eventKey!==key||!core.sameEvent(core.parseReceipt(applied.receipt,accountKey,scope),receipt))fail('source-event-conflict');
+      const current=core.parseState(state,accountKey,scope);
       if(!Number.isSafeInteger(applied.appliedVersion)||applied.appliedVersion<1||applied.appliedVersion>current.version)fail('invalid-applied-version');
       // Return CURRENT state: an older award replay must not resurrect its
       // historical after-balance after later spending.
       return Object.freeze({replayed:true,state:current});
     }
-    const next=core.applyEvent(state,receipt);
+    const next=core.applyEvent(state,receipt,scope);
     // All reads occur above. Both projection and immutable applied marker are
     // committed together. A retried transaction recalculates from live state.
     tx.set(eventPath,{format:1,accountKey,eventKey:key,receipt,receiptId,
@@ -67,4 +70,14 @@ class DedaTrustedProgressTransactionStore{
     }
   }
 }
-module.exports={reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore};
+// Emulator-only authority candidate. No live Admin SDK or credential setup here.
+async function reconcileLabReceipt({store,accountKey,receiptId}){
+  if(!/^127\.0\.0\.1:[0-9]+$/.test(process.env.FIRESTORE_EMULATOR_HOST||'')||
+     process.env.GCLOUD_PROJECT!=='demo-deda-stage03-uid')fail('lab-authority-emulator-only');
+  core.account(accountKey,'lab-uid');
+  if(typeof receiptId!=='string'||!/^[A-Za-z0-9_-]{20,80}$/.test(receiptId))fail('invalid-receipt-id');
+  const statePath=`deda_lab_uid_authority/${accountKey}`;
+  return reconcileScoped({store,accountKey,receiptId,statePath,scope:'lab-uid',
+    path:`${statePath}/receipts/${receiptId}`});
+}
+module.exports={reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore,reconcileLabReceipt};
