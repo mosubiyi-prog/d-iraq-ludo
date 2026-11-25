@@ -1,6 +1,7 @@
 // Stage 03 read-only live authority preflight, exact pinned lab client.
 // Never deploy rules, use Admin SDK, create users, write balances, or touch production.
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 const load=createRequire(import.meta.url);
 const {build,base,uid:fixtureUid,project:fixtureProject}=load('../stage03-trusted-fixture/uid-trusted-fixture.cjs');
@@ -58,6 +59,9 @@ async function main(){
   const expected=build(),paths=Object.keys(expected);
   require(paths.length===12&&expected[root]&&expected[view]);
   const same=(a,b)=>JSON.stringify(sorted(a))===JSON.stringify(sorted(b));
+  const v3=JSON.parse(readFileSync(new URL('./uid-private-v3-fixture.json',import.meta.url),'utf8'));
+  const v2={favorites:['DEDA_STAGE03_ANDROID_SYNTHETIC_ONLY_20261125']};
+  let observedPrivate;
   stage='strict-post-lock-readback';
   for(const c of [first,second]){
     for(const path of [root,view]){
@@ -65,10 +69,18 @@ async function main(){
       require(snap.exists()&&!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites&&same(snap.data(),expected[path]));
     }
     const privateHead=await getDocFromServer(c.head);
-    require(privateHead.exists()&&!privateHead.metadata.fromCache&&!privateHead.metadata.hasPendingWrites&&privateHead.data().uid===uid&&privateHead.data().version===2);
+    require(privateHead.exists()&&!privateHead.metadata.fromCache&&!privateHead.metadata.hasPendingWrites);
+    const d=privateHead.data();
+    require(d.uid===uid&&d.format===1&&/^[a-f0-9]{48}$/.test(d.mutationId)&&
+      (d.version===2||d.version===3)&&same(JSON.parse(d.payload),d.version===2?v2:v3));
+    const receipt=await getDocFromServer(doc(c.db,'deda_lab_uid_private',uid,'versions',d.mutationId));
+    require(receipt.exists()&&!receipt.metadata.fromCache&&!receipt.metadata.hasPendingWrites&&
+      receipt.data().updatedAt.isEqual(d.updatedAt)&&same(receipt.data(),d));
+    if(observedPrivate)require(same(observedPrivate,d));
+    observedPrivate=d;
   }
   console.log('PASS_POST_LOCK_EXACT_PROGRESS_AND_INVENTORY_TWO_CLIENTS');
-  console.log('PASS_POST_LOCK_PRIVATE_STORAGE_VERSION_2_PRESENT');
+  console.log('PASS_POST_LOCK_PRIVATE_STORAGE_EXACT_VERSION',observedPrivate.version);
   stage='protected-read-denials';
   for(const path of [root,view])await denied(()=>getDocFromServer(doc(unauth.db,path)));
   for(const c of [first,second]){

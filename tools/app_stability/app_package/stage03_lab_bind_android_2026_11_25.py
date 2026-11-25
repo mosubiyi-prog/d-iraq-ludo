@@ -25,6 +25,8 @@ def prepare(root):
       {'favorites': ['DEDA_STAGE03_LIVE_SYNTHETIC_ONLY_20261125']});
   static final _second = DedaPrivateDataPayload(
       {'favorites': ['DEDA_STAGE03_ANDROID_SYNTHETIC_ONLY_20261125']});
+  static final _third = DedaPrivateDataPayload.decode(
+      r'__STAGE03_PRIVATE_V3_JSON__', uidScoped: true);
   Future<void> _storage(bool write) async {
     if (_busy || _observe() != 'UID_MATCHED_SERVER_UNVERIFIED') return;
     setState(() { _busy = true; _status = 'CHECKING_STORAGE'; });
@@ -35,19 +37,19 @@ def prepare(root):
       if (r.status != DedaPrivateDataStatus.saved) {
         throw StateError('restore not confirmed');
       }
-      if (rev.version == 2 && rev.payload?.encode() == _second.encode()) {
-        status = write ? 'EXACT_V2_ALREADY_PRESENT_NO_WRITE' : 'RESTORE_V2_OK';
-      } else if (rev.version == 1 && rev.payload?.encode() == _first.encode()) {
+      if (rev.version == 3 && rev.payload?.encode() == _third.encode()) {
+        status = write ? 'EXACT_V3_ALREADY_PRESENT_NO_WRITE' : 'RESTORE_V3_OK';
+      } else if (rev.version == 2 && rev.payload?.encode() == _second.encode()) {
         if (!write) {
-          status = 'RESTORE_V1_OK';
+          status = 'RESTORE_V2_OK';
         } else {
-          final saved = await DedaStage03LabStorage.backup(_second);
+          final saved = await DedaStage03LabStorage.backup(_third);
           if (saved.status != DedaPrivateDataStatus.saved ||
-              saved.revision.version != 2 ||
-              saved.revision.payload?.encode() != _second.encode()) {
+              saved.revision.version != 3 ||
+              saved.revision.payload?.encode() != _third.encode()) {
             throw StateError('backup not confirmed');
           }
-          status = 'BACKUP_V2_CONFIRMED';
+          status = 'BACKUP_V3_CONFIRMED';
         }
       } else {
         throw StateError('unknown remote revision; no overwrite');
@@ -62,6 +64,10 @@ def prepare(root):
   void dispose() {''')
     s=once(s,"child: const Text('VERIFY_SERVER')),","child: const Text('VERIFY_SERVER')),\n        ElevatedButton(onPressed: _busy ? null : () => _storage(false),\n          child: const Text('RESTORE_STORAGE')),\n        ElevatedButton(onPressed: _busy ? null : () => _storage(true),\n          child: const Text('BACKUP_STORAGE')),")
     s=once(s,'DEDA LAB — PHASE 02','DEDA LAB — PHASE 03')
+    fixture=json.loads((gate.ROOT/'qa/stage03/uid-private-v3-fixture.json').read_text())
+    encoded=json.dumps(fixture,ensure_ascii=True,separators=(',',':'),sort_keys=True)
+    gate.require("'" not in encoded and '\\n' not in encoded, 'FIXTURE_LITERAL_UNSAFE')
+    s=once(s,'__STAGE03_PRIVATE_V3_JSON__',encoded)
     entry.write_text(s)
     pub=root/'pubspec.yaml'
     pub.write_text(once(pub.read_text(),'  firebase_auth: 5.7.0\n','  firebase_auth: 5.7.0\n  cloud_firestore: 5.6.12\n  shared_preferences: 2.5.3\n'))

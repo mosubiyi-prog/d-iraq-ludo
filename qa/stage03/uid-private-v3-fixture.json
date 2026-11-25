@@ -1,0 +1,30 @@
+{
+  "favorites": [
+    "DEDA_STAGE03_ANDROID_SYNTHETIC_ONLY_20261125"
+  ],
+  "recent": [
+    "DEDA_STAGE03_SYNTHETIC_RECENT"
+  ],
+  "personalPlaces": "[{\"name\":\"DEDA_SYNTHETIC_PLACE\"}]",
+  "contactDraft": "DEDA_SYNTHETIC_DRAFT",
+  "quizSeen": [
+    "q1",
+    "q2"
+  ],
+  "quiz:ids:2026-11-25": [
+    "q1",
+    "q2"
+  ],
+  "quiz:progress:2026-11-25": "{\"answered\":1}",
+  "quiz:completed:2026-11-25": false,
+  "quiz:ids:2026-11-24": [
+    "q3"
+  ],
+  "quiz:progress:2026-11-24": "{\"answered\":1}",
+  "quiz:completed:2026-11-24": true,
+  "deda_language_v1": "ar",
+  "deda_voice_enabled_v1": false,
+  "deda_speech_rate_v1": 1.2,
+  "deda_default_travel_mode_v1": "driving",
+  "deda_default_map_style_v1": "normal"
+}
