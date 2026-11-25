@@ -1,0 +1,64 @@
+name: DEDA Stage03 UID storage and rules QA NO DEPLOY
+on:
+  push:
+    branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]
+    paths:
+      - 'lib/deda_private_data_sync.dart'
+      - 'lib/deda_stage03_lab_uid_storage_2026_11_25.dart'
+      - 'test/deda_stage03_uid_sync_2026_11_25_test.dart'
+      - 'qa/stage03/**'
+      - '.github/workflows/deda-stage03-uid-storage-qa-2026-11-25.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  uid-sync:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/deda_private_data_sync.dart lib/deda_stage03_lab_uid_storage_2026_11_25.dart
+      - name: Run previous sync regressions and UID mode offline
+        run: |
+          set -euo pipefail
+          bin="$(command -v flutter)"
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" test --no-pub --reporter expanded test/deda_private_data_sync_test.dart test/deda_stage03_uid_sync_2026_11_25_test.dart
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$bin"
+  candidate-rules-emulator:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test candidate rules in local demo project, no credentials or deploy
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-rules"
+          mkdir -p "$work"
+          cp qa/stage03/firestore.lab-candidate.rules "$work/firestore.rules"
+          cp qa/stage03/uid-storage.test.mjs "$work/uid-storage.test.mjs"
+          cd "$work"
+          printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > firebase.json
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec --project demo-deda-stage03-uid --only firestore --config firebase.json --non-interactive 'node --test uid-storage.test.mjs'

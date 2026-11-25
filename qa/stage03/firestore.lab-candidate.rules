@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid &&
+        uid == 'PLmG06Uhhheef1hDE2MLfX6DEpg2' &&
+        request.auth.token.firebase.sign_in_provider == 'password';
+    }
+    function valid(uid, d) {
+      return d.keys().hasOnly(['format','uid','version','mutationId','payload','updatedAt']) &&
+        d.keys().hasAll(['format','uid','version','mutationId','payload','updatedAt']) &&
+        d.format == 1 && d.uid == uid && d.version is int &&
+        d.version > 0 && d.version <= 9007199254740990 &&
+        d.mutationId is string && d.mutationId.matches('^[a-f0-9]{48}$') &&
+        d.payload is string && d.payload.size() <= 200000 && d.updatedAt == request.time;
+    }
+    function newReceipt(uid,d) {
+      let path = /databases/$(database)/documents/deda_lab_uid_private/$(uid)/versions/$(d.mutationId);
+      return !exists(path) && getAfter(path).data == d;
+    }
+    match /deda_lab_uid_private/{uid} {
+      allow get: if owner(uid);
+      allow create: if owner(uid) && valid(uid,request.resource.data) &&
+        request.resource.data.version == 1 && newReceipt(uid,request.resource.data);
+      allow update: if owner(uid) && valid(uid,request.resource.data) &&
+        request.resource.data.version == resource.data.version + 1 &&
+        newReceipt(uid,request.resource.data);
+      allow list, delete: if false;
+      match /versions/{id} {
+        allow get: if owner(uid);
+        allow create: if owner(uid) && valid(uid,request.resource.data) &&
+          request.resource.data.mutationId == id &&
+          getAfter(/databases/$(database)/documents/deda_lab_uid_private/$(uid)).data == request.resource.data &&
+          (!exists(/databases/$(database)/documents/deda_lab_uid_private/$(uid)) ||
+           get(/databases/$(database)/documents/deda_lab_uid_private/$(uid)).data.mutationId != id);
+        allow list, update, delete: if false;
+      }
+    }
+    // Financial/progression authority is server-only. No client minting.
+    // This is a candidate lab namespace, not a deployed ledger or a balance.
+    match /deda_lab_uid_authority/{uid} {
+      allow get: if owner(uid);
+      allow list, create, update, delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
