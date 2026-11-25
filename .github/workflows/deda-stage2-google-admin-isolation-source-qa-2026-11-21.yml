@@ -12,6 +12,8 @@ on:
       - 'lib/deda_stage2_google_access_card_2026_11_21.dart'
       - 'lib/deda_stage2_isolated_admin_identity_2026_11_21.dart'
       - 'tools/app_stability/app_package/bind_stage2_profile_owner_2026_11_23.py'
+      - 'lib/deda_stage03_lab_uid_storage_2026_11_25.dart'
+      - 'lib/deda_private_data_sync.dart'
       - 'tools/app_stability/app_package/bind_stage2_friends_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_tasks_quiz_2026_11_24.py'
