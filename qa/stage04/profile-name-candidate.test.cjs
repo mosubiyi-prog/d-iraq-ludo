@@ -77,3 +77,48 @@ test('partial, foreign, anonymous, no-op, invalid name and unrelated protected c
   assert.deepEqual(await read(source),original);
   assert.equal(await read(history+'2'),undefined);
 });
+
+test('competing editors cannot overwrite the same revision or lose protected rights',async()=>{
+  const first=renamed(original,'Synthetic Editor One');
+  const second=renamed(original,'Synthetic Editor Two');
+  const results=await Promise.allSettled([write(client(),first),write(client(),second)]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(results.filter(x=>x.status==='rejected').length,1);
+  const winner=results[0].status==='fulfilled'?first:second;
+  assert.deepEqual(await read(account),winner);
+  assert.deepEqual(await read(source),winner);
+  assert.deepEqual(await read(history+'1'),original);
+  assert.deepEqual(await read(history+'2'),winner);
+  assert.equal(await read(history+'3'),undefined);
+  for(const [path,data] of Object.entries(rights))assert.deepEqual(await read(path),data);
+});
+test('rename stops on missing or inconsistent provenance and mismatched atomic values',async()=>{
+  const next=renamed(original), different=renamed(original,'Different Synthetic Name');
+  const seed=async(path,value)=>env.withSecurityRulesDisabled(async ctx=>{
+    const ref=doc(ctx.firestore(),path);
+    if(value===undefined)await deleteDoc(ref);else await setDoc(ref,value);
+  });
+  for(const path of [source,history+'1']){
+    for(const value of [undefined,{...structuredClone(original),profile:{...original.profile,displayName:'Inconsistent Source'}}]){
+      await seed(path,value);
+      await assertFails(write(client(),next));
+      assert.deepEqual(await read(account),original);
+      assert.equal(await read(history+'2'),undefined);
+      assert.deepEqual(await read(path),value);
+      await seed(path,original);
+    }
+  }
+  await seed(history+'2',different);
+  await assertFails(write(client(),next));
+  assert.deepEqual(await read(history+'2'),different);
+  await seed(history+'2',undefined);
+  const db=client(),batch=writeBatch(db);
+  batch.set(doc(db,account),next);
+  batch.set(doc(db,source),different);
+  batch.set(doc(db,history+'2'),next);
+  await assertFails(batch.commit());
+  assert.deepEqual(await read(account),original);
+  assert.deepEqual(await read(source),original);
+  assert.equal(await read(history+'2'),undefined);
+  for(const [path,data] of Object.entries(rights))assert.deepEqual(await read(path),data);
+});
