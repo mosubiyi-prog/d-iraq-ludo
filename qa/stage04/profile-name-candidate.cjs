@@ -190,7 +190,17 @@ function generateProfileActions(original) {
   const gate=e=>e.required.map(k=>'exists(tierEventPath(uid,"'+k+'"))').join(' && ');
   const call=(e,old,next)=>'pointCommit(uid,"'+e.key+'",'+literal(e.receipt)+','+old+','+next+')'+
     (gate(e)?' && '+gate(e):'');
-  const rootAllow=entries.map(e=>'('+call(e,'resource.data','request.resource.data')+')').join(' ||\n          ');
+  // Route by the unique signed point delta BEFORE evaluating the full
+  // receipt/ledger proof. A ternary executes exactly one expensive branch.
+  // All original conditions still apply, including the prior stage checks.
+  const deltas=entries.map(e=>e.receipt.delta.points);
+  if(new Set(deltas).size!==entries.length)throw Error('point-delta-not-unique');
+  const dispatch=entries.reduceRight((fallback,e)=>
+    '(d == '+e.receipt.delta.points+' ? ('+call(e,'old','next')+') : '+fallback+')','false');
+  const pointDispatch='    function pointDispatch(uid,old,next) {\n'+
+    '      let d = next.balances.points - old.balances.points;\n'+
+    '      return owner(uid) && '+dispatch+';\n    }\n';
+  const rootAllow='pointDispatch(uid,resource.data,request.resource.data)';
   const pointMatches=entries.flatMap(e=>['receipts','events'].map(kind=>{
     const check=call(e,'get(rootPath(uid)).data','getAfter(rootPath(uid)).data');
     const exact=kind==='receipts'?literal(e.receipt):
@@ -201,7 +211,7 @@ function generateProfileActions(original) {
       '        allow list, update, delete: if false;\n      }\n';
   })).join('');
   if(candidate.split(anchor).length!==2)throw Error('profile-action-root');
-  candidate=candidate.replace(anchor,()=>funcs+anchor+'\n      allow update: if '+rootAllow+';\n'+pointMatches);
+  candidate=candidate.replace(anchor,()=>funcs+pointDispatch+anchor+'\n      allow update: if '+rootAllow+';\n'+pointMatches);
   // Existing exact creation/name change rules remain intact. Only the
   // additional atomic selection alternative is enabled on these three paths.
   const nameCheck='nameCommit(uid,request.resource.data)';

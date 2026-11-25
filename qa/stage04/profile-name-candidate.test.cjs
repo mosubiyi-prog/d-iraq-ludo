@@ -146,6 +146,9 @@ test('Spark candidate: fixed synthetic point reserve and return are atomic, repl
   await assertFails(attempt(client(),10000,'reserve').commit);
   await assertFails(attempt(client(),5000,'claim').commit);
   await assertFails(attempt(client(),5000,'reserve',{delta:1}).commit);
+  // A delta that matches a different valid tier cannot borrow its proof.
+  await assertFails(attempt(client(),5000,'reserve',{delta:-5000}).commit);
+  await assertFails(attempt(client(),5000,'reserve',{delta:10050}).commit);
   await assertFails(attempt(client(),5000,'reserve',{omit:'/events/'}).commit);
   await assertFails(attempt(client('foreign'),5000,'reserve').commit);
   for(const t of [5000,10000,15000,20000,25000]){
