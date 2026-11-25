@@ -47,7 +47,8 @@ jobs:
       - name: Fail-closed separate account fixture authorization
         id: account_gate
         env:
-          APPROVED_COMMIT: ${{ github.event_name == 'push' && github.event.head_commit.message == 'Stage 03: authorize exact lab account fixture live once' }}
+          APPROVED_COMMIT: >-
+            ${{ github.event_name == 'push' && github.event.head_commit.message == 'Stage 03: authorize exact lab account fixture live once' }}
         run: |
           set -euo pipefail
           authorization="$GITHUB_WORKSPACE/qa/stage03/account-live-fixture-authorization.txt"
