@@ -92,6 +92,31 @@ void main(){
     final duplicate=protectedAccount()..['friends']=[row,row];
     expect(()=>project(duplicate),throwsFormatException);
   });
+  test('04/01 inventory requires exact same-UID purchase and accepted gift evidence',(){
+    final inventory=protectedInventory();
+    final receipt={'uid':uid,'frameId':'FRAME_03','kind':'lab_frame','cost':1000,'createdMs':100};
+    final ownership={'uid':uid,'frameId':'FRAME_03','receiptId':'${uid}_FRAME_03','createdMs':100};
+    final frame={'frameId':'FRAME_03','receipt':receipt,'ownership':ownership};
+    final id='@DEDA-QAFIXTURE';
+    final grant={'uid':uid,'identifier':id,'group':'001','baseColor':'gold',
+      'kind':'gifted','grantedMs':100};
+    final gift={'identifier':id,'grant':grant,'acceptance':null};
+    DedaStage04ProfileView project()=>DedaStage04ProfileView.fromProtected(
+      DedaStage03ProtectedSnapshot.decode(expectedUid:uid,progress:protectedProgress(),
+        inventory:inventory,account:protectedAccount()));
+    expect(()=>project().verifiedPaidFrameIds,throwsFormatException);
+    inventory['frames']=[frame]; inventory['idGifts']=[gift];
+    expect(project().verifiedPaidFrameIds,{'FRAME_03'});
+    expect(project().acceptedGiftIds,isEmpty);
+    inventory['idGifts']=[{...gift,'acceptance':{'uid':uid,'identifier':id,'group':'001','receivedMs':101}}];
+    expect(project().acceptedGiftIds,{id});
+    inventory['frames']=[frame,frame];
+    expect(()=>project().verifiedPaidFrameIds,throwsFormatException);
+    inventory['frames']=[{...frame,'ownership':{...ownership,'uid':'foreign'}}];
+    expect(()=>project().verifiedPaidFrameIds,throwsFormatException);
+    inventory['idGifts']=[{...gift,'acceptance':{'uid':'foreign','identifier':id,'group':'001','receivedMs':101}}];
+    expect(()=>project().acceptedGiftIds,throwsFormatException);
+  });
   test('04/01 live profile read is closed by default without an approved lab session',() async {
     await expectLater(DedaStage03LabStorage.readProfile(),throwsStateError);
   });

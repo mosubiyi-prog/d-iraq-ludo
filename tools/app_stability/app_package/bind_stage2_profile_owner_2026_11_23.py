@@ -770,9 +770,44 @@ STAGE04_FIELDS = """
       child = SavedPlacesPage(
           showFavorites: title == dedaText('المفضلة', 'Favorites'),
           stage04ProfileRead: read);
+    } else if (title == dedaText('متجري', 'My Store')) {
+      try {
+        final items = <DedaMyStoreItem>[
+          DedaMyStoreItem(id: view.originalId, label: view.originalId,
+              section: DedaMyStoreSection.identifiers,
+              proof: DedaMyStoreProof.accountSaved,
+              active: view.activeId == view.originalId),
+        ];
+        final owned = view.verifiedPaidFrameIds;
+        final rendered = <String>{};
+        for (var style = 6; style <= 18; style++) {
+          final frame = DedaLabPremiumFrameStyles.byProfileStyle(style);
+          if (frame == null || !owned.contains(frame.id)) continue;
+          if (!rendered.add(frame.id)) throw StateError('duplicate-frame-catalog');
+          items.add(DedaMyStoreItem(id: frame.id, label: frame.nameAr,
+              section: DedaMyStoreSection.frames,
+              proof: DedaMyStoreProof.serverVerified,
+              receiptKind: 'purchase', previewAsset: frame.assetPath));
+        }
+        if (rendered.length != owned.length) throw StateError('frame-catalog-incomplete');
+        for (final id in view.acceptedGiftIds) {
+          items.add(DedaMyStoreItem(id: id, label: id,
+              section: DedaMyStoreSection.identifiers,
+              proof: DedaMyStoreProof.serverVerified,
+              receiptKind: 'gift', active: id == view.activeId));
+        }
+        child = DedaMyStorePage(originalId: view.originalId, items: items,
+            isArabic: DedaLanguageState.isArabic, stage04ProfileRead: read);
+      } catch (_) {
+        _showPhase2Notice('تعذر التحقق من المقتنيات الموحدة.',
+            'Unified inventory could not be verified.');
+        return;
+      }
+    } else if (title == dedaText('عرض الملف العام', 'Public profile preview')) {
+      child = DedaPublicProfilePreviewPage(stage04ProfileRead: read);
     } else {
-      // Do not open a legacy phone editor, acquisition shop, or public
-      // preview while their full authoritative inputs are unavailable.
+      // Do not open a legacy phone editor or acquisition shop while
+      // its complete authoritative inputs are unavailable.
       _showPhase2Notice('هذه الوظيفة بانتظار مصدر موحد مؤمّن.',
           'This function is held until its unified source is secured.');
       return;
@@ -981,6 +1016,76 @@ def _stage04_places_state(body):
       }
     }""", 'stage04-places-no-empty-fallback')
 
+
+def _stage04_store(body):
+    body = once(body, "import 'deda_qa32_active_account_scope.dart';",
+        "import 'deda_qa32_active_account_scope.dart';\n" + STAGE04_IMPORT,
+        'stage04-store-import')
+    body = once(body, '    this.onOpenEditProfile,',
+        '    this.onOpenEditProfile,\n    this.stage04ProfileRead,', 'stage04-store-ctor')
+    body = once(body, '  final String originalId;',
+        '  final String originalId;\n  final DedaStage04ProfileRead? stage04ProfileRead;',
+        'stage04-store-read')
+    body = once(body, 'Widget build(BuildContext context) {', """Widget build(BuildContext context) {
+    DedaStage04ProfileView? unified;
+    if (stage04ProfileRead != null) {
+      try {
+        unified = stage04ProfileRead!.requireCurrent();
+        if (unified.originalId != originalId) throw StateError('profile-store-uid');
+      } catch (_) {
+        return Scaffold(body: Center(child: Text(_t('تعذر التحقق من الحساب', 'Account verification failed'))));
+      }
+    }""", 'stage04-store-build')
+    body = once(body, 'DedaQa32ActiveAccountScope(', """if (unified != null)
+              Column(children: <Widget>[
+                Text(unified.activeId, key: const Key('deda_stage04_store_active_id')),
+                if (unified.activeId != originalId) Text(originalId),
+                Text(_t('المقتنيات المثبتة فقط؛ المظهر والممتلكات الأخرى غير متاحة بعد.',
+                    'Verified inventory only; appearance and other items are not yet available.'),
+                    textAlign: TextAlign.center),
+              ])
+            else
+            DedaQa32ActiveAccountScope(""", 'stage04-store-no-legacy-id')
+    body = once(body,
+        "'لا توجد مقتنيات مثبتة للعرض هنا حاليًا.',",
+        "unified != null ? 'لا تتوفر بيانات مثبتة لهذا القسم بعد.' : 'لا توجد مقتنيات مثبتة للعرض هنا حاليًا.',",
+        'stage04-store-no-false-empty-ar')
+    return once(body, "'No confirmed items to show here yet.',",
+        "unified != null ? 'Verified data for this section is not yet available.' : 'No confirmed items to show here yet.',",
+        'stage04-store-no-false-empty-en')
+
+
+def _stage04_public_preview(body):
+    import re
+    body = once(body, 'const DedaPublicProfilePreviewPage({super.key});',
+        'const DedaPublicProfilePreviewPage({super.key, this.stage04ProfileRead});\n'
+        '  final DedaStage04ProfileRead? stage04ProfileRead;', 'stage04-preview-ctor')
+    # Keep the original preview layout. The lab branch never reads a phone
+    # identity or shows a local appearance as the unified account's appearance.
+    for name, field in [('name','displayName'), ('id','activeId')]:
+        pattern = r'final ' + name + r'\s*=\s*([^;]+);'
+        match = list(re.finditer(pattern, body))
+        if len(match) != 1: raise ValueError('STAGE04_PREVIEW_STOP:' + name)
+        m=match[0]
+        body=body[:m.start()] + ('final ' + name + ' = stage04ProfileRead != null ? '
+            'stage04ProfileRead!.requireCurrent().' + field + ' : (' + m.group(1) + ');') + body[m.end():]
+    body = once(body, 'DedaPreferences.profileBackgroundStyle,',
+        'stage04ProfileRead != null ? 0 : DedaPreferences.profileBackgroundStyle,',
+        'stage04-preview-background')
+    body = once(body, 'ValueListenableBuilder<int>(',
+        """if (stage04ProfileRead != null)
+                  SizedBox(height: 124, width: 124, child: Center(child: Icon(
+                    Icons.person_outline, size: 56,
+                    semanticLabel: dedaText('المظهر غير متاح', 'Appearance unavailable'))))
+                else
+                ValueListenableBuilder<int>(""", 'stage04-preview-avatar')
+    body = once(body, 'child: DedaSixActiveIdentity(',
+        """child: stage04ProfileRead != null
+                      ? Text(id, textAlign: TextAlign.center,
+                          key: const Key('deda_stage04_public_preview_id'))
+                      : DedaSixActiveIdentity(""", 'stage04-preview-id')
+    return body
+
 def bind_stage04_lab(project: Path):
     project = project.resolve()
     if project == REPO or project in REPO.parents or REPO in project.parents:
@@ -992,6 +1097,10 @@ def bind_stage04_lab(project: Path):
     verify_verified_owned_frame_art(original)
     verify_shared_routes(original)
     modified = _stage04_profile(original)
+    store_path = project/'lib/deda_100377_my_store_page_staged.dart'
+    store_modified = _stage04_store(store_path.read_text())
+    modified = _stage04_region(modified, 'class DedaPublicProfilePreviewPage extends StatelessWidget',
+        '\nclass ', _stage04_public_preview)
     modified = _stage04_region(modified, 'class SavedPlacesPage extends StatefulWidget',
         '\nclass ', _stage04_places_widget)
     modified = _stage04_region(modified, 'class _SavedPlacesPageState',
@@ -1011,6 +1120,7 @@ def bind_stage04_lab(project: Path):
         target = project/'lib'/name
         if not target.exists(): target.write_bytes((REPO/'lib'/name).read_bytes())
     main_path.write_text(modified)
+    store_path.write_text(store_modified)
     test = project/'test/deda_stage04_original_profile_hold_test.dart'
     if test.exists():
         raise ValueError('STAGE04_PROFILE_TEST_ALREADY_EXISTS')
