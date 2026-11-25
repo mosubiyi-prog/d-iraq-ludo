@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -102,4 +102,55 @@ test('client reads only own view and cannot write source, view, history or grant
   }
   for(const c of [client('foreign'),client(uid,'anonymous'),env.unauthenticatedContext().firestore()])await assertFails(getDocFromServer(doc(c,view)));
   assert.equal((await read()).revision,1);
+});
+
+const acctSource=base+'/accountSources/current',acctView=base+'/account/current';
+const other='synthetic-peer-001', original='@DEDA-QA1234',peerId='@DEDA-QA5678';
+const claimMs=Date.UTC(2026,10,1,10),claimKey='2026-11-01|open_map';
+const accountFixture=(revision=1)=>({format:1,uid,revision,complete:true,
+  profile:{displayName:'Synthetic QA',originalId:original,activeId:original,fixedColor:null},
+  friends:[{pairKey:[uid,other].sort().join('__'),members:[uid,other],requesterUid:uid,recipientUid:other,
+    requesterPublicId:original,recipientPublicId:peerId,requesterName:'Synthetic QA',recipientName:'Synthetic peer',status:'accepted'}],
+  tasks:[{claimKey,dayId:'2026-11-01',taskId:'open_map',completedMs:claimMs,claimedMs:claimMs+1}],
+  league:[{weekId,claimedKeys:[claimKey],completedTasks:1,weeklyXp:20}]});
+const accountSeed=v=>db.doc(acctSource).set(v);
+const accountApply=()=>projectAccount({store,uid});
+test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{
+  await accountSeed(accountFixture());const a=await accountApply();
+  assert.equal(a.view.friends[0].recipientUid,other);
+  assert.equal(a.view.tasks[0].claimKey,claimKey);
+  assert.equal(a.view.league[0].weeklyXp,20);
+  assert.deepEqual((await db.doc(acctView).get()).data(),a.view);
+  assert.equal((await accountApply()).replayed,true);
+  assert.equal((await db.doc(base).get()).exists,false);
+  // Published rules remain closed for new account projection until reviewed.
+  await assertFails(getDocFromServer(doc(client(),acctView)));
+  for(const path of [acctSource,acctView,base+'/accountHistory/1']){
+    await assertFails(setDoc(doc(client(),path),accountFixture()));
+  }
+});
+test('missing/foreign/duplicate or unsupported account sources fail closed',async()=>{
+  await assert.rejects(accountApply());
+  for(const mutate of [v=>v.complete=false,v=>v.uid=other,v=>v.friends[0].members=[other,'alien-uid'],
+    v=>v.tasks.push(v.tasks[0]),v=>v.tasks[0].dayId='2026-02-30',
+    v=>v.league[0].weeklyXp=200,v=>v.league[0].claimedKeys=['unknown']]){
+    const v=accountFixture();mutate(v);await accountSeed(v);await assert.rejects(accountApply());
+    assert.equal((await db.doc(acctView).get()).exists,false);
+  }
+});
+test('active premium ID requires matching accepted protected inventory grant',async()=>{
+  const v=accountFixture();v.profile.activeId=identifier;v.profile.fixedColor='gold';
+  await accountSeed(v);await assert.rejects(accountApply(),{code:'account-active-id-unproven'});
+  const inv=fixture();await seed(inv);await apply();await assert.rejects(accountApply(),{code:'account-active-id-unproven'});
+  inv.revision=2;inv.idGifts[0].acceptance={uid,identifier,group:'001',receivedMs:ms+1};
+  await seed(inv);await apply();assert.equal((await accountApply()).view.profile.activeId,identifier);
+});
+test('task claim history and weekly history cannot regress or reassign original ID',async()=>{
+  await accountSeed(accountFixture());await accountApply();
+  for(const mutate of [v=>{v.tasks=[];v.league=[];},v=>v.league=[],
+    v=>{v.tasks[0].claimedMs=null;v.league=[];},
+    v=>{v.profile.originalId='@DEDA-OTHER1';v.profile.activeId=v.profile.originalId;v.friends=[];}]){
+    const v=accountFixture(2);mutate(v);await accountSeed(v);await assert.rejects(accountApply());
+    assert.equal((await db.doc(acctView).get()).data().revision,1);
+  }
 });
