@@ -1,4 +1,4 @@
-name: DEDA Stage03 live authority read-only and trusted fixture offline QA
+name: DEDA Stage03 strict post-lock read-only and trusted fixture offline QA
 on:
   push:
     branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]

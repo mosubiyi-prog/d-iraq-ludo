@@ -1,9 +1,12 @@
 // Stage 03 read-only live authority preflight, exact pinned lab client.
 // Never deploy rules, use Admin SDK, create users, write balances, or touch production.
 import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
+const load=createRequire(import.meta.url);
+const {build,base,uid:fixtureUid,project:fixtureProject}=load('../stage03-trusted-fixture/uid-trusted-fixture.cjs');
 import {initializeApp,deleteApp} from 'firebase/app';
 import {initializeAuth,inMemoryPersistence,signInWithEmailAndPassword,getIdTokenResult} from 'firebase/auth';
-import {initializeFirestore,memoryLocalCache,doc,getDocFromServer,runTransaction,serverTimestamp,setLogLevel} from 'firebase/firestore';
+import {initializeFirestore,memoryLocalCache,doc,getDocFromServer,setLogLevel} from 'firebase/firestore';
 
 const projectId='deda-qa-uid-lab-20261108', uid='PLmG06Uhhheef1hDE2MLfX6DEpg2', email='deda-qa-test@example.com';
 const expectedHash='705e70c89ef87374a56ed7cf1f31fc408050935b04a9b4120b8b11685872a323';
@@ -50,43 +53,30 @@ async function main(){
   const first=make('stage03-authority-reader');await signIn(first);
   const second=make('stage03-authority-independent');await signIn(second);
   const unauth=make('stage03-authority-unsigned');
-  const root='deda_lab_uid_authority/'+uid;
-  const snap=await getDocFromServer(doc(first.db,root));
-  require(!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites);
-  const restored=await getDocFromServer(doc(second.db,root));
-  require(restored.exists()===snap.exists()&&!restored.metadata.fromCache&&!restored.metadata.hasPendingWrites);
-  if(snap.exists()){
-    const d=snap.data(),other=restored.data();
-    require(d.accountKey===uid&&d.format===1&&d.version===4&&
-      JSON.stringify(sorted(d.balances))===JSON.stringify(sorted({points:5,coins:10,xp:20,earnedDiamonds:200}))&&
-      JSON.stringify(sorted(d))===JSON.stringify(sorted(other)));
-    console.log('PASS_LIVE_SYNTHETIC_PROGRESS_RESTORE_TWO_CLIENTS');
-  }else console.log('PASS_LIVE_AUTHORITY_ABSENCE_NOT_ZERO');
-  stage='inventory-candidate-publication';
-  const view=root+'/inventory/current';
-  let inv;
-  try{inv=await getDocFromServer(doc(first.db,view));}
-  catch(e){require(e.code==='permission-denied');console.log('HOLD_LIVE_INVENTORY_RULE_NOT_AVAILABLE');}
-  if(inv){
-    require(!inv.metadata.fromCache&&!inv.metadata.hasPendingWrites);
-    const other=await getDocFromServer(doc(second.db,view));
-    require(other.exists()===inv.exists()&&!other.metadata.fromCache&&!other.metadata.hasPendingWrites);
-    if(inv.exists()){
-      const d=inv.data();
-      require(d.uid===uid&&d.format===1&&d.revision===1&&d.complete===true&&
-        d.frames?.length===1&&d.frames[0].frameId==='FRAME_03'&&
-        d.idGifts?.length===1&&d.idGifts[0].identifier==='@DEDA-QAFIXTURE'&&d.idGifts[0].acceptance===null&&
-        d.diamondGifts?.length===1&&d.diamondGifts[0].amount===250&&d.diamondGifts[0].status==='pending'&&
-        JSON.stringify(sorted(d))===JSON.stringify(sorted(other.data())));
-      console.log('PASS_LIVE_SYNTHETIC_OWNERSHIP_RESTORE_TWO_CLIENTS');
-    }else console.log('HOLD_LIVE_INVENTORY_SOURCE_ABSENT');
+  const root='deda_lab_uid_authority/'+uid,view=root+'/inventory/current';
+  require(base===root&&fixtureUid===uid&&fixtureProject===projectId);
+  const expected=build(),paths=Object.keys(expected);
+  require(paths.length===12&&expected[root]&&expected[view]);
+  const same=(a,b)=>JSON.stringify(sorted(a))===JSON.stringify(sorted(b));
+  stage='strict-post-lock-readback';
+  for(const c of [first,second]){
+    for(const path of [root,view]){
+      const snap=await getDocFromServer(doc(c.db,path));
+      require(snap.exists()&&!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites&&same(snap.data(),expected[path]));
+    }
+    const privateHead=await getDocFromServer(c.head);
+    require(privateHead.exists()&&!privateHead.metadata.fromCache&&!privateHead.metadata.hasPendingWrites&&privateHead.data().uid===uid&&privateHead.data().version===2);
   }
+  console.log('PASS_POST_LOCK_EXACT_PROGRESS_AND_INVENTORY_TWO_CLIENTS');
+  console.log('PASS_POST_LOCK_PRIVATE_STORAGE_VERSION_2_PRESENT');
   stage='protected-read-denials';
   for(const path of [root,view])await denied(()=>getDocFromServer(doc(unauth.db,path)));
-  for(const path of [root+'/inventorySources/current',root+'/inventoryHistory/1',root+'/receipts/stage03_synthetic_task_000001','deda_lab_uid_authority/stage03-foreign-uid-probe']){
-    await denied(()=>getDocFromServer(doc(first.db,path)));
+  for(const c of [first,second]){
+    for(const path of [...paths.filter(p=>p!==root&&p!==view),'deda_lab_fixture_authorization/'+uid,'deda_lab_uid_authority/stage03-foreign-uid-probe']){
+      await denied(()=>getDocFromServer(doc(c.db,path)));
+    }
   }
-  console.log('PASS_LIVE_PRIVATE_AUTHORITY_SOURCES_AND_FOREIGN_READ_DENIED');
+  console.log('PASS_POST_LOCK_PRIVATE_AUTHORIZATION_HISTORY_AND_FOREIGN_READ_DENIED');
   console.log('READ_ONLY_NO_AWARDS_NO_DEPLOY');
 }
 try{await main();}catch(e){
