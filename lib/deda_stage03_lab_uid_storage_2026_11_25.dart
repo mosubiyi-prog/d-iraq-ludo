@@ -104,7 +104,7 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       throw const FormatException('invalid-lab-revision');
     }
     final revision = DedaPrivateDataRevision(d['version'] as int,
-      d['mutationId'] as String, DedaPrivateDataPayload.decode(d['payload'] as String));
+      d['mutationId'] as String, DedaPrivateDataPayload.decode(d['payload'] as String, uidScoped: true));
     revision.validate();
     return revision;
   }

@@ -15,7 +15,7 @@ def prepare(root):
     root = Path(root).resolve()
     base.prepare(root, 'auth-runtime', json.loads(os.environ['LAB_CONFIG']))
     lib = root/'lib'
-    for name in ('deda_private_data_sync.dart','deda_stage03_lab_uid_storage_2026_11_25.dart'):
+    for name in ('deda_private_data_sync.dart','deda_stage03_lab_uid_storage_2026_11_25.dart','deda_step2_local_places_settings_evidence.dart'):
         gate.require(not (lib/name).exists(), 'DUPLICATE_STORAGE')
         shutil.copyfile(gate.ROOT/'lib'/name,lib/name)
     entry=lib/base.ENTRY

@@ -1,17 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
+import 'deda_step2_local_places_settings_evidence.dart';
 
 /// Nonfinancial records only. Native JSON text and malformed legacy entries
 /// remain byte-for-byte intact; no wallet, role, ID ownership or reward enters.
 class DedaPrivateDataPayload {
-  DedaPrivateDataPayload(Map<String, Object?> fields)
+  DedaPrivateDataPayload(Map<String, Object?> fields, {bool uidScoped = false})
       : fields = Map<String, Object?>.unmodifiable({
           for (final entry in (jsonDecode(jsonEncode(fields)) as Map<String, dynamic>).entries)
             entry.key: entry.value is List ? List<Object?>.unmodifiable(entry.value as List) : entry.value,
         }) {
     for (final entry in this.fields.entries) {
-      if (!validKey(entry.key)) throw const FormatException('unsupported-private-data-key');
+      if (!validKey(entry.key, uidScoped: uidScoped)) throw const FormatException('unsupported-private-data-key');
       final value = entry.value;
+      if (uidPreferenceKeys.contains(entry.key)) {
+        if (value != null && DedaStep2LocalPlacesSettingsReader.inspectRawValue(entry.key, value) !=
+            DedaStep2LocalSourceStatus.capturedUntrusted) {
+          throw const FormatException('invalid-uid-display-preference');
+        }
+        continue;
+      }
       final list = const {'favorites', 'recent', 'quizSeen'}.contains(entry.key) || entry.key.startsWith('quiz:ids:');
       final boolean = entry.key.startsWith('quiz:completed:');
       if (value != null && (list ? !(value is List && value.every((v) => v is String))
@@ -24,17 +32,24 @@ class DedaPrivateDataPayload {
     }
   }
   final Map<String, Object?> fields;
-  static bool validKey(String key) =>
+  // Existing display-only preferences; no roles, permissions, device secrets,
+  // location permission, ownership, or monetary data. Legacy scopes stay closed.
+  static const uidPreferenceKeys = <String>{
+    'deda_language_v1', 'deda_voice_enabled_v1', 'deda_speech_rate_v1',
+    'deda_default_travel_mode_v1', 'deda_default_map_style_v1',
+  };
+  static bool validKey(String key, {bool uidScoped = false}) =>
+      (uidScoped && uidPreferenceKeys.contains(key)) ||
       const {'favorites', 'recent', 'personalPlaces', 'contactDraft', 'quizSeen'}.contains(key) ||
       RegExp(r'^quiz:(ids|progress|completed):[0-9]{4}-[0-9]{2}-[0-9]{2}$').hasMatch(key);
   String encode() {
     final names = fields.keys.toList()..sort();
     return jsonEncode({for (final key in names) key: fields[key]});
   }
-  static DedaPrivateDataPayload decode(String text) {
+  static DedaPrivateDataPayload decode(String text, {bool uidScoped = false}) {
     final value = jsonDecode(text);
     if (value is! Map<String, dynamic>) throw const FormatException('invalid-private-data-payload');
-    return DedaPrivateDataPayload(value);
+    return DedaPrivateDataPayload(value, uidScoped: uidScoped);
   }
 }
 
@@ -81,7 +96,7 @@ class _PrivateJournal {
     'version': base.version, 'mutationId': base.mutationId, 'payload': base.payload?.encode(),
     'pendingId': pendingId, 'pending': pending?.encode(),
   });
-  static _PrivateJournal decode(String text, String account, String original) {
+  static _PrivateJournal decode(String text, String account, String original, {required bool uidScoped}) {
     final d = jsonDecode(text);
     const keys = {'format', 'account', 'original', 'version', 'mutationId', 'payload', 'pendingId', 'pending'};
     if (d is! Map || d.length != keys.length || !keys.every(d.containsKey) ||
@@ -95,10 +110,10 @@ class _PrivateJournal {
       throw const FormatException('invalid-private-data-journal');
     }
     final base = DedaPrivateDataRevision(d['version'] as int, d['mutationId'] as String?,
-        d['payload'] == null ? null : DedaPrivateDataPayload.decode(d['payload'] as String));
+        d['payload'] == null ? null : DedaPrivateDataPayload.decode(d['payload'] as String, uidScoped: uidScoped));
     base.validate();
     return _PrivateJournal(base, pendingId: d['pendingId'] as String?,
-        pending: d['pending'] == null ? null : DedaPrivateDataPayload.decode(d['pending'] as String));
+        pending: d['pending'] == null ? null : DedaPrivateDataPayload.decode(d['pending'] as String, uidScoped: uidScoped));
   }
 }
 
@@ -139,18 +154,20 @@ class DedaPrivateDataSync {
   Future<_PrivateJournal> _journal(String account, String original, void Function() check) async {
     final text = await io.readJournal(account); check();
     return text == null ? _PrivateJournal(const DedaPrivateDataRevision(0, null, null))
-        : _PrivateJournal.decode(text, account, original);
+        : _PrivateJournal.decode(text, account, original, uidScoped: _uidScope);
   }
   Future<void> _save(String account, String original, _PrivateJournal journal,
       void Function() check) async {
     check(); final text = journal.encode(account, original);
-    _PrivateJournal.decode(text, account, original);
+    _PrivateJournal.decode(text, account, original, uidScoped: _uidScope);
     await io.writeJournal(account, text); check();
   }
   Future<DedaPrivateDataResult> backup({required String account, required String original,
       required DedaPrivateDataPayload payload, required bool Function() isCurrent}) =>
     _run(account, original, isCurrent, (check) async {
       final journal = await _journal(account, original, check);
+      // Recheck scope before recording any local intent, including constructed payloads.
+      DedaPrivateDataPayload.decode(payload.encode(), uidScoped: _uidScope);
       // Do not create a new request ID for an unchanged uncertain save.
       // In UID mode never replace an unresolved mutation with another one.
       // Explicit restore/reconciliation retains the earlier local journal.
@@ -205,6 +222,7 @@ class DedaPrivateDataSync {
       await io.verifyOwner(account, original, check); check();
       final remote = await io.readServer(account, original, check); check(); remote.validate();
       if (remote.version == 0) return DedaPrivateDataResult(DedaPrivateDataStatus.absent, remote);
+      DedaPrivateDataPayload.decode(remote.payload!.encode(), uidScoped: _uidScope);
       if (remote.version < journal.base.version || (remote.version == journal.base.version &&
           (remote.mutationId != journal.base.mutationId ||
             remote.payload?.encode() != journal.base.payload?.encode()))) {

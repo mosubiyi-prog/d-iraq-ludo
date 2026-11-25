@@ -76,6 +76,37 @@ void main(){
       expect(()=>DedaPrivateDataPayload({field:'fixture'}),throwsFormatException,reason:field);
     }
   });
+  test('five existing display preferences use the same UID journal and restore without device authority',() async {
+    final server=Server(), a=Port(server,1), b=Port(server,2);
+    final payload=DedaPrivateDataPayload({
+      'favorites': <String>['fixture'],
+      'deda_language_v1': 'ar',
+      'deda_voice_enabled_v1': false,
+      'deda_speech_rate_v1': 1.2,
+      'deda_default_travel_mode_v1': 'driving',
+      'deda_default_map_style_v1': 'normal',
+    },uidScoped:true);
+    expect((await DedaPrivateDataSync.uidScoped(a).backup(account:uid,original:uid,
+      payload:payload,isCurrent:()=>true)).status,DedaPrivateDataStatus.saved);
+    expect((await restore(DedaPrivateDataSync.uidScoped(b))).revision.payload!.encode(),payload.encode());
+    expect(server.writes,1);
+    expect(()=>DedaPrivateDataPayload.decode(payload.encode()),throwsFormatException);
+    final legacy=Port(Server(),3);
+    await expectLater(DedaPrivateDataSync(legacy).backup(account:'07700000000',
+      original:'@DEDA-ABC123',payload:payload,isCurrent:()=>true),throwsFormatException);
+    expect(legacy.journal,isNull);
+    expect(legacy.server.writes,0);
+  });
+  test('UID preferences reject wrong type, range and non-preference authority',(){
+    for(final row in <Map<String,Object?>>[
+      {'deda_voice_enabled_v1':'false'}, {'deda_speech_rate_v1':3.0},
+      {'deda_language_v1':true}, {'deda_default_map_style_v1':''},
+      {'deda_default_travel_mode_v1':12}, {'role':'admin'},
+      {'deda_profile_frame_v1_07700000000':2}, {'locationPermission':true},
+    ]){
+      expect(()=>DedaPrivateDataPayload(row,uidScoped:true),throwsFormatException);
+    }
+  });
   test('lost acknowledgement retries same ID, never double commits',() async {
     final server=Server(), a=Port(server,1)..lost=true;
     final sync=DedaPrivateDataSync.uidScoped(a);
