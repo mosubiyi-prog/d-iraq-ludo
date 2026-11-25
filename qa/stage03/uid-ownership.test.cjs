@@ -202,7 +202,7 @@ test('exact account candidate preserves locked progress and inventory and contai
   const start=original.indexOf('      match /account/current');
   assert.ok(start>0);assert.equal(rules.slice(0,start),original.slice(0,start));
   assert.equal((rules.match(/allow create: if owner\(uid\) && request.resource.data ==/g)||[]).length,3);
-  assert.equal((rules.match(/allow list, update, delete: if false;/g)||[]).length,3);
+  assert.equal((rules.slice(start).match(/allow list, update, delete: if false;/g)||[]).length,3);
   assert.ok(!rules.includes('DEDA_STAGE03_SYNTHETIC_ONLY'));
   require('node:fs').writeFileSync('account-fixed-candidate.rules',rules);
 });
