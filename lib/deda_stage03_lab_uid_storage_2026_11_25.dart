@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_auth_session_runtime.dart';
 import 'deda_private_data_sync.dart';
+import 'deda_profile_visible_diamonds.dart';
 import 'deda_stage02_lab_single_uid_2026_11_25.dart';
 
 /// Read-only envelope. Only the guarded server transaction establishes source
@@ -277,6 +278,45 @@ class DedaStage04ProfileSaveOutcome {
       }
     }
     return DedaStage04ProfileSaveOutcome(name, appearance);
+  }
+}
+
+
+/// Review-only contract for the missing, independently verified personal
+/// wallet residuals. Not a balance writer, not a claim, and not a new ledger.
+/// The existing progress balance is already net of verified spends.
+class DedaStage04PersonalWallet {
+  DedaStage04PersonalWallet._(this.earnedResidual,this.giftResidual,
+      this.managerPersonal,this.hasManagerPersonal);
+  final int earnedResidual, giftResidual, managerPersonal;
+  final bool hasManagerPersonal;
+  static const _max = 9007199254740990;
+  int get visibleDiamonds => dedaProfileVisibleDiamonds(
+      ordinaryEarnedAndGifted: earnedResidual + giftResidual,
+      hasGeneralManagerPersonalWallet: hasManagerPersonal,
+      generalManagerPersonal: managerPersonal);
+
+  static DedaStage04PersonalWallet decode(Map<String,Object?> row,
+      DedaStage04ProfileView profile) {
+    const keys = {'format','uid','complete','sourceKind','progressVersion',
+      'inventoryRevision','giftResidual','managerPersonal','hasManagerPersonal'};
+    final gift = row['giftResidual'], manager = row['managerPersonal'],
+        hasManager = row['hasManagerPersonal'];
+    bool valid(Object? n) => n is int && n >= 0 && n <= _max;
+    if (row.length != keys.length || !keys.every(row.containsKey) ||
+        row['uid'] != profile.uid || row['format'] != 1 ||
+        row['complete'] != true || row['sourceKind'] != 'synthetic-lab-wallet-v1' ||
+        row['progressVersion'] != profile.progressRevision ||
+        row['inventoryRevision'] != profile.inventoryRevision ||
+        !valid(gift) || !valid(manager) || hasManager is! bool ||
+        (hasManager == false && manager != 0)) {
+      throw const FormatException('profile-wallet-source-unproven');
+    }
+    final earned = profile.earnedDiamonds, g = gift as int, m = manager as int;
+    if (g > _max-earned || m > _max-earned-g) {
+      throw const FormatException('profile-wallet-overflow');
+    }
+    return DedaStage04PersonalWallet._(earned,g,m,hasManager);
   }
 }
 

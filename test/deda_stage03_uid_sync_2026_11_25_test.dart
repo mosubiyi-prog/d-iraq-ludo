@@ -186,6 +186,30 @@ void main(){
     expect(full.complete,isTrue);
     expect(calls,['name','appearance']);
   });
+
+  test('04/01 wallet contract distinguishes residual funds from historical gift receipts',(){
+    final inventory=protectedInventory()..['diamondGifts']=[
+      {'amount':250,'status':'pending'}, {'amount':800,'status':'received'}];
+    final view=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+      expectedUid:uid,progress:protectedProgress(),inventory:inventory,account:protectedAccount()));
+    final wallet=<String,Object?>{'format':1,'uid':uid,'complete':true,
+      'sourceKind':'synthetic-lab-wallet-v1','progressVersion':4,
+      'inventoryRevision':1,'giftResidual':70,'managerPersonal':0,'hasManagerPersonal':false};
+    expect(DedaStage04PersonalWallet.decode(wallet,view).visibleDiamonds,270);
+    expect(DedaStage04PersonalWallet.decode({...wallet,'hasManagerPersonal':true,
+      'managerPersonal':1000000},view).visibleDiamonds,1000270);
+    for(final invalid in <Map<String,Object?>>[
+      {...wallet,'uid':'foreign'}, {...wallet,'complete':false},
+      {...wallet,'progressVersion':3}, {...wallet,'inventoryRevision':2},
+      {...wallet,'giftResidual':-1}, {...wallet,'giftResidual':9007199254740990},
+      {...wallet,'managerPersonal':1000000}, {...wallet,'adminGiftWallet':100000000},
+      {...wallet,'sourceKind':'legacy-phone'},
+      Map<String,Object?>.from(wallet)..remove('giftResidual'),
+    ]){
+      expect(()=>DedaStage04PersonalWallet.decode(invalid,view),throwsFormatException);
+    }
+    expect(view.earnedDiamonds,200);
+  });
   test('04/01 cosmetic selection is UID-private, not ownership, and rejects malformed values',(){
     final selection=DedaStage04Appearance(avatar:2,frame:'FRAME_03',background:7);
     final payload=DedaPrivateDataPayload({DedaStage04Appearance.key:selection.encode()},uidScoped:true);
