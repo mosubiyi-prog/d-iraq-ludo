@@ -624,7 +624,11 @@ def verify_shared_routes(main):
                    'DedaSocialFriendCount.notifier.value = verifiedCount;')),
     ):
         for marker in markers:
-            if body.count(marker) != 1:
+            # Count complete identifiers, not a suffix of accountEpoch.
+            # The later friends binder introduces its independent account
+            # epoch check; neither check may stand in for the other.
+            import re
+            if len(re.findall(r'(?<![A-Za-z0-9_$])' + re.escape(marker), body)) != 1:
                 raise ValueError('PROFILE_SHARED_ROUTE_VERIFY:' + marker)
 
 

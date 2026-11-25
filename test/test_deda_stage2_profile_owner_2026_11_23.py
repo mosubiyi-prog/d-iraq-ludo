@@ -275,6 +275,21 @@ class _DedaFriendCompactCard {}
         source = mod.STATE + " {\n" + section[a:z] + "  Widget _bioCard() {}\n}\n" + friend
         changed = mod.bind_shared_routes(source)
         mod.verify_shared_routes(changed)
+        # Later friends binder adds accountEpoch. It must not be counted
+        # as a second countEpoch guard, nor satisfy a missing countEpoch.
+        later = changed.replace(
+            'class _DedaFriendsPageState {',
+            'class _DedaFriendsPageState {\n'
+            '  void later() { if (accountEpoch != DedaPreferences.stabilityAccountEpoch) return; }')
+        mod.verify_shared_routes(later)
+        with self.assertRaisesRegex(ValueError, 'countEpoch'):
+            mod.verify_shared_routes(later.replace(
+                '                      countEpoch != DedaPreferences.stabilityAccountEpoch', 'REMOVED', 1))
+        with self.assertRaisesRegex(ValueError, 'countEpoch'):
+            mod.verify_shared_routes(later.replace(
+                '                      countEpoch != DedaPreferences.stabilityAccountEpoch',
+                '                      countEpoch != DedaPreferences.stabilityAccountEpoch || '
+                'countEpoch != DedaPreferences.stabilityAccountEpoch', 1))
         self.assertIn('height: 112,', changed)
         self.assertIn('gradient: LinearGradient(', changed)
         with self.assertRaises(ValueError):
