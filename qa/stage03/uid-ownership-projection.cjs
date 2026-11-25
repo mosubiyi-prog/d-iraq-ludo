@@ -2,7 +2,8 @@
 // Protected read projection only; no purchase, award, wallet or alias mutation.
 // Source fixtures are synthetic and written only by a trusted emulator context.
 const {isDeepStrictEqual:equal}=require('node:util');
-const {LAB_UID,account,parseState}=require('./reconcile-core.cjs');
+const core=require('./reconcile-core.cjs');
+const {LAB_UID,account,parseState}=core;
 const {frames}=require('./purchase-frames.cjs');
 const {weekStart}=require('./deda_weekly_direct_prize_plan.js');
 const fail=code=>{throw Object.assign(Error(code),{code})};
@@ -202,15 +203,20 @@ async function projectAccount({store,uid}){
 // document, write, role grant, phone mapping or production source import.
 // The legacy-shaped records below must be synthetic and owned by the pinned
 // lab UID. Both wallet balances and protected revisions are read in one tx.
-async function readWalletEvidence({store,uid}){
+function requireDemo(store,uid){
   requireThat(/^127\.0\.0\.1:[0-9]+$/.test(process.env.FIRESTORE_EMULATOR_HOST||'')&&
     process.env.GCLOUD_PROJECT==='demo-deda-stage03-uid'&&
     store?.db?.projectId==='demo-deda-stage03-uid','wallet-emulator-only');
   account(uid,'lab-uid');
+}
+async function readWalletEvidence({store,uid}){
+  requireDemo(store,uid);
+  return store.runTransaction(tx=>walletEvidence(tx,uid));
+}
+async function walletEvidence(tx,uid){
   const base='deda_lab_uid_authority/'+uid;
   const max=9007199254740990;
   const money=x=>Number.isSafeInteger(x)&&x>=0&&x<=max;
-  return store.runTransaction(async tx=>{
     const progress=parseState(await tx.get(base),uid,'lab-uid');
     const inventory=parse(await tx.get(base+'/inventory/current'),uid);
     const profile=parseAccount(await tx.get(base+'/account/current'),uid);
@@ -252,6 +258,143 @@ async function readWalletEvidence({store,uid}){
       progressVersion:progress.version,inventoryRevision:inventory.revision,
       accountRevision:profile.revision,originalId,
       giftResidual:gift.balance,managerPersonal,hasManagerPersonal});
+}
+
+// Existing protected projection, updated atomically from verified sources.
+// Only the trusted DEMO worker may write it, never a callable/client.
+async function refreshWallet({store,uid}){
+  requireDemo(store,uid);
+  return store.runTransaction(async tx=>{
+    const next=await walletEvidence(tx,uid);
+    const path='deda_lab_uid_authority/'+uid+'/wallet/current';
+    const old=await tx.get(path);
+    if(old!==null){
+      requireThat(old.uid===uid&&old.sourceKind==='synthetic-lab-wallet-v1'&&
+        old.originalId===next.originalId&&old.progressVersion<=next.progressVersion&&
+        old.inventoryRevision<=next.inventoryRevision&&old.accountRevision<=next.accountRevision,
+        'wallet-projection-conflict');
+      if(equal(old,next))return {replayed:true,view:next};
+    }
+    tx.set(path,{...next});
+    return {replayed:false,view:next};
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence};
+
+// Switch a previously received ID in the existing account/history and
+// original public directory in ONE transaction. No grant, UID, or debit.
+// Trusted emulator only; no new client permissions or production routing.
+async function activateOwnedId({store,uid,identifier,expectedRevision}){
+  requireDemo(store,uid);
+  requireThat(alias(identifier)&&Number.isSafeInteger(expectedRevision)&&expectedRevision>0,
+    'active-id-request-invalid');
+  const base='deda_lab_uid_authority/'+uid;
+  return store.runTransaction(async tx=>{
+    const accountPath=base+'/account/current', sourcePath=base+'/accountSources/current';
+    const old=parseAccount(await tx.get(accountPath),uid);
+    const previous=await tx.get(sourcePath);
+    const oldHistory=await tx.get(base+'/accountHistory/'+old.revision);
+    requireThat(equal(old,previous)&&equal(old,oldHistory),'active-id-history-conflict');
+    requireThat(old.revision===expectedRevision,'active-id-revision-conflict');
+    const inv=parse(await tx.get(base+'/inventory/current'),uid);
+    const invSource=await tx.get(base+'/inventorySources/current');
+    const invHistory=await tx.get(base+'/inventoryHistory/'+inv.revision);
+    requireThat(equal(inv,invSource)&&equal(inv,invHistory),'active-id-inventory-conflict');
+    const originalId=old.profile.originalId;
+    const user=await tx.get('users/'+uid),session=await tx.get('deda_sessions/'+uid);
+    const route=await tx.get('deda_share_ids/'+originalId);
+    requireThat(user&&session&&route&&user.accountKey===uid&&user.sharePersonalId===originalId&&
+      session.uid===uid&&session.accountKey===uid&&route.ownerUid===uid&&
+      route.publicId===originalId&&route.kind==='personal'&&route.active===true,
+      'active-id-owner-unproven');
+    const activePath='deda_stage71_active_identifier/'+originalId;
+    const publicPath='deda_public_active_aliases/'+originalId;
+    const active=await tx.get(activePath),pub=await tx.get(publicPath);
+    requireThat(active&&pub&&active.originalId===originalId&&active.activeId===old.profile.activeId&&
+      pub.originalId===originalId&&pub.activeId===old.profile.activeId&&pub.baseColor===old.profile.fixedColor,
+      'active-id-directory-conflict');
+    let color=null,aliasPath=null;
+    if(identifier!==originalId){
+      const g=inv.idGifts.find(x=>x.identifier===identifier);
+      const registry=await tx.get('deda_stage71_granted_registry/'+identifier);
+      const receipt=await tx.get('deda_stage74_id_gift_receipts/'+identifier);
+      const competing=await tx.get('deda_share_ids/'+identifier);
+      aliasPath='deda_public_alias_routes/'+identifier;
+      const aliasRoute=await tx.get(aliasPath);
+      requireThat(g&&g.acceptance&&registry&&receipt&&registry.identifier===identifier&&
+        registry.recipientOriginalId===originalId&&registry.group===g.grant.group&&
+        registry.baseColor===g.grant.baseColor&&registry.kind==='gifted'&&
+        receipt.identifier===identifier&&receipt.originalId===originalId&&receipt.group===g.grant.group&&
+        receipt.receivedAt&&typeof receipt.receivedAt.toMillis==='function'&&
+        receipt.receivedAt.toMillis()===g.acceptance.receivedMs&&
+        competing===null&&(!aliasRoute||(aliasRoute.aliasId===identifier&&aliasRoute.originalId===originalId&&
+          aliasRoute.baseColor===g.grant.baseColor)), 'active-id-ownership-unproven');
+      color=g.grant.baseColor;
+    }
+    if(identifier===old.profile.activeId)return {replayed:true,view:old};
+    requireThat(old.revision<9007199254740990,'active-id-revision-overflow');
+    const next=parseAccount({...old,revision:old.revision+1,
+      profile:{...old.profile,activeId:identifier,fixedColor:color}},uid);
+    const history=base+'/accountHistory/'+next.revision;
+    requireThat(await tx.get(history)===null,'active-id-history-conflict');
+    const now=store.serverTimestamp();
+    tx.set(accountPath,next);tx.set(sourcePath,next);tx.set(history,next);
+    tx.set(activePath,{originalId,activeId:identifier,updatedAt:now});
+    tx.set(publicPath,{originalId,activeId:identifier,baseColor:color,updatedAt:now});
+    if(aliasPath)tx.set(aliasPath,{aliasId:identifier,originalId,baseColor:color,updatedAt:now});
+    return {replayed:false,view:next};
+  });
+}
+
+// The original five-stage reserve/return operation uses the EXISTING
+// receipt/event ledger and reconcile core, not a separate point balance.
+// The fixed campaign exists only in the disposable demo. The user supplies
+// a threshold/action, never an amount, eligibility, or a reward receipt.
+const thresholds=Object.freeze([5000,10000,15000,20000,25000]);
+function pointReceipt(uid,threshold,action){
+  const reserve=core.parseReceipt({format:1,accountKey:uid,source:'point-reservation-v1',
+    sourceId:'stage04-synthetic-tier|'+threshold,kind:'spend',
+    delta:{points:-threshold,coins:0,xp:0,earnedDiamonds:0}},uid,'lab-uid');
+  if(action==='reserve')return reserve;
+  return core.parseReceipt({format:1,accountKey:uid,source:'point-tier-return-v1',
+    sourceId:'stage04-synthetic-tier|'+threshold+'|'+core.eventKey(reserve),kind:'award',
+    delta:{points:threshold+threshold/100,coins:0,xp:0,earnedDiamonds:0}},uid,'lab-uid');
+}
+async function pointTier({store,uid,threshold,action}){
+  requireDemo(store,uid);
+  const index=thresholds.indexOf(threshold);
+  requireThat(index>=0&&['reserve','claim'].includes(action)&&
+    !(action==='claim'&&threshold===25000),'point-tier-ineligible');
+  const base='deda_lab_uid_authority/'+uid;
+  return store.runTransaction(async tx=>{
+    const state=parseState(await tx.get(base),uid,'lab-uid');
+    // All paths are derived from the existing stable event key.
+    async function evidence(receipt){
+      const k=core.eventKey(receipt);
+      const rp=base+'/receipts/'+k, ep=base+'/events/'+k;
+      const r=await tx.get(rp),e=await tx.get(ep);
+      requireThat((r===null)===(e===null),'point-tier-partial-history');
+      if(r!==null)requireThat(core.sameEvent(core.parseReceipt(r,uid,'lab-uid'),receipt)&&
+        e.format===1&&e.accountKey===uid&&e.eventKey===k&&e.receiptId===k&&
+        core.sameEvent(core.parseReceipt(e.receipt,uid,'lab-uid'),receipt)&&
+        Number.isSafeInteger(e.appliedVersion)&&e.appliedVersion>=2&&e.appliedVersion<=state.version,
+        'point-tier-history-conflict');
+      return {rp,ep,k,applied:e};
+    }
+    const reservation=await evidence(pointReceipt(uid,threshold,'reserve'));
+    const target=action==='reserve'?reservation:await evidence(pointReceipt(uid,threshold,'claim'));
+    if(index>0){
+      const prior=await evidence(pointReceipt(uid,thresholds[index-1],'claim'));
+      requireThat(prior.applied!==null,'point-tier-previous-unclaimed');
+    }
+    if(action==='claim')requireThat(reservation.applied!==null,'point-tier-not-reserved');
+    if(target.applied!==null)return {replayed:true,state};
+    const receipt=pointReceipt(uid,threshold,action);
+    const next=core.applyEvent(state,receipt,'lab-uid');
+    tx.set(target.rp,{...receipt});
+    tx.set(target.ep,{format:1,accountKey:uid,eventKey:target.k,receipt,receiptId:target.k,
+      appliedVersion:next.version,afterBalances:next.balances,createdAt:store.serverTimestamp()});
+    tx.set(base,{...next});
+    return {replayed:false,state:next};
+  });
+}
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier};

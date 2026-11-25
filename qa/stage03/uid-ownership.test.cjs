@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -353,4 +353,105 @@ test('04/01 static wallet projection read by same UID only, all client writes de
     // No publication or live writer: remove only the test fixture.
     await local.withSecurityRulesDisabled(ctx=>deleteDoc(doc(ctx.firestore(),wallet)));
   }finally{await local.cleanup();}
+});
+
+
+test('04/01 trusted wallet refresh writes only derived projection and is idempotent',async()=>{
+  await seedWalletEvidence();
+  const wallet=base+'/wallet/current', before=(await db.doc(base).get()).data();
+  const first=await refreshWallet({store,uid});
+  assert.equal(first.replayed,false);assert.equal(first.view.giftResidual,70);
+  assert.equal((await refreshWallet({store,uid})).replayed,true);
+  await db.doc(walletGiftPath).update({balance:15});
+  const second=await refreshWallet({store,uid});
+  assert.equal(second.view.giftResidual,15);
+  assert.deepEqual((await db.doc(wallet).get()).data(),second.view);
+  await db.doc(walletGiftPath).delete();
+  await assert.rejects(refreshWallet({store,uid}),{code:'wallet-gift-source-unproven'});
+  assert.deepEqual((await db.doc(wallet).get()).data(),second.view);
+  assert.deepEqual((await db.doc(base).get()).data(),before);
+  await assertFails(setDoc(doc(client(),wallet),{...second.view,giftResidual:1000000}));
+});
+test('04/01 use received ID atomically in existing account and public directory; return original; retain ownership',async()=>{
+  await seedWalletEvidence();
+  const {buildAccount}=require('./uid-trusted-fixture.cjs');
+  for(const [path,row] of Object.entries(buildAccount()))await db.doc(path).set(row);
+  const inv=require('./uid-trusted-fixture.cjs').build()[view];
+  await seed(inv);
+  await db.doc(base+'/inventoryHistory/1').set(inv);
+  const active='deda_stage71_active_identifier/'+original,pub='deda_public_active_aliases/'+original;
+  const aliasPath='deda_public_alias_routes/'+identifier;
+  const registry='deda_stage71_granted_registry/'+identifier;
+  const receipt='deda_stage74_id_gift_receipts/'+identifier;
+  await db.doc(active).set({originalId:original,activeId:original,updatedAt:FieldValue.serverTimestamp()});
+  await db.doc(pub).set({originalId:original,activeId:original,baseColor:null,updatedAt:FieldValue.serverTimestamp()});
+  const use=(id,rev)=>activateOwnedId({store,uid,identifier:id,expectedRevision:rev});
+  await assert.rejects(use(identifier,1),{code:'active-id-ownership-unproven'});
+  inv.revision=2;inv.idGifts[0].acceptance={uid,identifier,group:'001',receivedMs:ms+1};
+  await seed(inv);await apply();
+  await db.doc(registry).set({identifier,recipientOriginalId:original,group:'001',baseColor:'gold',kind:'gifted'});
+  const {Timestamp}=require('firebase-admin/firestore');
+  await db.doc(receipt).set({identifier,originalId:original,group:'001',receivedAt:Timestamp.fromMillis(ms+1)});
+  await db.doc(aliasPath).set({aliasId:identifier,originalId:peerId,baseColor:'gold'});
+  await assert.rejects(use(identifier,1),{code:'active-id-ownership-unproven'});
+  await db.doc(aliasPath).delete();
+  const old=(await db.doc(acctView).get()).data(),before=(await db.doc(base).get()).data();
+  const owned=await read();
+  const switched=await use(identifier,1);
+  assert.equal(switched.view.profile.activeId,identifier);
+  assert.equal(switched.view.profile.fixedColor,'gold');
+  assert.deepEqual(switched.view,{...old,revision:2,profile:{...old.profile,activeId:identifier,fixedColor:'gold'}});
+  for(const p of [acctSource,acctView,base+'/accountHistory/2'])
+    assert.deepEqual((await db.doc(p).get()).data(),switched.view);
+  assert.equal((await db.doc(active).get()).data().activeId,identifier);
+  assert.equal((await db.doc(pub).get()).data().activeId,identifier);
+  assert.equal((await db.doc(aliasPath).get()).data().originalId,original);
+  await assert.rejects(use(original,1),{code:'active-id-revision-conflict'});
+  assert.equal((await use(identifier,2)).replayed,true);
+  const returned=await use(original,2);
+  assert.equal(returned.view.profile.activeId,original);
+  assert.equal(returned.view.profile.fixedColor,null);
+  assert.equal((await db.doc(pub).get()).data().activeId,original);
+  assert.equal((await db.doc(aliasPath).get()).data().originalId,original);
+  assert.deepEqual(await read(),owned);
+  assert.deepEqual((await db.doc(base).get()).data(),before);
+  await assertFails(setDoc(doc(client(),acctView),{...returned.view,revision:4}));
+});
+test('04/01 original five point stages use one ledger, reserve/return once and terminal spend stays spent',async()=>{
+  const core=require('./reconcile-core.cjs');
+  const {reconcileLabReceipt}=require('./reconcile-store.cjs');
+  const {build}=require('./uid-trusted-fixture.cjs');
+  const docs=build();
+  await db.doc(base).set(docs[base]);
+  const operate=(threshold,action)=>pointTier({store,uid,threshold,action});
+  await assert.rejects(operate(5000,'reserve'),{code:'insufficient-points'});
+  await assert.rejects(operate(5000,'claim'),{code:'point-tier-not-reserved'});
+  // The existing trusted receipt worker supplies synthetic earned points.
+  const receiptId='stage04_synthetic_points_0001';
+  const award=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',
+    sourceId:'stage04-synthetic-earned-points',kind:'award',
+    delta:{points:25000,coins:0,xp:0,earnedDiamonds:0}},uid,'lab-uid');
+  await db.doc(base+'/receipts/'+receiptId).set(award);
+  await reconcileLabReceipt({store,accountKey:uid,receiptId});
+  const before=(await db.doc(base).get()).data();
+  await assert.rejects(operate(10000,'reserve'),{code:'point-tier-previous-unclaimed'});
+  for(const threshold of [5000,10000,15000,20000,25000]){
+    const initial=(await db.doc(base).get()).data();
+    const reserved=await Promise.all([operate(threshold,'reserve'),operate(threshold,'reserve')]);
+    assert.equal(reserved.filter(x=>x.replayed).length,1);
+    assert.equal(reserved[0].state.balances.points,initial.balances.points-threshold);
+    if(threshold===25000){
+      await assert.rejects(operate(threshold,'claim'),{code:'point-tier-ineligible'});
+    }else{
+      const claimed=await Promise.all([operate(threshold,'claim'),operate(threshold,'claim')]);
+      assert.equal(claimed.filter(x=>x.replayed).length,1);
+      assert.equal(claimed[0].state.balances.points,initial.balances.points+threshold/100);
+    }
+  }
+  const final=(await db.doc(base).get()).data();
+  assert.equal(final.balances.points,before.balances.points+500-25000);
+  for(const unit of ['coins','xp','earnedDiamonds'])assert.equal(final.balances[unit],before.balances[unit]);
+  assert.equal((await operate(5000,'claim')).state.balances.points,final.balances.points);
+  assert.equal((await db.collection(base+'/events').get()).size,10);
+  await assertFails(setDoc(doc(client(),base),{...final,balances:{...final.balances,points:999999}}));
 });
