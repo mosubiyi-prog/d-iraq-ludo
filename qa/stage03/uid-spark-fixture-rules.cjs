@@ -5,7 +5,7 @@
 const {readFileSync,writeFileSync}=require('node:fs');
 const {build,base,uid}=require('./uid-trusted-fixture.cjs');
 const marker={uid,purpose:'DEDA_STAGE03_SYNTHETIC_ONLY',format:1};
-const markerPath=base+'/fixtureAuthorization/current';
+const markerPath='deda_lab_fixture_authorization/'+uid;
 function literal(v){
   if(v===null||typeof v==='boolean'||typeof v==='string')return JSON.stringify(v);
   if(typeof v==='number'&&Number.isSafeInteger(v))return String(v);

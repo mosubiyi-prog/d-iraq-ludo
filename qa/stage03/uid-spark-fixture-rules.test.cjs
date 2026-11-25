@@ -35,7 +35,8 @@ test('untrusted client cannot authorize or create any fixture without protected 
   await seed({...marker,purpose:'wrong'});await assertFails(batch(c));
 });
 test('authorized exact atomic fixture restores both projections on independent sessions, no replay writes',async()=>{
-  await seed();await assertSucceeds(batch(client()));
+  await seed();assert.equal((await serverRead(base)).exists(),false);
+  await assertSucceeds(batch(client()));
   for(const [p,d] of Object.entries(docs)){
     const s=await serverRead(p);assert.equal(s.exists(),true);
     const value=s.data();

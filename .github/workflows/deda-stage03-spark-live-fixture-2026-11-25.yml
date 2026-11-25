@@ -1,0 +1,49 @@
+name: DEDA Stage03 Spark fixed live fixture explicit owner gate NO DEPLOY
+on:
+  push:
+    branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]
+    paths:
+      - 'tools/app_stability/app_package/stage03_lab_live_spark_fixture_2026_11_25.mjs'
+      - 'qa/stage03/uid-spark-fixture-rules.cjs'
+      - '.github/workflows/deda-stage03-spark-live-fixture-2026-11-25.yml'
+      - 'qa/stage03/spark-live-fixture-authorization.txt'
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage03-spark-live-fixture
+  cancel-in-progress: false
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare exact fixed fixture and check live script without credentials
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-spark-live"
+          mkdir -p "$work"
+          cp qa/stage03/{uid-trusted-fixture,uid-trusted-fixture.test,uid-spark-fixture-rules,uid-ownership-projection}.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
+          cp tools/app_stability/app_package/stage03_lab_live_spark_fixture_2026_11_25.mjs "$work/live.mjs"
+          cd "$work"
+          node --check live.mjs
+          node --test uid-trusted-fixture.test.cjs
+      - name: Execute fixed lab fixture only after explicit separate owner authorization commit
+        if: github.event.head_commit.message == 'Stage 03: authorize exact lab synthetic fixture live once'
+        env:
+          LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
+          LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
+          STAGE03_LIVE_AUTHORIZED: LAB_SYNTHETIC_ONLY
+          STAGE03_ACTIVATION_FILE: ${{ github.workspace }}/qa/stage03/spark-live-fixture-authorization.txt
+        run: |
+          set -euo pipefail
+          test "$(cat "$STAGE03_ACTIVATION_FILE")" = LAB_SYNTHETIC_ONLY
+          cd "$RUNNER_TEMP/stage03-spark-live"
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock firebase@11.10.0
+          node live.mjs
