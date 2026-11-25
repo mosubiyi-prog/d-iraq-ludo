@@ -35,7 +35,8 @@ jobs:
           node --check live.mjs
           node --test uid-trusted-fixture.test.cjs
       - name: Execute fixed lab fixture only after explicit separate owner authorization commit
-        if: github.event.head_commit.message == 'Stage 03: authorize exact lab synthetic fixture live once'
+        if: >-
+          github.event.head_commit.message == 'Stage 03: authorize exact lab synthetic fixture live once'
         env:
           LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
           LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
