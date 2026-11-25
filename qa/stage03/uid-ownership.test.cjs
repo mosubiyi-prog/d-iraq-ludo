@@ -275,3 +275,41 @@ test('04/01 missing gift, wrong route, foreign UID and inconsistent manager proo
   await assert.rejects(readWallet(),{code:'wallet-manager-source-unproven'});
   await assert.rejects(readWalletEvidence({store:{db:{projectId:'not-demo'}},uid}),{code:'wallet-emulator-only'});
 });
+
+ 
+test('04/01 static wallet projection read by same UID only, all client writes denied',async()=>{
+  await seedWalletEvidence();
+  const proof=await readWallet();
+  const wallet=base+'/wallet/current';
+  const originalRules=readFileSync('firestore.rules','utf8');
+  const anchor='      match /account/current {';
+  assert.equal(originalRules.split(anchor).length,2);
+  // Temporary emulator rules only. Never export, generate a live candidate
+  // from this test, or grant writes to the client.
+  const candidate=originalRules.replace(anchor,()=>[
+    '      match /wallet/current {',
+    '        allow get: if owner(uid);',
+    '        allow list, create, update, delete: if false;',
+    '      }',anchor].join('\n'));
+  const local=await initializeTestEnvironment({projectId,firestore:{rules:candidate}});
+  try{
+    const c=(id=uid,provider='password')=>local.authenticatedContext(id,{firebase:{sign_in_provider:provider}}).firestore();
+    await local.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),wallet),proof));
+    for(const owner of [c(),c()]){
+      assert.deepEqual((await assertSucceeds(getDocFromServer(doc(owner,wallet)))).data(),proof);
+      await assertFails(setDoc(doc(owner,wallet),{...proof,giftResidual:99999}));
+      await assertFails(deleteDoc(doc(owner,wallet)));
+      await assertFails(getDocs(collection(owner,base,'wallet')));
+      await assertFails(setDoc(doc(owner,base+'/wallet/other'),proof));
+      await assertFails(getDocFromServer(doc(owner,walletGiftPath)));
+      await assertFails(getDocFromServer(doc(owner,walletPersonalPath)));
+    }
+    for(const denied of [c(other),c(uid,'anonymous'),local.unauthenticatedContext().firestore()]){
+      await assertFails(getDocFromServer(doc(denied,wallet)));
+      await assertFails(setDoc(doc(denied,wallet),proof));
+    }
+    assert.deepEqual((await db.doc(wallet).get()).data(),proof);
+    // No publication or live writer: remove only the test fixture.
+    await local.withSecurityRulesDisabled(ctx=>deleteDoc(doc(ctx.firestore(),wallet)));
+  }finally{await local.cleanup();}
+});

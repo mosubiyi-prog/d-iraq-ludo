@@ -210,6 +210,27 @@ void main(){
     }
     expect(view.earnedDiamonds,200);
   });
+  test('04/01 wallet candidate is default off and rejects a changed opening revision',(){
+    expect(DedaStage03LabStorage.walletCandidateEnabled,isFalse);
+    DedaStage04ProfileView view(Map<String,Object?> p,Map<String,Object?> i,Map<String,Object?> a) =>
+      DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:p,inventory:i,account:a));
+    final opening=view(protectedProgress(),protectedInventory(),protectedAccount());
+    final row=<String,Object?>{'format':1,'uid':uid,'complete':true,
+      'sourceKind':'synthetic-lab-wallet-v1','progressVersion':4,
+      'inventoryRevision':1,'giftResidual':70,'managerPersonal':0,'hasManagerPersonal':false};
+    expect(DedaStage04PersonalWallet.decodeForOpening(row,opening,opening).visibleDiamonds,270);
+    for(final changed in [
+      view(protectedProgress()..['version']=5,protectedInventory(),protectedAccount()),
+      view(protectedProgress(),protectedInventory()..['revision']=2,protectedAccount()),
+      view(protectedProgress(),protectedInventory(),protectedAccount()..['revision']=2),
+    ]){
+      expect(()=>DedaStage04PersonalWallet.decodeForOpening(row,opening,changed),
+        throwsA(isA<DedaPrivateDataConflict>()));
+    }
+    expect(()=>DedaStage04PersonalWallet.decodeForOpening(
+      {...row,'inventoryRevision':2},opening,opening),throwsFormatException);
+  });
   test('04/01 cosmetic selection is UID-private, not ownership, and rejects malformed values',(){
     final selection=DedaStage04Appearance(avatar:2,frame:'FRAME_03',background:7);
     final payload=DedaPrivateDataPayload({DedaStage04Appearance.key:selection.encode()},uidScoped:true);

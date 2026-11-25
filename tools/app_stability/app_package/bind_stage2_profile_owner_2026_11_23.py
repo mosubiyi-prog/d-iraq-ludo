@@ -681,6 +681,7 @@ STAGE04_FIELDS = """
       || DedaStage03LabStorage.enabled;
   DedaStage04ProfileRead? _stage04Read;
   DedaStage04AppearanceRead? _stage04Appearance;
+  int? _stage04WalletDiamonds;
   DedaAuthSnapshot? _stage04Principal;
   StreamSubscription<User?>? _stage04Auth;
   bool _stage04Expired = false;
@@ -695,6 +696,7 @@ STAGE04_FIELDS = """
     _stage04Expired = true;
     _stage04Read = null;
     _stage04Appearance = null;
+    _stage04WalletDiamonds = null;
     if (mounted) setState(() { _stage04Loading = false; });
   }
   bool _stage04SameSession() {
@@ -723,13 +725,19 @@ STAGE04_FIELDS = """
   }
   Future<void> _stage04Refresh() async {
     if (!mounted || _stage04Loading || !_stage04SameSession()) return;
-    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; });
+    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; _stage04WalletDiamonds = null; });
     try {
       final read = await DedaStage03LabStorage.readProfile();
       final view = read.requireCurrent();
       DedaStage04AppearanceRead? appearance;
       try { appearance = await DedaStage03LabStorage.readAppearance(read); }
       catch (_) { /* No local/default fallback or edit on a conflicting journal. */ }
+      int? walletDiamonds;
+      if (DedaStage03LabStorage.walletCandidateEnabled) {
+        try {
+          walletDiamonds = (await DedaStage03LabStorage.readWalletCandidate(read)).visibleDiamonds;
+        } catch (_) { /* Missing or stale source stays held, never zero. */ }
+      }
       if (!mounted || !_stage04SameSession()) return;
       read.requireCurrent();
       setState(() {
@@ -738,6 +746,7 @@ STAGE04_FIELDS = """
         (_stage04Friends ??= ValueNotifier<int>(view.acceptedFriends)).value = view.acceptedFriends;
         _stage04Read = read;
         _stage04Appearance = appearance;
+        _stage04WalletDiamonds = walletDiamonds;
         _stage04Loading = false;
       });
     } catch (_) {
@@ -940,7 +949,8 @@ def _stage04_level(body):
 def _stage04_stats(body):
     body = once(body, 'child: ValueListenableBuilder<int>(\n            valueListenable: DedaDiamondsWallet.balanceNotifier,',
         """child: _stage04LabMode
-              ? _statCard(icon: Icons.diamond_rounded, value: '—',
+              ? _statCard(icon: Icons.diamond_rounded,
+                  value: (_stage04View == null ? null : _stage04WalletDiamonds)?.toString() ?? '—',
                   label: dedaText('الماسات', 'Diamonds'),
                   color: const Color(0xFF7639D4), surface: const Color(0xFFF1E8FF))
               : ValueListenableBuilder<int>(

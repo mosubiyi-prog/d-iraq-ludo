@@ -296,6 +296,19 @@ class DedaStage04PersonalWallet {
       hasGeneralManagerPersonalWallet: hasManagerPersonal,
       generalManagerPersonal: managerPersonal);
 
+  static DedaStage04PersonalWallet decodeForOpening(
+      Map<String,Object?> row, DedaStage04ProfileView opening,
+      DedaStage04ProfileView fresh) {
+    if (opening.uid != fresh.uid || opening.originalId != fresh.originalId ||
+        opening.progressRevision != fresh.progressRevision ||
+        opening.inventoryRevision != fresh.inventoryRevision ||
+        opening.accountRevision != fresh.accountRevision ||
+        opening.earnedDiamonds != fresh.earnedDiamonds) {
+      throw const DedaPrivateDataConflict();
+    }
+    return decode(row, fresh);
+  }
+
   static DedaStage04PersonalWallet decode(Map<String,Object?> row,
       DedaStage04ProfileView profile) {
     const keys = {'format','uid','complete','sourceKind','progressVersion',
@@ -417,6 +430,51 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     return DedaStage04ProfileRead._(view, current);
   }
 
+
+  /// A static synthetic wallet projection only. No live rules or wallet
+  /// issuance are provided by this candidate; default closed.
+  static const walletCandidateEnabled =
+      bool.fromEnvironment('DEDA_STAGE04_PROFILE_WALLET_CANDIDATE');
+
+  /// Read the candidate view and the three protected documents in one
+  /// transaction, never substituting a phone balance or historical gifts.
+  /// The opening view must still match. No wallet mutation or permission grant.
+  static Future<DedaStage04PersonalWallet> readWalletCandidate(
+      DedaStage04ProfileRead opening) async {
+    if (!walletCandidateEnabled) {
+      throw StateError('profile-wallet-candidate-disabled');
+    }
+    final current = _intent();
+    final old = opening.requireCurrent();
+    void check() {
+      if (!current()) throw const DedaPrivateDataStale();
+      opening.requireCurrent();
+      _io._check(uid, uid);
+    }
+    await _io.verifyOwner(uid, uid, check);
+    check();
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app());
+    final base = db.doc('deda_lab_uid_authority/$uid');
+    final result = await db.runTransaction<DedaStage04PersonalWallet>((tx) async {
+      check();
+      final p = await tx.get(base);
+      final i = await tx.get(base.collection('inventory').doc('current'));
+      final a = await tx.get(base.collection('account').doc('current'));
+      final w = await tx.get(base.collection('wallet').doc('current'));
+      check();
+      for (final row in [p,i,a,w]) {
+        if (!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites) {
+          throw StateError('profile-wallet-server-source-required');
+        }
+      }
+      final fresh = DedaStage04ProfileView.fromProtected(
+          DedaStage03ProtectedSnapshot.decode(expectedUid: uid,
+            progress: p.data(), inventory: i.data(), account: a.data()));
+      return DedaStage04PersonalWallet.decodeForOpening(w.data()!, old, fresh);
+    }, timeout: const Duration(seconds: 15));
+    check();
+    return result;
+  }
 
   /// Review-only client integration. Default closed; the existing live
   /// laboratory rules do not permit this candidate write. Never call from
