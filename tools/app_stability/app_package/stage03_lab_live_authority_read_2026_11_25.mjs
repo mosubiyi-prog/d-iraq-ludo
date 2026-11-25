@@ -1,13 +1,13 @@
-// Stage 03 read-only live authority preflight, exact pinned lab client.
+// Stage 03 live authority preflight, read-only by default. Optional exact nonfinancial synthetic account seed after explicit owner publication and manual dispatch.
 // Never deploy rules, use Admin SDK, create users, write balances, or touch production.
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 const load=createRequire(import.meta.url);
-const {build,base,uid:fixtureUid,project:fixtureProject}=load('../stage03-trusted-fixture/uid-trusted-fixture.cjs');
+const {build,buildAccount,base,uid:fixtureUid,project:fixtureProject}=load('../stage03-trusted-fixture/uid-trusted-fixture.cjs');
 import {initializeApp,deleteApp} from 'firebase/app';
 import {initializeAuth,inMemoryPersistence,signInWithEmailAndPassword,getIdTokenResult} from 'firebase/auth';
-import {initializeFirestore,memoryLocalCache,doc,getDocFromServer,setLogLevel} from 'firebase/firestore';
+import {initializeFirestore,memoryLocalCache,doc,getDocFromServer,setLogLevel,writeBatch} from 'firebase/firestore';
 
 const projectId='deda-qa-uid-lab-20261108', uid='PLmG06Uhhheef1hDE2MLfX6DEpg2', email='deda-qa-test@example.com';
 const expectedHash='705e70c89ef87374a56ed7cf1f31fc408050935b04a9b4120b8b11685872a323';
@@ -89,7 +89,37 @@ async function main(){
     }
   }
   console.log('PASS_POST_LOCK_PRIVATE_AUTHORIZATION_HISTORY_AND_FOREIGN_READ_DENIED');
-  console.log('READ_ONLY_NO_AWARDS_NO_DEPLOY');
+  // Root and inventory already checked and locked. Never touch them.
+  const accountRows=buildAccount(),accountView=root+'/account/current';
+  if(process.env.ACCOUNT_FIXTURE_AUTHORIZED==='true'){
+    stage='explicit-fixed-account-only';
+    const before=await getDocFromServer(doc(first.db,accountView));
+    require(!before.metadata.fromCache&&!before.metadata.hasPendingWrites);
+    if(before.exists()){
+      require(same(before.data(),accountRows[accountView]));
+      console.log('PASS_EXISTING_EXACT_ACCOUNT_NO_WRITE');
+    }else{
+      const batch=writeBatch(first.db);
+      for(const [path,value] of Object.entries(accountRows))batch.set(doc(first.db,path),value);
+      await batch.commit();
+      console.log('PASS_ATOMIC_NONFINANCIAL_ACCOUNT_FIXTURE_SAVE');
+    }
+    stage='account-two-independent-clients';
+    for(const c of [first,second]){
+      const snapshot=await getDocFromServer(doc(c.db,accountView));
+      require(snapshot.exists()&&!snapshot.metadata.fromCache&&!snapshot.metadata.hasPendingWrites&&same(snapshot.data(),accountRows[accountView]));
+      for(const path of Object.keys(accountRows).filter(p=>p!==accountView))await denied(()=>getDocFromServer(doc(c.db,path)));
+      for(const path of [root,view]){
+        const snapshot=await getDocFromServer(doc(c.db,path));
+        require(snapshot.exists()&&same(snapshot.data(),expected[path]));
+      }
+    }
+    await denied(()=>getDocFromServer(doc(unauth.db,accountView)));
+    console.log('PASS_EXACT_ACCOUNT_RESTORE_TWO_CLIENTS_PRIOR_AUTHORITY_UNCHANGED');
+    console.log('SYNTHETIC_ACCOUNT_ONLY_NO_AWARDS_NO_DEPLOY');
+  }else{
+    console.log('READ_ONLY_NO_AWARDS_NO_DEPLOY');
+  }
 }
 try{await main();}catch(e){
   const code=typeof e.code==='string'&&/^[a-z0-9/-]{1,60}$/.test(e.code)?e.code:'';

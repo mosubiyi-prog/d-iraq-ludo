@@ -39,3 +39,11 @@ jobs:
           npm install --no-audit --no-fund --ignore-scripts --no-package-lock @firebase/rules-unit-testing@4.0.0 firebase@11.10.0 firebase-admin@13.0.0
           node --check uid-ownership-projection.cjs
           GCLOUD_PROJECT=demo-deda-stage03-uid npx --yes firebase-tools@13.35.1 emulators:exec --project demo-deda-stage03-uid --only firestore --config firebase.json --non-interactive 'node --test uid-ownership.test.cjs'
+          sha256sum account-fixed-candidate.rules > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage03-account-fixed-candidate-REVIEW-ONLY
+          path: |
+            ${{ runner.temp }}/stage03-ownership/account-fixed-candidate.rules
+            ${{ runner.temp }}/stage03-ownership/SHA256SUMS.txt
+          if-no-files-found: error
