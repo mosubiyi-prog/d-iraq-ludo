@@ -120,7 +120,7 @@ void main(){
   test('04/01 active gifted ID needs matching accepted grant and fixed color',(){
     final a=protectedAccount(), inventory=protectedInventory();
     final id='@DEDA-QAFIXTURE';
-    (a['profile'] as Map).addAll({'activeId':id,'fixedColor':'gold'});
+    (a['profile'] as Map<String,String?>).addAll(<String,String?>{'activeId':id,'fixedColor':'gold'});
     DedaStage04ProfileView project()=>DedaStage04ProfileView.fromProtected(
       DedaStage03ProtectedSnapshot.decode(expectedUid:uid,progress:protectedProgress(),
         inventory:inventory,account:a));
