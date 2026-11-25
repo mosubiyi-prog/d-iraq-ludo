@@ -29,6 +29,7 @@ jobs:
           work="$RUNNER_TEMP/stage03-live"
           mkdir -p "$work"
           cp tools/app_stability/app_package/stage03_lab_live_storage_2026_11_25.mjs "$work/probe.mjs"
+          cp qa/stage03/uid-private-v3-fixture.json "$work/uid-private-v3-fixture.json"
           cd "$work"
           npm install --no-audit --no-fund --ignore-scripts --no-package-lock firebase@11.10.0
           node --check probe.mjs
