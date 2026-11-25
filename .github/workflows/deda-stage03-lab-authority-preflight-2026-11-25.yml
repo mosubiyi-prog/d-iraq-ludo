@@ -8,15 +8,12 @@ on:
       - 'tools/app_stability/app_package/stage03_lab_live_authority_read_2026_11_25.mjs'
       - '.github/workflows/deda-stage03-lab-authority-preflight-2026-11-25.yml'
       - '.github/workflows/deda-stage03-lab-trusted-fixture-manual-2026-11-25.yml'
-  workflow_dispatch:
-    inputs:
-      account_fixture:
-        description: 'After owner publication only: type LAB_ACCOUNT_SYNTHETIC_ONLY'
-        required: false
-        type: string
-        default: ''
+      - 'qa/stage03/account-live-fixture-authorization.txt'
 permissions:
   contents: read
+concurrency:
+  group: deda-stage03-lab-authority-preflight
+  cancel-in-progress: false
 jobs:
   preflight:
     if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
@@ -47,11 +44,28 @@ jobs:
           cd "$work"
           npm install --no-audit --no-fund --ignore-scripts --no-package-lock firebase@11.10.0
           node --check probe.mjs
-      - name: Exact lab UID read-only preflight
+      - name: Fail-closed separate account fixture authorization
+        id: account_gate
+        env:
+          APPROVED_COMMIT: ${{ github.event_name == 'push' && github.event.head_commit.message == 'Stage 03: authorize exact lab account fixture live once' }}
+        run: |
+          set -euo pipefail
+          authorization="$GITHUB_WORKSPACE/qa/stage03/account-live-fixture-authorization.txt"
+          if [ "$APPROVED_COMMIT" = true ]; then
+            test -f "$authorization"
+            test "$(cat "$authorization")" = LAB_ACCOUNT_SYNTHETIC_ONLY
+            echo 'authorized=true' >> "$GITHUB_OUTPUT"
+            echo 'ACCOUNT_FIXTURE_EXPLICIT_GATE_ENABLED'
+          else
+            test ! -e "$authorization"
+            echo 'authorized=false' >> "$GITHUB_OUTPUT"
+            echo 'ACCOUNT_FIXTURE_GATE_CLOSED'
+          fi
+      - name: Exact lab UID read-only preflight or explicitly authorized fixed account fixture
         env:
           LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
           LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
-          ACCOUNT_FIXTURE_AUTHORIZED: ${{ github.event_name == 'workflow_dispatch' && inputs.account_fixture == 'LAB_ACCOUNT_SYNTHETIC_ONLY' }}
+          ACCOUNT_FIXTURE_AUTHORIZED: ${{ steps.account_gate.outputs.authorized }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/stage03-authority-client"
