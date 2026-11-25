@@ -313,7 +313,7 @@ class DedaStage04PersonalWallet {
   static DedaStage04PersonalWallet decode(Map<String,Object?> row,
       DedaStage04ProfileView profile) {
     const keys = {'format','uid','complete','sourceKind','progressVersion',
-      'inventoryRevision','giftResidual','managerPersonal','hasManagerPersonal'};
+      'inventoryRevision','accountRevision','originalId','giftResidual','managerPersonal','hasManagerPersonal'};
     final gift = row['giftResidual'], manager = row['managerPersonal'],
         hasManager = row['hasManagerPersonal'];
     bool valid(Object? n) => n is int && n >= 0 && n <= _max;
@@ -322,6 +322,7 @@ class DedaStage04PersonalWallet {
         row['complete'] != true || row['sourceKind'] != 'synthetic-lab-wallet-v1' ||
         row['progressVersion'] != profile.progressRevision ||
         row['inventoryRevision'] != profile.inventoryRevision ||
+        row['accountRevision'] != profile.accountRevision || row['originalId'] != profile.originalId ||
         !valid(gift) || !valid(manager) || hasManager is! bool ||
         (hasManager == false && manager != 0)) {
       throw const FormatException('profile-wallet-source-unproven');

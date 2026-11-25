@@ -250,6 +250,7 @@ async function readWalletEvidence({store,uid}){
       managerPersonal<=max-earned-gift.balance,'wallet-overflow');
     return Object.freeze({format:1,uid,complete:true,sourceKind:'synthetic-lab-wallet-v1',
       progressVersion:progress.version,inventoryRevision:inventory.revision,
+      accountRevision:profile.revision,originalId,
       giftResidual:gift.balance,managerPersonal,hasManagerPersonal});
   });
 }

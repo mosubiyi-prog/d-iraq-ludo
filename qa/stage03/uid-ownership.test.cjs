@@ -240,7 +240,8 @@ test('04/01 wallet reads residuals from original-shaped records, not gift receip
   const oldProgress=(await db.doc(base).get()).data(),oldInventory=await read();
   const result=await readWallet();
   assert.deepEqual(result,{format:1,uid,complete:true,sourceKind:'synthetic-lab-wallet-v1',
-    progressVersion:4,inventoryRevision:1,giftResidual:70,managerPersonal:0,hasManagerPersonal:false});
+    progressVersion:4,inventoryRevision:1,accountRevision:1,originalId:original,
+    giftResidual:70,managerPersonal:0,hasManagerPersonal:false});
   assert.equal(oldProgress.balances.earnedDiamonds+result.giftResidual,270);
   await db.doc(walletGiftPath).update({balance:0});
   assert.equal((await readWallet()).giftResidual,0);
@@ -288,7 +289,31 @@ test('04/01 static wallet projection read by same UID only, all client writes de
   // from this test, or grant writes to the client.
   const candidate=originalRules.replace(anchor,()=>[
     '      match /wallet/current {',
-    '        allow get: if owner(uid);',
+    '        function sourceCurrent(w) {',
+    '          let root = /databases/$(database)/documents/deda_lab_uid_authority/$(uid);',
+    '          let account = get(/databases/$(database)/documents/deda_lab_uid_authority/$(uid)/account/current).data;',
+    '          let gift = get(/databases/$(database)/documents/deda_diamond_gift_balances/$(w.originalId)).data;',
+    '          let route = get(/databases/$(database)/documents/deda_share_ids/$(w.originalId)).data;',
+    '          return w.uid == uid && w.complete == true && w.sourceKind == "synthetic-lab-wallet-v1" &&',
+    '            w.originalId == account.profile.originalId && w.accountRevision == account.revision &&',
+    '            w.progressVersion == get(root).data.version &&',
+    '            w.inventoryRevision == get(/databases/$(database)/documents/deda_lab_uid_authority/$(uid)/inventory/current).data.revision &&',
+    '            route.ownerUid == uid && route.publicId == w.originalId && route.active == true && route.kind == "personal" &&',
+    '            gift.publicId == w.originalId && (!gift.keys().hasAny(["ownerUid"]) || gift.ownerUid == uid) &&',
+    '            gift.balance == w.giftResidual && managerCurrent(w);',
+    '        }',
+    '        function managerCurrent(w) {',
+    '          let ap = /databases/$(database)/documents/admins/$(uid);',
+    '          let gp = /databases/$(database)/documents/admin_entry_access/$(uid);',
+    '          let mp = /databases/$(database)/documents/deda_gm_personal_diamond_wallets/$(uid);',
+    '          return w.hasManagerPersonal == false ?',
+    '            (w.managerPersonal == 0 && !exists(ap) && !exists(gp) && !exists(mp)) :',
+    '            (get(ap).data.role == "general_manager" && get(ap).data.active == true && get(ap).data.status == "active" &&',
+    '            get(gp).data.accountKey == uid && get(gp).data.active == true && get(gp).data.status == "active" &&',
+    '            get(gp).data.accessType == "general_manager_gateway" && get(gp).data.allowedRole == "general_manager" &&',
+    '            get(mp).data.accountKey == uid && get(mp).data.balance == w.managerPersonal);',
+    '        }',
+    '        allow get: if owner(uid) && sourceCurrent(resource.data);',
     '        allow list, create, update, delete: if false;',
     '      }',anchor].join('\n'));
   const local=await initializeTestEnvironment({projectId,firestore:{rules:candidate}});
@@ -309,6 +334,22 @@ test('04/01 static wallet projection read by same UID only, all client writes de
       await assertFails(setDoc(doc(denied,wallet),proof));
     }
     assert.deepEqual((await db.doc(wallet).get()).data(),proof);
+    await db.doc(walletGiftPath).update({balance:20});
+    await assertFails(getDocFromServer(doc(c(),wallet)));
+    const fresh=await readWallet();
+    assert.equal(fresh.giftResidual,20);
+    await local.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),wallet),fresh));
+    assert.deepEqual((await assertSucceeds(getDocFromServer(doc(c(),wallet)))).data(),fresh);
+    await db.doc(acctView).update({revision:2});
+    await assertFails(getDocFromServer(doc(c(),wallet)));
+    await db.doc(acctView).update({revision:1});
+    await seedWalletManager();
+    await assertFails(getDocFromServer(doc(c(),wallet)));
+    const manager=await readWallet();
+    await local.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),wallet),manager));
+    assert.deepEqual((await assertSucceeds(getDocFromServer(doc(c(),wallet)))).data(),manager);
+    await db.doc(walletPersonalPath).update({balance:50});
+    await assertFails(getDocFromServer(doc(c(),wallet)));
     // No publication or live writer: remove only the test fixture.
     await local.withSecurityRulesDisabled(ctx=>deleteDoc(doc(ctx.firestore(),wallet)));
   }finally{await local.cleanup();}

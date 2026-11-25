@@ -195,13 +195,15 @@ void main(){
       expectedUid:uid,progress:protectedProgress(),inventory:inventory,account:protectedAccount()));
     final wallet=<String,Object?>{'format':1,'uid':uid,'complete':true,
       'sourceKind':'synthetic-lab-wallet-v1','progressVersion':4,
-      'inventoryRevision':1,'giftResidual':70,'managerPersonal':0,'hasManagerPersonal':false};
+      'inventoryRevision':1,'accountRevision':1,'originalId':'@DEDA-QA1234',
+      'giftResidual':70,'managerPersonal':0,'hasManagerPersonal':false};
     expect(DedaStage04PersonalWallet.decode(wallet,view).visibleDiamonds,270);
     expect(DedaStage04PersonalWallet.decode({...wallet,'hasManagerPersonal':true,
       'managerPersonal':1000000},view).visibleDiamonds,1000270);
     for(final invalid in <Map<String,Object?>>[
       {...wallet,'uid':'foreign'}, {...wallet,'complete':false},
       {...wallet,'progressVersion':3}, {...wallet,'inventoryRevision':2},
+      {...wallet,'accountRevision':2}, {...wallet,'originalId':'@DEDA-QA5678'},
       {...wallet,'giftResidual':-1}, {...wallet,'giftResidual':9007199254740990},
       {...wallet,'managerPersonal':1000000}, {...wallet,'adminGiftWallet':100000000},
       {...wallet,'sourceKind':'legacy-phone'},
@@ -219,7 +221,8 @@ void main(){
     final opening=view(protectedProgress(),protectedInventory(),protectedAccount());
     final row=<String,Object?>{'format':1,'uid':uid,'complete':true,
       'sourceKind':'synthetic-lab-wallet-v1','progressVersion':4,
-      'inventoryRevision':1,'giftResidual':70,'managerPersonal':0,'hasManagerPersonal':false};
+      'inventoryRevision':1,'accountRevision':1,'originalId':'@DEDA-QA1234',
+      'giftResidual':70,'managerPersonal':0,'hasManagerPersonal':false};
     expect(DedaStage04PersonalWallet.decodeForOpening(row,opening,opening).visibleDiamonds,270);
     for(final changed in [
       view(protectedProgress()..['version']=5,protectedInventory(),protectedAccount()),
@@ -287,6 +290,12 @@ void main(){
     final view=DedaStage04PlaceData.fromRevision(restored.revision,key);
     expect(view.favorites,isEmpty);expect(view.recent,[a,b]);
     expect(view.prepare(a,keyOf:key,favorite:false).encode(),edit.encode());
+    final added=view.prepare(b,keyOf:key,favorite:true,recordRecent:true);
+    expect(added.fields['favorites'],[b]);
+    expect(added.fields['recent'],[b,a]);
+    expect(added.fields['contactDraft'],'untouched');
+    expect(view.prepare(b,keyOf:key,recordRecent:true).fields['favorites'],isEmpty);
+    expect(opening.prepare(a,keyOf:key,favorite:true).fields['favorites'],[a]);
     final stale=await two.backup(account:uid,original:uid,payload:initial.revision.payload!,
       expectedBase:opening.revision,isCurrent:()=>true);
     expect(stale.status,DedaPrivateDataStatus.conflict);

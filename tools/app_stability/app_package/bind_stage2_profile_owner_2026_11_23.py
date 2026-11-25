@@ -1044,6 +1044,34 @@ STAGE04_PLACES_FIELDS = """
       setState(() { _stage04Places = null; _places = []; _loading = false; _stage04PlacesError = true; });
     }
   }
+  Future<void> _stage04OpenPlace(PlaceInfo place) async {
+    final opening = _stage04Places;
+    final profile = widget.stage04ProfileRead!;
+    if (_stage04PlacesBusy || opening == null || !dedaSectionCurrent) return;
+    try {
+      final data = opening.requireCurrent();
+      final id = DedaPlacesStore.placeId(place);
+      final rows = widget.showFavorites ? data.favorites : data.recent;
+      final raw = rows.singleWhere((row) => _stage04PlaceKey(row) == id);
+      await Navigator.push<void>(context, MaterialPageRoute<void>(
+        builder: (_) => StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, auth) {
+            try {
+              if (auth.hasError || auth.data?.uid != DedaStage03LabStorage.uid ||
+                  !dedaSectionCurrent) return dedaSectionExpiredView();
+              profile.requireCurrent();
+              return PlaceDetailsPage(place: place, categoryIcon: dedaIconForPlaceType(place.type),
+                  stage04ProfileRead: profile, stage04RawPlace: raw);
+            } catch (_) { return dedaSectionExpiredView(); }
+          })));
+      if (dedaSectionCurrent) await _stage04LoadPlaces();
+    } catch (_) {
+      if (dedaSectionCurrent) {
+        setState(() { _stage04Places = null; _places = []; _stage04PlacesError = true; });
+      }
+    }
+  }
   Future<void> _stage04RemoveFavorite(PlaceInfo place) async {
     final opening = _stage04Places;
     if (_stage04PlacesBusy || opening == null || !dedaSectionCurrent) return;
@@ -1086,9 +1114,7 @@ def _stage04_places_state(body):
     body = once(body, 'onTap: () async {',
         'onTap: () async {\n'
         """                          if (widget.stage04ProfileRead != null) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
-                              dedaText('تفاصيل المكان والطريق بانتظار ربط الخارطة بالهوية الموحدة.',
-                                'Place details and routing await the unified map binding.'))));
+                            await _stage04OpenPlace(place);
                             return;
                           }""",
         'stage04-places-no-legacy-details')
@@ -1107,6 +1133,113 @@ def _stage04_places_state(body):
       }
     }""", 'stage04-places-no-empty-fallback')
 
+
+STAGE04_DETAILS_FIELDS = """
+  DedaStage04PlacesRead? _stage04DetailsOpening;
+  bool _stage04DetailsError = false;
+  String _stage04DetailKey(String row) => DedaPlacesStore.placeId(
+      PlaceInfo.fromJson(DedaStage04PlaceData.decodeRecord(row)));
+  bool _stage04DetailsCurrent() {
+    if (!mounted) return false;
+    try { widget.stage04ProfileRead!.requireCurrent(); return true; }
+    catch (_) { return false; }
+  }
+  Future<void> _stage04RefreshDetails({bool recordRecent=false}) async {
+    try {
+      final profile = widget.stage04ProfileRead!, raw = widget.stage04RawPlace!;
+      var opening = await DedaStage03LabStorage.readProfilePlaces(profile, _stage04DetailKey);
+      if (!_stage04DetailsCurrent()) return;
+      if (recordRecent) {
+        final result = await DedaStage03LabStorage.saveProfilePlace(opening,raw,_stage04DetailKey,recordRecent:true);
+        if (!_stage04DetailsCurrent()) return;
+        if (result.status != DedaPrivateDataStatus.saved) throw const DedaPrivateDataConflict();
+        opening = await DedaStage03LabStorage.readProfilePlaces(profile, _stage04DetailKey);
+      }
+      if (!_stage04DetailsCurrent()) return;
+      final data = opening.requireCurrent();
+      if (!data.favorites.contains(raw) && !data.recent.contains(raw)) throw const DedaPrivateDataConflict();
+      final id = _stage04DetailKey(raw);
+      setState(() {
+        _stage04DetailsOpening = opening;
+        _favorite = data.favorites.any((row) => _stage04DetailKey(row) == id);
+        _favoriteLoading = false;
+        _stage04DetailsError = false;
+      });
+    } catch (_) {
+      if (_stage04DetailsCurrent()) setState(() {
+        _stage04DetailsOpening = null;
+        _favoriteLoading = false;
+        _stage04DetailsError = true;
+      });
+    }
+  }
+  Future<void> _stage04ToggleDetailsFavorite() async {
+    final opening = _stage04DetailsOpening;
+    if (_favoriteLoading || opening == null || !_stage04DetailsCurrent()) return;
+    setState(() => _favoriteLoading = true);
+    try {
+      final result = await DedaStage03LabStorage.saveProfilePlace(
+          opening,widget.stage04RawPlace!,_stage04DetailKey,favorite:!_favorite);
+      if (!_stage04DetailsCurrent()) return;
+      if (result.status != DedaPrivateDataStatus.saved) throw const DedaPrivateDataConflict();
+      await _stage04RefreshDetails();
+    } catch (_) {
+      if (_stage04DetailsCurrent()) setState(() {
+        _stage04DetailsOpening = null;
+        _favoriteLoading = false;
+        _stage04DetailsError = true;
+      });
+    }
+  }
+"""
+
+def _stage04_details_widget(body):
+    body = once(body, '  final PlaceInfo place;',
+        '  final PlaceInfo place;\n  final DedaStage04ProfileRead? stage04ProfileRead;\n  final String? stage04RawPlace;',
+        'stage04-details-fields')
+    return once(body, '    required this.place,',
+        '    required this.place,\n    this.stage04ProfileRead,\n    this.stage04RawPlace,',
+        'stage04-details-input')
+
+def _stage04_details_state(body):
+    brace = body.index('{')
+    body = body[:brace+1] + STAGE04_DETAILS_FIELDS + body[brace+1:]
+    body = once(body, 'DedaTravelMode _travelMode = DedaPreferences.defaultTravelMode;',
+        'late DedaTravelMode _travelMode;', 'stage04-details-travel-init')
+    body = once(body, '    super.initState();',
+        """    super.initState();
+    if (widget.stage04ProfileRead != null) {
+      _travelMode = DedaTravelMode.car;
+      unawaited(_stage04RefreshDetails(recordRecent:true));
+      return;
+    }
+    _travelMode = DedaPreferences.defaultTravelMode;""", 'stage04-details-no-legacy-init')
+    body = once(body, 'Future<void> _toggleFavorite() async {',
+        'Future<void> _toggleFavorite() async {\n'
+        '    if (widget.stage04ProfileRead != null) return _stage04ToggleDetailsFavorite();',
+        'stage04-details-favorite')
+    body = once(body, 'Future<void> _openRoute() async {',
+        """Future<void> _openRoute() async {
+    if (widget.stage04ProfileRead != null) {
+      if (_stage04DetailsCurrent()) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        dedaText('بدء الطريق بانتظار ربط الخارطة بالهوية الموحدة.',
+          'Routing awaits the unified map binding.'))));
+      return;
+    }""", 'stage04-details-no-legacy-route')
+    body = once(body, '    final place = widget.place;',
+        """    if (widget.stage04ProfileRead != null &&
+        (!_stage04DetailsCurrent() || _stage04DetailsError || _stage04DetailsOpening == null)) {
+      return Scaffold(appBar: AppBar(title: Text(dedaText('معلومات المكان', 'Place information'))),
+        body: Center(child: _favoriteLoading && _stage04DetailsCurrent()
+          ? const CircularProgressIndicator()
+          : Text(dedaText('تعذر تأكيد سجل المكان. أعد فتحه من حسابك.',
+              'Place record could not be confirmed. Reopen it from your account.'))));
+    }
+    final place = widget.place;""", 'stage04-details-held')
+    body = once(body, 'if (place.isDedaRegistered) ...[',
+        'if (place.isDedaRegistered && widget.stage04ProfileRead == null) ...[',
+        'stage04-details-no-stale-live-availability')
+    return body
 
 def _stage04_store(body):
     body = once(body, "import 'deda_qa32_active_account_scope.dart';",
@@ -1341,6 +1474,10 @@ def bind_stage04_lab(project: Path):
     store_modified = _stage04_store(store_path.read_text())
     modified = _stage04_region(modified, 'class DedaPublicProfilePreviewPage extends StatelessWidget',
         '\nclass ', _stage04_public_preview)
+    modified = _stage04_region(modified, 'class PlaceDetailsPage extends StatefulWidget',
+        '\nclass ', _stage04_details_widget)
+    modified = _stage04_region(modified, 'class _PlaceDetailsPageState',
+        '\nclass ', _stage04_details_state)
     modified = _stage04_region(modified, 'class SavedPlacesPage extends StatefulWidget',
         '\nclass ', _stage04_places_widget)
     modified = _stage04_region(modified, 'class _SavedPlacesPageState',
