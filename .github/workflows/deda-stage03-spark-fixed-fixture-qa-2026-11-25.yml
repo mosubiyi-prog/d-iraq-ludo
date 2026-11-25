@@ -1,0 +1,40 @@
+name: DEDA Stage03 Spark fixed fixture candidate emulator NO DEPLOY
+on:
+  push:
+    branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]
+    paths:
+      - 'qa/stage03/uid-spark-fixture-rules.cjs'
+      - 'qa/stage03/uid-spark-fixture-rules.test.cjs'
+      - 'qa/stage03/uid-trusted-fixture.cjs'
+      - 'qa/stage03/firestore.lab-candidate.rules'
+      - '.github/workflows/deda-stage03-spark-fixed-fixture-qa-2026-11-25.yml'
+permissions:
+  contents: read
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Generate exact fixture candidate and exercise emulator without cloud credentials
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-spark-fixed"
+          mkdir -p "$work"
+          cp qa/stage03/{uid-spark-fixture-rules,uid-spark-fixture-rules.test,uid-trusted-fixture,uid-ownership-projection}.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
+          cp qa/stage03/firestore.lab-candidate.rules "$work/original.rules"
+          cd "$work"
+          node uid-spark-fixture-rules.cjs original.rules firestore.rules
+          printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > firebase.json
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          GCLOUD_PROJECT=demo-deda-stage03-uid npx --yes firebase-tools@13.35.1 emulators:exec --project demo-deda-stage03-uid --only firestore --config firebase.json --non-interactive 'node --test uid-spark-fixture-rules.test.cjs'
