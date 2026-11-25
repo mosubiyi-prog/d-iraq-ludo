@@ -186,7 +186,18 @@ class DedaStage04ProfileView {
       }
       if (status == 'accepted') accepted++;
     }
-    return DedaStage04ProfileView._(s, accepted);
+    final view = DedaStage04ProfileView._(s, accepted);
+    if (view.activeId != view.originalId) {
+      if (!view.acceptedGiftIds.contains(view.activeId)) {
+        throw const FormatException('profile-active-id-unproven');
+      }
+      final row = view.identifierGiftRecords.singleWhere(
+          (item) => (item as Map)['identifier'] == view.activeId) as Map;
+      if ((row['grant'] as Map)['baseColor'] != view.fixedColor) {
+        throw const FormatException('profile-active-id-color-unproven');
+      }
+    }
+    return view;
   }
 }
 

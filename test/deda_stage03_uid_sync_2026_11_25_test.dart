@@ -117,6 +117,24 @@ void main(){
     inventory['idGifts']=[{...gift,'acceptance':{'uid':'foreign','identifier':id,'group':'001','receivedMs':101}}];
     expect(()=>project().acceptedGiftIds,throwsFormatException);
   });
+  test('04/01 active gifted ID needs matching accepted grant and fixed color',(){
+    final a=protectedAccount(), inventory=protectedInventory();
+    final id='@DEDA-QAFIXTURE';
+    (a['profile'] as Map).addAll({'activeId':id,'fixedColor':'gold'});
+    DedaStage04ProfileView project()=>DedaStage04ProfileView.fromProtected(
+      DedaStage03ProtectedSnapshot.decode(expectedUid:uid,progress:protectedProgress(),
+        inventory:inventory,account:a));
+    expect(project,throwsFormatException);
+    final grant={'uid':uid,'identifier':id,'group':'001','baseColor':'gold',
+      'kind':'gifted','grantedMs':100};
+    final gift={'identifier':id,'grant':grant,'acceptance':null};
+    inventory['idGifts']=[gift];
+    expect(project,throwsFormatException);
+    inventory['idGifts']=[{...gift,'acceptance':{'uid':uid,'identifier':id,'group':'001','receivedMs':101}}];
+    expect(project().activeId,id);
+    (a['profile'] as Map)['fixedColor']='pink';
+    expect(project,throwsFormatException);
+  });
   test('04/01 cosmetic selection is UID-private, not ownership, and rejects malformed values',(){
     final selection=DedaStage04Appearance(avatar:2,frame:'FRAME_03',background:7);
     final payload=DedaPrivateDataPayload({DedaStage04Appearance.key:selection.encode()},uidScoped:true);
