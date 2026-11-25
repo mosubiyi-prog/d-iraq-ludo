@@ -1005,7 +1005,11 @@ def _stage04_profile(source):
         lambda body: once(body, '          onTap();',
           '          if (_stage04LabMode) { _stage04OpenCard(title); return; }\n          onTap();',
           'stage04-original-card-routing'))
-    return STAGE04_IMPORT + source[:a] + profile + source[z:]
+    sync_import = "import 'deda_private_data_sync.dart';\n"
+    imports = STAGE04_IMPORT
+    if sync_import not in source:
+        imports += sync_import
+    return imports + source[:a] + profile + source[z:]
 
 STAGE04_PLACES_FIELDS = """
   bool _stage04PlacesError = false;
@@ -1156,10 +1160,10 @@ def _stage04_editor_state(body):
     body = once(body, '    super.initState();', """    super.initState();
     final opening = widget.stage04Appearance;
     if (opening != null) {
+      var verifiedName = '';
       try {
         final view = opening.requireCurrent();
         final chosen = opening.selection;
-        _name = TextEditingController(text: view.displayName);
         // Initial preview only when no prior selection exists.
         _avatarStyle = chosen?.avatar ?? 0;
         _frameStyle = chosen?.frameStyle(
@@ -1174,13 +1178,16 @@ def _stage04_editor_state(body):
         if (_serverVerifiedPaidStyles.contains(_frameStyle)) {
           _confirmedActiveFrame = _frameStyle;
         }
+        verifiedName = view.displayName;
       } catch (_) {
-        // Always initialize the original late fields, but never render them
-        // as account data or write when verification fails.
+        // Initialize the original late fields but never render them as
+        // account data or write when verification fails.
         _stage04EditorHeld = true;
-        _name = TextEditingController();
         _avatarStyle = 0; _frameStyle = 3; _backgroundStyle = 0;
+        _serverVerifiedPaidStyles.clear();
+        _confirmedActiveFrame = null;
       }
+      _name = TextEditingController(text: verifiedName);
       return;
     }""", 'stage04-editor-no-phone-init')
     body = once(body, '  bool _saving = false;', """  bool _saving = false;
