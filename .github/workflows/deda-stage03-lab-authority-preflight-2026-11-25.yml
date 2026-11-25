@@ -1,0 +1,50 @@
+name: DEDA Stage03 live authority read-only and trusted fixture offline QA
+on:
+  push:
+    branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]
+    paths:
+      - 'qa/stage03/uid-trusted-fixture.cjs'
+      - 'qa/stage03/uid-trusted-fixture.test.cjs'
+      - 'tools/app_stability/app_package/stage03_lab_live_authority_read_2026_11_25.mjs'
+      - '.github/workflows/deda-stage03-lab-authority-preflight-2026-11-25.yml'
+      - '.github/workflows/deda-stage03-lab-trusted-fixture-manual-2026-11-25.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test fixed trusted fixture without credentials
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-trusted-fixture"
+          mkdir -p "$work"
+          cp qa/stage03/uid-trusted-fixture.cjs qa/stage03/uid-trusted-fixture.test.cjs qa/stage03/uid-trusted-live-fixture.cjs qa/stage03/uid-ownership-projection.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
+          cd "$work"
+          node --test uid-trusted-fixture.test.cjs
+      - name: Prepare client SDK without credentials
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-authority-client"
+          mkdir -p "$work"
+          cp tools/app_stability/app_package/stage03_lab_live_authority_read_2026_11_25.mjs "$work/probe.mjs"
+          cd "$work"
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock firebase@11.10.0
+          node --check probe.mjs
+      - name: Exact lab UID read-only preflight
+        env:
+          LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
+          LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/stage03-authority-client"
+          node probe.mjs
