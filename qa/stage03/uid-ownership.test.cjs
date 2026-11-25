@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -205,4 +205,73 @@ test('exact account candidate preserves locked progress and inventory and contai
   assert.equal((rules.slice(start).match(/allow list, update, delete: if false;/g)||[]).length,3);
   assert.ok(!rules.includes('DEDA_STAGE03_SYNTHETIC_ONLY'));
   require('node:fs').writeFileSync('account-fixed-candidate.rules',rules);
+});
+
+ 
+// Legacy-shaped synthetic records only. No production read or wallet mutation
+// by readWalletEvidence; the pinned lab UID is the only account key.
+const walletGiftPath='deda_diamond_gift_balances/'+original;
+const walletPersonalPath='deda_gm_personal_diamond_wallets/'+uid;
+const walletAdminPath='admins/'+uid, walletAccessPath='admin_entry_access/'+uid;
+const walletRoutePath='deda_share_ids/'+original;
+async function seedWalletEvidence(){
+  const {build,buildAccount}=require('./uid-trusted-fixture.cjs');
+  const docs={...build(),...buildAccount()};
+  // The fixture's earned balance is already net of its verified frame debit.
+  for(const p of [base,view,acctView])await db.doc(p).set(docs[p]);
+  const rows={
+    ['users/'+uid]:{accountKey:uid,sharePersonalId:original},
+    ['deda_sessions/'+uid]:{accountKey:uid,uid},
+    [walletRoutePath]:{publicId:original,ownerUid:uid,active:true,kind:'personal'},
+    [walletGiftPath]:{publicId:original,balance:70},
+  };
+  for(const [p,v] of Object.entries(rows))await db.doc(p).set(v);
+  return rows;
+}
+const readWallet=()=>readWalletEvidence({store,uid});
+async function seedWalletManager(){
+  await db.doc(walletAdminPath).set({role:'general_manager',active:true,status:'active'});
+  await db.doc(walletAccessPath).set({accountKey:uid,active:true,status:'active',
+    accessType:'general_manager_gateway',allowedRole:'general_manager'});
+  await db.doc(walletPersonalPath).set({accountKey:uid,balance:1000000});
+}
+test('04/01 wallet reads residuals from original-shaped records, not gift receipts or admin gifting pool',async()=>{
+  await seedWalletEvidence();
+  const oldProgress=(await db.doc(base).get()).data(),oldInventory=await read();
+  const result=await readWallet();
+  assert.deepEqual(result,{format:1,uid,complete:true,sourceKind:'synthetic-lab-wallet-v1',
+    progressVersion:4,inventoryRevision:1,giftResidual:70,managerPersonal:0,hasManagerPersonal:false});
+  assert.equal(oldProgress.balances.earnedDiamonds+result.giftResidual,270);
+  await db.doc(walletGiftPath).update({balance:0});
+  assert.equal((await readWallet()).giftResidual,0);
+  await seedWalletManager();
+  const manager=await readWallet();
+  assert.equal(manager.hasManagerPersonal,true);assert.equal(manager.managerPersonal,1000000);
+  assert.equal(oldProgress.balances.earnedDiamonds+manager.giftResidual+manager.managerPersonal,1000200);
+  assert.deepEqual((await db.doc(base).get()).data(),oldProgress);
+  assert.deepEqual(await read(),oldInventory);
+  assert.equal((await db.doc(walletPersonalPath).get()).data().balance,1000000);
+  assert.equal((await db.doc(walletGiftPath).get()).data().balance,0);
+});
+test('04/01 missing gift, wrong route, foreign UID and inconsistent manager proof fail closed',async()=>{
+  await seedWalletEvidence();
+  await db.doc(walletGiftPath).delete();
+  await assert.rejects(readWallet(),{code:'wallet-gift-source-unproven'});
+  await db.doc(walletGiftPath).set({publicId:original,balance:70,ownerUid:other});
+  await assert.rejects(readWallet(),{code:'wallet-gift-source-unproven'});
+  await db.doc(walletGiftPath).set({publicId:original,balance:70});
+  await db.doc(walletRoutePath).update({ownerUid:other});
+  await assert.rejects(readWallet(),{code:'wallet-owner-unproven'});
+  await db.doc(walletRoutePath).update({ownerUid:uid});
+  await assert.rejects(readWalletEvidence({store,uid:other}),{code:'invalid-account'});
+  await db.doc(walletPersonalPath).set({accountKey:uid,balance:1000000});
+  await assert.rejects(readWallet(),{code:'wallet-role-unproven'});
+  await seedWalletManager();
+  await db.doc(walletPersonalPath).delete();
+  await assert.rejects(readWallet(),{code:'wallet-manager-source-unproven'});
+  await db.doc(walletPersonalPath).set({accountKey:uid,balance:9007199254740990});
+  await assert.rejects(readWallet(),{code:'wallet-overflow'});
+  await db.doc(walletPersonalPath).set({accountKey:other,balance:1});
+  await assert.rejects(readWallet(),{code:'wallet-manager-source-unproven'});
+  await assert.rejects(readWalletEvidence({store:{db:{projectId:'not-demo'}},uid}),{code:'wallet-emulator-only'});
 });

@@ -2,7 +2,7 @@
 // Protected read projection only; no purchase, award, wallet or alias mutation.
 // Source fixtures are synthetic and written only by a trusted emulator context.
 const {isDeepStrictEqual:equal}=require('node:util');
-const {LAB_UID,account}=require('./reconcile-core.cjs');
+const {LAB_UID,account,parseState}=require('./reconcile-core.cjs');
 const {frames}=require('./purchase-frames.cjs');
 const {weekStart}=require('./deda_weekly_direct_prize_plan.js');
 const fail=code=>{throw Object.assign(Error(code),{code})};
@@ -198,4 +198,59 @@ async function projectAccount({store,uid}){
         'account-active-id-unproven');
     }});
 }
-module.exports={project,parse,projectAccount,parseAccount};
+// 04/01: read existing wallet schema in the local demo only. No new
+// document, write, role grant, phone mapping or production source import.
+// The legacy-shaped records below must be synthetic and owned by the pinned
+// lab UID. Both wallet balances and protected revisions are read in one tx.
+async function readWalletEvidence({store,uid}){
+  requireThat(/^127\.0\.0\.1:[0-9]+$/.test(process.env.FIRESTORE_EMULATOR_HOST||'')&&
+    process.env.GCLOUD_PROJECT==='demo-deda-stage03-uid'&&
+    store?.db?.projectId==='demo-deda-stage03-uid','wallet-emulator-only');
+  account(uid,'lab-uid');
+  const base='deda_lab_uid_authority/'+uid;
+  const max=9007199254740990;
+  const money=x=>Number.isSafeInteger(x)&&x>=0&&x<=max;
+  return store.runTransaction(async tx=>{
+    const progress=parseState(await tx.get(base),uid,'lab-uid');
+    const inventory=parse(await tx.get(base+'/inventory/current'),uid);
+    const profile=parseAccount(await tx.get(base+'/account/current'),uid);
+    const originalId=profile.profile.originalId;
+    const user=await tx.get('users/'+uid);
+    const session=await tx.get('deda_sessions/'+uid);
+    const route=await tx.get('deda_share_ids/'+originalId);
+    requireThat(user&&session&&route&&user.accountKey===uid&&
+      user.sharePersonalId===originalId&&session.uid===uid&&session.accountKey===uid&&
+      route.ownerUid===uid&&route.publicId===originalId&&route.kind==='personal'&&
+      route.active===true,'wallet-owner-unproven');
+    const gift=await tx.get('deda_diamond_gift_balances/'+originalId);
+    requireThat(gift&&gift.publicId===originalId&&
+      (!Object.hasOwn(gift,'ownerUid')||gift.ownerUid===uid)&&money(gift.balance),
+      'wallet-gift-source-unproven');
+    const admin=await tx.get('admins/'+uid);
+    const access=await tx.get('admin_entry_access/'+uid);
+    const personal=await tx.get('deda_gm_personal_diamond_wallets/'+uid);
+    // Only the demo's explicit active GM role AND gateway may admit a
+    // personal wallet. Missing gift balance or ambiguous roles always HOLD.
+    const hasManagerPersonal=admin?.role==='general_manager'&&admin.active===true&&
+      admin.status==='active'&&access?.accountKey===uid&&access.active===true&&
+      access.status==='active'&&access.accessType==='general_manager_gateway'&&
+      access.allowedRole==='general_manager';
+    let managerPersonal=0;
+    if(hasManagerPersonal){
+      requireThat(personal&&personal.accountKey===uid&&money(personal.balance),
+        'wallet-manager-source-unproven');
+      managerPersonal=personal.balance;
+    }else{
+      // Ordinary synthetic account: all three privileged records absent.
+      // A partial or conflicting record does not establish ordinary status.
+      requireThat(admin===null&&access===null&&personal===null,'wallet-role-unproven');
+    }
+    const earned=progress.balances.earnedDiamonds;
+    requireThat(money(earned)&&gift.balance<=max-earned&&
+      managerPersonal<=max-earned-gift.balance,'wallet-overflow');
+    return Object.freeze({format:1,uid,complete:true,sourceKind:'synthetic-lab-wallet-v1',
+      progressVersion:progress.version,inventoryRevision:inventory.revision,
+      giftResidual:gift.balance,managerPersonal,hasManagerPersonal});
+  });
+}
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence};
