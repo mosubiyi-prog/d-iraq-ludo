@@ -123,10 +123,24 @@ test('complete protected account projection retains actual relationships, task c
   assert.deepEqual((await db.doc(acctView).get()).data(),a.view);
   assert.equal((await accountApply()).replayed,true);
   assert.equal((await db.doc(base).get()).exists,false);
-  // Published rules remain closed for new account projection until reviewed.
-  await assertFails(getDocFromServer(doc(client(),acctView)));
-  for(const path of [acctSource,acctView,base+'/accountHistory/1']){
-    await assertFails(setDoc(doc(client(),path),accountFixture()));
+  // Candidate only: independent authenticated owner clients restore exact data.
+  // This does NOT prove that these rules are published in the live lab.
+  for(const c of [client(),client()]){
+    assert.deepEqual((await assertSucceeds(getDocFromServer(doc(c,acctView)))).data(),a.view);
+    await assertFails(getDocs(collection(c,base,'account')));
+    await assertFails(getDocFromServer(doc(c,acctSource)));
+    await assertFails(getDocFromServer(doc(c,base+'/accountHistory/1')));
+    await assertFails(getDocFromServer(doc(c,'deda_lab_uid_authority/'+other+'/account/current')));
+  }
+  const unsigned=env.unauthenticatedContext().firestore();
+  for(const c of [client(other),client(uid,'anonymous'),unsigned]){
+    await assertFails(getDocFromServer(doc(c,acctView)));
+  }
+  for(const c of [client(),client(other),client(uid,'anonymous'),unsigned]){
+    for(const path of [acctSource,acctView,base+'/accountHistory/1']){
+      await assertFails(setDoc(doc(c,path),accountFixture()));
+      await assertFails(deleteDoc(doc(c,path)));
+    }
   }
 });
 test('missing/foreign/duplicate or unsupported account sources fail closed',async()=>{

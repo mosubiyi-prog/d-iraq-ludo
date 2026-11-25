@@ -47,6 +47,12 @@ service cloud.firestore {
         allow get: if owner(uid);
         allow list, create, update, delete: if false;
       }
+      // UNPUBLISHED candidate: same owner-only account snapshot.
+      // No client can produce this snapshot, its sources or its history.
+      match /account/current {
+        allow get: if owner(uid);
+        allow list, create, update, delete: if false;
+      }
     }
     match /{document=**} { allow read, write: if false; }
   }
