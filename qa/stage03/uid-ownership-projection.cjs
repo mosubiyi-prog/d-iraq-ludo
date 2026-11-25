@@ -397,4 +397,4 @@ async function pointTier({store,uid,threshold,action}){
     return {replayed:false,state:next};
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier};
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt};

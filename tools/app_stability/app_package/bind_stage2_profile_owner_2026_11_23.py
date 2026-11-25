@@ -682,6 +682,8 @@ STAGE04_FIELDS = """
   DedaStage04ProfileRead? _stage04Read;
   DedaStage04AppearanceRead? _stage04Appearance;
   int? _stage04WalletDiamonds;
+  DedaStage04TierState? _stage04Tiers;
+  bool _stage04TierBusy = false;
   DedaAuthSnapshot? _stage04Principal;
   StreamSubscription<User?>? _stage04Auth;
   bool _stage04Expired = false;
@@ -697,6 +699,7 @@ STAGE04_FIELDS = """
     _stage04Read = null;
     _stage04Appearance = null;
     _stage04WalletDiamonds = null;
+    _stage04Tiers = null;
     if (mounted) setState(() { _stage04Loading = false; });
   }
   bool _stage04SameSession() {
@@ -725,13 +728,18 @@ STAGE04_FIELDS = """
   }
   Future<void> _stage04Refresh() async {
     if (!mounted || _stage04Loading || !_stage04SameSession()) return;
-    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; _stage04WalletDiamonds = null; });
+    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; _stage04WalletDiamonds = null; _stage04Tiers = null; });
     try {
       final read = await DedaStage03LabStorage.readProfile();
       final view = read.requireCurrent();
       DedaStage04AppearanceRead? appearance;
       try { appearance = await DedaStage03LabStorage.readAppearance(read); }
       catch (_) { /* No local/default fallback or edit on a conflicting journal. */ }
+      DedaStage04TierState? tiers;
+      if (DedaStage03LabStorage.actionsCandidateEnabled) {
+        try { tiers = await DedaStage03LabStorage.readPointTierCandidate(read); }
+        catch (_) { /* No assumed empty reward history. */ }
+      }
       int? walletDiamonds;
       if (DedaStage03LabStorage.walletCandidateEnabled) {
         try {
@@ -747,6 +755,12 @@ STAGE04_FIELDS = """
         _stage04Read = read;
         _stage04Appearance = appearance;
         _stage04WalletDiamonds = walletDiamonds;
+        _stage04Tiers = tiers;
+        _openedPointTiers.clear(); _claimedPointTiers.clear();
+        if (tiers != null) {
+          _openedPointTiers.addAll(tiers.reserved);
+          _claimedPointTiers.addAll(tiers.claimed);
+        }
         _stage04Loading = false;
       });
     } catch (_) {
@@ -793,6 +807,24 @@ STAGE04_FIELDS = """
     if ((changed == true || DedaStage03LabStorage.nameCandidateEnabled) &&
         mounted && _stage04SameSession()) {
       await _stage04Refresh();
+    }
+  }
+  Future<void> _stage04TierAction(int threshold,bool claim) async {
+    final read=_stage04Read;
+    if (_stage04TierBusy || read==null || _stage04Tiers==null || !_stage04SameSession()) return;
+    setState(() => _stage04TierBusy=true);
+    try {
+      await DedaStage03LabStorage.performPointTierCandidate(read,threshold,claim);
+      if (!mounted || !_stage04SameSession()) return;
+      await _stage04Refresh();
+    } catch (_) {
+      if (mounted && _stage04SameSession()) {
+        _showPhase2Notice('تعذر تأكيد العملية؛ يعاد جلب السجل دون تكرارها.',
+            'The action was not confirmed; refreshing without replaying it.');
+        await _stage04Refresh();
+      }
+    } finally {
+      if (mounted && _stage04SameSession()) setState(() => _stage04TierBusy=false);
     }
   }
   void _stage04OpenCard(String title) {
@@ -849,6 +881,10 @@ STAGE04_FIELDS = """
         }
         child = DedaMyStorePage(originalId: view.originalId, items: items,
             isArabic: DedaLanguageState.isArabic, stage04ProfileRead: read,
+            onUseStage04Id: DedaStage03LabStorage.actionsCandidateEnabled ? (id) async {
+              await DedaStage03LabStorage.useIdentifierCandidate(read,id);
+              if (mounted && _stage04SameSession()) await _stage04Refresh();
+            } : null,
             onOpenEditProfile: _stage04Appearance == null ? null : () {
               if (!_stage04SameSession() || _stage04View == null) return;
               Navigator.pop(context);
@@ -961,7 +997,7 @@ def _stage04_stats(body):
     body = once(body, 'valueListenable: DedaTaskEngine.totalPointsNotifier,',
         'valueListenable: _stage04LabMode ? _stage04Points! : DedaTaskEngine.totalPointsNotifier,',
         'stage04-task-points')
-    return once(body, 'onTap: () => setState(', 'onTap: _stage04LabMode ? null : () => setState(',
+    return once(body, 'onTap: () => setState(', 'onTap: _stage04LabMode && _stage04Tiers == null ? null : () => setState(',
         'stage04-no-local-point-reward')
 
 def _stage04_build(body):
@@ -972,7 +1008,7 @@ def _stage04_build(body):
     body = once(body, 'onPressed: _openEditProfile,',
         'onPressed: _stage04LabMode ? _stage04OpenEditor : _openEditProfile,', 'stage04-edit-held')
     return once(body, '          ValueListenableBuilder<int>(\n            valueListenable: DedaTaskEngine.totalPointsNotifier,',
-        '          if (!_stage04LabMode)\n          ValueListenableBuilder<int>(\n            valueListenable: DedaTaskEngine.totalPointsNotifier,',
+        '          if (!_stage04LabMode || _stage04Tiers != null)\n          ValueListenableBuilder<int>(\n            valueListenable: _stage04LabMode ? _stage04Points! : DedaTaskEngine.totalPointsNotifier,',
         'stage04-local-reward-panel-held')
 
 def _stage04_profile(source):
@@ -1016,6 +1052,33 @@ def _stage04_profile(source):
         lambda body: once(body, '          onTap();',
           '          if (_stage04LabMode) { _stage04OpenCard(title); return; }\n          onTap();',
           'stage04-original-card-routing'))
+    # Bind the existing five original cards, without a second renderer.
+    profile = once(profile, 'Future<void> _loadOpenedPointTiers() async {',
+        'Future<void> _loadOpenedPointTiers() async {\n'
+        '    if (_stage04LabMode) return;', 'stage04-tier-no-phone-load')
+    profile = once(profile, 'Future<void> _claimPointTierReward(int threshold) async {',
+        'Future<void> _claimPointTierReward(int threshold) async {\n'
+        '    if (_stage04LabMode) return _stage04TierAction(threshold,true);',
+        'stage04-tier-claim')
+    profile = once(profile, 'Future<void> _openPointTier(int threshold, int totalPoints) async {',
+        'Future<void> _openPointTier(int threshold, int totalPoints) async {\n'
+        '    if (_stage04LabMode) return _stage04TierAction(threshold,false);',
+        'stage04-tier-reserve')
+    profile = once(profile, 'final rewardCode = _rewardCode16();',
+        """if (_stage04LabMode) return Center(child: Text(
+      dedaText('اكتمل حجز المرحلة الأخيرة. رمز الجائزة وطلب الإدارة غير متاحين حتى تأكيد مصدرهما.',
+          'Final reservation confirmed. Prize code and administration request await their verified source.'),
+      textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)));
+    final rewardCode = _rewardCode16();""", 'stage04-tier-final-no-phone')
+    profile = once(profile, '_rewardPartForTier(threshold),',
+        "_stage04LabMode ? '---' : _rewardPartForTier(threshold),",
+        'stage04-tier-no-phone-code')
+    profile = once(profile, "'تم كشف هذا الجزء من رمزك',",
+        "_stage04LabMode ? 'رمز الجائزة بانتظار المصدر المؤكد' : 'تم كشف هذا الجزء من رمزك',",
+        'stage04-tier-code-caption-ar')
+    profile = once(profile, "'This part of your code is revealed',",
+        "_stage04LabMode ? 'Prize code awaits its verified source' : 'This part of your code is revealed',",
+        'stage04-tier-code-caption-en')
     sync_import = "import 'deda_private_data_sync.dart';\n"
     imports = STAGE04_IMPORT
     if sync_import not in source:
@@ -1246,9 +1309,9 @@ def _stage04_store(body):
         "import 'deda_qa32_active_account_scope.dart';\n" + STAGE04_IMPORT,
         'stage04-store-import')
     body = once(body, '    this.onOpenEditProfile,',
-        '    this.onOpenEditProfile,\n    this.stage04ProfileRead,', 'stage04-store-ctor')
+        '    this.onOpenEditProfile,\n    this.stage04ProfileRead,\n    this.onUseStage04Id,', 'stage04-store-ctor')
     body = once(body, '  final String originalId;',
-        '  final String originalId;\n  final DedaStage04ProfileRead? stage04ProfileRead;',
+        '  final String originalId;\n  final DedaStage04ProfileRead? stage04ProfileRead;\n  final Future<void> Function(String)? onUseStage04Id;',
         'stage04-store-read')
     body = once(body, 'Widget build(BuildContext context) {', """Widget build(BuildContext context) {
     DedaStage04ProfileView? unified;
@@ -1274,6 +1337,28 @@ def _stage04_store(body):
         "'لا توجد مقتنيات مثبتة للعرض هنا حاليًا.',",
         "unified != null ? 'لا تتوفر بيانات مثبتة لهذا القسم بعد.' : 'لا توجد مقتنيات مثبتة للعرض هنا حاليًا.',",
         'stage04-store-no-false-empty-ar')
+    body = once(body, "trailing: item.active",
+        """trailing: unified != null && onUseStage04Id != null &&
+                                section == DedaMyStoreSection.identifiers && !item.active
+                            ? TextButton(onPressed: () async {
+                                final confirm = await showDialog<bool>(context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    content: Text(_t('تأكيد استخدام هذا الآيدي؟', 'Activate this identifier?')),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx,false), child: Text(_t('إلغاء','Cancel'))),
+                                      TextButton(onPressed: () => Navigator.pop(ctx,true), child: Text(_t('استخدام','Use'))),
+                                    ]));
+                                if (confirm != true || !context.mounted) return;
+                                try {
+                                  stage04ProfileRead!.requireCurrent();
+                                  await onUseStage04Id!(item.id);
+                                  if (context.mounted) Navigator.pop(context);
+                                } catch (_) {
+                                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(_t('لم يتأكد الاستخدام؛ أعد فتح متجري.', 'Activation unconfirmed; reopen My Store.'))));
+                                }
+                              }, child: Text(_t('استخدام','Use')))
+                            : item.active""", 'stage04-store-owned-use')
     return once(body, "'No confirmed items to show here yet.',",
         "unified != null ? 'Verified data for this section is not yet available.' : 'No confirmed items to show here yet.',",
         'stage04-store-no-false-empty-en')

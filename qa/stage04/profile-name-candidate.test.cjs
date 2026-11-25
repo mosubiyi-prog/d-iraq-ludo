@@ -3,9 +3,9 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
-const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch}=require('firebase/firestore');
+const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch,serverTimestamp,Timestamp}=require('firebase/firestore');
 const {build,buildAccount,base,uid}=require('../stage03/uid-trusted-fixture.cjs');
-const {generateProfileName}=require('./profile-name-candidate.cjs');
+const {generateProfileName,generateProfileActions}=require('./profile-name-candidate.cjs');
 const projectId='demo-deda-stage03-uid';
 const account=base+'/account/current',source=base+'/accountSources/current',history=base+'/accountHistory/';
 const original=buildAccount()[account], rights=build();
@@ -27,7 +27,7 @@ const read=async(path)=>{
 before(async()=>{
   assert.match(process.env.FIRESTORE_EMULATOR_HOST||'',/^127\.0\.0\.1:[0-9]+$/);
   assert.equal(process.env.GCLOUD_PROJECT,projectId);
-  env=await initializeTestEnvironment({projectId,firestore:{rules:generateProfileName(readFileSync('original.rules','utf8'))}});
+  env=await initializeTestEnvironment({projectId,firestore:{rules:generateProfileActions(readFileSync('original.rules','utf8'))}});
 });
 after(async()=>{if(env)await env.cleanup()});
 beforeEach(async()=>{
@@ -121,4 +121,90 @@ test('rename stops on missing or inconsistent provenance and mismatched atomic v
   assert.deepEqual(await read(source),original);
   assert.equal(await read(history+'2'),undefined);
   for(const [path,data] of Object.entries(rights))assert.deepEqual(await read(path),data);
+});
+
+
+test('Spark candidate: fixed synthetic point reserve and return are atomic, replay and mint denied',async()=>{
+  const core=require('../stage03/reconcile-core.cjs');
+  const {pointReceipt}=require('../stage03/uid-ownership-projection.cjs');
+  const award=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',
+    sourceId:'stage04-synthetic-ui-earn',kind:'award',delta:{points:25000,coins:0,xp:0,earnedDiamonds:0}},uid,'lab-uid');
+  const initial=core.applyEvent(rights[base],award,'lab-uid');
+  await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),base),initial));
+  let state=initial;
+  const attempt=(c,threshold,action,{delta=null,omit=null,old=state}={})=>{
+    const r=pointReceipt(uid,threshold,action),k=core.eventKey(r);
+    const next=core.applyEvent(old,r,'lab-uid');
+    const actual=delta===null?next:{...next,balances:{...next.balances,points:next.balances.points+delta}};
+    const batch=writeBatch(c);
+    const rows={[base]:actual,[base+'/receipts/'+k]:r,[base+'/events/'+k]:{
+      format:1,accountKey:uid,eventKey:k,receipt:r,receiptId:k,appliedVersion:actual.version,
+      afterBalances:actual.balances,createdAt:serverTimestamp()}};
+    for(const [p,row] of Object.entries(rows))if(!omit||!p.includes(omit))batch.set(doc(c,p),row);
+    return {next,commit:batch.commit()};
+  };
+  await assertFails(attempt(client(),10000,'reserve').commit);
+  await assertFails(attempt(client(),5000,'claim').commit);
+  await assertFails(attempt(client(),5000,'reserve',{delta:1}).commit);
+  await assertFails(attempt(client(),5000,'reserve',{omit:'/events/'}).commit);
+  await assertFails(attempt(client('foreign'),5000,'reserve').commit);
+  for(const t of [5000,10000,15000,20000,25000]){
+    const reserve=attempt(client(),t,'reserve');
+    await assertSucceeds(reserve.commit);state=reserve.next;
+    if(t!==25000){
+      const claim=attempt(client(),t,'claim');
+      await assertSucceeds(claim.commit);state=claim.next;
+    }
+    assert.deepEqual(await read(base),state);
+  }
+  assert.equal(state.balances.points,505);
+  await assertFails(attempt(client(),5000,'claim').commit);
+  await assertFails(setDoc(doc(client(),base),{...state,version:state.version+1,
+    balances:{...state.balances,points:999999}}));
+  assert.deepEqual(await read(base),state);
+});
+
+test('Spark candidate: only accepted fixed synthetic alias switches atomically, original stays reserved',async()=>{
+  const o=original.profile.originalId,a='@DEDA-QAFIXTURE';
+  const active='deda_stage71_active_identifier/'+o,pub='deda_public_active_aliases/'+o,
+    alias='deda_public_alias_routes/'+a;
+  const invPath=base+'/inventory/current',inv=structuredClone(rights[invPath]),g=inv.idGifts[0];
+  const rec={identifier:a,originalId:o,group:g.grant.group,receivedAt:Timestamp.fromMillis(g.grant.grantedMs+1)};
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const c=ctx.firestore(),b=writeBatch(c);
+    b.set(doc(c,'deda_share_ids/'+o),{ownerUid:uid,publicId:o,kind:'personal',active:true});
+    b.set(doc(c,active),{originalId:o,activeId:o,updatedAt:serverTimestamp()});
+    b.set(doc(c,pub),{originalId:o,activeId:o,baseColor:null,updatedAt:serverTimestamp()});
+    b.set(doc(c,'deda_stage71_granted_registry/'+a),{identifier:a,recipientOriginalId:o,group:g.grant.group,baseColor:'gold',kind:'gifted'});
+    b.set(doc(c,'deda_stage74_id_gift_receipts/'+a),rec);
+    await b.commit();
+  });
+  function use(c,old,id,omit=''){
+    const p={...old.profile,activeId:id,fixedColor:id===o?null:'gold'};
+    const next={...old,revision:old.revision+1,profile:p};
+    const b=writeBatch(c);
+    const rows={[account]:next,[source]:next,[history+next.revision]:next,
+      [active]:{originalId:o,activeId:id,updatedAt:serverTimestamp()},
+      [pub]:{originalId:o,activeId:id,baseColor:p.fixedColor,updatedAt:serverTimestamp()}};
+    if(id!==o)rows[alias]={aliasId:id,originalId:o,baseColor:p.fixedColor,updatedAt:serverTimestamp()};
+    for(const [path,row] of Object.entries(rows))if(path!==omit)b.set(doc(c,path),row);
+    return {next,commit:b.commit()};
+  }
+  await assertFails(use(client(),original,a).commit);
+  g.acceptance={uid,identifier:a,group:g.grant.group,receivedMs:g.grant.grantedMs+1};
+  await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),invPath),inv));
+  await assertFails(use(client(),original,a,pub).commit);
+  await assertFails(use(client('foreign'),original,a).commit);
+  await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),alias),{aliasId:a,originalId:'@DEDA-QA5678',baseColor:'gold'}));
+  await assertFails(use(client(),original,a).commit);
+  await env.withSecurityRulesDisabled(ctx=>deleteDoc(doc(ctx.firestore(),alias)));
+  const second=use(client(),original,a);await assertSucceeds(second.commit);
+  assert.deepEqual(await read(account),second.next);
+  assert.equal((await read(pub)).activeId,a);
+  const third=use(client(),second.next,o);await assertSucceeds(third.commit);
+  assert.deepEqual(await read(account),third.next);
+  assert.equal((await read(pub)).activeId,o);
+  assert.equal((await read(alias)).originalId,o);
+  assert.deepEqual(await read(invPath),inv);
+  assert.deepEqual(await read(base),rights[base]);
 });

@@ -335,6 +335,45 @@ class DedaStage04PersonalWallet {
   }
 }
 
+/// Exact synthetic campaign event identities, derived from the existing
+/// reconcile-core eventKey. Not a new ledger or a real prize-code issuer.
+class DedaStage04TierState {
+  const DedaStage04TierState(this.reserved,this.claimed);
+  final Set<int> reserved, claimed;
+  static const keys = <int,(String,String?)>{
+    5000: ('98b23cc67f5935396196b43e3d14a53df5f219d4500f604a7e441933b938c487', '82561d03bf50f6d1be2423cfd8a8ff7c4214ccbcf37beb094669cc7870cb6558'),
+    10000: ('fbcac52e26c152299ad7a44db26ca4d84a834d009427500fe91c90072018d232', 'e1faec921eea72ebedb060eba865cb2e0d606a7ff286dc9ed0d14511205b4d35'),
+    15000: ('982b842a04fb09bfc0783c4333464f5599afca103a36dc4f0a0fe70754a16f57', '094b51b881b8ca7060b28623da964af30c66f711c74159bf4175530611edb6b1'),
+    20000: ('cd3b2ccc888e1a36fb7462f8267f3811a5363213edbd45db38dba84bf5728e9a', '2ae5367718616332d15dbca27a62ea3cce170044b5998a1b38b690d3c02b16fa'),
+    25000: ('4741009ed027a9ad4ea139232be5c42841eea0ff1dbd5a7a3b96290dd664c579', null),
+  };
+  static String key(int threshold,bool claim) {
+    final k=keys[threshold];
+    if(k==null || (claim && k.$2==null)) throw const FormatException('point-tier-ineligible');
+    return claim ? k.$2! : k.$1;
+  }
+  static Map<String,Object?> receipt(String uid,int threshold,bool claim) {
+    key(threshold,claim);
+    final reserveKey=key(threshold,false);
+    return {'format':1,'accountKey':uid,'source':claim?'point-tier-return-v1':'point-reservation-v1',
+      'sourceId':'stage04-synthetic-tier|$threshold'+(claim?'|$reserveKey':''),
+      'kind':claim?'award':'spend','delta':{'points':claim?threshold+threshold~/100:-threshold,
+        'coins':0,'xp':0,'earnedDiamonds':0}};
+  }
+  static void verifyMarker(Map<String,dynamic> marker,String uid,int threshold,bool claim,int version) {
+    final k=key(threshold,claim),expected=receipt(uid,threshold,claim),r=marker['receipt'];
+    if(marker['accountKey']!=uid || marker['format']!=1 || marker['eventKey']!=k ||
+       marker['receiptId']!=k || marker['appliedVersion'] is! int ||
+       (marker['appliedVersion'] as int)<2 || (marker['appliedVersion'] as int)>version ||
+       r is! Map || r.length!=expected.length ||
+       expected.keys.where((x)=>x!='delta').any((x)=>r[x]!=expected[x]) ||
+       r['delta'] is! Map || (r['delta'] as Map).length!=4 ||
+       (expected['delta'] as Map).keys.any((x)=>(r['delta'] as Map)[x]!=(expected['delta'] as Map)[x])) {
+      throw const FormatException('point-tier-marker-invalid');
+    }
+  }
+}
+
 /// A view admitted only by the current lab session. The caller must use
 /// requireCurrent at presentation and action boundaries, not retain an old
 /// view across a session transition.
@@ -557,6 +596,125 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     }, timeout: const Duration(seconds: 15));
     check();
     return result;
+  }
+
+  /// Default-off, exact synthetic lab candidate. Requires the separately
+  /// emulator-tested Spark rules; never publish those rules to production.
+  static const actionsCandidateEnabled =
+      bool.fromEnvironment('DEDA_STAGE04_PROFILE_ACTIONS_CANDIDATE');
+
+  static Future<DedaStage04TierState> readPointTierCandidate(
+      DedaStage04ProfileRead opening) async {
+    if (!actionsCandidateEnabled) throw StateError('profile-actions-disabled');
+    final old=opening.requireCurrent(), current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
+    await _io.verifyOwner(uid,uid,check);
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app());
+    final base=db.doc('deda_lab_uid_authority/$uid');
+    final result=await db.runTransaction<DedaStage04TierState>((tx) async {
+      check();
+      final p=await tx.get(base);
+      if(!p.exists || p.metadata.isFromCache || p.metadata.hasPendingWrites ||
+         p.data()?['version']!=old.progressRevision)throw const DedaPrivateDataConflict();
+      final reserved=<int>{},claimed=<int>{};
+      int? previous;
+      for(final t in DedaStage04TierState.keys.keys){
+        for(final claim in [false,true]){
+          if(claim && t==25000)continue;
+          final s=await tx.get(base.collection('events').doc(DedaStage04TierState.key(t,claim)));
+          check();
+          if(s.metadata.isFromCache || s.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+          if(s.exists){
+            DedaStage04TierState.verifyMarker(s.data()!,uid,t,claim,old.progressRevision);
+            if(claim && !reserved.contains(t) || !claim && previous!=null && !claimed.contains(previous)) {
+              throw const FormatException('point-tier-sequence-invalid');
+            }
+            (claim?claimed:reserved).add(t);
+          }
+        }
+        previous=t;
+      }
+      return DedaStage04TierState(Set.unmodifiable(reserved),Set.unmodifiable(claimed));
+    });
+    check();return result;
+  }
+
+  static Future<void> performPointTierCandidate(DedaStage04ProfileRead opening,int threshold,bool claim) async {
+    if (!actionsCandidateEnabled) throw StateError('profile-actions-disabled');
+    final old=opening.requireCurrent(),current=_intent();
+    final k=DedaStage04TierState.key(threshold,claim),r=DedaStage04TierState.receipt(uid,threshold,claim);
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
+    await _io.verifyOwner(uid,uid,check);
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app()), base=db.doc('deda_lab_uid_authority/$uid');
+    final ref=base.collection('events').doc(k);
+    await db.runTransaction<void>((tx) async {
+      check();
+      final p=await tx.get(base), e=await tx.get(ref);
+      check();
+      if(!p.exists || p.metadata.isFromCache || p.metadata.hasPendingWrites ||
+          e.metadata.isFromCache || e.metadata.hasPendingWrites ||
+          p.data()?['version']!=old.progressRevision || e.exists)throw const DedaPrivateDataConflict();
+      final data=p.data()!, balances=Map<String,dynamic>.from(data['balances'] as Map);
+      final delta=(r['delta'] as Map)['points'] as int;
+      final nextPoints=(balances['points'] as int)+delta;
+      if(nextPoints<0 || nextPoints>9007199254740990)throw const DedaPrivateDataConflict();
+      final nextVersion=old.progressRevision+1;
+      balances['points']=nextPoints;
+      tx.set(base,{...data,'version':nextVersion,'balances':balances});
+      tx.set(base.collection('receipts').doc(k),Map<String,dynamic>.from(r));
+      tx.set(ref,{'format':1,'accountKey':uid,'eventKey':k,'receipt':r,'receiptId':k,
+        'appliedVersion':nextVersion,'afterBalances':balances,'createdAt':FieldValue.serverTimestamp()});
+    });
+    check();
+    final fresh=await readProfile();
+    final history=await readPointTierCandidate(fresh);
+    check();
+    if(!(claim?history.claimed:history.reserved).contains(threshold))throw const DedaPrivateDataConflict();
+  }
+
+  /// Atomic owner selection, account history and existing public directory.
+  /// Rules independently repeat proof of the fixed accepted lab gift.
+  static Future<DedaStage04ProfileRead> useIdentifierCandidate(DedaStage04ProfileRead opening,String id) async {
+    if(!actionsCandidateEnabled)throw StateError('profile-actions-disabled');
+    final old=opening.requireCurrent(),current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
+    await _io.verifyOwner(uid,uid,check);
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app()),base=db.doc('deda_lab_uid_authority/$uid');
+    final aRef=base.collection('account').doc('current');
+    await db.runTransaction<void>((tx) async {
+      check();
+      final p=await tx.get(base),i=await tx.get(base.collection('inventory').doc('current')),a=await tx.get(aRef);
+      check();
+      for(final row in [p,i,a]){
+        if(!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+      }
+      final fresh=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:p.data(),inventory:i.data(),account:a.data()));
+      if(fresh.accountRevision!=old.accountRevision || fresh.inventoryRevision!=old.inventoryRevision ||
+         fresh.originalId!=old.originalId || id==fresh.activeId)throw const DedaPrivateDataConflict();
+      String? color;
+      if(id!=fresh.originalId){
+        if(!fresh.acceptedGiftIds.contains(id))throw const FormatException('profile-id-not-owned');
+        final g=fresh.identifierGiftRecords.singleWhere((x)=>(x as Map)['identifier']==id) as Map;
+        color=(g['grant'] as Map)['baseColor'] as String;
+      }
+      final revision=fresh.accountRevision+1,original=fresh.originalId;
+      final row=<String,dynamic>{...fresh._source.account,'revision':revision,
+        'profile':{...Map<String,Object?>.from(fresh._profile),'activeId':id,'fixedColor':color}};
+      tx.set(aRef,row);
+      tx.set(base.collection('accountSources').doc('current'),row);
+      tx.set(base.collection('accountHistory').doc('$revision'),row);
+      tx.set(db.collection('deda_stage71_active_identifier').doc(original),
+        {'originalId':original,'activeId':id,'updatedAt':FieldValue.serverTimestamp()});
+      tx.set(db.collection('deda_public_active_aliases').doc(original),
+        {'originalId':original,'activeId':id,'baseColor':color,'updatedAt':FieldValue.serverTimestamp()});
+      if(id!=original)tx.set(db.collection('deda_public_alias_routes').doc(id),
+        {'aliasId':id,'originalId':original,'baseColor':color,'updatedAt':FieldValue.serverTimestamp()});
+    });
+    check();
+    final fresh=await readProfile();check();
+    if(fresh.requireCurrent().activeId!=id)throw const DedaPrivateDataConflict();
+    return fresh;
   }
 
   /// Review-only client integration. Default closed; the existing live
