@@ -1,0 +1,42 @@
+name: DEDA Stage03 live pinned lab storage SDK NO DEPLOY
+on:
+  push:
+    branches: [deda-100451-owner-admin-session-safe-repair-2026-11-20]
+    paths:
+      - 'tools/app_stability/app_package/stage03_lab_live_storage_2026_11_25.mjs'
+      - '.github/workflows/deda-stage03-lab-live-storage-2026-11-25.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage03-live-pinned-lab
+  cancel-in-progress: false
+jobs:
+  live-synthetic-storage:
+    if: github.ref == 'refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare exact SDK in disposable directory without credentials
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stage03-live"
+          mkdir -p "$work"
+          cp tools/app_stability/app_package/stage03_lab_live_storage_2026_11_25.mjs "$work/probe.mjs"
+          cd "$work"
+          npm install --no-audit --no-fund --ignore-scripts --no-package-lock firebase@11.10.0
+          node --check probe.mjs
+      - name: Verify dedicated lab config and run live synthetic client SDK probe
+        env:
+          LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}
+          LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/stage03-live"
+          node probe.mjs
