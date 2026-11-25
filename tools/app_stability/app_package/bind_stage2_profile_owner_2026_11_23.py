@@ -680,6 +680,7 @@ STAGE04_FIELDS = """
   static const _stage04LabMode = bool.fromEnvironment('DEDA_STAGE04_PROFILE_LAB')
       || DedaStage03LabStorage.enabled;
   DedaStage04ProfileRead? _stage04Read;
+  DedaStage04AppearanceRead? _stage04Appearance;
   DedaAuthSnapshot? _stage04Principal;
   StreamSubscription<User?>? _stage04Auth;
   bool _stage04Expired = false;
@@ -693,6 +694,7 @@ STAGE04_FIELDS = """
     if (_stage04Expired) return;
     _stage04Expired = true;
     _stage04Read = null;
+    _stage04Appearance = null;
     if (mounted) setState(() { _stage04Loading = false; });
   }
   bool _stage04SameSession() {
@@ -721,16 +723,21 @@ STAGE04_FIELDS = """
   }
   Future<void> _stage04Refresh() async {
     if (!mounted || _stage04Loading || !_stage04SameSession()) return;
-    setState(() { _stage04Loading = true; _stage04Read = null; });
+    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; });
     try {
       final read = await DedaStage03LabStorage.readProfile();
       final view = read.requireCurrent();
+      DedaStage04AppearanceRead? appearance;
+      try { appearance = await DedaStage03LabStorage.readAppearance(read); }
+      catch (_) { /* No local/default fallback or edit on a conflicting journal. */ }
       if (!mounted || !_stage04SameSession()) return;
+      read.requireCurrent();
       setState(() {
         (_stage04Xp ??= ValueNotifier<int>(view.xp)).value = view.xp;
         (_stage04Points ??= ValueNotifier<int>(view.taskPoints)).value = view.taskPoints;
         (_stage04Friends ??= ValueNotifier<int>(view.acceptedFriends)).value = view.acceptedFriends;
         _stage04Read = read;
+        _stage04Appearance = appearance;
         _stage04Loading = false;
       });
     } catch (_) {
@@ -755,12 +762,38 @@ STAGE04_FIELDS = """
     if (!_stage04SameSession() || view == null) return;
     unawaited(Clipboard.setData(ClipboardData(text: view.activeId)));
   }
+  Future<void> _stage04OpenEditor() async {
+    final opening = _stage04Appearance;
+    if (opening == null || !_stage04SameSession()) {
+      _showPhase2Notice('تعذر التحقق من سجل المظهر الموحد.',
+          'The unified appearance record could not be verified.');
+      return;
+    }
+    final changed = await Navigator.push<bool>(context, MaterialPageRoute<bool>(
+      builder: (_) => StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, auth) {
+          try {
+            if (auth.hasError || auth.connectionState == ConnectionState.waiting ||
+                auth.data?.uid != DedaStage03LabStorage.uid ||
+                !_stage04SameSession()) return _stage04HeldProfile();
+            opening.requireCurrent();
+            return DedaEditProfilePage(stage04Appearance: opening);
+          } catch (_) { return _stage04HeldProfile(); }
+        })));
+    if (changed == true && mounted && _stage04SameSession()) {
+      await _stage04Refresh();
+    }
+  }
   void _stage04OpenCard(String title) {
     final read = _stage04Read;
     final view = _stage04View;
     if (read == null || view == null || !_stage04SameSession()) return;
     Widget child;
-    if (title == dedaText('الشارات', 'Badges')) {
+    if (title == dedaText('تعديل الملف', 'Edit profile')) {
+      unawaited(_stage04OpenEditor());
+      return;
+    } else if (title == dedaText('الشارات', 'Badges')) {
       child = DedaSixAchievementsPage(
           level: DedaSocialProgressWallet.levelForXp(
               view.xp.clamp(0, 1 << 30).toInt()),
@@ -778,6 +811,13 @@ STAGE04_FIELDS = """
               proof: DedaMyStoreProof.accountSaved,
               active: view.activeId == view.originalId),
         ];
+        final selected = _stage04Appearance?.selection;
+        final chosenStyle = selected?.frameStyle(
+            (i) => DedaLabPremiumFrameStyles.byProfileStyle(i)?.id);
+        items.addAll(DedaProfileFreeInventory.forDevice(
+            avatarStyle: selected?.avatar ?? -1, frameStyle: chosenStyle ?? -1,
+            backgroundStyle: selected?.background ?? -1).where(
+              (item) => item.proof == DedaMyStoreProof.basicFree));
         final owned = view.verifiedPaidFrameIds;
         final rendered = <String>{};
         for (var style = 6; style <= 18; style++) {
@@ -787,7 +827,8 @@ STAGE04_FIELDS = """
           items.add(DedaMyStoreItem(id: frame.id, label: frame.nameAr,
               section: DedaMyStoreSection.frames,
               proof: DedaMyStoreProof.serverVerified,
-              receiptKind: 'purchase', previewAsset: frame.assetPath));
+              receiptKind: 'purchase', previewAsset: frame.assetPath,
+              active: selected?.frame == frame.id));
         }
         if (rendered.length != owned.length) throw StateError('frame-catalog-incomplete');
         for (final id in view.acceptedGiftIds) {
@@ -797,14 +838,20 @@ STAGE04_FIELDS = """
               receiptKind: 'gift', active: id == view.activeId));
         }
         child = DedaMyStorePage(originalId: view.originalId, items: items,
-            isArabic: DedaLanguageState.isArabic, stage04ProfileRead: read);
+            isArabic: DedaLanguageState.isArabic, stage04ProfileRead: read,
+            onOpenEditProfile: _stage04Appearance == null ? null : () {
+              if (!_stage04SameSession() || _stage04View == null) return;
+              Navigator.pop(context);
+              unawaited(_stage04OpenEditor());
+            });
       } catch (_) {
         _showPhase2Notice('تعذر التحقق من المقتنيات الموحدة.',
             'Unified inventory could not be verified.');
         return;
       }
     } else if (title == dedaText('عرض الملف العام', 'Public profile preview')) {
-      child = DedaPublicProfilePreviewPage(stage04ProfileRead: read);
+      child = DedaPublicProfilePreviewPage(stage04ProfileRead: read,
+          stage04Appearance: _stage04Appearance?.selection);
     } else {
       // Do not open a legacy phone editor or acquisition shop while
       // its complete authoritative inputs are unavailable.
@@ -853,14 +900,20 @@ def _stage04_hero(body):
     if body.count('DedaPreferences.profileBackgroundStyle') < 2:
         raise ValueError('STAGE04_PROFILE_STOP:hero-background')
     body = body.replace('DedaPreferences.profileBackgroundStyle',
-        '(_stage04LabMode ? 0 : DedaPreferences.profileBackgroundStyle)')
+        '(_stage04LabMode ? (_stage04Appearance?.selection?.background ?? 0) : DedaPreferences.profileBackgroundStyle)')
     avatar = 'child: ValueListenableBuilder<int>('
     body = once(body, avatar, """child: _stage04LabMode
-                          ? SizedBox(width: avatarSize, height: avatarSize,
+                          ? (_stage04Appearance?.selection != null
+                              ? DedaFramedAvatar(
+                                  avatarStyle: _stage04Appearance!.selection!.avatar,
+                                  frameStyle: _stage04Appearance!.selection!.frameStyle(
+                                    (i) => DedaLabPremiumFrameStyles.byProfileStyle(i)?.id),
+                                  size: avatarSize)
+                              : SizedBox(width: avatarSize, height: avatarSize,
                               child: Center(child: Icon(Icons.person_outline,
                                 size: avatarSize * 0.45, color: Colors.white,
                                 semanticLabel: dedaText('المظهر غير متاح',
-                                    'Appearance unavailable'))))
+                                    'Appearance unavailable')))))
                           : ValueListenableBuilder<int>(""", 'stage04-hero-avatar')
     body = once(body, '                    DedaStage48ActiveInkProfileSlot(',
         """                    if (_stage04LabMode)
@@ -906,7 +959,7 @@ def _stage04_build(body):
         '    if (_stage04LabMode && _stage04View == null) return _stage04HeldProfile();',
         'stage04-before-render')
     body = once(body, 'onPressed: _openEditProfile,',
-        'onPressed: _stage04LabMode ? null : _openEditProfile,', 'stage04-edit-held')
+        'onPressed: _stage04LabMode ? _stage04OpenEditor : _openEditProfile,', 'stage04-edit-held')
     return once(body, '          ValueListenableBuilder<int>(\n            valueListenable: DedaTaskEngine.totalPointsNotifier,',
         '          if (!_stage04LabMode)\n          ValueListenableBuilder<int>(\n            valueListenable: DedaTaskEngine.totalPointsNotifier,',
         'stage04-local-reward-panel-held')
@@ -1058,7 +1111,8 @@ def _stage04_store(body):
 def _stage04_public_preview(body):
     import re
     body = once(body, 'const DedaPublicProfilePreviewPage({super.key});',
-        'const DedaPublicProfilePreviewPage({super.key, this.stage04ProfileRead});\n'
+        'const DedaPublicProfilePreviewPage({super.key, this.stage04ProfileRead, this.stage04Appearance});\n'
+        '  final DedaStage04Appearance? stage04Appearance;\n'
         '  final DedaStage04ProfileRead? stage04ProfileRead;', 'stage04-preview-ctor')
     # Keep the original preview layout. The lab branch never reads a phone
     # identity or shows a local appearance as the unified account's appearance.
@@ -1070,10 +1124,15 @@ def _stage04_public_preview(body):
         body=body[:m.start()] + ('final ' + name + ' = stage04ProfileRead != null ? '
             'stage04ProfileRead!.requireCurrent().' + field + ' : (' + m.group(1) + ');') + body[m.end():]
     body = once(body, 'DedaPreferences.profileBackgroundStyle,',
-        'stage04ProfileRead != null ? 0 : DedaPreferences.profileBackgroundStyle,',
+        'stage04ProfileRead != null ? (stage04Appearance?.background ?? 0) : DedaPreferences.profileBackgroundStyle,',
         'stage04-preview-background')
     body = once(body, 'ValueListenableBuilder<int>(',
-        """if (stage04ProfileRead != null)
+        """if (stage04ProfileRead != null && stage04Appearance != null)
+                  DedaFramedAvatar(avatarStyle: stage04Appearance!.avatar,
+                      frameStyle: stage04Appearance!.frameStyle(
+                          (i) => DedaLabPremiumFrameStyles.byProfileStyle(i)?.id),
+                      size: 124)
+                else if (stage04ProfileRead != null)
                   SizedBox(height: 124, width: 124, child: Center(child: Icon(
                     Icons.person_outline, size: 56,
                     semanticLabel: dedaText('المظهر غير متاح', 'Appearance unavailable'))))
@@ -1084,6 +1143,109 @@ def _stage04_public_preview(body):
                       ? Text(id, textAlign: TextAlign.center,
                           key: const Key('deda_stage04_public_preview_id'))
                       : DedaSixActiveIdentity(""", 'stage04-preview-id')
+    return body
+
+
+def _stage04_editor_widget(body):
+    return once(body, 'const DedaEditProfilePage({super.key});',
+        'const DedaEditProfilePage({super.key, this.stage04Appearance});\n'
+        '  final DedaStage04AppearanceRead? stage04Appearance;', 'stage04-editor-ctor')
+
+
+def _stage04_editor_state(body):
+    body = once(body, '    super.initState();', """    super.initState();
+    final opening = widget.stage04Appearance;
+    if (opening != null) {
+      try {
+        final view = opening.requireCurrent();
+        final chosen = opening.selection;
+        _name = TextEditingController(text: view.displayName);
+        // Initial preview only when no prior selection exists.
+        _avatarStyle = chosen?.avatar ?? 0;
+        _frameStyle = chosen?.frameStyle(
+            (i) => DedaLabPremiumFrameStyles.byProfileStyle(i)?.id) ?? 3;
+        _backgroundStyle = chosen?.background ?? 0;
+        final owned = view.verifiedPaidFrameIds;
+        for (var style=6; style<=18; style++) {
+          if (owned.contains(DedaLabPremiumFrameStyles.byProfileStyle(style)?.id)) {
+            _serverVerifiedPaidStyles.add(style);
+          }
+        }
+        if (_serverVerifiedPaidStyles.contains(_frameStyle)) {
+          _confirmedActiveFrame = _frameStyle;
+        }
+      } catch (_) {
+        // Always initialize the original late fields, but never render them
+        // as account data or write when verification fails.
+        _stage04EditorHeld = true;
+        _name = TextEditingController();
+        _avatarStyle = 0; _frameStyle = 3; _backgroundStyle = 0;
+      }
+      return;
+    }""", 'stage04-editor-no-phone-init')
+    body = once(body, '  bool _saving = false;', """  bool _saving = false;
+  bool _stage04EditorHeld = false;
+  Future<void> _stage04SaveAppearance() async {
+    final opening = widget.stage04Appearance!;
+    if (_saving || _stage04EditorHeld) return;
+    setState(() { _saving = true; _error = null; });
+    try {
+      opening.requireCurrent();
+      final selection = DedaStage04Appearance.fromStyles(
+          avatar: _avatarStyle, frameStyle: _frameStyle,
+          background: _backgroundStyle,
+          paidIdAt: (i) => DedaLabPremiumFrameStyles.byProfileStyle(i)?.id);
+      final result = await DedaStage03LabStorage.saveAppearance(opening, selection);
+      opening.requireCurrent();
+      if (!mounted) return;
+      if (result.status == DedaPrivateDataStatus.saved) {
+        Navigator.pop(context, true);
+      } else {
+        setState(() => _error = dedaText(
+            'لم يتأكد الحفظ؛ أعد المحاولة بنفس الاختيار أو أغلق الشاشة عند التعارض.',
+            'Save not confirmed; retry the same selection or close on conflict.'));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = dedaText('تعذر تأكيد حفظ المظهر.',
+          'Appearance save could not be confirmed.'));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }""", 'stage04-editor-save')
+    body = once(body, '  Future<void> _save() async {',
+        '  Future<void> _save() async {\n'
+        '    if (widget.stage04Appearance != null) return _stage04SaveAppearance();',
+        'stage04-editor-bypass-legacy-save')
+    body = once(body, 'if (!dedaSectionCurrent) return dedaSectionExpiredView();',
+        """if (!dedaSectionCurrent) return dedaSectionExpiredView();
+    if (widget.stage04Appearance != null) {
+      try {
+        widget.stage04Appearance!.requireCurrent();
+        if (_stage04EditorHeld) return dedaSectionExpiredView();
+      } catch (_) { return dedaSectionExpiredView(); }
+    }""", 'stage04-editor-current')
+    body = once(body, 'const DedaUnifiedCurrencyStrip(),',
+        'if (widget.stage04Appearance == null) const DedaUnifiedCurrencyStrip(),',
+        'stage04-editor-no-local-wallet')
+    body = once(body, 'child: DedaSixActiveIdentity(',
+        """child: widget.stage04Appearance != null
+                              ? SelectableText(widget.stage04Appearance!.requireCurrent().activeId)
+                              : DedaSixActiveIdentity(""", 'stage04-editor-id')
+    body = once(body, 'if (index >= 6)\n                                  DedaSixFramePurchaseAction(',
+        """if (index >= 6 && widget.stage04Appearance != null)
+                                  TextButton(
+                                    onPressed: _saving || !_serverVerifiedPaidStyles.contains(index)
+                                        ? null : () => setState(() {
+                                            _frameStyle = index; _previewFrameStyle = null;
+                                          }),
+                                    child: Text(_serverVerifiedPaidStyles.contains(index)
+                                        ? dedaText('استخدام', 'Use')
+                                        : dedaText('الشراء محجوب', 'Purchase held')))
+                                else if (index >= 6)
+                                  DedaSixFramePurchaseAction(""", 'stage04-editor-no-checkout')
+    body = once(body, 'controller: _name,',
+        'controller: _name,\n                    readOnly: widget.stage04Appearance != null,',
+        'stage04-editor-name-authority-held')
     return body
 
 def bind_stage04_lab(project: Path):
@@ -1097,6 +1259,10 @@ def bind_stage04_lab(project: Path):
     verify_verified_owned_frame_art(original)
     verify_shared_routes(original)
     modified = _stage04_profile(original)
+    modified = _stage04_region(modified, 'class DedaEditProfilePage extends StatefulWidget',
+        '\nclass ', _stage04_editor_widget)
+    modified = _stage04_region(modified, 'class _DedaEditProfilePageState',
+        '\nclass ', _stage04_editor_state)
     store_path = project/'lib/deda_100377_my_store_page_staged.dart'
     store_modified = _stage04_store(store_path.read_text())
     modified = _stage04_region(modified, 'class DedaPublicProfilePreviewPage extends StatelessWidget',

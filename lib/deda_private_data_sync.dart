@@ -2,6 +2,52 @@ import 'dart:async';
 import 'dart:convert';
 import 'deda_step2_local_places_settings_evidence.dart';
 
+/// An owner-selected cosmetic preference, not a grant or a public profile.
+/// The caller must verify a paid frame against the separate protected inventory.
+class DedaStage04Appearance {
+  DedaStage04Appearance({required this.avatar, required this.frame,
+      required this.background}) {
+    if (avatar < 0 || avatar > 8 || background < 0 || background > 8 ||
+        !RegExp(r'^(free_[0-5]|FRAME_(03|0[5-9]|1[0-6]))$').hasMatch(frame)) {
+      throw const FormatException('invalid-profile-appearance');
+    }
+  }
+  static const key = 'profileAppearance';
+  final int avatar, background;
+  final String frame;
+  bool get paid => frame.startsWith('FRAME_');
+  String encode() => jsonEncode({'avatar':avatar,'frame':frame,'background':background});
+  static DedaStage04Appearance decode(Object? raw) {
+    if (raw is! String) throw const FormatException('invalid-profile-appearance');
+    final d = jsonDecode(raw);
+    if (d is! Map || d.length != 3 || d['avatar'] is! int ||
+        d['frame'] is! String || d['background'] is! int) {
+      throw const FormatException('invalid-profile-appearance');
+    }
+    return DedaStage04Appearance(avatar:d['avatar'] as int,
+        frame:d['frame'] as String, background:d['background'] as int);
+  }
+  void requireOwned(Set<String> verified) {
+    if (paid && !verified.contains(frame)) {
+      throw const FormatException('unowned-profile-frame');
+    }
+  }
+  int frameStyle(String? Function(int) paidIdAt) {
+    if (!paid) return int.parse(frame.substring(5));
+    for (var style=6; style<=18; style++) {
+      if (paidIdAt(style)==frame) return style;
+    }
+    throw const FormatException('missing-original-frame-style');
+  }
+  static DedaStage04Appearance fromStyles({required int avatar, required int frameStyle,
+      required int background, required String? Function(int) paidIdAt}) {
+    final id = frameStyle >= 0 && frameStyle <= 5 ? 'free_$frameStyle'
+        : frameStyle >= 6 && frameStyle <= 18 ? paidIdAt(frameStyle) : null;
+    if (id == null) throw const FormatException('missing-original-frame-style');
+    return DedaStage04Appearance(avatar:avatar,frame:id,background:background);
+  }
+}
+
 /// Nonfinancial records only. Native JSON text and malformed legacy entries
 /// remain byte-for-byte intact; no wallet, role, ID ownership or reward enters.
 class DedaPrivateDataPayload {
@@ -13,6 +59,10 @@ class DedaPrivateDataPayload {
     for (final entry in this.fields.entries) {
       if (!validKey(entry.key, uidScoped: uidScoped)) throw const FormatException('unsupported-private-data-key');
       final value = entry.value;
+      if (entry.key == DedaStage04Appearance.key) {
+        DedaStage04Appearance.decode(value);
+        continue;
+      }
       if (uidPreferenceKeys.contains(entry.key)) {
         if (value != null && DedaStep2LocalPlacesSettingsReader.inspectRawValue(entry.key, value) !=
             DedaStep2LocalSourceStatus.capturedUntrusted) {
@@ -39,7 +89,7 @@ class DedaPrivateDataPayload {
     'deda_default_travel_mode_v1', 'deda_default_map_style_v1',
   };
   static bool validKey(String key, {bool uidScoped = false}) =>
-      (uidScoped && uidPreferenceKeys.contains(key)) ||
+      (uidScoped && (uidPreferenceKeys.contains(key) || key == DedaStage04Appearance.key)) ||
       const {'favorites', 'recent', 'personalPlaces', 'contactDraft', 'quizSeen'}.contains(key) ||
       RegExp(r'^quiz:(ids|progress|completed):[0-9]{4}-[0-9]{2}-[0-9]{2}$').hasMatch(key);
   String encode() {
@@ -163,9 +213,21 @@ class DedaPrivateDataSync {
     await io.writeJournal(account, text); check();
   }
   Future<DedaPrivateDataResult> backup({required String account, required String original,
-      required DedaPrivateDataPayload payload, required bool Function() isCurrent}) =>
+      required DedaPrivateDataPayload payload, required bool Function() isCurrent,
+      DedaPrivateDataRevision? expectedBase}) =>
     _run(account, original, isCurrent, (check) async {
       final journal = await _journal(account, original, check);
+      // A screen opened at revision N cannot replace fields from a later
+      // revision, even if another save on this device advanced the journal.
+      if (expectedBase != null) {
+        if (!_uidScope) throw ArgumentError('expected-base-requires-uid');
+        expectedBase.validate();
+        if (journal.base.version != expectedBase.version ||
+            journal.base.mutationId != expectedBase.mutationId ||
+            journal.base.payload?.encode() != expectedBase.payload?.encode()) {
+          return DedaPrivateDataResult(DedaPrivateDataStatus.conflict, journal.base);
+        }
+      }
       // Recheck scope before recording any local intent, including constructed payloads.
       DedaPrivateDataPayload.decode(payload.encode(), uidScoped: _uidScope);
       // Do not create a new request ID for an unchanged uncertain save.

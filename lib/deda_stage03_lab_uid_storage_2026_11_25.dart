@@ -203,6 +203,16 @@ class DedaStage04ProfileRead {
   }
 }
 
+/// The restored private revision used to open the existing profile editor.
+/// A selection never confers an entitlement. The base is held for CAS.
+class DedaStage04AppearanceRead {
+  DedaStage04AppearanceRead._(this._profile, this._revision, this.selection);
+  final DedaStage04ProfileRead _profile;
+  final DedaPrivateDataRevision _revision;
+  final DedaStage04Appearance? selection;
+  DedaStage04ProfileView requireCurrent() => _profile.requireCurrent();
+}
+
 /// Lab only, default off. No legacy account/phone/ID routing, no wallet,
 /// rewards, role, ownership or authoritative score writes from this class.
 /// Existing DedaPrivateDataSync provides revision and journal coordination.
@@ -275,6 +285,58 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final view = DedaStage04ProfileView.fromProtected(protected);
     if (!current()) throw const DedaPrivateDataStale();
     return DedaStage04ProfileRead._(view, current);
+  }
+
+  /// Restore existing private data, retaining every field and its revision.
+  /// Absence of a selection is not a saved default.
+  static Future<DedaStage04AppearanceRead> readAppearance(DedaStage04ProfileRead profile) async {
+    profile.requireCurrent();
+    final current = _intent();
+    final restored = await restore();
+    if (!current()) throw const DedaPrivateDataStale();
+    final view = profile.requireCurrent();
+    if (restored.status != DedaPrivateDataStatus.saved || restored.revision.payload == null) {
+      throw StateError('profile-appearance-private-source-held');
+    }
+    final fields = restored.revision.payload!.fields;
+    final selection = fields.containsKey(DedaStage04Appearance.key)
+        ? DedaStage04Appearance.decode(fields[DedaStage04Appearance.key]) : null;
+    if (selection?.paid == true) selection!.requireOwned(view.verifiedPaidFrameIds);
+    return DedaStage04AppearanceRead._(profile,restored.revision,selection);
+  }
+
+  /// Only a display selection may change; no protected document is written.
+  /// Recheck paid entitlement from the server at save time, then use the
+  /// opening revision, the original UID journal and its existing receipts.
+  static Future<DedaPrivateDataResult> saveAppearance(
+      DedaStage04AppearanceRead opening, DedaStage04Appearance selection) async {
+    opening.requireCurrent();
+    final current = _intent();
+    final fresh = await readProfile();
+    final view = fresh.requireCurrent();
+    if (!current() || opening.requireCurrent().uid != view.uid) {
+      throw const DedaPrivateDataStale();
+    }
+    if (selection.paid) selection.requireOwned(view.verifiedPaidFrameIds);
+    // Previously saved legacy choices can be kept; do not create new legacy
+    // avatar/background choices that the original picker no longer offers.
+    if ((selection.avatar > 5 && selection.avatar != opening.selection?.avatar) ||
+        (selection.background >= 3 && selection.background <= 5 &&
+         selection.background != opening.selection?.background) ||
+        (!selection.paid && selection.frameStyle((_)=>null) < 3 &&
+         selection.frame != opening.selection?.frame)) {
+      throw const FormatException('profile-legacy-choice-not-selected');
+    }
+    final payload = DedaPrivateDataPayload({
+      ...opening._revision.payload!.fields,
+      DedaStage04Appearance.key: selection.encode(),
+    },uidScoped:true);
+    return _sync.backup(account:uid, original:uid, payload:payload,
+        expectedBase:opening._revision, isCurrent:() {
+      if (!current()) return false;
+      try { opening.requireCurrent(); fresh.requireCurrent(); return true; }
+      catch (_) { return false; }
+    });
   }
 
   /// Profile Favorites/Activity: use the existing UID restore journal.

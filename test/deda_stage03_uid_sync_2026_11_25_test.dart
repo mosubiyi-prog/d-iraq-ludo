@@ -117,6 +117,33 @@ void main(){
     inventory['idGifts']=[{...gift,'acceptance':{'uid':'foreign','identifier':id,'group':'001','receivedMs':101}}];
     expect(()=>project().acceptedGiftIds,throwsFormatException);
   });
+  test('04/01 cosmetic selection is UID-private, not ownership, and rejects malformed values',(){
+    final selection=DedaStage04Appearance(avatar:2,frame:'FRAME_03',background:7);
+    final payload=DedaPrivateDataPayload({DedaStage04Appearance.key:selection.encode()},uidScoped:true);
+    expect(DedaStage04Appearance.decode(payload.fields[DedaStage04Appearance.key]).frame,'FRAME_03');
+    expect(()=>DedaPrivateDataPayload.decode(payload.encode()),throwsFormatException);
+    expect(()=>selection.requireOwned({}),throwsFormatException);
+    selection.requireOwned({'FRAME_03'});
+    expect(selection.frameStyle((i)=>i==6?'FRAME_03':null),6);
+    expect(()=>DedaStage04Appearance(avatar:9,frame:'free_3',background:7),throwsFormatException);
+    expect(()=>DedaStage04Appearance(avatar:2,frame:'FRAME_01',background:7),throwsFormatException);
+    expect(()=>DedaPrivateDataPayload({DedaStage04Appearance.key:'{"avatar":0,"frame":"free_3","background":1,"role":"admin"}'},uidScoped:true),throwsFormatException);
+  });
+  test('04/01 appearance save preserves unrelated records and stale same-device editors cannot overwrite',() async {
+    final server=Server(), a=Port(server,1), b=Port(server,2);
+    final sync=DedaPrivateDataSync.uidScoped(a), other=DedaPrivateDataSync.uidScoped(b);
+    final initial=DedaPrivateDataPayload({'favorites':['fixture'],'recent':['old'],'deda_language_v1':'ar'},uidScoped:true);
+    final initialSave=await sync.backup(account:uid,original:uid,payload:initial,isCurrent:()=>true);
+    final base=initialSave.revision;
+    final selection=DedaStage04Appearance(avatar:2,frame:'free_3',background:7);
+    final next=DedaPrivateDataPayload({...base.payload!.fields,DedaStage04Appearance.key:selection.encode()},uidScoped:true);
+    expect((await sync.backup(account:uid,original:uid,payload:next,expectedBase:base,isCurrent:()=>true)).status,DedaPrivateDataStatus.saved);
+    expect((await restore(other)).revision.payload!.encode(),next.encode());
+    expect((await sync.backup(account:uid,original:uid,payload:initial,expectedBase:base,isCurrent:()=>true)).status,DedaPrivateDataStatus.conflict);
+    expect(server.writes,2);
+    expect(server.value.payload!.fields['favorites'],['fixture']);
+    expect(server.value.payload!.fields['deda_language_v1'],'ar');
+  });
   test('04/01 live profile read is closed by default without an approved lab session',() async {
     await expectLater(DedaStage03LabStorage.readProfile(),throwsStateError);
   });
