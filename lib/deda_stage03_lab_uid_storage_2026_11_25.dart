@@ -8,6 +8,74 @@ import 'deda_auth_session_runtime.dart';
 import 'deda_private_data_sync.dart';
 import 'deda_stage02_lab_single_uid_2026_11_25.dart';
 
+/// Read-only envelope. Only the guarded server transaction establishes source
+/// provenance; decoding a map never grants rewards, money, ownership or roles.
+class DedaStage03ProtectedSnapshot {
+  DedaStage03ProtectedSnapshot._(this.uid, this.progress, this.inventory, this.account);
+  final String uid;
+  final Map<String, Object?> progress, inventory, account;
+
+  static bool _exact(Map<String, Object?> m, Set<String> keys) =>
+      m.length == keys.length && keys.every(m.containsKey);
+  static bool _counter(Object? v, {int min = 0}) =>
+      v is int && v >= min && v <= 9007199254740990;
+  static Object? _freeze(Object? v) {
+    if (v is Map) {
+      return Map<String, Object?>.unmodifiable({
+        for (final e in v.entries) e.key as String: _freeze(e.value),
+      });
+    }
+    if (v is List) return List<Object?>.unmodifiable(v.map(_freeze));
+    if (v == null || v is String || v is bool || v is num) return v;
+    throw const FormatException('unsupported-protected-field');
+  }
+  static DedaStage03ProtectedSnapshot decode({
+    required String expectedUid,
+    required Map<String, Object?>? progress,
+    required Map<String, Object?>? inventory,
+    required Map<String, Object?>? account,
+  }) {
+    if (expectedUid != DedaStage02LabSingleUid.approvedUid ||
+        progress == null || inventory == null || account == null) {
+      throw const FormatException('protected-source-incomplete');
+    }
+    final balances = progress['balances'];
+    const units = {'points', 'coins', 'xp', 'earnedDiamonds'};
+    if (!_exact(progress, {'format','accountKey','version','balances','initializedBy'}) ||
+        progress['format'] != 1 || progress['accountKey'] != expectedUid ||
+        !_counter(progress['version'], min: 1) || balances is! Map ||
+        balances.length != units.length || !units.every((k) => _counter(balances[k])) ||
+        progress['initializedBy'] is! String ||
+        !RegExp(r'^[a-f0-9]{64}$').hasMatch(progress['initializedBy'] as String)) {
+      throw const FormatException('invalid-protected-progress');
+    }
+    bool validProjection(Map<String, Object?> row, Set<String> fields) =>
+        _exact(row, {'format','uid','revision','complete',...fields}) &&
+        row['format'] == 1 && row['uid'] == expectedUid &&
+        _counter(row['revision'], min: 1) && row['complete'] == true;
+    if (!validProjection(inventory, {'frames','idGifts','diamondGifts'}) ||
+        !['frames','idGifts','diamondGifts'].every((k) => inventory[k] is List)) {
+      throw const FormatException('invalid-protected-inventory');
+    }
+    final profile = account['profile'];
+    if (!validProjection(account, {'profile','friends','tasks','league'}) ||
+        profile is! Map || profile.length != 4 ||
+        !['displayName','originalId','activeId','fixedColor'].every(profile.containsKey) ||
+        profile['displayName'] is! String || (profile['displayName'] as String).trim().isEmpty ||
+        profile['originalId'] is! String ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(profile['originalId'] as String) ||
+        profile['activeId'] is! String ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(profile['activeId'] as String) ||
+        !['friends','tasks','league'].every((k) => account[k] is List)) {
+      throw const FormatException('invalid-protected-account');
+    }
+    return DedaStage03ProtectedSnapshot._(expectedUid,
+        _freeze(progress) as Map<String, Object?>,
+        _freeze(inventory) as Map<String, Object?>,
+        _freeze(account) as Map<String, Object?>);
+  }
+}
+
 /// Lab only, default off. No legacy account/phone/ID routing, no wallet,
 /// rewards, role, ownership or authoritative score writes from this class.
 /// Existing DedaPrivateDataSync provides revision and journal coordination.
@@ -38,6 +106,38 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       _sync.backup(account: uid, original: uid, payload: payload, isCurrent: _intent());
   static Future<DedaPrivateDataResult> restore() =>
       _sync.restore(account: uid, original: uid, isCurrent: _intent());
+
+  /// Server transaction reads all protected views under the same UID.
+  /// No write, no partial or cached fallback if a source is unavailable.
+  static Future<DedaStage03ProtectedSnapshot> readProtected() async {
+    final current = _intent();
+    void check() {
+      if (!current()) throw const DedaPrivateDataStale();
+      _io._check(uid, uid);
+    }
+    await _io.verifyOwner(uid, uid, check);
+    check();
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app());
+    final base = db.doc('deda_lab_uid_authority/$uid');
+    final result = await db.runTransaction<DedaStage03ProtectedSnapshot>((tx) async {
+      check();
+      final p = await tx.get(base);
+      check();
+      final i = await tx.get(base.collection('inventory').doc('current'));
+      check();
+      final a = await tx.get(base.collection('account').doc('current'));
+      check();
+      for (final row in [p,i,a]) {
+        if (!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites) {
+          throw StateError('protected-server-source-required');
+        }
+      }
+      return DedaStage03ProtectedSnapshot.decode(expectedUid: uid,
+          progress: p.data(), inventory: i.data(), account: a.data());
+    }, timeout: const Duration(seconds: 15));
+    check();
+    return result;
+  }
 
   void _check(String account, [String? original]) {
     if (!_matches() || account != uid || (original != null && original != uid)) {

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/deda_private_data_sync.dart';
+import '../lib/deda_stage03_lab_uid_storage_2026_11_25.dart';
 
 const uid = 'PLmG06Uhhheef1hDE2MLfX6DEpg2';
 class Server {
@@ -39,7 +40,36 @@ Future<DedaPrivateDataResult> save(DedaPrivateDataSync s,String v) =>
   s.backup(account:uid,original:uid,payload:data(v),isCurrent:()=>true);
 Future<DedaPrivateDataResult> restore(DedaPrivateDataSync s) =>
   s.restore(account:uid,original:uid,isCurrent:()=>true);
+Map<String,Object?> protectedProgress()=>{'format':1,'accountKey':uid,'version':4,
+  'balances':{'points':5,'coins':10,'xp':20,'earnedDiamonds':200},
+  'initializedBy':List.filled(64,'a').join()};
+Map<String,Object?> protectedInventory()=>{'format':1,'uid':uid,'revision':1,'complete':true,
+  'frames':[{'frameId':'FRAME_03'}],'idGifts':[],'diamondGifts':[]};
+Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'complete':true,
+  'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
+  'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('protected read envelope preserves all three same-UID projections and is immutable',(){
+    final progress=protectedProgress(), inventory=protectedInventory(), account=protectedAccount();
+    final snapshot=DedaStage03ProtectedSnapshot.decode(expectedUid:uid,
+      progress:progress,inventory:inventory,account:account);
+    (progress['balances'] as Map)['points']=900;
+    expect((snapshot.progress['balances'] as Map)['points'],5);
+    expect(()=> (snapshot.progress['balances'] as Map)['points']=1,throwsUnsupportedError);
+    expect(()=> (snapshot.inventory['frames'] as List).clear(),throwsUnsupportedError);
+    expect(snapshot.account['profile'],account['profile']);
+  });
+  test('protected read envelope rejects absence, foreign identity and malformed authority, never zero fallback',(){
+    DedaStage03ProtectedSnapshot decode(Map<String,Object?>? p,Map<String,Object?>? i,Map<String,Object?>? a)=>
+      DedaStage03ProtectedSnapshot.decode(expectedUid:uid,progress:p,inventory:i,account:a);
+    expect(()=>decode(null,protectedInventory(),protectedAccount()),throwsFormatException);
+    expect(()=>decode(protectedProgress(),null,protectedAccount()),throwsFormatException);
+    expect(()=>decode(protectedProgress(),protectedInventory(),null),throwsFormatException);
+    expect(()=>decode(protectedProgress()..['accountKey']='other',protectedInventory(),protectedAccount()),throwsFormatException);
+    expect(()=>decode(protectedProgress(),protectedInventory()..['uid']='other',protectedAccount()),throwsFormatException);
+    expect(()=>decode(protectedProgress(),protectedInventory(),protectedAccount()..['complete']=false),throwsFormatException);
+    expect(()=>decode(protectedProgress()..['balances']={'points':5},protectedInventory(),protectedAccount()),throwsFormatException);
+  });
   test('fresh device restores committed data by UID without prior local data',() async {
     final server=Server(), a=Port(server,1), b=Port(server,2);
     expect((await save(DedaPrivateDataSync.uidScoped(a),'a')).status,DedaPrivateDataStatus.saved);
