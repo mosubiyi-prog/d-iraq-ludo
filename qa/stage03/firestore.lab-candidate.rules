@@ -41,6 +41,12 @@ service cloud.firestore {
     match /deda_lab_uid_authority/{uid} {
       allow get: if owner(uid);
       allow list, create, update, delete: if false;
+      // Candidate only: owner may read the verified inventory projection.
+      // Sources and history remain denied by the default rule.
+      match /inventory/current {
+        allow get: if owner(uid);
+        allow list, create, update, delete: if false;
+      }
     }
     match /{document=**} { allow read, write: if false; }
   }
