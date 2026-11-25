@@ -159,6 +159,33 @@ void main(){
   test('04/01 name candidate write is disabled by default',(){
     expect(DedaStage03LabStorage.nameCandidateEnabled,isFalse);
   });
+
+  test('04/01 combined editor reports each confirmed part, never rolls back or retries',() async {
+    final calls=<String>[];
+    Future<void> name() async {calls.add('name');}
+    Future<bool> appearance() async {calls.add('appearance');return false;}
+    final partial=await DedaStage04ProfileSaveOutcome.run(nameChanged:true,appearanceChanged:true,
+      saveName:name,saveAppearance:appearance);
+    expect(partial.name,DedaStage04SavePart.confirmed);
+    expect(partial.appearance,DedaStage04SavePart.unconfirmed);
+    expect(partial.complete,isFalse);
+    expect(calls,['name','appearance']);
+    calls.clear();
+    final blocked=await DedaStage04ProfileSaveOutcome.run(nameChanged:true,appearanceChanged:true,
+      saveName:() async {calls.add('name');throw StateError('ack lost');},saveAppearance:appearance);
+    expect(blocked.name,DedaStage04SavePart.unconfirmed);
+    expect(blocked.appearance,DedaStage04SavePart.notAttempted);
+    expect(calls,['name']);
+    calls.clear();
+    final unchanged=await DedaStage04ProfileSaveOutcome.run(nameChanged:false,appearanceChanged:false,
+      saveName:name,saveAppearance:appearance);
+    expect(unchanged.complete,isTrue);
+    expect(calls,isEmpty);
+    final full=await DedaStage04ProfileSaveOutcome.run(nameChanged:true,appearanceChanged:true,
+      saveName:name,saveAppearance:() async {calls.add('appearance');return true;});
+    expect(full.complete,isTrue);
+    expect(calls,['name','appearance']);
+  });
   test('04/01 cosmetic selection is UID-private, not ownership, and rejects malformed values',(){
     final selection=DedaStage04Appearance(avatar:2,frame:'FRAME_03',background:7);
     final payload=DedaPrivateDataPayload({DedaStage04Appearance.key:selection.encode()},uidScoped:true);

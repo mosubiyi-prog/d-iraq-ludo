@@ -781,7 +781,8 @@ STAGE04_FIELDS = """
             return DedaEditProfilePage(stage04Appearance: opening);
           } catch (_) { return _stage04HeldProfile(); }
         })));
-    if (changed == true && mounted && _stage04SameSession()) {
+    if ((changed == true || DedaStage03LabStorage.nameCandidateEnabled) &&
+        mounted && _stage04SameSession()) {
       await _stage04Refresh();
     }
   }
@@ -1192,9 +1193,10 @@ def _stage04_editor_state(body):
     }""", 'stage04-editor-no-phone-init')
     body = once(body, '  bool _saving = false;', """  bool _saving = false;
   bool _stage04EditorHeld = false;
+  bool _stage04ReopenRequired = false;
   Future<void> _stage04SaveAppearance() async {
     final opening = widget.stage04Appearance!;
-    if (_saving || _stage04EditorHeld) return;
+    if (_saving || _stage04EditorHeld || _stage04ReopenRequired) return;
     setState(() { _saving = true; _error = null; });
     try {
       opening.requireCurrent();
@@ -1202,6 +1204,38 @@ def _stage04_editor_state(body):
           avatar: _avatarStyle, frameStyle: _frameStyle,
           background: _backgroundStyle,
           paidIdAt: (i) => DedaLabPremiumFrameStyles.byProfileStyle(i)?.id);
+      if (DedaStage03LabStorage.nameCandidateEnabled) {
+        final outcome = await DedaStage03LabStorage.saveProfileCandidate(
+            opening, _name.text, selection);
+        opening.requireCurrent();
+        if (!mounted) return;
+        if (outcome.complete) {
+          Navigator.pop(context, true);
+          return;
+        }
+        // Never retry from an old opening revision. Closing the editor
+        // refreshes the parent even if a write acknowledgement was lost.
+        String status(DedaStage04SavePart part) {
+          switch (part) {
+            case DedaStage04SavePart.unchanged:
+              return dedaText('دون تغيير', 'Unchanged');
+            case DedaStage04SavePart.confirmed:
+              return dedaText('مؤكد', 'Confirmed');
+            case DedaStage04SavePart.unconfirmed:
+              return dedaText('غير مؤكد', 'Unconfirmed');
+            case DedaStage04SavePart.notAttempted:
+              return dedaText('لم تتم المحاولة', 'Not attempted');
+          }
+        }
+        setState(() {
+          _stage04ReopenRequired = true;
+          _error = dedaText('الاسم: ', 'Name: ') + status(outcome.name) +
+              dedaText('، المظهر: ', ', Appearance: ') + status(outcome.appearance) +
+              dedaText('. أغلق المحرر وافتحه مجدداً للتحقق من الحفظ.',
+                  '. Close and reopen the editor to verify the save.');
+        });
+        return;
+      }
       final result = await DedaStage03LabStorage.saveAppearance(opening, selection);
       opening.requireCurrent();
       if (!mounted) return;
@@ -1251,7 +1285,7 @@ def _stage04_editor_state(body):
                                 else if (index >= 6)
                                   DedaSixFramePurchaseAction(""", 'stage04-editor-no-checkout')
     body = once(body, 'controller: _name,',
-        'controller: _name,\n                    readOnly: widget.stage04Appearance != null,',
+        'controller: _name,\n                    readOnly: widget.stage04Appearance != null && (!DedaStage03LabStorage.nameCandidateEnabled || _saving || _stage04ReopenRequired),',
         'stage04-editor-name-authority-held')
     return body
 

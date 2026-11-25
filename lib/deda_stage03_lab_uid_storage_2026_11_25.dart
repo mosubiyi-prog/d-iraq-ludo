@@ -240,6 +240,46 @@ class DedaStage04NameChange {
       readback.displayName == name;
 }
 
+
+/// Save coordination only: delegates to the existing guarded writers.
+/// Separate results prevent an unconfirmed operation from being shown as
+/// successful, and no rollback or automatic retry can overwrite another device.
+enum DedaStage04SavePart { unchanged, confirmed, unconfirmed, notAttempted }
+class DedaStage04ProfileSaveOutcome {
+  const DedaStage04ProfileSaveOutcome(this.name, this.appearance);
+  final DedaStage04SavePart name, appearance;
+  bool get complete =>
+      (name == DedaStage04SavePart.unchanged || name == DedaStage04SavePart.confirmed) &&
+      (appearance == DedaStage04SavePart.unchanged || appearance == DedaStage04SavePart.confirmed);
+
+  static Future<DedaStage04ProfileSaveOutcome> run({
+    required bool nameChanged, required bool appearanceChanged,
+    required Future<void> Function() saveName,
+    required Future<bool> Function() saveAppearance,
+  }) async {
+    var name = DedaStage04SavePart.unchanged;
+    var appearance = appearanceChanged
+        ? DedaStage04SavePart.notAttempted : DedaStage04SavePart.unchanged;
+    if (nameChanged) {
+      try {
+        await saveName();
+        name = DedaStage04SavePart.confirmed;
+      } catch (_) {
+        return DedaStage04ProfileSaveOutcome(DedaStage04SavePart.unconfirmed, appearance);
+      }
+    }
+    if (appearanceChanged) {
+      try {
+        appearance = await saveAppearance()
+            ? DedaStage04SavePart.confirmed : DedaStage04SavePart.unconfirmed;
+      } catch (_) {
+        appearance = DedaStage04SavePart.unconfirmed;
+      }
+    }
+    return DedaStage04ProfileSaveOutcome(name, appearance);
+  }
+}
+
 /// A view admitted only by the current lab session. The caller must use
 /// requireCurrent at presentation and action boundaries, not retain an old
 /// view across a session transition.
@@ -392,6 +432,27 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       throw const DedaPrivateDataConflict();
     }
     return readback;
+  }
+
+  /// The original editor uses these two existing guarded writers only.
+  /// Candidate remains default-off and no live rules are changed here.
+  static Future<DedaStage04ProfileSaveOutcome> saveProfileCandidate(
+      DedaStage04AppearanceRead opening, String name,
+      DedaStage04Appearance selection) async {
+    if (!nameCandidateEnabled) throw StateError('profile-name-candidate-disabled');
+    final old = opening.requireCurrent();
+    return DedaStage04ProfileSaveOutcome.run(
+      nameChanged: name != old.displayName,
+      appearanceChanged: opening.selection?.encode() != selection.encode(),
+      saveName: () async {
+        await saveNameCandidate(opening._profile, name);
+      },
+      saveAppearance: () async {
+        opening.requireCurrent();
+        final result = await saveAppearance(opening, selection);
+        return result.status == DedaPrivateDataStatus.saved;
+      },
+    );
   }
 
   /// Restore existing private data, retaining every field and its revision.
