@@ -201,6 +201,45 @@ class DedaStage04ProfileView {
   }
 }
 
+
+/// Name-only compare-and-set plan for the already tested candidate rules.
+/// It cannot mint rights, replace a UID, or write by itself.
+class DedaStage04NameChange {
+  DedaStage04NameChange._(this.uid, this.revision, this.name, this.account);
+  final String uid, name;
+  final int revision;
+  final Map<String, Object?> account;
+
+  static DedaStage04NameChange prepare(DedaStage04ProfileView opening,
+      DedaStage04ProfileView fresh, String name) {
+    if (opening.uid != fresh.uid ||
+        opening.accountRevision != fresh.accountRevision ||
+        opening.displayName != fresh.displayName) {
+      throw const DedaPrivateDataConflict();
+    }
+    if (name.runes.length < 2 || name.runes.length > 96 ||
+        name != name.trim() || name.contains(RegExp(r'[<>\x00-\x1f]')) ||
+        name == fresh.displayName ||
+        fresh.accountRevision >= 9007199254740990) {
+      throw const FormatException('profile-name-invalid-or-unchanged');
+    }
+    final next = <String,Object?>{
+      ...fresh._source.account,
+      'revision': fresh.accountRevision + 1,
+      'profile': Map<String,Object?>.unmodifiable({
+        ...Map<String,Object?>.from(fresh._profile),
+        'displayName': name,
+      }),
+    };
+    return DedaStage04NameChange._(fresh.uid, fresh.accountRevision+1, name,
+        Map<String,Object?>.unmodifiable(next));
+  }
+
+  bool confirmedBy(DedaStage04ProfileView readback) =>
+      readback.uid == uid && readback.accountRevision == revision &&
+      readback.displayName == name;
+}
+
 /// A view admitted only by the current lab session. The caller must use
 /// requireCurrent at presentation and action boundaries, not retain an old
 /// view across a session transition.
@@ -296,6 +335,63 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final view = DedaStage04ProfileView.fromProtected(protected);
     if (!current()) throw const DedaPrivateDataStale();
     return DedaStage04ProfileRead._(view, current);
+  }
+
+
+  /// Review-only client integration. Default closed; the existing live
+  /// laboratory rules do not permit this candidate write. Never call from
+  /// the UI until the candidate rules and combined save policy are approved.
+  static const nameCandidateEnabled =
+      bool.fromEnvironment('DEDA_STAGE04_PROFILE_NAME_CANDIDATE');
+
+  static Future<DedaStage04ProfileRead> saveNameCandidate(
+      DedaStage04ProfileRead opening, String name) async {
+    if (!nameCandidateEnabled) {
+      throw StateError('profile-name-candidate-disabled');
+    }
+    final current = _intent();
+    final old = opening.requireCurrent();
+    void check() {
+      if (!current()) throw const DedaPrivateDataStale();
+      opening.requireCurrent();
+      _io._check(uid, uid);
+    }
+    await _io.verifyOwner(uid, uid, check);
+    check();
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app());
+    final base = db.doc('deda_lab_uid_authority/$uid');
+    final account = base.collection('account').doc('current');
+    final plan = await db.runTransaction<DedaStage04NameChange>((tx) async {
+      check();
+      final p = await tx.get(base);
+      final i = await tx.get(base.collection('inventory').doc('current'));
+      final a = await tx.get(account);
+      check();
+      for (final row in [p,i,a]) {
+        if (!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites) {
+          throw StateError('protected-server-source-required');
+        }
+      }
+      final fresh = DedaStage04ProfileView.fromProtected(
+          DedaStage03ProtectedSnapshot.decode(expectedUid: uid,
+            progress: p.data(), inventory: i.data(), account: a.data()));
+      final change = DedaStage04NameChange.prepare(old, fresh, name);
+      check();
+      final data = Map<String,dynamic>.from(change.account);
+      tx.set(account, data);
+      tx.set(base.collection('accountSources').doc('current'), data);
+      tx.set(base.collection('accountHistory').doc('${change.revision}'), data);
+      return change;
+    });
+    // A failed acknowledgement is not a confirmed save. No automatic
+    // second write or rollback; a caller must reopen the server revision.
+    check();
+    final readback = await readProfile();
+    check();
+    if (!plan.confirmedBy(readback.requireCurrent())) {
+      throw const DedaPrivateDataConflict();
+    }
+    return readback;
   }
 
   /// Restore existing private data, retaining every field and its revision.

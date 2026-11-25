@@ -135,6 +135,30 @@ void main(){
     (a['profile'] as Map)['fixedColor']='pink';
     expect(project,throwsFormatException);
   });
+
+  test('04/01 name change plan preserves the protected account and requires its exact revision',(){
+    DedaStage04ProfileView view(Map<String,Object?> a)=>
+      DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:a));
+    final a=protectedAccount(), initial=view(a);
+    final plan=DedaStage04NameChange.prepare(initial,initial,'اسم تجريبي جديد');
+    expect(plan.uid,uid);
+    expect(plan.revision,2);
+    expect(plan.account,{...a,'revision':2,'profile':{
+      ...Map<String,Object?>.from(a['profile'] as Map),'displayName':'اسم تجريبي جديد'}});
+    expect(()=>plan.account['uid']='other',throwsUnsupportedError);
+    expect(()=> (plan.account['profile'] as Map)['activeId']='other',throwsUnsupportedError);
+    expect(plan.confirmedBy(initial),isFalse);
+    expect(plan.confirmedBy(view(Map<String,Object?>.from(plan.account))),isTrue);
+    final changed=view(protectedAccount()..['revision']=2);
+    expect(()=>DedaStage04NameChange.prepare(initial,changed,'New name'),throwsA(isA<DedaPrivateDataConflict>()));
+    for(final invalid in ['x',' bad','bad ','<bad>','bad\nname','Synthetic QA',List.filled(97,'a').join()]){
+      expect(()=>DedaStage04NameChange.prepare(initial,initial,invalid),throwsFormatException);
+    }
+  });
+  test('04/01 name candidate write is disabled by default',(){
+    expect(DedaStage03LabStorage.nameCandidateEnabled,isFalse);
+  });
   test('04/01 cosmetic selection is UID-private, not ownership, and rejects malformed values',(){
     final selection=DedaStage04Appearance(avatar:2,frame:'FRAME_03',background:7);
     final payload=DedaPrivateDataPayload({DedaStage04Appearance.key:selection.encode()},uidScoped:true);
