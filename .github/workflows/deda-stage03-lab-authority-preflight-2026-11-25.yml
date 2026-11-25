@@ -28,9 +28,15 @@ jobs:
           set -euo pipefail
           work="$RUNNER_TEMP/stage03-trusted-fixture"
           mkdir -p "$work"
-          cp qa/stage03/uid-trusted-fixture.cjs qa/stage03/uid-trusted-fixture.test.cjs qa/stage03/uid-trusted-live-fixture.cjs qa/stage03/uid-ownership-projection.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
+          cp qa/stage03/uid-trusted-fixture.cjs qa/stage03/uid-trusted-fixture.test.cjs qa/stage03/uid-spark-fixture-rules.cjs qa/stage03/uid-trusted-live-fixture.cjs qa/stage03/uid-ownership-projection.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
+          cp qa/stage03/firestore.lab-candidate.rules "$work/firestore.rules"
           cd "$work"
           node --test uid-trusted-fixture.test.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage03-account-fixed-candidate-REVIEW-ONLY
+          path: ${{ runner.temp }}/stage03-trusted-fixture/account-fixed-candidate.rules
+          if-no-files-found: error
       - name: Prepare client SDK without credentials
         run: |
           set -euo pipefail

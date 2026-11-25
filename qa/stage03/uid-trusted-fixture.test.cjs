@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {build,apply,base,project}=require('./uid-trusted-fixture.cjs');
+const {build,apply,base,project,buildAccount}=require('./uid-trusted-fixture.cjs');
 class Store{
   constructor(){this.rows=new Map();this.writes=0;}
   serverTimestamp(){return {toMillis:()=>1};}
@@ -32,4 +32,27 @@ test('existing changed receipt or inventory never overwritten',async()=>{
   const store=new Store();await apply({store,projectId:project});const before=store.writes;
   store.rows.set(base+'/inventory/current',{revision:2});
   await assert.rejects(apply({store,projectId:project}),/unknown-or-partial/);assert.equal(store.writes,before);
+});
+
+test('account snapshot separate from previously locked progress and inventory',()=>{
+  const a=buildAccount(),p=base+'/account/current';
+  assert.equal(Object.keys(a).length,3);
+  assert.deepEqual(a[p],a[base+'/accountSources/current']);
+  assert.deepEqual(a[p],a[base+'/accountHistory/1']);
+  assert.equal(a[p].league[0].weeklyXp,20);
+  assert.equal(a[p].profile.originalId,a[p].profile.activeId);
+  assert.ok(Object.keys(a).every(k=>!Object.hasOwn(build(),k)));
+  assert.equal(a[p].friends[0].recipientUid,'synthetic-peer-001');
+});
+
+test('exact account candidate preserves locked progress and inventory and contains no update/delete grant',()=>{
+  const {generateAccount}=require('./uid-spark-fixture-rules.cjs');
+  const original=require('node:fs').readFileSync('firestore.rules','utf8');
+  const rules=generateAccount(original);
+  const start=original.indexOf('      match /account/current');
+  assert.ok(start>0);assert.equal(rules.slice(0,start),original.slice(0,start));
+  assert.equal((rules.match(/allow create: if owner\(uid\) && request.resource.data ==/g)||[]).length,3);
+  assert.equal((rules.match(/allow list, update, delete: if false;/g)||[]).length,3);
+  assert.ok(!rules.includes('DEDA_STAGE03_SYNTHETIC_ONLY'));
+  require('node:fs').writeFileSync('account-fixed-candidate.rules',rules);
 });

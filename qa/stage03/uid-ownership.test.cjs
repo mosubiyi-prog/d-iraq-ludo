@@ -168,3 +168,29 @@ test('task claim history and weekly history cannot regress or reassign original 
     assert.equal((await db.doc(acctView).get()).data().revision,1);
   }
 });
+
+test('separate exact live account candidate only permits atomic fixed synthetic snapshot',async()=>{
+  const {generateAccount}=require('./uid-spark-fixture-rules.cjs');
+  const {buildAccount,build}=require('./uid-trusted-fixture.cjs');
+  const {writeBatch}=require('firebase/firestore');
+  const local=await initializeTestEnvironment({projectId,firestore:{rules:generateAccount(readFileSync('firestore.rules','utf8'))}});
+  try{
+    await local.clearFirestore();
+    const owner=local.authenticatedContext(uid,{firebase:{sign_in_provider:'password'}}).firestore();
+    const foreign=local.authenticatedContext(other,{firebase:{sign_in_provider:'password'}}).firestore();
+    const docs=buildAccount();
+    const save=(db,rows)=>{const batch=writeBatch(db);for(const [p,v] of Object.entries(rows))batch.set(doc(db,p),v);return batch.commit();};
+    await assertFails(save(owner,{[acctView]:docs[acctView]}));
+    const bad=structuredClone(docs);bad[acctView].league[0].weeklyXp=200;
+    await assertFails(save(owner,bad));await assertFails(save(foreign,docs));
+    await assertFails(save(owner,build()));
+    await assertSucceeds(save(owner,docs));
+    const second=local.authenticatedContext(uid,{firebase:{sign_in_provider:'password'}}).firestore();
+    assert.deepEqual((await assertSucceeds(getDocFromServer(doc(second,acctView)))).data(),docs[acctView]);
+    await assertFails(save(owner,docs));
+    await assertFails(deleteDoc(doc(owner,acctView)));
+    await assertFails(getDocFromServer(doc(owner,acctSource)));
+    await assertFails(getDocFromServer(doc(owner,base+'/accountHistory/1')));
+    await assertFails(getDocFromServer(doc(foreign,acctView)));
+  }finally{await local.cleanup();}
+});

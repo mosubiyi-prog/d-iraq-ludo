@@ -2,7 +2,7 @@
 // Fixed synthetic lab fixture. No input from a phone, no real reward issuer.
 const {isDeepStrictEqual:equal}=require('node:util');
 const core=require('./reconcile-core.cjs');
-const {parse}=require('./uid-ownership-projection.cjs');
+const {parse,parseAccount}=require('./uid-ownership-projection.cjs');
 const uid=core.LAB_UID, project='deda-qa-uid-lab-20261108';
 const base='deda_lab_uid_authority/'+uid;
 const zero=()=>({points:0,coins:0,xp:0,earnedDiamonds:0});
@@ -60,4 +60,19 @@ async function apply({store,projectId}){
     return {replayed:false,count:paths.length};
   });
 }
-module.exports={build,apply,checkStored,project,uid,base};
+// Separate fixed, NON-FINANCIAL synthetic account snapshot for the existing
+// pinned lab UID. Do not alter build() or reopen the earlier 12-doc fixture.
+function buildAccount(){
+  const peer='synthetic-peer-001',original='@DEDA-QA1234',peerId='@DEDA-QA5678';
+  const dayId='2026-11-01',taskId='open_map',claimKey=dayId+'|'+taskId;
+  const completedMs=Date.UTC(2026,10,1,10);
+  const row=parseAccount({format:1,uid,revision:1,complete:true,
+    profile:{displayName:'Synthetic QA',originalId:original,activeId:original,fixedColor:null},
+    friends:[{pairKey:[uid,peer].sort().join('__'),members:[uid,peer],requesterUid:uid,recipientUid:peer,
+      requesterPublicId:original,recipientPublicId:peerId,requesterName:'Synthetic QA',
+      recipientName:'Synthetic peer',status:'accepted'}],
+    tasks:[{claimKey,dayId,taskId,completedMs,claimedMs:completedMs+1}],
+    league:[{weekId:'2026-10-31',claimedKeys:[claimKey],completedTasks:1,weeklyXp:20}]},uid);
+  return {[base+'/accountSources/current']:row,[base+'/account/current']:row,[base+'/accountHistory/1']:row};
+}
+module.exports={build,apply,checkStored,project,uid,base,buildAccount};

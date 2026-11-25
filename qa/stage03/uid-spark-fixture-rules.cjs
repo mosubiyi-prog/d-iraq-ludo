@@ -3,7 +3,7 @@
 // No general client balance writer. Authorization is a protected, console-owner seed.
 // Do not deploy these generated rules to production or use for real entitlements.
 const {readFileSync,writeFileSync}=require('node:fs');
-const {build,base,uid}=require('./uid-trusted-fixture.cjs');
+const {build,base,uid,buildAccount}=require('./uid-trusted-fixture.cjs');
 const marker={uid,purpose:'DEDA_STAGE03_SYNTHETIC_ONLY',format:1};
 const markerPath='deda_lab_fixture_authorization/'+uid;
 function literal(v){
@@ -56,4 +56,21 @@ if(require.main===module){
   if(process.argv.length!==4)throw Error('input and output paths required');
   writeFileSync(process.argv[3],generate(readFileSync(process.argv[2],'utf8')));
 }
-module.exports={generate,marker,markerPath};
+// Generate a separately reviewed, immutable exact-account-only lab rules
+// candidate. Console publication itself is owner authorization. No marker
+// reactivation, root/inventory writes, real IDs, payout or broad permission.
+function generateAccount(original){
+  const docs=buildAccount(),paths=Object.keys(docs);
+  const view=base+'/account/current';
+  const old='      match /account/current {\n        allow get: if owner(uid);\n        allow list, create, update, delete: if false;\n      }';
+  if(original.split(old).length!==2||paths.length!==3||!docs[view])throw Error('unexpected account candidate layout');
+  const check=paths.map(p=>'getAfter(/databases/$(database)/documents/'+p+').data == '+literal(docs[p])).join(' &&\n          ');
+  const blocks=paths.map(p=>{
+    const relative=p.slice(base.length+1);
+    return '      match /'+relative+' {\n        allow get: if '+(p===view?'owner(uid)':'false')+
+      ';\n        allow create: if owner(uid) && request.resource.data == '+literal(docs[p])+
+      ' &&\n          '+check+';\n        allow list, update, delete: if false;\n      }';
+  }).join('\n');
+  return original.replace(old,()=>blocks);
+}
+module.exports={generate,marker,markerPath,generateAccount};

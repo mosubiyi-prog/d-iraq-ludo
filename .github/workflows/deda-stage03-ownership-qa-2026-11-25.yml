@@ -32,7 +32,7 @@ jobs:
           node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
           work="$RUNNER_TEMP/stage03-ownership"
           mkdir -p "$work"
-          cp qa/stage03/uid-ownership-projection.cjs qa/stage03/uid-ownership.test.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
+          cp qa/stage03/uid-ownership-projection.cjs qa/stage03/uid-ownership.test.cjs qa/stage03/uid-trusted-fixture.cjs qa/stage03/uid-spark-fixture-rules.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js "$work/"
           cp qa/stage03/firestore.lab-candidate.rules "$work/firestore.rules"
           cd "$work"
           printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > firebase.json
