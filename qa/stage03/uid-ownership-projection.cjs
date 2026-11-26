@@ -439,4 +439,70 @@ function generateWalletRead(originalRules){
     '        allow list, create, update, delete: if false;',
     '      }',anchor].join('\n'));
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead};
+// 04/02: exercise the original relationship operations in a trusted DEMO
+// transaction. The peer is a synthetic fixture, never a new Auth user.
+// No callable/client writer or production permission; a second real owner's
+// projection and public directory authorization require later integration.
+async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action}){
+  requireDemo(store,uid);
+  requireThat(peerUid==='synthetic-peer-001'&&peerUid!==uid&&
+    Number.isSafeInteger(expectedRevision)&&expectedRevision>=1&&
+    ['send','accept','reject','remove'].includes(action),'friends-candidate-input');
+  const base='deda_lab_uid_authority/'+uid;
+  const pair=[uid,peerUid].sort().join('__');
+  // Use the same SDK transaction as the trusted store; removal requires a
+  // real document delete, not a fabricated rejection or tombstone.
+  return store.db.runTransaction(async tx=>{
+    const ref=path=>store.db.doc(path);
+    const get=async path=>{const row=await tx.get(ref(path));return row.exists?row.data():null;};
+    const old=parseAccount(await get(base+'/account/current'),uid);
+    const source=await get(base+'/accountSources/current');
+    const history=await get(base+'/accountHistory/'+old.revision);
+    requireThat(old.revision===expectedRevision&&old.revision<9007199254740990&&
+      equal(old,source)&&equal(old,history),'friends-revision-conflict');
+    const user=await get('users/'+uid),session=await get('deda_sessions/'+uid);
+    const original=old.profile.originalId,peerId='@DEDA-QA5678';
+    const own=await get('deda_share_ids/'+original),route=await get('deda_share_ids/'+peerId);
+    const profile=await get('deda_social_profiles/'+peerId);
+    function verifiedRoute(row,owner,id){
+      return row&&row.ownerUid===owner&&row.publicId===id&&row.kind==='personal'&&row.active===true;
+    }
+    requireThat(user?.accountKey===uid&&user.sharePersonalId===original&&
+      session?.uid===uid&&session.accountKey===uid&&verifiedRoute(own,uid,original)&&
+      peerId!==original&&peerId!==old.profile.activeId&&verifiedRoute(route,peerUid,peerId)&&
+      profile?.ownerUid===peerUid&&profile.publicId===peerId&&name(profile.displayName),
+      'friends-directory-owner-unproven');
+    const graphPath='deda_friendships/'+pair;
+    const graph=await get(graphPath);
+    const previous=old.friends.find(row=>row.pairKey===pair)||null;
+    requireThat(equal(graph,previous),'friends-canonical-projection-conflict');
+    let nextRow;
+    if(action==='send'){
+      requireThat(previous===null||previous.status==='rejected','friends-existing-request-or-relation');
+      nextRow={pairKey:pair,members:[uid,peerUid],requesterUid:uid,recipientUid:peerUid,
+        requesterPublicId:original,recipientPublicId:peerId,requesterName:old.profile.displayName,
+        recipientName:profile.displayName,status:'pending'};
+    }else if(action==='accept'||action==='reject'){
+      requireThat(previous&&previous.status==='pending'&&previous.recipientUid===uid&&
+        previous.requesterUid===peerUid,'friends-not-pending-recipient');
+      nextRow={...previous,status:action==='accept'?'accepted':'rejected'};
+    }else{
+      requireThat(previous&&previous.status==='accepted','friends-not-accepted');
+      nextRow=null;
+    }
+    const next=parseAccount({...old,revision:old.revision+1,
+      friends:[...old.friends.filter(row=>row.pairKey!==pair),...(nextRow?[nextRow]:[])]},uid);
+    const nextHistory=base+'/accountHistory/'+next.revision;
+    requireThat(await get(nextHistory)===null,'friends-history-conflict');
+    preserveAccount(old,next);
+    // No wallet/task/league writer and no participant identity change.
+    requireThat(equal(next.profile,old.profile)&&equal(next.tasks,old.tasks)&&
+      equal(next.league,old.league),'friends-unrelated-change');
+    tx.set(ref(base+'/account/current'),next);
+    tx.set(ref(base+'/accountSources/current'),next);
+    tx.set(ref(nextHistory),next);
+    if(nextRow)tx.set(ref(graphPath),nextRow);else tx.delete(ref(graphPath));
+    return next;
+  });
+}
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate};

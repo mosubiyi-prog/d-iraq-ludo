@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -115,6 +115,68 @@ const accountFixture=(revision=1)=>({format:1,uid,revision,complete:true,
   league:[{weekId,claimedKeys:[claimKey],completedTasks:1,weeklyXp:20}]});
 const accountSeed=v=>db.doc(acctSource).set(v);
 const accountApply=()=>projectAccount({store,uid});
+// Existing UID and trusted synthetic peer records only. No Auth enrolment.
+const friendGraphPath='deda_friendships/'+[uid,other].sort().join('__');
+async function seedFriendActionFixture(direction='accepted'){
+  const a=accountFixture();
+  if(direction==='incoming'){
+    a.friends[0]={...a.friends[0],members:[other,uid],requesterUid:other,
+      recipientUid:uid,requesterPublicId:peerId,recipientPublicId:original,
+      requesterName:'Synthetic peer',recipientName:'Synthetic QA',status:'pending'};
+  }
+  await accountSeed(a);await accountApply();
+  const seed={
+    ['users/'+uid]:{accountKey:uid,sharePersonalId:original},
+    ['deda_sessions/'+uid]:{uid,accountKey:uid},
+    ['deda_share_ids/'+original]:{ownerUid:uid,publicId:original,kind:'personal',active:true},
+    ['deda_share_ids/'+peerId]:{ownerUid:other,publicId:peerId,kind:'personal',active:true},
+    ['deda_social_profiles/'+peerId]:{ownerUid:other,publicId:peerId,displayName:'Synthetic peer'},
+    [friendGraphPath]:a.friends[0],
+  };
+  await Promise.all(Object.entries(seed).map(([p,v])=>db.doc(p).set(v)));
+  return a;
+}
+const friendAction=(action,expectedRevision,peerUid=other)=>
+  mutateFriendCandidate({store,uid,peerUid,action,expectedRevision});
+test('04/02 trusted demo removes and sends exactly once, protects source and unrelated rights',async()=>{
+  const old=await seedFriendActionFixture();
+  const removed=await friendAction('remove',1);
+  assert.equal(removed.friends.length,0);
+  assert.equal((await db.doc(friendGraphPath).get()).exists,false);
+  await assert.rejects(friendAction('send',1),{code:'friends-revision-conflict'});
+  const sent=await friendAction('send',2);
+  assert.equal(sent.friends[0].status,'pending');
+  assert.equal(sent.friends[0].requesterUid,uid);
+  assert.deepEqual((await db.doc(friendGraphPath).get()).data(),sent.friends[0]);
+  await assert.rejects(friendAction('accept',3),{code:'friends-not-pending-recipient'});
+  await assert.rejects(friendAction('send',3),{code:'friends-existing-request-or-relation'});
+  await assert.rejects(friendAction('remove',3),{code:'friends-not-accepted'});
+  await assert.rejects(friendAction('send',3,uid),{code:'friends-candidate-input'});
+  assert.deepEqual(sent.profile,old.profile);assert.deepEqual(sent.tasks,old.tasks);
+  assert.deepEqual(sent.league,old.league);
+  assert.deepEqual((await db.doc(acctSource).get()).data(),sent);
+  assert.deepEqual((await db.doc(base+'/accountHistory/3').get()).data(),sent);
+  await assertFails(setDoc(doc(client(),friendGraphPath),{...sent.friends[0],status:'accepted'}));
+  await assertFails(setDoc(doc(client(),acctView),{...sent,revision:4}));
+});
+test('04/02 incoming response requires recipient, matching canonical relationship and exact revision',async()=>{
+  for(const action of ['accept','reject']){
+    await env.clearFirestore();
+    await seedFriendActionFixture('incoming');
+    const row=(await db.doc(friendGraphPath).get()).data();
+    await db.doc(friendGraphPath).set({...row,status:'accepted'});
+    await assert.rejects(friendAction(action,1),{code:'friends-canonical-projection-conflict'});
+    await db.doc(friendGraphPath).set(row);
+    await db.doc('deda_share_ids/'+peerId).update({ownerUid:uid});
+    await assert.rejects(friendAction(action,1),{code:'friends-directory-owner-unproven'});
+    await db.doc('deda_share_ids/'+peerId).update({ownerUid:other});
+    const result=await friendAction(action,1);
+    assert.equal(result.friends[0].status,action==='accept'?'accepted':'rejected');
+    assert.deepEqual((await db.doc(friendGraphPath).get()).data(),result.friends[0]);
+    await assert.rejects(friendAction(action,1),{code:'friends-revision-conflict'});
+    await assert.rejects(friendAction(action,2),{code:'friends-not-pending-recipient'});
+  }
+});
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{
   await accountSeed(accountFixture());const a=await accountApply();
   assert.equal(a.view.friends[0].recipientUid,other);
