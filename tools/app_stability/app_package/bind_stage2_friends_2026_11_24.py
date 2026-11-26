@@ -461,7 +461,9 @@ def patch_lab_service(src):
         return one(body,'  final DedaSocialProfile profile;',
             '  final DedaSocialProfile profile;\n  final DedaStage04FriendsRead? stage04Read;\n'
             '  bool get stage04Current {\n    try { stage04Read?.requireCurrent(); return stage04Read!=null; }\n'
-            '    catch (_) { return false; }\n  }','lab-session-guard')
+            '    catch (_) { return false; }\n  }\n'
+            '  String? get stage04DisplayId {\n'
+            '    try { return stage04Read?.requireProfile().activeId; } catch (_) { return null; }\n  }','lab-session-guard')
     src=region(src,'class DedaSocialSession {','class DedaSocialService {',session)
     src=one(src,'class DedaSocialService {','class DedaSocialService {\n  // '+LAB_MARK+'\n'+LAB_HELPERS,'lab-service')
     src=one(src,'  static Stream<List<DedaFriendshipRecord>> watchRelations(String uid) {',
@@ -547,6 +549,17 @@ def patch_lab_main(main):
     }''','lab-copy-own-id')
         body=one(body,'final found = await DedaStage51FriendSearch.findByUserInput(id);',
             'final found = await (DedaSocialService.stage04LabMode ? DedaSocialService.readLabPublicProfile(id) : DedaStage51FriendSearch.findByUserInput(id));','lab-search')
+        # The add page also renders the owner's ID before a session opens.
+        # Do not ask the legacy phone preference or legacy alias widget.
+        old_id = "    final myId = _session?.publicId ??\n        DedaBackend.personalShareIdForPhone(DedaPreferences.phone).trim();"
+        body=one(body,old_id,"    final myId = DedaSocialService.stage04LabMode\n"
+            "        ? (_session?.stage04DisplayId ?? '')\n"
+            "        : (_session?.publicId ?? DedaBackend.personalShareIdForPhone(DedaPreferences.phone).trim());",
+            'lab-own-display-id')
+        body=one(body,'child: DedaSixActiveIdentity(originalId:',
+            'child: DedaSocialService.stage04LabMode ? Text(myId.isEmpty ? "—" : myId,\n'
+            '                                style: const TextStyle(color: Color(0xFF334E68), fontWeight: FontWeight.w900, fontSize: 15))\n'
+            '                              : DedaSixActiveIdentity(originalId:', 'lab-own-id-no-legacy-widget')
         return body
     def requests(body):
         body=one(body,'    unawaited(DedaIncomingRequestNotifications.markCurrentIncomingSeen());',
