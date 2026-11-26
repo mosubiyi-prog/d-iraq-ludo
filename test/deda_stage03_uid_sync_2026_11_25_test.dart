@@ -50,6 +50,23 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('synthetic prize display follows verified reservations, not the phone', () {
+    const empty = DedaStage04TierState({}, {});
+    expect(empty.codePart(5000), isNull);
+    expect(empty.prizeReady, isFalse);
+    const partial = DedaStage04TierState({5000}, {});
+    expect(partial.codePart(5000), 'Q44');
+    expect(partial.codePart(10000), isNull);
+    expect(partial.prizeReady, isFalse);
+    const complete = DedaStage04TierState({5000,10000,15000,20000,25000},
+        {5000,10000,15000,20000}, finalPoints:505);
+    expect(complete.prizeReady, isTrue);
+    expect(DedaStage04TierState.keys.keys.map(complete.codePart).join(),
+        DedaStage04TierState.syntheticPrizeCode);
+    expect(DedaStage04TierState.syntheticPrizeCode.length,16);
+    expect(const DedaStage04TierState({5000,10000,15000,20000,25000},
+        {5000,10000,15000,20000}).prizeReady,isFalse);
+  });
   test('04/01 profile binds exact protected UID, IDs, distinct progress and ownership views',(){
     final account=protectedAccount();
     final peer='synthetic-peer-001';

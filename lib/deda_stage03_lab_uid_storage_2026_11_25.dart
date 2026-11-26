@@ -338,8 +338,27 @@ class DedaStage04PersonalWallet {
 /// Exact synthetic campaign event identities, derived from the existing
 /// reconcile-core eventKey. Not a new ledger or a real prize-code issuer.
 class DedaStage04TierState {
-  const DedaStage04TierState(this.reserved,this.claimed);
+  const DedaStage04TierState(this.reserved,this.claimed,{this.finalPoints});
   final Set<int> reserved, claimed;
+  final int? finalPoints;
+  // Fixed synthetic display reference, never a secret or real prize issuer.
+  static String get syntheticPrizeCode => 'Q4'+key(25000,false).substring(0,14);
+  String? codePart(int threshold) {
+    final index=keys.keys.toList().indexOf(threshold);
+    if(index<0 || !reserved.contains(threshold))return null;
+    const starts=[0,3,6,9,12],ends=[3,6,9,12,16];
+    return syntheticPrizeCode.substring(starts[index],ends[index]);
+  }
+  bool get prizeReady => reserved.length==5 && keys.keys.every(reserved.contains) &&
+      claimed.length==4 && keys.keys.where((t)=>t!=25000).every(claimed.contains) &&
+      finalPoints!=null && finalPoints!>=0;
+  static int terminalPoints(Map<String,dynamic> marker,String uid,int version) {
+    verifyMarker(marker,uid,25000,false,version);
+    final b=marker['afterBalances'];
+    if(b is! Map || b['points'] is! int || (b['points'] as int)<0 ||
+        (b['points'] as int)>9007199254740990)throw const FormatException('point-tier-final-balance');
+    return b['points'] as int;
+  }
   static const keys = <int,(String,String?)>{
     5000: ('98b23cc67f5935396196b43e3d14a53df5f219d4500f604a7e441933b938c487', '82561d03bf50f6d1be2423cfd8a8ff7c4214ccbcf37beb094669cc7870cb6558'),
     10000: ('fbcac52e26c152299ad7a44db26ca4d84a834d009427500fe91c90072018d232', 'e1faec921eea72ebedb060eba865cb2e0d606a7ff286dc9ed0d14511205b4d35'),
@@ -617,7 +636,7 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       if(!p.exists || p.metadata.isFromCache || p.metadata.hasPendingWrites ||
          p.data()?['version']!=old.progressRevision)throw const DedaPrivateDataConflict();
       final reserved=<int>{},claimed=<int>{};
-      int? previous;
+      int? previous, finalPoints;
       for(final t in DedaStage04TierState.keys.keys){
         for(final claim in [false,true]){
           if(claim && t==25000)continue;
@@ -629,12 +648,13 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
             if(claim && !reserved.contains(t) || !claim && previous!=null && !claimed.contains(previous)) {
               throw const FormatException('point-tier-sequence-invalid');
             }
+            if(t==25000)finalPoints=DedaStage04TierState.terminalPoints(s.data()!,uid,old.progressRevision);
             (claim?claimed:reserved).add(t);
           }
         }
         previous=t;
       }
-      return DedaStage04TierState(Set.unmodifiable(reserved),Set.unmodifiable(claimed));
+      return DedaStage04TierState(Set.unmodifiable(reserved),Set.unmodifiable(claimed),finalPoints:finalPoints);
     });
     check();return result;
   }
@@ -670,6 +690,83 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final history=await readPointTierCandidate(fresh);
     check();
     if(!(claim?history.claimed:history.reserved).contains(threshold))throw const DedaPrivateDataConflict();
+  }
+
+  // Fixed candidate only; no phone route, admin reply or payout.
+  static DocumentReference<Map<String,dynamic>> _prizeRef(FirebaseFirestore db) =>
+      db.collection('prize_winner_requests').doc('prize_v1_$uid');
+  static Map<String,dynamic>? _readPrizeRow(DocumentSnapshot<Map<String,dynamic>> row) {
+    if(row.metadata.isFromCache || row.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+    if(!row.exists)return null;
+    final d=row.data()!;
+    if(d['ownerUid']!=uid || d['accountKey']!=uid || d['cycleId']!='prize_v1' ||
+        d['rewardCode']!=DedaStage04TierState.syntheticPrizeCode || d['status']!='new' ||
+        d['phone']!='' || d['finalReservedPoints']!=25000 ||
+        d['adminMessage']!='' || d['prizeDetails']!='' || d['userReply']!='') {
+      throw const FormatException('profile-prize-request-unproven');
+    }
+    return d;
+  }
+  static Stream<Map<String,dynamic>?> watchPrizeCandidate(DedaStage04ProfileRead opening) async* {
+    if(!actionsCandidateEnabled)throw StateError('profile-actions-disabled');
+    final current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
+    await _io.verifyOwner(uid,uid,check);
+    final tiers=await readPointTierCandidate(opening);
+    if(!tiers.prizeReady)throw const DedaPrivateDataConflict();
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app());
+    bool confirmed=false;
+    await for(final row in _prizeRef(db).snapshots(includeMetadataChanges:true)){
+      check();
+      if(row.metadata.hasPendingWrites)continue;
+      if(row.metadata.isFromCache){
+        if(confirmed)throw const DedaPrivateDataConflict();
+        continue;
+      }
+      final data=_readPrizeRow(row);
+      if(data!=null && data['pointsAtCompletion']!=tiers.finalPoints)throw const DedaPrivateDataConflict();
+      confirmed=true;
+      yield data;
+    }
+  }
+  static Future<void> submitPrizeCandidate(DedaStage04ProfileRead opening) async {
+    if(!actionsCandidateEnabled)throw StateError('profile-actions-disabled');
+    final current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
+    await _io.verifyOwner(uid,uid,check);
+    final fresh=await readProfile(),view=fresh.requireCurrent();
+    final tiers=await readPointTierCandidate(fresh);
+    if(!tiers.prizeReady)throw const DedaPrivateDataConflict();
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app()),base=db.doc('deda_lab_uid_authority/$uid');
+    final ref=_prizeRef(db);
+    await db.runTransaction<void>((tx) async {
+      check();
+      final old=await tx.get(ref);
+      final a=await tx.get(base.collection('account').doc('current'));
+      final finalEvent=await tx.get(base.collection('events').doc(DedaStage04TierState.key(25000,false)));
+      check();
+      if(!a.exists || a.metadata.isFromCache || a.metadata.hasPendingWrites ||
+          a.data()?['revision']!=view.accountRevision || !finalEvent.exists ||
+          finalEvent.metadata.isFromCache || finalEvent.metadata.hasPendingWrites ||
+          DedaStage04TierState.terminalPoints(finalEvent.data()!,uid,view.progressRevision)!=tiers.finalPoints) {
+        throw const DedaPrivateDataConflict();
+      }
+      final existing=_readPrizeRow(old);
+      if(existing!=null){
+        if(existing['pointsAtCompletion']!=tiers.finalPoints)throw const DedaPrivateDataConflict();
+        return;
+      }
+      tx.set(ref,{'ownerUid':uid,'cycleId':'prize_v1','accountKey':uid,
+        'name':view.displayName,'phone':'','dedaId':view.originalId,
+        'rewardCode':DedaStage04TierState.syntheticPrizeCode,'pointsAtCompletion':tiers.finalPoints,
+        'completedThresholds':[5000,10000,15000,20000,25000],'finalReservedPoints':25000,
+        'status':'new','adminMessage':'','prizeDetails':'','userReply':'',
+        'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
+    });
+    check();
+    final saved=_readPrizeRow(await ref.get(const GetOptions(source:Source.server)));
+    check();
+    if(saved==null || saved['pointsAtCompletion']!=tiers.finalPoints)throw const DedaPrivateDataConflict();
   }
 
   /// Atomic owner selection, account history and existing public directory.

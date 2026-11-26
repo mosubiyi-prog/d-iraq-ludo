@@ -683,6 +683,7 @@ STAGE04_FIELDS = """
   DedaStage04AppearanceRead? _stage04Appearance;
   int? _stage04WalletDiamonds;
   DedaStage04TierState? _stage04Tiers;
+  Stream<Map<String,dynamic>?>? _stage04PrizeStream;
   bool _stage04TierBusy = false;
   DedaAuthSnapshot? _stage04Principal;
   StreamSubscription<User?>? _stage04Auth;
@@ -700,6 +701,7 @@ STAGE04_FIELDS = """
     _stage04Appearance = null;
     _stage04WalletDiamonds = null;
     _stage04Tiers = null;
+    _stage04PrizeStream = null;
     if (mounted) setState(() { _stage04Loading = false; });
   }
   bool _stage04SameSession() {
@@ -728,7 +730,7 @@ STAGE04_FIELDS = """
   }
   Future<void> _stage04Refresh() async {
     if (!mounted || _stage04Loading || !_stage04SameSession()) return;
-    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; _stage04WalletDiamonds = null; _stage04Tiers = null; });
+    setState(() { _stage04Loading = true; _stage04Read = null; _stage04Appearance = null; _stage04WalletDiamonds = null; _stage04Tiers = null; _stage04PrizeStream = null; });
     try {
       final read = await DedaStage03LabStorage.readProfile();
       final view = read.requireCurrent();
@@ -756,6 +758,7 @@ STAGE04_FIELDS = """
         _stage04Appearance = appearance;
         _stage04WalletDiamonds = walletDiamonds;
         _stage04Tiers = tiers;
+        _stage04PrizeStream = tiers?.prizeReady == true ? DedaStage03LabStorage.watchPrizeCandidate(read) : null;
         _openedPointTiers.clear(); _claimedPointTiers.clear();
         if (tiers != null) {
           _openedPointTiers.addAll(tiers.reserved);
@@ -826,6 +829,22 @@ STAGE04_FIELDS = """
     } finally {
       if (mounted && _stage04SameSession()) setState(() => _stage04TierBusy=false);
     }
+  }
+  void _stage04OpenPrize() {
+    final read=_stage04Read, tiers=_stage04Tiers;
+    final view=_stage04View;
+    if(read==null || tiers==null || !tiers.prizeReady || view==null || !_stage04SameSession())return;
+    final stream=DedaStage03LabStorage.watchPrizeCandidate(read);
+    unawaited(Navigator.push<void>(context,MaterialPageRoute<void>(builder:(_)=>
+      StreamBuilder<User?>(stream:FirebaseAuth.instance.authStateChanges(),builder:(context,auth){
+        if(auth.hasError || auth.data?.uid!=DedaStage03LabStorage.uid || !_stage04SameSession())return _stage04HeldProfile();
+        try {read.requireCurrent();} catch(_){return _stage04HeldProfile();}
+        return DedaPrizeWinnerRequestPage(isArabic:DedaLanguageState.isArabic,
+          name:view.displayName,phone:'',dedaId:view.originalId,
+          rewardCode:DedaStage04TierState.syntheticPrizeCode,pointsAtCompletion:tiers.finalPoints!,
+          stage04RequestStream:stream,stage04Submit:()=>DedaStage03LabStorage.submitPrizeCandidate(read),
+          stage04Current:()=>_stage04SameSession());
+      }))));
   }
   void _stage04OpenCard(String title) {
     final read = _stage04Read;
@@ -1011,6 +1030,34 @@ def _stage04_build(body):
         '          if (!_stage04LabMode || _stage04Tiers != null)\n          ValueListenableBuilder<int>(\n            valueListenable: _stage04LabMode ? _stage04Points! : DedaTaskEngine.totalPointsNotifier,',
         'stage04-local-reward-panel-held')
 
+def _stage04_final_prize(body):
+    body = once(body, 'final rewardCode = _rewardCode16();',
+        """if (_stage04LabMode && (_stage04Tiers?.prizeReady != true || _stage04PrizeStream == null))
+      return const Center(child: Text('—', style: TextStyle(color: Colors.white)));
+    final rewardCode = _stage04LabMode ? DedaStage04TierState.syntheticPrizeCode : _rewardCode16();""",
+        'stage04-final-reference')
+    body = once(body, 'stream: DedaBackend.prizeWinnerRequestForUser(DedaPreferences.phone),',
+        'stream: _stage04LabMode ? _stage04PrizeStream : DedaBackend.prizeWinnerRequestForUser(DedaPreferences.phone),',
+        'stage04-final-request-stream')
+    body = once(body, 'final request = snapshot.data;',
+        """if (_stage04LabMode && (!_stage04SameSession() || snapshot.hasError ||
+        snapshot.connectionState == ConnectionState.waiting || snapshot.connectionState == ConnectionState.none))
+          return const Center(child: Text('—', style: TextStyle(color: Colors.white)));
+        final request = snapshot.data;""", 'stage04-final-server-only')
+    body = once(body, "dedaText('رمز الجائزة الكامل', 'Complete prize code')",
+        "(_stage04LabMode ? dedaText('رمز الفحص فقط', 'Synthetic test code') : dedaText('رمز الجائزة الكامل', 'Complete prize code'))",
+        'stage04-final-reference-label')
+    body = once(body, "'لقد حصلت على الجائزة النهائية 👏',",
+        "_stage04LabMode ? 'اكتمل الاستحقاق التجريبي فقط' : 'لقد حصلت على الجائزة النهائية 👏',",
+        'stage04-final-no-award-ar')
+    body = once(body, "'You earned the final prize 👏',",
+        "_stage04LabMode ? 'Synthetic eligibility only' : 'You earned the final prize 👏',",
+        'stage04-final-no-award-en')
+    body = once(body, 'onTap: () {\n                      Navigator.push<void>(',
+        'onTap: () {\n                      if (_stage04LabMode) { _stage04OpenPrize(); return; }\n                      Navigator.push<void>(',
+        'stage04-final-request-route')
+    return body
+
 def _stage04_profile(source):
     a,z = original_profile_span(source)
     profile = source[a:z]
@@ -1064,20 +1111,16 @@ def _stage04_profile(source):
         'Future<void> _openPointTier(int threshold, int totalPoints) async {\n'
         '    if (_stage04LabMode) return _stage04TierAction(threshold,false);',
         'stage04-tier-reserve')
-    profile = once(profile, 'final rewardCode = _rewardCode16();',
-        """if (_stage04LabMode) return Center(child: Text(
-      dedaText('اكتمل حجز المرحلة الأخيرة. رمز الجائزة وطلب الإدارة غير متاحين حتى تأكيد مصدرهما.',
-          'Final reservation confirmed. Prize code and administration request await their verified source.'),
-      textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)));
-    final rewardCode = _rewardCode16();""", 'stage04-tier-final-no-phone')
+    profile = _stage04_region(profile, '  Widget _finalPrizeBackFace({',
+        '  Widget _rewardTierBackFace({', _stage04_final_prize)
     profile = once(profile, '_rewardPartForTier(threshold),',
-        "_stage04LabMode ? '---' : _rewardPartForTier(threshold),",
+        "_stage04LabMode ? (_stage04Tiers?.codePart(threshold) ?? '---') : _rewardPartForTier(threshold),",
         'stage04-tier-no-phone-code')
     profile = once(profile, "'تم كشف هذا الجزء من رمزك',",
-        "_stage04LabMode ? 'رمز الجائزة بانتظار المصدر المؤكد' : 'تم كشف هذا الجزء من رمزك',",
+        "_stage04LabMode ? 'جزء رمز الفحص فقط' : 'تم كشف هذا الجزء من رمزك',",
         'stage04-tier-code-caption-ar')
     profile = once(profile, "'This part of your code is revealed',",
-        "_stage04LabMode ? 'Prize code awaits its verified source' : 'This part of your code is revealed',",
+        "_stage04LabMode ? 'Synthetic code part only' : 'This part of your code is revealed',",
         'stage04-tier-code-caption-en')
     sync_import = "import 'deda_private_data_sync.dart';\n"
     imports = STAGE04_IMPORT
@@ -1540,6 +1583,58 @@ def _stage04_editor_state(body):
         'stage04-editor-name-authority-held')
     return body
 
+def _stage04_prize_page(source):
+    a=source.index('class DedaPrizeWinnerRequestPage extends StatefulWidget')
+    z=source.index('\nclass ',source.index('class _DedaPrizeWinnerRequestPageState',a)+1)
+    body=source[a:z]
+    body=once(body,'  final int pointsAtCompletion;',
+        """  final int pointsAtCompletion;
+  final Stream<Map<String,dynamic>?>? stage04RequestStream;
+  final Future<void> Function()? stage04Submit;
+  final bool Function()? stage04Current;""",'stage04-prize-page-fields')
+    body=once(body,'    required this.pointsAtCompletion,',
+        """    required this.pointsAtCompletion,
+    this.stage04RequestStream,
+    this.stage04Submit,
+    this.stage04Current,""",'stage04-prize-page-constructor')
+    body=once(body,'      await DedaBackend.submitPrizeWinnerRequest(',
+        """      if (widget.stage04RequestStream != null) {
+        if (widget.stage04Current?.call() != true || widget.stage04Submit == null) return;
+        await widget.stage04Submit!();
+        if (!mounted || widget.stage04Current?.call() != true) return;
+      } else await DedaBackend.submitPrizeWinnerRequest(""",'stage04-prize-submit')
+    body=once(body,"'تم إرسال طلب الجائزة إلى إدارة DEDA بنجاح.',",
+        "widget.stage04RequestStream != null ? 'تم تأكيد طلب الفحص فقط.' : 'تم إرسال طلب الجائزة إلى إدارة DEDA بنجاح.',",
+        'stage04-prize-message-ar')
+    body=once(body,"'Your prize request was sent to DEDA administration.',",
+        "widget.stage04RequestStream != null ? 'Synthetic request confirmed only.' : 'Your prize request was sent to DEDA administration.',",
+        'stage04-prize-message-en')
+    body=once(body,'  Future<void> _replyToAdmin() async {',
+        '  Future<void> _replyToAdmin() async {\n    if (widget.stage04RequestStream != null) return;','stage04-prize-no-legacy-reply')
+    body=once(body,'  Future<void> _confirmPrizeReceived() async {',
+        '  Future<void> _confirmPrizeReceived() async {\n    if (widget.stage04RequestStream != null) return;','stage04-prize-no-legacy-confirm')
+    body=once(body,'stream: DedaBackend.prizeWinnerRequestForUser(widget.phone),',
+        'stream: widget.stage04RequestStream ?? DedaBackend.prizeWinnerRequestForUser(widget.phone),','stage04-prize-stream')
+    body=once(body,'          final data = snapshot.data;',
+        """          if (widget.stage04RequestStream != null && (widget.stage04Current?.call() != true ||
+              snapshot.hasError || snapshot.connectionState == ConnectionState.waiting ||
+              snapshot.connectionState == ConnectionState.none)) {
+            return Center(child: Text(t('طلب الفحص غير مؤكد', 'Synthetic request not confirmed')));
+          }
+          final data = snapshot.data;""",'stage04-prize-page-guard')
+    body=once(body,"'لقد حصلت على الجائزة النهائية 👏',",
+        "widget.stage04RequestStream != null ? 'استحقاق تجريبي فقط' : 'لقد حصلت على الجائزة النهائية 👏',",'stage04-prize-page-no-award-ar')
+    body=once(body,"'You earned the final prize 👏',",
+        "widget.stage04RequestStream != null ? 'Synthetic eligibility only' : 'You earned the final prize 👏',",'stage04-prize-page-no-award-en')
+    body=once(body,"t('الرمز النهائي الكامل', 'Complete final code')",
+        "widget.stage04RequestStream != null ? t('رمز الفحص فقط', 'Synthetic test code') : t('الرمز النهائي الكامل', 'Complete final code')",
+        'stage04-prize-page-label')
+    body=once(body,"if (status == 'needs_info') ...[",
+        "if (widget.stage04RequestStream == null && status == 'needs_info') ...[",'stage04-prize-no-reply-ui')
+    body=once(body,"if (status == 'prize_sent') ...[",
+        "if (widget.stage04RequestStream == null && status == 'prize_sent') ...[",'stage04-prize-no-receipt-ui')
+    return source[:a]+body+source[z:]
+
 def bind_stage04_lab(project: Path):
     project = project.resolve()
     if project == REPO or project in REPO.parents or REPO in project.parents:
@@ -1557,6 +1652,8 @@ def bind_stage04_lab(project: Path):
         '\nclass ', _stage04_editor_state)
     store_path = project/'lib/deda_100377_my_store_page_staged.dart'
     store_modified = _stage04_store(store_path.read_text())
+    prize_path = project/'lib/prize_winner_pages.dart'
+    prize_modified = _stage04_prize_page(prize_path.read_text())
     modified = _stage04_region(modified, 'class DedaPublicProfilePreviewPage extends StatelessWidget',
         '\nclass ', _stage04_public_preview)
     modified = _stage04_region(modified, 'class PlaceDetailsPage extends StatefulWidget',
@@ -1583,6 +1680,7 @@ def bind_stage04_lab(project: Path):
         if not target.exists(): target.write_bytes((REPO/'lib'/name).read_bytes())
     main_path.write_text(modified)
     store_path.write_text(store_modified)
+    prize_path.write_text(prize_modified)
     test = project/'test/deda_stage04_original_profile_hold_test.dart'
     if test.exists():
         raise ValueError('STAGE04_PROFILE_TEST_ALREADY_EXISTS')
