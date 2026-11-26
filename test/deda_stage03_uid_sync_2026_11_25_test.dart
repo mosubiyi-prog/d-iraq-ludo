@@ -121,6 +121,51 @@ void main(){
     final duplicate=protectedAccount()..['friends']=[row,row];
     expect(()=>project(duplicate),throwsFormatException);
   });
+  test('04/02 friends and requests share the protected UID projection, never public-ID identity',(){
+    Map<String,Object?> row(String peer, String id, String status, bool incoming){
+      final a=incoming?peer:uid,b=incoming?uid:peer;
+      final pair=[a,b]..sort();
+      return {'pairKey':pair.join('__'),'members':[a,b],
+        'requesterUid':a,'recipientUid':b,
+        'requesterPublicId':incoming?id:'@DEDA-QA1234',
+        'recipientPublicId':incoming?'@DEDA-QA1234':id,
+        'requesterName':incoming?'Peer':'Synthetic QA',
+        'recipientName':incoming?'Synthetic QA':'Peer','status':status};
+    }
+    DedaStage04FriendsView project(List<Map<String,Object?>> rows){
+      final account=protectedAccount()..['friends']=rows;
+      final profile=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+          expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:account));
+      final friends=DedaStage04FriendsView.fromProfile(profile);
+      expect(friends.accepted.length,profile.acceptedFriends);
+      return friends;
+    }
+    final accepted=row('synthetic-peer-001','@DEDA-QA5678','accepted',false);
+    final incoming=row('synthetic-peer-002','@DEDA-QA5679','pending',true);
+    final outgoing=row('synthetic-peer-003','@DEDA-QA5680','pending',false);
+    final rejected=row('synthetic-peer-004','@DEDA-QA5681','rejected',true);
+    final view=project([accepted,incoming,outgoing,rejected]);
+    expect(view.uid,uid);
+    expect(view.originalId,'@DEDA-QA1234');
+    expect(view.revision,1);
+    expect(view.accepted.single.peerUid,'synthetic-peer-001');
+    expect(view.accepted.single.peerPublicId,'@DEDA-QA5678');
+    expect(view.incomingRequests.single.peerUid,'synthetic-peer-002');
+    expect(view.outgoingRequests.single.peerUid,'synthetic-peer-003');
+    expect(view.rows.length,4);
+    expect(()=>view.rows.clear(),throwsUnsupportedError);
+    expect(()=>view.accepted.clear(),throwsUnsupportedError);
+    expect(project([]).rows,isEmpty);
+    expect(()=>project([accepted,accepted]),throwsFormatException);
+    expect(()=>project([{...accepted,'requesterPublicId':'@DEDA-QA9999'}]),throwsFormatException);
+    expect(()=>project([{...accepted,'recipientPublicId':'@DEDA-QA1234'}]),throwsFormatException);
+    expect(()=>project([{...accepted,'recipientName':''}]),throwsFormatException);
+    expect(()=>project([Map<String,Object?>.from(accepted)..remove('recipientName')]),throwsFormatException);
+    expect(()=>project([accepted,{...incoming,'requesterPublicId':'@DEDA-QA5678'}]),throwsFormatException);
+  });
+  test('04/02 friends read cannot open without the existing lab session',() async {
+    await expectLater(DedaStage03LabStorage.readFriends(),throwsStateError);
+  });
   test('04/01 inventory requires exact same-UID purchase and accepted gift evidence',(){
     final inventory=protectedInventory();
     final receipt={'uid':uid,'frameId':'FRAME_03','kind':'lab_frame','cost':1000,'createdMs':100};

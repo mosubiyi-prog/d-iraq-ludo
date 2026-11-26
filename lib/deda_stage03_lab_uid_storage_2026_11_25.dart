@@ -424,6 +424,94 @@ class DedaStage04ProfileRead {
   }
 }
 
+/// 04/02: relationship presentation over the same protected account.
+/// Both parties are Firebase UID keys; public identifiers are display data.
+/// No directory discovery, notification, task award or relationship writer.
+class DedaStage04FriendRow {
+  const DedaStage04FriendRow._(this.ownerUid, this.pairKey, this.peerUid,
+      this.peerPublicId, this.peerName, this.incoming, this.status);
+  final String ownerUid, pairKey, peerUid, peerPublicId, peerName, status;
+  final bool incoming;
+}
+
+/// Full account-scoped snapshot; do not replace missing fields with a
+/// placeholder name, zero friends, or an identity inferred from an alias.
+class DedaStage04FriendsView {
+  DedaStage04FriendsView._(this.uid, this.originalId, this.revision, this.rows);
+  final String uid, originalId;
+  final int revision;
+  final List<DedaStage04FriendRow> rows;
+  List<DedaStage04FriendRow> get accepted =>
+      List.unmodifiable(rows.where((r) => r.status == 'accepted'));
+  List<DedaStage04FriendRow> get incomingRequests =>
+      List.unmodifiable(rows.where((r) => r.status == 'pending' && r.incoming));
+  List<DedaStage04FriendRow> get outgoingRequests =>
+      List.unmodifiable(rows.where((r) => r.status == 'pending' && !r.incoming));
+
+  static DedaStage04FriendsView fromProfile(DedaStage04ProfileView profile) {
+    // The existing profile projection already checks owner participation,
+    // canonical pair, unique peer and status. Enforce the complete trusted
+    // parseAccount relationship schema before exposing names and public IDs.
+    final raw = profile._source.account['friends'] as List;
+    if (raw.length > 200) throw const FormatException('friends-source-limit');
+    const fields = {'pairKey','members','requesterUid','recipientUid',
+      'requesterPublicId','recipientPublicId','requesterName','recipientName','status'};
+    bool member(Object? v) => v is String &&
+        RegExp(r'^[A-Za-z0-9_-]{6,128}$').hasMatch(v);
+    bool alias(Object? v) => v is String &&
+        RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(v);
+    bool name(Object? v) => v is String && v.isNotEmpty && v.length <= 96 &&
+        v.trim() == v && !RegExp(r'[<>\x00-\x1f]').hasMatch(v);
+    final rows = <DedaStage04FriendRow>[];
+    for (final value in raw) {
+      if (value is! Map || value.length != fields.length ||
+          !fields.every(value.containsKey) ||
+          !member(value['requesterUid']) || !member(value['recipientUid']) ||
+          !alias(value['requesterPublicId']) || !alias(value['recipientPublicId']) ||
+          !name(value['requesterName']) || !name(value['recipientName'])) {
+        throw const FormatException('friends-source-incomplete');
+      }
+      final incoming = value['recipientUid'] == profile.uid;
+      final ownId = value[incoming ? 'recipientPublicId' : 'requesterPublicId'];
+      final peerId = value[incoming ? 'requesterPublicId' : 'recipientPublicId'] as String;
+      if (ownId != profile.originalId || peerId == profile.originalId ||
+          peerId == profile.activeId) {
+        throw const FormatException('friends-public-id-owner-conflict');
+      }
+      rows.add(DedaStage04FriendRow._(profile.uid, value['pairKey'] as String,
+          value[incoming ? 'requesterUid' : 'recipientUid'] as String, peerId,
+          value[incoming ? 'requesterName' : 'recipientName'] as String,
+          incoming, value['status'] as String));
+    }
+    final publicIds = <String>{};
+    if (rows.any((r) => !publicIds.add(r.peerPublicId))) {
+      throw const FormatException('friends-ambiguous-peer-public-id');
+    }
+    rows.sort((a,b) {
+      final nameOrder = a.peerName.compareTo(b.peerName);
+      return nameOrder != 0 ? nameOrder : a.pairKey.compareTo(b.pairKey);
+    });
+    final view = DedaStage04FriendsView._(profile.uid, profile.originalId,
+        profile.accountRevision, List.unmodifiable(rows));
+    if (view.accepted.length != profile.acceptedFriends) {
+      throw const FormatException('friends-count-inconsistent');
+    }
+    return view;
+  }
+}
+
+/// Keep the existing session-generation guard for every presentation read.
+/// A fresh action must still obtain a fresh trusted relationship revision.
+class DedaStage04FriendsRead {
+  DedaStage04FriendsRead._(this._profile, this._friends);
+  final DedaStage04ProfileRead _profile;
+  final DedaStage04FriendsView _friends;
+  DedaStage04FriendsView requireCurrent() {
+    _profile.requireCurrent();
+    return _friends;
+  }
+}
+
 /// The restored private revision used to open the existing profile editor.
 /// A selection never confers an entitlement. The base is held for CAS.
 class DedaStage04AppearanceRead {
@@ -589,6 +677,15 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     return DedaStage04ProfileRead._(view, current);
   }
 
+
+  /// 04/02 reads the exact existing account projection. No separate
+  /// collection, public-ID login, listener that leaks an old UID, or write.
+  static Future<DedaStage04FriendsRead> readFriends() async {
+    final profile = await readProfile();
+    final friends = DedaStage04FriendsView.fromProfile(profile.requireCurrent());
+    profile.requireCurrent();
+    return DedaStage04FriendsRead._(profile, friends);
+  }
 
   /// Direct read-only residual sources in the unpublished synthetic candidate.
   /// No wallet issuance or writes; default closed.
