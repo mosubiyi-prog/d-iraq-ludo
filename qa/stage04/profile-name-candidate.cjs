@@ -250,6 +250,45 @@ function generateProfileActions(original) {
     }
 `;
   if(candidate.split(end).length!==2)throw Error('profile-action-end');
-  return generateWalletRead(candidate.replace(end,()=>directory+end));
+  // Original prize_winner_requests path and cycle; pinned synthetic account only.
+  // Code is a display reference, NOT an authentication credential or a payout.
+  // Each earlier event is immutable under these same candidate rules. The
+  // final event records the actual post-reservation points, not client input.
+  const terminal=entries.find(e=>e.receipt.delta.points===-25000);
+  if(!terminal || entries.length!==9)throw Error('prize-terminal-anchor');
+  const earlier=entries.filter(e=>e!==terminal).map(e=>
+    'exists(tierEventPath(uid,"'+e.key+'"))').join(' &&\n          ');
+  const code=syntheticPrizeCode(terminal.key);
+  const prize=String.raw`
+    match /prize_winner_requests/{requestId} {
+      function prizeOwner() {
+        return owner(request.auth.uid) && requestId == 'prize_v1_' + request.auth.uid;
+      }
+      function completePrize(uid,d) {
+        let a=get(accountPath(uid)).data;
+        let finalEvent=get(tierEventPath(uid,"`+terminal.key+String.raw`")).data;
+        return a.uid == uid && finalEvent.accountKey == uid &&
+          finalEvent.eventKey == "`+terminal.key+String.raw`" &&
+          finalEvent.receipt == `+literal(terminal.receipt)+String.raw` &&
+          `+earlier+String.raw` &&
+          d == {'ownerUid':uid,'cycleId':'prize_v1','accountKey':uid,
+            'name':a.profile.displayName,'phone':'','dedaId':a.profile.originalId,
+            'rewardCode':"`+code+String.raw`",'pointsAtCompletion':finalEvent.afterBalances.points,
+            'completedThresholds':[5000,10000,15000,20000,25000],
+            'finalReservedPoints':25000,'status':'new','adminMessage':'',
+            'prizeDetails':'','userReply':'','createdAt':request.time,'updatedAt':request.time};
+      }
+      allow get: if prizeOwner();
+      allow create: if prizeOwner() && completePrize(request.auth.uid,request.resource.data);
+      allow list, update, delete: if false;
+    }
+`;
+  return generateWalletRead(candidate.replace(end,()=>directory+prize+end));
 }
-module.exports={generateProfileName,generateProfileActions};
+// Deterministic display-only reference for the single synthetic fixture.
+// Never a production issuer or proof of entitlement by itself.
+function syntheticPrizeCode(finalEventKey){
+  if(typeof finalEventKey!=='string'||!/^[a-f0-9]{64}$/.test(finalEventKey))throw Error('prize-fixture-key');
+  return 'Q4'+finalEventKey.slice(0,14);
+}
+module.exports={generateProfileName,generateProfileActions,syntheticPrizeCode};

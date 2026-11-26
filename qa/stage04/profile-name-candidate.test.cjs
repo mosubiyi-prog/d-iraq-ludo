@@ -5,7 +5,7 @@ const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
 const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch,serverTimestamp,Timestamp,runTransaction}=require('firebase/firestore');
 const {build,buildAccount,base,uid}=require('../stage03/uid-trusted-fixture.cjs');
-const {generateProfileName,generateProfileActions}=require('./profile-name-candidate.cjs');
+const {generateProfileName,generateProfileActions,syntheticPrizeCode}=require('./profile-name-candidate.cjs');
 const projectId='demo-deda-stage03-uid';
 const account=base+'/account/current',source=base+'/accountSources/current',history=base+'/accountHistory/';
 const original=buildAccount()[account], rights=build();
@@ -179,6 +179,18 @@ test('Spark candidate: fixed synthetic point reserve and return are atomic, repl
     for(const [p,row] of Object.entries(rows))if(!omit||!p.includes(omit))batch.set(doc(c,p),row);
     return {next,commit:batch.commit()};
   };
+  const prizePath='prize_winner_requests/prize_v1_'+uid;
+  const terminalKey=core.eventKey(pointReceipt(uid,25000,'reserve'));
+  const rewardCode=syntheticPrizeCode(terminalKey);
+  assert.match(rewardCode,/^[A-Z][0-9][a-f0-9]{14}$/);
+  const prizeRow=points=>({ownerUid:uid,cycleId:'prize_v1',accountKey:uid,
+    name:second.profile.displayName,phone:'',dedaId:second.profile.originalId,
+    rewardCode,pointsAtCompletion:points,completedThresholds:[5000,10000,15000,20000,25000],
+    finalReservedPoints:25000,status:'new',adminMessage:'',prizeDetails:'',userReply:'',
+    createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+  const request=(c,row,path=prizePath)=>setDoc(doc(c,path),row);
+  await assertSucceeds(getDocFromServer(doc(client(),prizePath)));
+  await assertFails(request(client(),prizeRow(505)));
   await assertFails(attempt(client(),10000,'reserve').commit);
   await assertFails(attempt(client(),5000,'claim').commit);
   await assertFails(attempt(client(),5000,'reserve',{delta:1}).commit);
@@ -188,6 +200,7 @@ test('Spark candidate: fixed synthetic point reserve and return are atomic, repl
   await assertFails(attempt(client(),5000,'reserve',{omit:'/events/'}).commit);
   await assertFails(attempt(client('foreign'),5000,'reserve').commit);
   for(const t of [5000,10000,15000,20000,25000]){
+    await assertFails(request(client(),prizeRow(505)));
     const reserve=attempt(client(),t,'reserve');
     await assertSucceeds(reserve.commit);state=reserve.next;
     await assertFails(readWallet());
@@ -206,6 +219,32 @@ test('Spark candidate: fixed synthetic point reserve and return are atomic, repl
     assert.deepEqual(await read(base),state);
   }
   assert.equal(state.balances.points,505);
+  const row=prizeRow(state.balances.points);
+  for(const override of [{rewardCode:'X000000000000000'},{phone:'fabricated-phone'},
+    {name:'Not the account name'},{dedaId:'@DEDA-QA9999'},{status:'approved'},
+    {pointsAtCompletion:506},{completedThresholds:[25000]},{ownerUid:'foreign'},
+    {finalReservedPoints:0},{adminMessage:'approved'},{extra:true}]){
+    await assertFails(request(client(),{...row,...override}));
+  }
+  await assertFails(request(client('foreign'),row));
+  await assertFails(request(client(uid,'anonymous'),row));
+  await assertFails(request(client(),row,prizePath+'-duplicate'));
+  const firstKey=core.eventKey(pointReceipt(uid,5000,'reserve'));
+  const firstPath=base+'/events/'+firstKey,firstEvent=await read(firstPath);
+  await env.withSecurityRulesDisabled(ctx=>deleteDoc(doc(ctx.firestore(),firstPath)));
+  await assertFails(request(client(),row));
+  await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),firstPath),firstEvent));
+  const outcomes=await Promise.allSettled([request(client(),row),request(client(),row)]);
+  assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+  const saved=(await assertSucceeds(getDocFromServer(doc(client(),prizePath)))).data();
+  assert.equal(saved.rewardCode,rewardCode);assert.equal(saved.status,'new');
+  assert.equal(saved.pointsAtCompletion,state.balances.points);
+  assert.equal(saved.accountKey,uid);assert.equal(saved.phone,'');
+  await assertFails(request(client(),row));
+  await assertFails(deleteDoc(doc(client(),prizePath)));
+  await assertFails(getDocFromServer(doc(client('foreign'),prizePath)));
+  await assertFails(getDocFromServer(doc(client(uid,'anonymous'),prizePath)));
+  assert.deepEqual(await read(prizePath),saved);
   await assertFails(attempt(client(),5000,'claim').commit);
   await assertFails(setDoc(doc(client(),base),{...state,version:state.version+1,
     balances:{...state.balances,points:999999}}));
