@@ -84,6 +84,19 @@ class FriendsSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.patch_lab_service(changed)
 
+    def test_lab_preview_reuses_original_page_and_verified_stream(self):
+        route='  Future<void> _openProfile(DedaFriendshipRecord relation) async {'
+        bound=mod.patch_lab_preview_route(route)
+        self.assertIn('watchLabFriendPreview(session,relation)',bound)
+        self.assertIn('DedaFriendPublicProfilePage(profile: profile)',bound)
+        self.assertIn('!session.stage04Current || snapshot.hasError',bound)
+        original='    return DedaQa32LiveFriendAppearance('
+        surface=mod.patch_lab_preview_surface(original)
+        self.assertIn('return _buildVisible(context, profile);',surface)
+        self.assertTrue(surface.endswith(original))
+        self.assertIn('final result=await profileForFriend(relation,session.uid);',mod.LAB_HELPERS)
+        self.assertIn('yield null;',mod.LAB_HELPERS)
+
     def test_lab_notification_binding_reuses_original_lifecycle(self):
         source = '''class DedaIncomingRequestNotifications {
   static Future<void> start() async {

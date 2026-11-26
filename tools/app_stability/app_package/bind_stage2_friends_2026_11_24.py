@@ -421,6 +421,44 @@ LAB_HELPERS = r'''
     return profile;
   }
 
+  // Original preview stays live; snapshots are invalidations, not proof.
+  static Stream<DedaSocialProfile?> watchLabFriendPreview(
+      DedaSocialSession session,DedaFriendshipRecord relation) {
+    final signals=StreamController<void>();
+    final subs=<StreamSubscription<dynamic>>[];
+    void invalidate(dynamic _) {
+      if(!signals.isClosed)signals.add(null);
+    }
+    void fail(Object error,StackTrace stack) {
+      if(!signals.isClosed)signals.addError(error,stack);
+    }
+    signals.onListen=() {
+      try {
+        if(!session.stage04Current || !relation.members.contains(session.uid))
+          throw StateError('friends-preview-session-changed');
+        final peer=relation.otherPublicId(session.uid);
+        subs.add(FirebaseAuth.instance.authStateChanges().listen(invalidate,onError:fail));
+        subs.add(_db.doc('deda_lab_uid_authority/'+session.profile.ownerUid+'/account/current')
+            .snapshots().listen(invalidate,onError:fail));
+        subs.add(_db.doc('deda_social_profiles/'+peer).snapshots().listen(invalidate,onError:fail));
+        subs.add(_db.doc('deda_share_ids/'+peer).snapshots().listen(invalidate,onError:fail));
+        invalidate(null);
+      } catch(error,stack) { fail(error,stack); }
+    };
+    signals.onCancel=() async {
+      for(final sub in subs) { await sub.cancel(); }
+      unawaited(signals.close());
+    };
+    return signals.stream.asyncExpand<DedaSocialProfile?>((_) async* {
+      yield null;
+      if(!session.stage04Current)throw StateError('friends-preview-session-changed');
+      final result=await profileForFriend(relation,session.uid);
+      if(!session.stage04Current || result==null)
+        throw StateError('friends-preview-session-changed');
+      yield result;
+    });
+  }
+
   // Read the existing directory and public profile only if they agree on
   // the canonical ID and actual peer UID. No Functions or phone lookup.
   // Current live lab rules can deny these paths; denial stays an error.
@@ -569,6 +607,37 @@ def patch_lab_notifications(main):
         'Future<DedaSocialSession> dedaPrepareSocialSectionEntry(',notifications)
 
 
+def patch_lab_preview_route(body):
+    anchor='  Future<void> _openProfile(DedaFriendshipRecord relation) async {'
+    return one(body,anchor,anchor+'''
+    if(DedaSocialService.stage04LabMode) {
+      final session=_session;
+      if(!mounted || session==null || !session.stage04Current ||
+          relation.status!='accepted' || !relation.members.contains(session.uid))return;
+      final stream=DedaSocialService.watchLabFriendPreview(session,relation);
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>
+        StreamBuilder<DedaSocialProfile?>(stream:stream,builder:(context,snapshot) {
+          if(!session.stage04Current || snapshot.hasError) {
+            return Scaffold(appBar:AppBar(),body:Center(child:Text(dedaText(
+              'تعذر التحقق من ملف الصديق.','Friend profile verification failed.'))));
+          }
+          final profile=snapshot.data;
+          if(profile==null)return Scaffold(appBar:AppBar(),
+              body:const Center(child:CircularProgressIndicator()));
+          return DedaFriendPublicProfilePage(profile: profile);
+        })));
+      return;
+    }''','lab-preview-route')
+
+
+def patch_lab_preview_surface(body):
+    # The parent route now owns live verification. Do not let the old
+    # independent appearance reader replace the verified profile in lab mode.
+    return one(body,'    return DedaQa32LiveFriendAppearance(',
+        '    if(DedaSocialService.stage04LabMode)return _buildVisible(context, profile);\n'
+        '    return DedaQa32LiveFriendAppearance(','lab-preview-surface')
+
+
 def patch_lab_main(main):
     main=patch_lab_notifications(main)
     def friends(body):
@@ -598,11 +667,7 @@ def patch_lab_main(main):
             '    if(DedaSocialService.stage04LabMode) {\n'
             "      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(dedaText('معاملة العلاقة بانتظار اعتماد المصدر الموحد.','Relationship transaction awaits unified authority.'))));\n"
             '      return;\n    }','lab-remove-held')
-        body=one(body,'  Future<void> _openProfile(DedaFriendshipRecord relation) async {',
-            '  Future<void> _openProfile(DedaFriendshipRecord relation) async {\n'
-            '    if(DedaSocialService.stage04LabMode) {\n'
-            "      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(dedaText('عرض الصديق بانتظار اعتماد الدليل العام.','Friend preview awaits verified public directory.'))));\n"
-            '      return;\n    }','lab-preview-held')
+        body=patch_lab_preview_route(body)
         return body
     def add(body):
         anchor='  Future<void> _prepare() async {'
@@ -672,7 +737,8 @@ def patch_lab_main(main):
         return body
     main=region(main,'class _DedaFriendsPageState','class _DedaFriendCompactCard',friends)
     main=region(main,'class _DedaAddFriendPageState','class DedaFriendRequestsPage',add)
-    return region(main,'class _DedaFriendRequestsPageState','class DedaFriendPublicProfilePage',requests)
+    main=region(main,'class _DedaFriendRequestsPageState','class DedaFriendPublicProfilePage',requests)
+    return region(main,'class DedaFriendPublicProfilePage extends StatelessWidget {','class DedaStylePage extends StatefulWidget {',patch_lab_preview_surface)
 
 def bind_lab(project):
     project=Path(project).resolve()

@@ -160,6 +160,19 @@ void main(){
     expect(()=>project([{...incoming,'requestRevision':0}]),throwsFormatException);
     expect(()=>project([{...incoming,'requestRevision':2}]),throwsFormatException);
     expect(()=>project([{...incoming,'requestRevision':'1'}]),throwsFormatException);
+    final accept=view.prepareAction('accept','synthetic-peer-002','@DEDA-QA5679',
+        renderedEvent:oldNotice);
+    expect(accept['expectedRevision'],1);
+    expect(accept['peerUid'],'synthetic-peer-002');
+    expect(accept['requestRevision'],isNull);
+    expect(()=>view.prepareAction('reject','synthetic-peer-003','@DEDA-QA5680',
+        renderedEvent:view.outgoingRequests.single.notificationKey),throwsStateError);
+    expect(()=>view.prepareAction('accept','synthetic-peer-002','@DEDA-QA5679',
+        renderedEvent:'wrong'),throwsStateError);
+    expect(()=>view.prepareAction('send','synthetic-peer-001','@DEDA-QA5678'),throwsStateError);
+    expect(view.prepareAction('send','synthetic-peer-004','@DEDA-QA5681')['action'],'send');
+    expect(view.prepareAction('remove','synthetic-peer-001','@DEDA-QA5678',
+        renderedEvent:view.accepted.single.notificationKey)['action'],'remove');
     final preview=view.requireAcceptedPeer(view.accepted.single.pairKey,'@DEDA-QA5678');
     expect(preview.peerUid,'synthetic-peer-001');
     view.verifyPreview(preview,'synthetic-peer-001','@DEDA-QA5678');

@@ -449,7 +449,19 @@ function generateWalletRead(originalRules){
 // transaction. The peer is a synthetic fixture, never a new Auth user.
 // No callable/client writer or production permission; a second real owner's
 // projection and public directory authorization require later integration.
-async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,simulatePeer=false}){
+async function executeFriendCandidateCommand({store,uid,command}){
+  requireDemo(store,uid);
+  exact(command,['format','action','peerUid','peerPublicId','pairKey','expectedRevision','requestRevision']);
+  requireThat(command.format===1&&command.peerUid==='synthetic-peer-001'&&
+    command.peerPublicId==='@DEDA-QA5678'&&
+    command.pairKey===[uid,command.peerUid].sort().join('__')&&
+    (command.requestRevision===null||stamp(command.requestRevision)),'friends-command-invalid');
+  // Internal emulator worker, NOT a client endpoint.
+  return mutateFriendCandidate({store,uid,peerUid:command.peerUid,
+    expectedRevision:command.expectedRevision,action:command.action,
+    expectedRequestRevision:command.requestRevision});
+}
+async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,simulatePeer=false,expectedRequestRevision=undefined}){
   requireDemo(store,uid);
   requireThat(peerUid==='synthetic-peer-001'&&peerUid!==uid&&
     Number.isSafeInteger(expectedRevision)&&expectedRevision>=1&&
@@ -488,6 +500,8 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     const graph=await get(graphPath);
     const previous=old.friends.find(row=>row.pairKey===pair)||null;
     requireThat(equal(graph,previous),'friends-canonical-projection-conflict');
+    requireThat(expectedRequestRevision===undefined ||
+      (previous?.requestRevision??null)===expectedRequestRevision,'friends-command-stale-request');
     let nextRow;
     if(action==='send'){
       requireThat(previous===null||previous.status==='rejected','friends-existing-request-or-relation');
@@ -519,4 +533,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate};
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand};

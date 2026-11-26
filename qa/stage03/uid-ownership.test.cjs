@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -217,6 +217,26 @@ test('04/02 bilateral synthetic lifecycle uses one owner UID, canonical row and 
   assert.equal((await db.doc('deda_sessions/'+other).get()).exists,false);
   assert.equal((await db.doc('deda_lab_uid_authority/'+other+'/account/current').get()).exists,false);
   await assertFails(setDoc(doc(client(),friendGraphPath),{...next.friends[0],status:'accepted'}));
+});
+test('04/02 UI command boundary uses existing trusted worker and rejects forged peer or stale event',async()=>{
+  await seedFriendActionFixture('incoming');
+  const cmd={format:1,action:'accept',peerUid:other,peerPublicId:peerId,
+    pairKey:[uid,other].sort().join('__'),expectedRevision:1,requestRevision:null};
+  const run=command=>executeFriendCandidateCommand({store,uid,command});
+  await assert.rejects(run({...cmd,simulatePeer:true}),{code:'ownership-schema'});
+  await assert.rejects(run({...cmd,peerPublicId:original}),{code:'friends-command-invalid'});
+  await assert.rejects(run({...cmd,requestRevision:1}),{code:'friends-command-stale-request'});
+  const accepted=await run(cmd);
+  assert.equal(accepted.friends[0].status,'accepted');
+  await assert.rejects(run(cmd),{code:'friends-revision-conflict'});
+  const removed=await run({...cmd,action:'remove',expectedRevision:2});
+  assert.equal(removed.friends.length,0);
+  const sent=await run({...cmd,action:'send',expectedRevision:3});
+  assert.equal(sent.friends[0].status,'pending');
+  assert.equal(sent.friends[0].requestRevision,4);
+  await assert.rejects(run({...cmd,action:'reject',expectedRevision:4,requestRevision:4}),
+    {code:'friends-not-pending-recipient'});
+  await assertFails(setDoc(doc(client(),acctView),{...sent,revision:5}));
 });
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{
   await accountSeed(accountFixture());const a=await accountApply();
