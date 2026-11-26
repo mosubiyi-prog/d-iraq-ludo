@@ -177,6 +177,43 @@ test('04/02 incoming response requires recipient, matching canonical relationshi
     await assert.rejects(friendAction(action,2),{code:'friends-not-pending-recipient'});
   }
 });
+test('04/02 bilateral synthetic lifecycle uses one owner UID, canonical row and monotonic history',async()=>{
+  const old=await seedFriendActionFixture();
+  const peer=(action,expectedRevision)=>mutateFriendCandidate({
+    store,uid,peerUid:other,action,expectedRevision,simulatePeer:true});
+  await friendAction('remove',1);
+  const sent=await friendAction('send',2);
+  assert.equal(sent.friends[0].recipientUid,other);
+  await assert.rejects(friendAction('accept',3),{code:'friends-not-pending-recipient'});
+  const rejected=await peer('reject',3);
+  assert.equal(rejected.friends[0].status,'rejected');
+  const incoming=await peer('send',4);
+  assert.equal(incoming.friends[0].requesterUid,other);
+  assert.equal(incoming.friends[0].recipientUid,uid);
+  await assert.rejects(peer('accept',5),{code:'friends-not-pending-recipient'});
+  const accepted=await friendAction('accept',5);
+  assert.equal(accepted.friends[0].status,'accepted');
+  assert.deepEqual((await db.doc(friendGraphPath).get()).data(),accepted.friends[0]);
+  const gone=await peer('remove',6);
+  assert.equal(gone.friends.length,0);
+  assert.equal((await db.doc(friendGraphPath).get()).exists,false);
+  const competing=await Promise.allSettled([friendAction('send',7),peer('send',7)]);
+  assert.equal(competing.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(competing.find(x=>x.status==='rejected').reason.code,'friends-revision-conflict');
+  const next=competing.find(x=>x.status==='fulfilled').value;
+  assert.equal(next.revision,8);
+  assert.deepEqual((await db.doc(friendGraphPath).get()).data(),next.friends[0]);
+  assert.deepEqual((await db.doc(acctView).get()).data(),next);
+  assert.deepEqual((await db.doc(acctSource).get()).data(),next);
+  assert.equal((await db.collection(base+'/accountHistory').get()).size,8);
+  assert.deepEqual(next.profile,old.profile);
+  assert.deepEqual(next.tasks,old.tasks);
+  assert.deepEqual(next.league,old.league);
+  assert.equal((await db.doc('users/'+other).get()).exists,false);
+  assert.equal((await db.doc('deda_sessions/'+other).get()).exists,false);
+  assert.equal((await db.doc('deda_lab_uid_authority/'+other+'/account/current').get()).exists,false);
+  await assertFails(setDoc(doc(client(),friendGraphPath),{...next.friends[0],status:'accepted'}));
+});
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{
   await accountSeed(accountFixture());const a=await accountApply();
   assert.equal(a.view.friends[0].recipientUid,other);

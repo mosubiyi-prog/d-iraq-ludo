@@ -443,11 +443,17 @@ function generateWalletRead(originalRules){
 // transaction. The peer is a synthetic fixture, never a new Auth user.
 // No callable/client writer or production permission; a second real owner's
 // projection and public directory authorization require later integration.
-async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action}){
+async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,simulatePeer=false}){
   requireDemo(store,uid);
   requireThat(peerUid==='synthetic-peer-001'&&peerUid!==uid&&
     Number.isSafeInteger(expectedRevision)&&expectedRevision>=1&&
+    typeof simulatePeer==='boolean'&&
     ['send','accept','reject','remove'].includes(action),'friends-candidate-input');
+  // Only the trusted demo worker may simulate the already-existing peer.
+  // The authenticated owner remains pinned by requireDemo; this flag is
+  // never an Auth principal, callable parameter, or client permission.
+  const actor=simulatePeer?peerUid:uid;
+  const recipient=simulatePeer?uid:peerUid;
   const base='deda_lab_uid_authority/'+uid;
   const pair=[uid,peerUid].sort().join('__');
   // Use the same SDK transaction as the trusted store; removal requires a
@@ -479,12 +485,13 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action}
     let nextRow;
     if(action==='send'){
       requireThat(previous===null||previous.status==='rejected','friends-existing-request-or-relation');
-      nextRow={pairKey:pair,members:[uid,peerUid],requesterUid:uid,recipientUid:peerUid,
-        requesterPublicId:original,recipientPublicId:peerId,requesterName:old.profile.displayName,
-        recipientName:profile.displayName,status:'pending'};
+      nextRow={pairKey:pair,members:[actor,recipient],requesterUid:actor,recipientUid:recipient,
+        requesterPublicId:simulatePeer?peerId:original,recipientPublicId:simulatePeer?original:peerId,
+        requesterName:simulatePeer?profile.displayName:old.profile.displayName,
+        recipientName:simulatePeer?old.profile.displayName:profile.displayName,status:'pending'};
     }else if(action==='accept'||action==='reject'){
-      requireThat(previous&&previous.status==='pending'&&previous.recipientUid===uid&&
-        previous.requesterUid===peerUid,'friends-not-pending-recipient');
+      requireThat(previous&&previous.status==='pending'&&previous.recipientUid===actor&&
+        previous.requesterUid===recipient,'friends-not-pending-recipient');
       nextRow={...previous,status:action==='accept'?'accepted':'rejected'};
     }else{
       requireThat(previous&&previous.status==='accepted','friends-not-accepted');
