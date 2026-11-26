@@ -397,6 +397,29 @@ LAB_HELPERS = r'''
     }
   }
 
+  // Reuse the directory reader for a FRIEND preview, but require the
+  // accepted canonical relation both before and after the server lookup.
+  static Future<DedaSocialProfile?> readLabFriendPreview(
+      DedaFriendshipRecord relation,String key) async {
+    final opening=await DedaStage03LabStorage.readFriends();
+    final view=opening.requireCurrent();
+    if(key!=view.originalId || relation.status!='accepted' ||
+        !relation.members.contains(key)) {
+      throw StateError('friends-preview-not-accepted');
+    }
+    final selected=view.requireAcceptedPeer(relation.id,relation.otherPublicId(key));
+    final profile=await readLabPublicProfile(selected.peerPublicId);
+    opening.requireCurrent();
+    if(profile==null)throw StateError('friends-preview-directory-missing');
+    final fresh=await DedaStage03LabStorage.readFriends();
+    opening.requireCurrent();
+    final latest=fresh.requireCurrent();
+    if(latest.uid!=view.uid || latest.originalId!=key || latest.revision<view.revision)
+      throw StateError('friends-preview-stale-revision');
+    latest.verifyPreview(selected,profile.ownerUid,profile.publicId);
+    return profile;
+  }
+
   // Read the existing directory and public profile only if they agree on
   // the canonical ID and actual peer UID. No Functions or phone lookup.
   // Current live lab rules can deny these paths; denial stays an error.
@@ -488,6 +511,12 @@ def patch_lab_service(src):
             i=body.index('async {\n')+len('async {\n')
             return body[:i]+'    '+guard+'\n'+body[i:]
         src=region(src,start,end,patch)
+    # The existing service boundary is reused; no second preview service.
+    start='  static Future<DedaSocialProfile?> profileForFriend('
+    if src.count(start)!=1:
+        raise ValueError('FRIENDS_LAB_PREVIEW_ANCHOR')
+    i=src.index('async {\n',src.index(start))+len('async {\n')
+    src=src[:i]+'    if(stage04LabMode)return readLabFriendPreview(relation,myUid);\n'+src[i:]
     return src
 
 def patch_lab_main(main):

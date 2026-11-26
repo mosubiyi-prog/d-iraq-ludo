@@ -153,6 +153,16 @@ void main(){
     expect(view.incomingRequests.single.peerUid,'synthetic-peer-002');
     expect(view.outgoingRequests.single.peerUid,'synthetic-peer-003');
     expect(view.rows.length,4);
+    final preview=view.requireAcceptedPeer(view.accepted.single.pairKey,'@DEDA-QA5678');
+    expect(preview.peerUid,'synthetic-peer-001');
+    view.verifyPreview(preview,'synthetic-peer-001','@DEDA-QA5678');
+    expect(()=>view.verifyPreview(preview,'synthetic-peer-002','@DEDA-QA5678'),throwsStateError);
+    expect(()=>view.verifyPreview(preview,'synthetic-peer-001','@DEDA-QA5679'),throwsStateError);
+    expect(()=>view.requireAcceptedPeer(preview.pairKey,'@DEDA-QA5679'),throwsStateError);
+    expect(()=>view.requireAcceptedPeer(view.incomingRequests.single.pairKey,'@DEDA-QA5679'),throwsStateError);
+    expect(()=>project([]).verifyPreview(preview,'synthetic-peer-001','@DEDA-QA5678'),throwsStateError);
+    expect(()=>project([{...accepted,'status':'rejected'}]).verifyPreview(
+      preview,'synthetic-peer-001','@DEDA-QA5678'),throwsStateError);
     expect(()=>view.rows.clear(),throwsUnsupportedError);
     expect(()=>view.accepted.clear(),throwsUnsupportedError);
     expect(project([]).rows,isEmpty);

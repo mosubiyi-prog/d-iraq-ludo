@@ -60,6 +60,17 @@ class FriendsSourceTests(unittest.TestCase):
         self.assertNotIn('signInAnonymously', mod.LAB_HELPERS)
         self.assertNotIn('httpsCallable', mod.LAB_HELPERS)
 
+    def test_lab_preview_uses_current_accepted_relation_and_existing_service(self):
+        src = profile.archived_profile_member('lib/deda_social_service.dart')
+        changed = mod.patch_lab_service(mod.patch_service(src))
+        self.assertIn('if(stage04LabMode)return readLabFriendPreview(relation,myUid);',changed)
+        self.assertIn('view.requireAcceptedPeer(relation.id,relation.otherPublicId(key))',changed)
+        self.assertIn('latest.verifyPreview(selected,profile.ownerUid,profile.publicId)',changed)
+        self.assertIn('readLabPublicProfile(selected.peerPublicId)',changed)
+        self.assertEqual(changed.count('static Future<DedaSocialProfile?> readLabFriendPreview('),1)
+        with self.assertRaises(ValueError):
+            mod.patch_lab_service(changed)
+
     def test_repository_cannot_be_patched(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

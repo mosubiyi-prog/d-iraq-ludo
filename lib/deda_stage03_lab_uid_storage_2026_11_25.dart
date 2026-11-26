@@ -448,6 +448,27 @@ class DedaStage04FriendsView {
   List<DedaStage04FriendRow> get outgoingRequests =>
       List.unmodifiable(rows.where((r) => r.status == 'pending' && !r.incoming));
 
+  /// A rendered row is not a permission. Require the current accepted
+  /// canonical relationship and its display key before reading a preview.
+  DedaStage04FriendRow requireAcceptedPeer(String pairKey, String peerPublicId) {
+    final matches=accepted.where((r)=>r.pairKey==pairKey &&
+        r.peerPublicId==peerPublicId);
+    if(matches.length!=1)throw StateError('friends-preview-not-accepted');
+    return matches.single;
+  }
+
+  /// Recheck after directory I/O. No old relationship or public-ID takeover
+  /// may authorize a preview, even when the displayed ID is unchanged.
+  void verifyPreview(DedaStage04FriendRow opening, String directoryUid,
+      String directoryPublicId) {
+    final current=requireAcceptedPeer(opening.pairKey,opening.peerPublicId);
+    if(opening.ownerUid!=uid || opening.status!='accepted' ||
+        opening.peerUid!=current.peerUid || directoryUid!=current.peerUid ||
+        directoryPublicId!=current.peerPublicId) {
+      throw StateError('friends-preview-owner-conflict');
+    }
+  }
+
   static DedaStage04FriendsView fromProfile(DedaStage04ProfileView profile) {
     // The existing profile projection already checks owner participation,
     // canonical pair, unique peer and status. Enforce the complete trusted
