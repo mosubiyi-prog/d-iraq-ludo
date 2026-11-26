@@ -7,6 +7,12 @@ on:
       - 'tools/app_stability/app_package/stage03_lab_android_runtime_2026_11_25.py'
       - '.github/workflows/deda-stage03-lab-android-runtime-2026-11-25.yml'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Existing storage regression or Stage04 read-only profile'
+        type: choice
+        options: [profile, storage]
+        default: profile
 permissions:
   contents: read
 concurrency:
@@ -38,7 +44,9 @@ jobs:
           cd "$project"
           flutter pub get
           flutter analyze lib --no-fatal-infos --no-fatal-warnings
-          flutter build apk --debug --no-pub --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STAGE02_DISPOSABLE_RUNNER=true --dart-define=DEDA_STAGE03_LAB_STORAGE=true
+          profile=true
+          if [ "${{ github.event.inputs.mode }}" = storage ]; then profile=false; fi
+          flutter build apk --debug --no-pub --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STAGE02_DISPOSABLE_RUNNER=true --dart-define=DEDA_STAGE03_LAB_STORAGE=true --dart-define=DEDA_STAGE04_ANDROID_PROFILE_READONLY="$profile" --dart-define=DEDA_STAGE04_PROFILE_WALLET_CANDIDATE="$profile"
           apk="$project/build/app/outputs/flutter-apk/app-debug.apk"
           sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           analyzer="$(find "$sdk/cmdline-tools" -type f -name apkanalyzer | head -n 1)"
@@ -62,10 +70,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Real Android SDK storage save and fresh local restore
+      - name: Real Android SDK profile read-only or explicit storage regression
         uses: reactivecircus/android-emulator-runner@v2
         env:
           LAB_PASSWORD: ${{ secrets.DEDA_STAGE02_LAB_PASSWORD }}
+          STAGE04_PROFILE_READONLY: ${{ github.event.inputs.mode != 'storage' }}
         with:
           api-level: 35
           target: google_apis

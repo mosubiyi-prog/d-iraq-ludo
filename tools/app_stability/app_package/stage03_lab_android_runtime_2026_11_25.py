@@ -28,6 +28,19 @@ def run():
         raise RuntimeError('storage state absent')
     try:
         fresh()
+        if os.environ.get('STAGE04_PROFILE_READONLY') == 'true':
+            def profile():
+                tap('READ_PROFILE')
+                result=either(('PROFILE_WALLET_270_AND_RIGHTS_OK','BLOCKED_PROFILE'))
+                if result!='PROFILE_WALLET_270_AND_RIGHTS_OK':
+                    raise RuntimeError('profile read blocked')
+            profile()
+            print('PASS_ANDROID_STAGE04_DART_PROFILE_WALLET_RIGHTS',flush=True)
+            fresh()
+            profile()
+            print('PASS_ANDROID_STAGE04_FRESH_LOCAL_PROFILE_SAME_UID',flush=True)
+            print('STAGE04_READ_ONLY_NO_FULL_APP_NO_MUTATIONS',flush=True)
+            return
         tap('RESTORE_STORAGE')
         initial=either(('RESTORE_V2_OK','RESTORE_V3_OK','BLOCKED_STORAGE'))
         if initial=='BLOCKED_STORAGE': raise RuntimeError('initial restore blocked')
