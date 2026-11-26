@@ -1654,12 +1654,23 @@ def _stage04_prize_page(source):
         """  Future<void> _confirmPrizeReceived() async {
     if (widget.stage04RequestStream != null && widget.stage04Current?.call() != true) return;""",
         'stage04-prize-confirm-entry')
-    body=once(body,'    if (confirmed != true || !mounted) return;',
-        """    if (confirmed != true || !mounted) return;
-    if (widget.stage04RequestStream != null) {
+    # The assembled page may extend the post-dialog guard. Keep that
+    # guard verbatim and insert at the unique start of its mutation phase.
+    def bind_confirm_route(method):
+        anchor = '    setState(() => _submitting = true);'
+        if method.count('showDialog<bool>') != 1 or method.count(anchor) != 1:
+            raise ValueError('STAGE04_PROFILE_STOP:prize-confirm-structure')
+        if method.index('showDialog<bool>') >= method.index(anchor):
+            raise ValueError('STAGE04_PROFILE_STOP:prize-confirm-order')
+        return once(method, anchor,
+            """    if (widget.stage04RequestStream != null) {
+      if (confirmed != true || !mounted || widget.stage04Current?.call() != true) return;
       await _stage04Follow(widget.stage04Confirm);
       return;
-    }""",'stage04-prize-confirm-route')
+    }
+    setState(() => _submitting = true);""",'stage04-prize-confirm-route')
+    body=_stage04_region(body,'  Future<void> _confirmPrizeReceived() async {',
+        '  Widget _infoTile(',bind_confirm_route)
     body=once(body,'stream: DedaBackend.prizeWinnerRequestForUser(widget.phone),',
         'stream: widget.stage04RequestStream ?? DedaBackend.prizeWinnerRequestForUser(widget.phone),','stage04-prize-stream')
     body=once(body,'          final data = snapshot.data;',
@@ -1744,6 +1755,8 @@ void main() {
   });
   testWidgets('original prize page submits and follows the injected UID route only',
       (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900,1600));
+    addTearDown(()=>tester.binding.setSurfaceSize(null));
     final stream=StreamController<Map<String,dynamic>?>.broadcast();
     var submits=0, confirms=0;
     String? reply;
