@@ -363,14 +363,22 @@ LAB_LOAD = r'''
 
 '''
 
+def patch_lab_load_entry(s):
+    # Multiple identical checks exist in the original method. Match only
+    # the complete public signature and insert before its first statement.
+    anchor=('  static Future<Object?> loadStandings({\n'
+            '    required String accountKey, required bool Function() sameViewer,\n'
+            '  }) async {\n')
+    return one(s,anchor,LAB_LOAD+anchor+
+        '    if(DedaStage03LabStorage.leagueLabMode)return _loadLabStandings(accountKey,sameViewer);\n',
+        'lab-load-signature')
+
+
 def patch_lab_direct(s):
     if MARK not in s or LAB_MARK in s:
         raise ValueError('WEEKLY_LAB_EXISTING_DIRECT_REQUIRED')
     s=LAB_IMPORT+s
-    s=one(s,'  static Future<Object?> loadStandings({',LAB_LOAD+'  static Future<Object?> loadStandings({','lab-reader')
-    s=one(s,"    if (!sameViewer()) throw StateError('league-account-switched');",
-        "    if(DedaStage03LabStorage.leagueLabMode)return _loadLabStandings(accountKey,sameViewer);\n"
-        "    if (!sameViewer()) throw StateError('league-account-switched');",'lab-no-phone-or-outbox')
+    s=patch_lab_load_entry(s)
     anchor='    required String accountKey, required String taskId,\n  }) async {'
     s=one(s,anchor,anchor+'\n    if(DedaStage03LabStorage.leagueLabMode){\n'
         '      final confirmed=await DedaStage03LabStorage.confirmLeagueClaim(accountKey,taskId);\n'

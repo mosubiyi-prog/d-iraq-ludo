@@ -58,6 +58,19 @@ class WeeklySourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.bind_lab(ROOT)
 
+    def test_lab_load_entry_matches_signature_not_repeated_guard(self):
+        original=(ROOT/'lib/deda_weekly_firestore_direct_bridge_100406.dart').read_text()
+        guard="    if (!sameViewer()) throw StateError('league-account-switched');"
+        # The actual bridge contains repeated guards. Retain all of them.
+        self.assertGreaterEqual(original.count(guard),2)
+        changed=mod.patch_lab_load_entry(original)
+        self.assertEqual(changed.count(guard),original.count(guard))
+        self.assertEqual(changed.count('return _loadLabStandings(accountKey,sameViewer);'),1)
+        self.assertEqual(changed.replace(mod.LAB_LOAD,'',1).replace(
+            '    if(DedaStage03LabStorage.leagueLabMode)return _loadLabStandings(accountKey,sameViewer);\n','',1),original)
+        with self.assertRaises(ValueError):
+            mod.patch_lab_load_entry(original+original)
+
     def test_original_repo_not_writeable(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
