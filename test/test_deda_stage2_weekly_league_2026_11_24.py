@@ -71,6 +71,17 @@ class WeeklySourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.patch_lab_load_entry(original+original)
 
+    def test_lab_prize_and_control_keep_manager_writer_unchanged(self):
+        old=mod.patch_prize((ROOT/'lib/deda_weekly_prize_plan_100408.dart').read_text())
+        bound=mod.patch_lab_prize(old)
+        a='class DedaWeeklyPrizeAmount extends StatelessWidget'
+        z='class DedaAdminLeaguePrizeSummary'
+        self.assertEqual(bound[:bound.index(a)],mod.LAB_IMPORT+old[:old.index(a)])
+        self.assertEqual(bound[bound.index(z):],old[old.index(z):])
+        self.assertIn('amounts.length!=10',bound)
+        maintenance=mod.patch_lab_maintenance(mod.patch_maintenance((ROOT/'lib/deda_weekly_maintenance_status_100408.dart').read_text()))
+        self.assertIn('data?["paused"] is! bool',maintenance)
+
     def test_original_repo_not_writeable(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

@@ -511,7 +511,7 @@ jobs:
             ip link set lo up
             test "$(ip -o link show | wc -l)" -eq 1
             exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
-          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_leaderboard_page.dart
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_prize_plan.dart lib/deda_weekly_maintenance_status.dart
       - name: Bind phase 01 hold into the complete assembled DEDA entry and compile isolated debug QA
         env:
           LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}

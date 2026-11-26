@@ -387,10 +387,15 @@ def patch_lab_direct(s):
         'String id, String viewer, String status, int left,{DedaStage04LeagueRead? lab}) async {','lab-read-parameter')
     s=one(s,'    final all = <Map<String, dynamic>>[];',
         '    final owner=lab?.requireCurrent();\n'
+        '    Map<String,Map<String,dynamic>>? fixture;\n'
         '    if(lab!=null){\n'
-        '      final own=snap.docs.where((d)=>d.id==viewer).toList();\n'
-        '      if(own.length>1)throw StateError("league-lab-duplicate-owner");\n'
-        '      lab.verifyOwnerScore(id,own.isEmpty?null:own.single.data());\n'
+        "      final proof=await db.collection('deda_weekly_direct_weeks').doc(id).get(_server)\n"
+        '          .timeout(const Duration(seconds:12));\n'
+        '      lab.requireCurrent();\n'
+        '      if(proof.metadata.isFromCache || proof.metadata.hasPendingWrites)\n'
+        '        throw StateError("league-fixture-server-proof");\n'
+        '      fixture=DedaStage04LeagueRead.verifyRankingProof(lab.requireCurrent(),id,proof.data(),\n'
+        '        {for(final row in snap.docs)row.id:row.data()});\n'
         '    }\n'
         '    final all = <Map<String, dynamic>>[];','lab-score-proof')
     s=one(s,"          row['updatedAt'] is! Timestamp) continue;",
@@ -403,11 +408,18 @@ def patch_lab_direct(s):
     s=one(s,'final known = pid == viewer && authUid != null',
         'final known = lab==null && pid == viewer && authUid != null','lab-no-old-id-cache')
     s=one(s,'var displayedId = known?.displayId ?? pid;',
-        'var displayedId = owner!=null && pid==viewer?owner.activeId:(known?.displayId ?? pid);','lab-owner-display-id')
+        'var displayedId = fixture!=null?fixture[pid]!["activeId"] as String:(known?.displayId ?? pid);','lab-owner-display-id')
     s=one(s,"if (proof?['displayId'] is String) {",
-        "if ((owner==null || pid!=viewer) && proof?['displayId'] is String) {",'lab-no-overwrite-own-id')
+        "if (lab==null && proof?['displayId'] is String) {",'lab-no-overwrite-own-id')
     s=one(s,"if (p?['publicId'] == pid &&",
-        "if (p?['publicId'] == pid && (owner==null || pid!=viewer || p?['ownerUid']==owner.uid) &&",'lab-own-appearance-owner')
+        "if (p?['publicId'] == pid && (fixture==null || p?['ownerUid']==fixture[pid]?['ownerUid']) &&",'lab-own-appearance-owner')
+    # In lab mode the complete proof supplies the display ID. Never consult
+    # the old alias store; read the existing server directory for appearance.
+    s=one(s,"final fetched = await Future.wait<Map<String, dynamic>?>([",
+        "final fetched = await Future.wait<Map<String, dynamic>?>([",'lab-fetch-anchor')
+    s=one(s,"          db.collection('deda_public_active_aliases').doc(pid)",
+        "          if(lab!=null) Future<Map<String,dynamic>?>.value(null) else\n"
+        "          db.collection('deda_public_active_aliases').doc(pid)",'lab-no-old-alias-read')
     return s
 
 def patch_lab_page(s):
@@ -424,6 +436,31 @@ def patch_lab_page(s):
         s=one(s,old,new,'lab-verified-label-'+scale)
     return s
 
+def patch_lab_prize(s):
+    # Only the original public widget, never the manager's increase writer.
+    a=s.index('class DedaWeeklyPrizeAmount extends StatelessWidget')
+    z=s.index('class DedaAdminLeaguePrizeSummary',a)
+    public=s[a:z]
+    public=one(public,'        final values = DedaWeeklyPrizePlan.amounts(snapshot.data!.data());',
+        '        final data=snapshot.data!.data();\n'
+        '        if(DedaStage03LabStorage.leagueLabMode){\n'
+        '          final amounts=data?["amounts"];\n'
+        '          if(DedaStage03LabStorage.leagueAccountKey().isEmpty || data?["weekId"]!=DedaWeeklyPrizePlan.thisWeekId ||\n'
+        '              amounts is! List || amounts.length!=10 || List.generate(10,(i)=>i).any((i)=>\n'
+        '                amounts[i] is! int || amounts[i]<DedaWeeklyPrizePlan.minimum[i] || amounts[i]>1000000))\n'
+        "            return Text('💎 …',style:TextStyle(color:color,fontSize:fontSize));\n"
+        '        }\n'
+        '        final values = DedaWeeklyPrizePlan.amounts(data);','lab-prize-no-guesses')
+    return LAB_IMPORT+s[:a]+public+s[z:]
+
+def patch_lab_maintenance(s):
+    return LAB_IMPORT+one(s,'        final data = snapshot.data!.data();',
+        '        final data = snapshot.data!.data();\n'
+        '        if(DedaStage03LabStorage.leagueLabMode &&\n'
+        '            (DedaStage03LabStorage.leagueAccountKey().isEmpty || data?["weekId"]!=currentWeekId() || data?["paused"] is! bool)){\n'
+        "          return const FittedBox(fit:BoxFit.scaleDown,child:Text('جارِ التحقق من حالة الدوري...'));\n"
+        '        }','lab-control-proven')
+
 def bind_lab(project):
     project=Path(project).resolve()
     if project==ROOT or ROOT in project.parents or project in ROOT.parents:
@@ -431,7 +468,8 @@ def bind_lab(project):
     files={key:(project/path).read_text() for key,path in PATHS.items()}
     verify(files)
     transforms={'main':patch_lab_main,'gate':patch_lab_gate,
-                'direct':patch_lab_direct,'page':patch_lab_page}
+                'direct':patch_lab_direct,'page':patch_lab_page,
+                'prize':patch_lab_prize,'maintenance':patch_lab_maintenance}
     updated={key:patch(files[key]) for key,patch in transforms.items()}
     for key,value in updated.items():
         (project/PATHS[key]).write_text(value)

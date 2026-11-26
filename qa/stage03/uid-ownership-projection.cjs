@@ -552,6 +552,95 @@ function generateFriendCandidateRules(originalRules){
   return originalRules.replace(anchor,()=>block).replace(tail,()=>root+tail);
 }
 
+// 04/03: read-only fixture for the existing weekly paths. No client writes,
+// no second Auth user and no settlement. The emulator caller seeds these
+// documents explicitly; this helper does not write to any database.
+async function buildLeagueCandidate({store,uid,weekId,peerTasks=[]}){
+  requireDemo(store,uid);
+  const start=weekStart(weekId),close=start+7*86400000-6*3600000;
+  const {Timestamp}=require('firebase-admin/firestore');
+  const base='deda_lab_uid_authority/'+uid;
+  return store.runTransaction(async tx=>{
+    const raw=await tx.get(base+'/account/current');
+    const a=parseAccount(raw,uid);
+    requireThat(equal(raw,await tx.get(base+'/accountSources/current'))&&
+      equal(raw,await tx.get(base+'/accountHistory/'+a.revision))&&
+      a.profile.originalId==='@DEDA-QA1234','league-fixture-owner-proof');
+    const peer='@DEDA-QA5678',other='synthetic-peer-001';
+    const route=await tx.get('deda_share_ids/'+peer),p=await tx.get('deda_social_profiles/'+peer);
+    requireThat(route?.ownerUid===other&&route.publicId===peer&&route.kind==='personal'&&
+      route.active===true&&p?.ownerUid===other&&p.publicId===peer&&name(p.displayName),
+      'league-fixture-peer-proof');
+    const valid=rows=>unique(rows,'claimKey',20000,t=>{
+      exact(t,['claimKey','dayId','taskId','completedMs','claimedMs']);
+      requireThat(realDay(t.dayId)&&taskIds.has(t.taskId)&&t.claimKey===t.dayId+'|'+t.taskId&&
+        stamp(t.completedMs)&&baghdadDay(t.completedMs)===t.dayId&&
+        (t.claimedMs===null||(stamp(t.claimedMs)&&t.claimedMs>=t.completedMs&&
+          baghdadDay(t.claimedMs)===t.dayId)),'league-fixture-task-proof');
+      return t;
+    }).filter(t=>t.claimedMs!==null&&t.claimedMs>=start&&t.claimedMs<close);
+    const own=valid(a.tasks),otherRows=valid(peerTasks);
+    const claimed=own.map(x=>x.claimKey).sort();
+    requireThat(equal(claimed,a.league.find(x=>x.weekId===weekId)?.claimedKeys??[]),
+      'league-fixture-owner-claims');
+    const path='deda_weekly_direct_weeks/'+weekId,docs={},rows=[];
+    function add(id,ownerUid,activeId,displayName,tasks){
+      requireThat(tasks.length<=56,'league-fixture-claim-limit');
+      if(!tasks.length)return;
+      const sorted=[...tasks].sort((x,y)=>x.claimedMs-y.claimedMs||x.claimKey.localeCompare(y.claimKey));
+      const last=sorted.at(-1),keys=tasks.map(x=>x.claimKey).sort();
+      rows.push({publicId:id,ownerUid,activeId,displayName,claimedKeys:keys,reachedMs:last.claimedMs});
+      docs[path+'/scores/'+id]={weekId,weekStart:Timestamp.fromMillis(start),publicId:id,
+        displayName,claimedKeys:keys,lastClaimKey:last.claimKey,completedTasks:keys.length,
+        weeklyXp:keys.length*20,updatedAt:Timestamp.fromMillis(last.claimedMs)};
+    }
+    add(a.profile.originalId,uid,a.profile.activeId,a.profile.displayName,own);
+    add(peer,other,peer,p.displayName,otherRows);
+    docs[path]={format:1,synthetic:true,complete:true,ownerUid:uid,weekId,
+      accountRevision:a.revision,rows};
+    return docs;
+  });
+}
+function generateLeagueCandidateRules(originalRules){
+  const tail='    match /{document=**} { allow read, write: if false; }';
+  if(originalRules.split(tail).length!==2||originalRules.includes('function leagueFixtureOwner('))
+    throw Error('league-rule-anchor');
+  const root=[
+    '    function leagueFixtureOwner() { return owner("'+LAB_UID+'"); }',
+    '    function fixtureWeek(w) { return w.matches("^20[0-9]{2}-[0-9]{2}-[0-9]{2}$"); }',
+    '    function fixtureComplete(w) {',
+    '      let p=get(/databases/$(database)/documents/deda_weekly_direct_weeks/$(w)).data;',
+    '      return p.synthetic==true && p.complete==true && p.ownerUid=="'+LAB_UID+'" && p.weekId==w;',
+    '    }',
+    '    match /deda_weekly_direct_weeks/{w} {',
+    '      allow get: if leagueFixtureOwner() && fixtureWeek(w);',
+    '      allow list, write: if false;',
+    '      match /scores/{id} {',
+    '        allow get: if leagueFixtureOwner() && fixtureWeek(w) && fixtureComplete(w);',
+    '        allow list: if leagueFixtureOwner() && fixtureWeek(w) && fixtureComplete(w) && request.query.limit<=5001;',
+    '        allow write: if false;',
+    '      }',
+    '    }',
+    '    match /deda_weekly_direct_prize_plans/{w} {',
+    '      allow get: if leagueFixtureOwner() && fixtureWeek(w) && fixtureComplete(w);',
+    '      allow list, write: if false;',
+    '    }',
+    '    match /deda_weekly_direct_control/active {',
+    '      allow get: if leagueFixtureOwner();',
+    '      allow list, write: if false;',
+    '    }',
+    '    match /deda_share_ids/{id} {',
+    '      allow get: if leagueFixtureOwner() && id in ["@DEDA-QA1234","@DEDA-QA5678"];',
+    '      allow list, write: if false;',
+    '    }',
+    '    match /deda_social_profiles/{id} {',
+    '      allow get: if leagueFixtureOwner() && id in ["@DEDA-QA1234","@DEDA-QA5678"];',
+    '      allow list, write: if false;',
+    '    }',
+  ].join('\n')+'\n';
+  return originalRules.replace(tail,()=>root+tail);
+}
+
 // 04/02: exercise the original relationship operations in a trusted DEMO
 // transaction. The peer is a synthetic fixture, never a new Auth user.
 // No callable/client writer or production permission; a second real owner's
@@ -640,4 +729,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules};
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,generateLeagueCandidateRules};

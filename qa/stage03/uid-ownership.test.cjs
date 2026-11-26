@@ -3,12 +3,12 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
-const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch}=require('firebase/firestore');
+const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch,query,limit}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -283,6 +283,45 @@ test('04/02 scoped Spark client candidate accepts only exact atomic friend trans
     assert.deepEqual((await db.doc(acctSource).get()).data(),pending);
     assert.equal((await db.doc('users/'+other).get()).exists,false);
     await assertFails(getDocFromServer(doc(owner,acctSource)));
+  }finally{await local.cleanup();}
+});
+test('04/03 existing week fixture is complete, read-only and restricted to the same UID',async()=>{
+  await seedFriendActionFixture();
+  const peerTasks=[{claimKey:'2026-11-01|long_trip',dayId:'2026-11-01',
+    taskId:'long_trip',completedMs:claimMs-10,claimedMs:claimMs-9}];
+  const docs=await buildLeagueCandidate({store,uid,weekId,peerTasks});
+  const path='deda_weekly_direct_weeks/'+weekId;
+  assert.equal(docs[path].rows.length,2);
+  assert.equal(docs[path+'/scores/'+original].weeklyXp,20);
+  assert.equal(docs[path+'/scores/'+peerId].weeklyXp,20);
+  assert.ok(docs[path+'/scores/'+peerId].updatedAt.toMillis()<docs[path+'/scores/'+original].updatedAt.toMillis());
+  await assert.rejects(buildLeagueCandidate({store,uid,weekId,peerTasks:[peerTasks[0],peerTasks[0]]}),
+    {code:'duplicate-ownership-source'});
+  const empty=await buildLeagueCandidate({store,uid,weekId:'2026-11-07'});
+  assert.deepEqual(empty['deda_weekly_direct_weeks/2026-11-07'].rows,[]);
+  const batch=db.batch();for(const [p,d] of Object.entries(docs))batch.set(db.doc(p),d);
+  batch.set(db.doc('deda_weekly_direct_prize_plans/'+weekId),{weekId,amounts:[250,200,150,100,100,100,100,100,100,100]});
+  batch.set(db.doc('deda_weekly_direct_control/active'),{weekId,paused:false});
+  await batch.commit();
+  const local=await initializeTestEnvironment({projectId,firestore:{rules:generateLeagueCandidateRules(readFileSync('firestore.rules','utf8'))}});
+  try{
+    const c=(id=uid,provider='password')=>local.authenticatedContext(id,{firebase:{sign_in_provider:provider}}).firestore();
+    const owner=c(), scores=d=>query(collection(d,path+'/scores'),limit(5001));
+    assert.equal((await assertSucceeds(getDocs(scores(owner)))).size,2);
+    await assertSucceeds(getDocFromServer(doc(owner,path)));
+    await assertSucceeds(getDocFromServer(doc(owner,'deda_weekly_direct_prize_plans/'+weekId)));
+    await assertSucceeds(getDocFromServer(doc(owner,'deda_weekly_direct_control/active')));
+    await assertFails(getDocs(scores(c(other))));
+    await assertFails(getDocs(scores(c(uid,'anonymous'))));
+    await assertFails(getDocs(collection(owner,path+'/scores')));
+    await assertFails(setDoc(doc(owner,path),{...docs[path],rows:[]}));
+    await assertFails(setDoc(doc(owner,path+'/scores/'+original),{weeklyXp:1120}));
+    await assertFails(setDoc(doc(owner,'deda_weekly_direct_prize_plans/'+weekId),{amounts:[1]}));
+    await assertFails(setDoc(doc(owner,'deda_weekly_direct_control/active'),{paused:false}));
+    await assertFails(setDoc(doc(owner,'deda_diamond_gifts/fake'),{amount:250}));
+    await assertFails(getDocFromServer(doc(owner,acctSource)));
+    assert.equal((await db.doc('users/'+other).get()).exists,false);
+    assert.equal((await db.collection('deda_diamond_gifts').get()).size,0);
   }finally{await local.cleanup();}
 });
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{

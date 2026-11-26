@@ -648,6 +648,57 @@ class DedaStage04LeagueRead {
         score['completedTasks']!=keys.length || score['weeklyXp']!=keys.length*20)
       throw StateError('league-owner-score-conflict');
   }
+  /// A complete server fixture must match every score document, not merely
+  /// the viewer. No unproven empty set, omitted competitor or stale score.
+  static Map<String,Map<String,dynamic>> verifyRankingProof(
+      DedaStage04ProfileView p,String week,Map<String,dynamic>? proof,
+      Map<String,Map<String,dynamic>> scores) {
+    if(proof==null || proof.length!=7 || proof['format']!=1 ||
+        proof['synthetic']!=true || proof['complete']!=true ||
+        proof['ownerUid']!=p.uid || proof['weekId']!=week ||
+        proof['accountRevision']!=p.accountRevision || proof['rows'] is! List ||
+        (proof['rows'] as List).length!=scores.length || scores.length>2)
+      throw StateError('league-fixture-completeness');
+    final result=<String,Map<String,dynamic>>{};
+    final start=DateTime.tryParse(week+'T03:00:00Z');
+    if(start==null || weekId(start)!=week ||
+        DedaWeeklyLeagueClock.at(start).weekStart!=start)
+      throw StateError('league-fixture-week');
+    for(final raw in proof['rows'] as List){
+      if(raw is! Map || raw.length!=6 || !['publicId','ownerUid','activeId','displayName','claimedKeys','reachedMs'].every(raw.containsKey))
+        throw StateError('league-fixture-row');
+      final id=raw['publicId'], owner=raw['ownerUid'], active=raw['activeId'];
+      if(id is! String || result.containsKey(id) ||
+          !(id==p.originalId && owner==p.uid && active==p.activeId && raw['displayName']==p.displayName ||
+            id=='@DEDA-QA5678' && owner=='synthetic-peer-001' && active==id) ||
+          raw['displayName'] is! String || raw['claimedKeys'] is! List ||
+          raw['reachedMs'] is! int)
+        throw StateError('league-fixture-identity');
+      final reached=DateTime.fromMillisecondsSinceEpoch(raw['reachedMs'] as int,isUtc:true);
+      final keys=raw['claimedKeys'] as List;
+      if(keys.isEmpty || keys.length>56 || keys.toSet().length!=keys.length ||
+          weekId(reached)!=week || !DedaWeeklyLeagueClock.at(reached).canAccumulate ||
+          !keys.every((k){
+            if(k is! String)return false;
+            final parts=k.split('|');
+            if(parts.length!=2 || !DedaWeeklyCommunityOutbox.tasks.contains(parts[1]))return false;
+            final d=DateTime.tryParse(parts[0]+'T09:00:00Z');
+            return d!=null && day(d)==parts[0] && weekId(d)==week;
+          }))throw StateError('league-fixture-receipts');
+      final s=scores[id], sk=s?['claimedKeys'], at=s?['updatedAt'];
+      if(s==null || s['weekId']!=week || s['publicId']!=id ||
+          s['displayName']!=raw['displayName'] || sk is! List ||
+          sk.length!=keys.length || sk.toSet().length!=keys.length ||
+          !keys.toSet().containsAll(sk) || s['completedTasks']!=keys.length ||
+          s['weeklyXp']!=keys.length*20 || at is! Timestamp ||
+          at.millisecondsSinceEpoch!=raw['reachedMs'])
+        throw StateError('league-fixture-score-conflict');
+      result[id]=Map<String,dynamic>.unmodifiable(Map<String,dynamic>.from(raw));
+    }
+    validateOwnerScore(p,week,scores[p.originalId]);
+    return Map.unmodifiable(result);
+  }
+
   void verifyUnchanged(DedaStage04LeagueRead fresh){
     final a=requireCurrent(),b=fresh.requireCurrent();
     if(a.uid!=b.uid || a.accountRevision!=b.accountRevision ||

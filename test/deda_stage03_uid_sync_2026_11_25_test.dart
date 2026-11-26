@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/deda_private_data_sync.dart';
@@ -50,6 +51,32 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/03 complete ranking proof cannot omit or fabricate synthetic rows',(){
+    final a=protectedAccount();
+    final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;
+    final key='2026-11-01|open_map';
+    a['tasks']=[{'claimKey':key,'dayId':'2026-11-01','taskId':'open_map','completedMs':at,'claimedMs':at+1}];
+    a['league']=[{'weekId':'2026-10-31','claimedKeys':[key],'completedTasks':1,'weeklyXp':20}];
+    final p=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+      expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:a));
+    final row=<String,dynamic>{'publicId':p.originalId,'ownerUid':uid,'activeId':p.activeId,
+      'displayName':p.displayName,'claimedKeys':[key],'reachedMs':at+1};
+    final proof=<String,dynamic>{'format':1,'synthetic':true,'complete':true,'ownerUid':uid,
+      'weekId':'2026-10-31','accountRevision':1,'rows':[row]};
+    final score=<String,dynamic>{'publicId':p.originalId,'weekId':'2026-10-31',
+      'displayName':p.displayName,'claimedKeys':[key],'weeklyXp':20,'completedTasks':1,
+      'updatedAt':Timestamp.fromMillisecondsSinceEpoch(at+1)};
+    final scores={p.originalId:score};
+    Map<String,Map<String,dynamic>> verify(Map<String,dynamic>? evidence,Map<String,Map<String,dynamic>> values)=>
+      DedaStage04LeagueRead.verifyRankingProof(p,'2026-10-31',evidence,values);
+    expect(verify(proof,scores).keys,[p.originalId]);
+    expect(()=>verify(null,scores),throwsStateError);
+    expect(()=>verify({...proof,'accountRevision':2},scores),throwsStateError);
+    expect(()=>verify({...proof,'rows':[]},scores),throwsStateError);
+    expect(()=>verify(proof,{}),throwsStateError);
+    expect(()=>verify(proof,{p.originalId:{...score,'weeklyXp':40}}),throwsStateError);
+    expect(()=>verify({...proof,'rows':[{...row,'ownerUid':'other'}]},scores),throwsStateError);
+  });
   test('04/03 protected weekly claims match score exactly and exclude frozen claims',(){
     final account=protectedAccount();
     final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;
