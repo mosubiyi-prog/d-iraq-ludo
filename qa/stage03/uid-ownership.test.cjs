@@ -3,12 +3,12 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
-const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs}=require('firebase/firestore');
+const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -237,6 +237,53 @@ test('04/02 UI command boundary uses existing trusted worker and rejects forged 
   await assert.rejects(run({...cmd,action:'reject',expectedRevision:4,requestRevision:4}),
     {code:'friends-not-pending-recipient'});
   await assertFails(setDoc(doc(client(),acctView),{...sent,revision:5}));
+});
+test('04/02 scoped Spark client candidate accepts only exact atomic friend transitions',async()=>{
+  const initial=await seedFriendActionFixture('incoming');
+  const p='deda_social_profiles/'+peerId;
+  await db.doc(p).update({avatarStyle:1,frameStyle:0,backgroundStyle:0,level:1,badges:[]});
+  const rules=generateFriendCandidateRules(readFileSync('firestore.rules','utf8'));
+  const local=await initializeTestEnvironment({projectId,firestore:{rules}});
+  try{
+    const c=(id=uid,provider='password')=>local.authenticatedContext(id,{firebase:{sign_in_provider:provider}}).firestore();
+    const owner=c();
+    await assertSucceeds(getDocFromServer(doc(owner,p)));
+    await assertFails(getDocFromServer(doc(c(other),p)));
+    await assertFails(getDocs(collection(owner,'deda_social_profiles')));
+    await assertFails(setDoc(doc(owner,p),{ownerUid:uid}));
+    const commit=(client,next,omit='')=>{
+      const batch=writeBatch(client);
+      for(const path of [acctView,acctSource,base+'/accountHistory/'+next.revision])
+        if(path!==omit)batch.set(doc(client,path),next);
+      if(omit!==friendGraphPath){
+        if(next.friends.length)batch.set(doc(client,friendGraphPath),next.friends[0]);
+        else batch.delete(doc(client,friendGraphPath));
+      }
+      return batch.commit();
+    };
+    const accepted={...initial,revision:2,friends:[{...initial.friends[0],status:'accepted'}]};
+    await assertFails(commit(owner,{...accepted,profile:{...initial.profile,displayName:'forged'}}));
+    await assertFails(commit(owner,{...accepted,tasks:[]}));
+    await assertFails(commit(owner,accepted,acctSource));
+    await assertFails(commit(owner,accepted,friendGraphPath));
+    await assertFails(commit(c(other),accepted));
+    await assertFails(commit(c(uid,'anonymous'),accepted));
+    await assertSucceeds(commit(owner,accepted));
+    await assertFails(commit(owner,accepted));
+    const removed={...accepted,revision:3,friends:[]};
+    await assertSucceeds(commit(owner,removed));
+    const pending={...removed,revision:4,friends:[{pairKey:[uid,other].sort().join('__'),
+      members:[uid,other],requesterUid:uid,recipientUid:other,requesterPublicId:original,
+      recipientPublicId:peerId,requesterName:initial.profile.displayName,
+      recipientName:'Synthetic peer',status:'pending',requestRevision:4}]};
+    await assertSucceeds(commit(owner,pending));
+    await assertFails(commit(owner,{...pending,revision:5,friends:[{...pending.friends[0],status:'accepted'}]}));
+    await assertFails(commit(owner,{...pending,revision:5,friends:[]}));
+    assert.deepEqual((await assertSucceeds(getDocFromServer(doc(c(),acctView)))).data(),pending);
+    assert.deepEqual((await db.doc(acctSource).get()).data(),pending);
+    assert.equal((await db.doc('users/'+other).get()).exists,false);
+    await assertFails(getDocFromServer(doc(owner,acctSource)));
+  }finally{await local.cleanup();}
 });
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{
   await accountSeed(accountFixture());const a=await accountApply();

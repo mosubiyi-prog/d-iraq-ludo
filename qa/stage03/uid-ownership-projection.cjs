@@ -445,6 +445,113 @@ function generateWalletRead(originalRules){
     '        allow list, create, update, delete: if false;',
     '      }',anchor].join('\n'));
 }
+// Candidate rules only for the existing one-owner synthetic account.
+// Base rules remain read-only, and no deployment or broad permission.
+function generateFriendCandidateRules(originalRules){
+  const anchor='      match /account/current {\n        allow get: if owner(uid);\n        allow list, create, update, delete: if false;\n      }';
+  const tail='    match /{document=**} { allow read, write: if false; }';
+  if(originalRules.split(anchor).length!==2||originalRules.split(tail).length!==2||
+      originalRules.includes('function friendTransition('))throw Error('friends-rule-anchor');
+  const pair=[LAB_UID,'synthetic-peer-001'].sort().join('__');
+  const path='/databases/$(database)/documents/deda_lab_uid_authority/'+LAB_UID;
+  const graph='/databases/$(database)/documents/deda_friendships/'+pair;
+  const peer='/databases/$(database)/documents/deda_social_profiles/@DEDA-QA5678';
+  const route='/databases/$(database)/documents/deda_share_ids/@DEDA-QA5678';
+  const root=[
+    "",
+    "    function friendOwner() { return owner(\"OWNER\"); }",
+    "    function friendAccount() { return get(BASE/account/current).data; }",
+    "    function friendAfter() { return getAfter(BASE/account/current).data; }",
+    "    function friendDirectory() {",
+    "      let p=get(PEER).data;",
+    "      let r=get(ROUTE).data;",
+    "      return r.keys().hasOnly([\"ownerUid\",\"publicId\",\"kind\",\"active\"]) &&",
+    "        r.ownerUid==\"synthetic-peer-001\" && r.publicId==\"@DEDA-QA5678\" &&",
+    "        r.kind==\"personal\" && r.active==true &&",
+    "        p.keys().hasOnly([\"ownerUid\",\"publicId\",\"displayName\",\"avatarStyle\",\"frameStyle\",\"backgroundStyle\",\"level\",\"badges\"]) &&",
+    "        p.ownerUid==r.ownerUid && p.publicId==r.publicId && p.displayName is string &&",
+    "        p.avatarStyle is int && p.frameStyle is int && p.backgroundStyle is int &&",
+    "        p.level is int && p.badges is list;",
+    "    }",
+    "    function friendRow(a,r) {",
+    "      return r.pairKey==\"PAIR\" &&",
+    "        ((r.requesterUid==a.uid && r.recipientUid==\"synthetic-peer-001\" &&",
+    "          r.members==[a.uid,\"synthetic-peer-001\"] && r.requesterPublicId==a.profile.originalId &&",
+    "          r.recipientPublicId==\"@DEDA-QA5678\") ||",
+    "         (r.recipientUid==a.uid && r.requesterUid==\"synthetic-peer-001\" &&",
+    "          r.members==[\"synthetic-peer-001\",a.uid] && r.recipientPublicId==a.profile.originalId &&",
+    "          r.requesterPublicId==\"@DEDA-QA5678\"));",
+    "    }",
+    "    function friendBefore(a) {",
+    "      return a.friends.size()==0 ? !exists(GRAPH) :",
+    "        a.friends.size()==1 && friendRow(a,a.friends[0]) &&",
+    "          get(GRAPH).data==a.friends[0];",
+    "    }",
+    "    function friendAfterGraph(n) {",
+    "      return n.friends.size()==0 ? !existsAfter(GRAPH) :",
+    "        n.friends.size()==1 && getAfter(GRAPH).data==n.friends[0];",
+    "    }",
+    "    function friendSend(a,n) {",
+    "      let p=get(PEER).data;",
+    "      return n.friends==[{",
+    "        \"pairKey\":\"PAIR\",\"members\":[a.uid,\"synthetic-peer-001\"],",
+    "        \"requesterUid\":a.uid,\"recipientUid\":\"synthetic-peer-001\",",
+    "        \"requesterPublicId\":a.profile.originalId,\"recipientPublicId\":\"@DEDA-QA5678\",",
+    "        \"requesterName\":a.profile.displayName,\"recipientName\":p.displayName,",
+    "        \"status\":\"pending\",\"requestRevision\":n.revision",
+    "      }] && (a.friends.size()==0 || a.friends[0].status==\"rejected\");",
+    "    }",
+    "    function friendRespond(a,n) {",
+    "      return a.friends.size()==1 && n.friends.size()==1 &&",
+    "        a.friends[0].status==\"pending\" && a.friends[0].recipientUid==a.uid &&",
+    "        n.friends[0].diff(a.friends[0]).affectedKeys().hasOnly([\"status\"]) &&",
+    "        n.friends[0].status in [\"accepted\",\"rejected\"];",
+    "    }",
+    "    function friendTransition(a,n) {",
+    "      return a.uid==\"OWNER\" && a.profile.originalId==\"@DEDA-QA1234\" &&",
+    "        a.complete==true && a.format==1 &&",
+    "        n.diff(a).affectedKeys().hasOnly([\"revision\",\"friends\"]) &&",
+    "        n.revision==a.revision+1 && n.revision<=9007199254740990 &&",
+    "        friendDirectory() && friendBefore(a) && friendAfterGraph(n) &&",
+    "        (friendSend(a,n) || friendRespond(a,n) ||",
+    "          (a.friends.size()==1 && a.friends[0].status==\"accepted\" && n.friends.size()==0));",
+    "    }",
+    "    function friendLinked(a,n) {",
+    "      return n.revision==a.revision+1 &&",
+    "        get(BASE/accountSources/current).data==a &&",
+    "        get(BASE/accountHistory/$(string(a.revision))).data==a &&",
+    "        !exists(BASE/accountHistory/$(string(n.revision))) &&",
+    "        getAfter(BASE/accountSources/current).data==n &&",
+    "        getAfter(BASE/accountHistory/$(string(n.revision))).data==n;",
+    "    }",
+    "    match /deda_share_ids/{id} {",
+    "      allow get: if friendOwner() && id==\"@DEDA-QA5678\" && friendDirectory();",
+    "      allow list, write: if false;",
+    "    }",
+    "    match /deda_social_profiles/{id} {",
+    "      allow get: if friendOwner() && id==\"@DEDA-QA5678\" && friendDirectory();",
+    "      allow list, write: if false;",
+    "    }",
+    "    match /deda_friendships/{id} {",
+    "      allow get: if friendOwner() && id==\"PAIR\";",
+    "      allow create, update: if friendOwner() && id==\"PAIR\" &&",
+    "        friendAfter().revision==friendAccount().revision+1 &&",
+    "        friendAfter().friends==[request.resource.data];",
+    "      allow delete: if friendOwner() && id==\"PAIR\" &&",
+    "        friendAfter().revision==friendAccount().revision+1 &&",
+    "        friendAfter().friends==[];",
+    "      allow list: if false;",
+    "    }"
+  ].join('\n')
+    .replaceAll('OWNER',()=>LAB_UID).replaceAll('PAIR',()=>pair)
+    .replaceAll('BASE',()=>path).replaceAll('GRAPH',()=>graph)
+    .replaceAll('PEER',()=>peer).replaceAll('ROUTE',()=>route);
+  const block=anchor.replace('allow list, create, update, delete: if false;',
+    'allow update: if owner(uid) && friendTransition(resource.data,request.resource.data) && friendLinked(resource.data,request.resource.data);\n        allow list, create, delete: if false;')+
+    '\n      match /accountSources/current {\n        allow update: if owner(uid) && resource.data==friendAccount() && request.resource.data==friendAfter() && friendAfter().revision==friendAccount().revision+1;\n        allow read, create, delete: if false;\n      }\n      match /accountHistory/{revision} {\n        allow create: if owner(uid) && revision==string(friendAfter().revision) && request.resource.data==friendAfter() && friendAfter().revision==friendAccount().revision+1;\n        allow read, update, delete: if false;\n      }';
+  return originalRules.replace(anchor,()=>block).replace(tail,()=>root+tail);
+}
+
 // 04/02: exercise the original relationship operations in a trusted DEMO
 // transaction. The peer is a synthetic fixture, never a new Auth user.
 // No callable/client writer or production permission; a second real owner's
@@ -533,4 +640,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand};
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules};

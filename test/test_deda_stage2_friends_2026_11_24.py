@@ -81,6 +81,9 @@ class FriendsSourceTests(unittest.TestCase):
         self.assertIn('latest.verifyPreview(selected,profile.ownerUid,profile.publicId)',changed)
         self.assertIn('readLabPublicProfile(selected.peerPublicId)',changed)
         self.assertEqual(changed.count('static Future<DedaSocialProfile?> readLabFriendPreview('),1)
+        self.assertIn("performFriendCandidate('send',target.ownerUid,target.publicId)",changed)
+        self.assertIn("_performLabFriendAction(accept?'accept':'reject',relationId,renderedEvent:stage04Event)",changed)
+        self.assertIn("_performLabFriendAction('remove',relationId,renderedEvent:stage04Event)",changed)
         with self.assertRaises(ValueError):
             mod.patch_lab_service(changed)
 

@@ -345,6 +345,19 @@ def bind(project, verify_only=False):
 LAB_MARK = 'DEDA_STAGE04_FRIENDS_UID_SOURCE'
 LAB_HELPERS = r'''
   static const stage04LabMode = bool.fromEnvironment('DEDA_STAGE04_FRIENDS_LAB');
+  static const stage04Actions = DedaStage03LabStorage.friendActionsCandidateEnabled;
+
+  static Future<String> _performLabFriendAction(String action,String relationId,
+      {String? renderedEvent}) async {
+    final read=await DedaStage03LabStorage.readFriends();
+    final view=read.requireCurrent();
+    final rows=view.rows.where((r)=>r.pairKey==relationId);
+    if(rows.length!=1 || renderedEvent==null)throw StateError('friends-action-stale-row');
+    final row=rows.single;
+    view.prepareAction(action,row.peerUid,row.peerPublicId,renderedEvent:renderedEvent);
+    return DedaStage03LabStorage.performFriendCandidate(action,row.peerUid,row.peerPublicId,
+      renderedEvent:renderedEvent);
+  }
   static Future<DedaSocialSession> readLabSession() async {
     final read = await DedaStage03LabStorage.readFriends();
     final p = read.requireProfile();
@@ -542,11 +555,11 @@ def patch_lab_service(src):
         ('  static Future<DedaSocialProfile?> findByPublicId(', '  static Stream<List<DedaFriendshipRecord>> watchRelations(',
          'if(stage04LabMode)return readLabPublicProfile(raw);'),
         ('  static Future<String> sendFriendRequest(', '  static Future<void> respondToRequest(',
-         "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
+         "if(stage04LabMode){ if(!sender.stage04Current)throw StateError('friends-action-stale-session'); return DedaStage03LabStorage.performFriendCandidate('send',target.ownerUid,target.publicId); }"),
         ('  static Future<void> respondToRequest(', '  static Future<void> removeRelation(',
-         "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
+         "if(stage04LabMode){ await _performLabFriendAction(accept?'accept':'reject',relationId,renderedEvent:stage04Event); return; }"),
         ('  static Future<void> removeRelation(', '  static Future<DedaSocialProfile?> profileForFriend(',
-         "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
+         "if(stage04LabMode){ await _performLabFriendAction('remove',relationId,renderedEvent:stage04Event); return; }"),
     ]:
         def patch(body):
             # The method may contain nested async transaction closures.
@@ -554,6 +567,9 @@ def patch_lab_service(src):
             i=body.index('async {\n')+len('async {\n')
             return body[:i]+'    '+guard+'\n'+body[i:]
         src=region(src,start,end,patch)
+    src=one(src,'    required bool accept,\n  }) async {','    required bool accept,\n    String? stage04Event,\n  }) async {','lab-respond-event')
+    src=one(src,'  static Future<void> removeRelation(String relationId) async {',
+        '  static Future<void> removeRelation(String relationId,{String? stage04Event}) async {','lab-remove-event')
     # The existing service boundary is reused; no second preview service.
     start='  static Future<DedaSocialProfile?> profileForFriend('
     if src.count(start)!=1:
@@ -664,9 +680,11 @@ def patch_lab_main(main):
             '                  if (DedaSocialFriendCount.notifier.value != verifiedCount) {','lab-no-old-count-write')
         body=one(body,'  Future<void> _remove(DedaFriendshipRecord relation) async {',
             '  Future<void> _remove(DedaFriendshipRecord relation) async {\n'
-            '    if(DedaSocialService.stage04LabMode) {\n'
+            '    if(DedaSocialService.stage04LabMode && !DedaSocialService.stage04Actions) {\n'
             "      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(dedaText('معاملة العلاقة بانتظار اعتماد المصدر الموحد.','Relationship transaction awaits unified authority.'))));\n"
             '      return;\n    }','lab-remove-held')
+        body=one(body,'DedaSocialService.removeRelation(relation.id)',
+            'DedaSocialService.removeRelation(relation.id,stage04Event:relation.stage04NotificationKey)','lab-remove-original-button')
         body=patch_lab_preview_route(body)
         return body
     def add(body):
@@ -725,6 +743,8 @@ def patch_lab_main(main):
       } finally { _preparingRequests=false; }
       return;
     }''','lab-request-entry')
+        body=one(body,'relationId: relation.id,',
+            'relationId: relation.id, stage04Event: relation.stage04NotificationKey,','lab-respond-original-button')
         body=one(body,'                final all = snapshot.data!;',
             '''                final all = snapshot.data!;
                 if(DedaSocialService.stage04LabMode) {

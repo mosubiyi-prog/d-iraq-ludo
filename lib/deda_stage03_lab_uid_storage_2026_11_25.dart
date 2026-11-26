@@ -744,6 +744,76 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     return DedaStage04FriendsRead._(profile, friends);
   }
 
+  /// Exact one-owner synthetic candidate. No production or general client
+  /// authority. The emulator-tested candidate rules are separately required.
+  static const friendActionsCandidateEnabled =
+      bool.fromEnvironment('DEDA_STAGE04_FRIEND_ACTIONS_CANDIDATE');
+
+  static Future<String> performFriendCandidate(String action,String peerUid,
+      String peerPublicId,{String? renderedEvent}) async {
+    if(!friendActionsCandidateEnabled || peerUid!='synthetic-peer-001' ||
+        peerPublicId!='@DEDA-QA5678')throw StateError('friends-lab-authority-held');
+    final opening=await readFriends(), current=_intent();
+    final view=opening.requireCurrent();
+    final cmd=view.prepareAction(action,peerUid,peerPublicId,renderedEvent:renderedEvent);
+    final pair=cmd['pairKey'] as String;
+    void check(){
+      if(!current())throw const DedaPrivateDataStale();
+      opening.requireCurrent();_io._check(uid,uid);
+    }
+    await _io.verifyOwner(uid,uid,check);
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app());
+    final base=db.doc('deda_lab_uid_authority/$uid');
+    final account=base.collection('account').doc('current');
+    final graph=db.collection('deda_friendships').doc(pair);
+    await db.runTransaction<void>((tx) async {
+      check();
+      final a=await tx.get(account),g=await tx.get(graph);
+      final p=await tx.get(db.collection('deda_social_profiles').doc(peerPublicId));
+      final r=await tx.get(db.collection('deda_share_ids').doc(peerPublicId));
+      check();
+      for(final s in [a,g,p,r]){
+        if(s.metadata.isFromCache || s.metadata.hasPendingWrites)
+          throw const DedaPrivateDataConflict();
+      }
+      final old=a.data(), peer=p.data(), route=r.data();
+      if(old==null || old['revision']!=cmd['expectedRevision'] ||
+          old['uid']!=uid || old['friends'] is! List ||
+          (old['friends'] as List).length>1 || view.originalId!='@DEDA-QA1234' ||
+          peer==null || peer['ownerUid']!=peerUid || peer['publicId']!=peerPublicId ||
+          peer['displayName'] is! String || route==null || route['ownerUid']!=peerUid ||
+          route['publicId']!=peerPublicId || route['kind']!='personal' || route['active']!=true)
+        throw const DedaPrivateDataConflict();
+      final rows=old['friends'] as List;
+      final previous=rows.isEmpty?null:Map<String,dynamic>.from(rows.single as Map);
+      if(previous!=null && previous['pairKey']!=pair)
+        throw const DedaPrivateDataConflict();
+      // Rules repeat full equality to the graph and immutable history.
+      if(g.exists!=(previous!=null) || previous?['requestRevision']!=cmd['requestRevision'])
+        throw const DedaPrivateDataConflict();
+      final revision=view.revision+1;
+      Map<String,dynamic>? nextRow;
+      if(action=='send'){
+        nextRow={'pairKey':pair,'members':[uid,peerUid],'requesterUid':uid,
+          'recipientUid':peerUid,'requesterPublicId':view.originalId,
+          'recipientPublicId':peerPublicId,'requesterName':opening.requireProfile().displayName,
+          'recipientName':peer['displayName'],'status':'pending','requestRevision':revision};
+      }else if(action!='remove'){
+        nextRow={...previous!,'status':action=='accept'?'accepted':'rejected'};
+      }
+      final next={...old,'revision':revision,'friends':nextRow==null?[]:[nextRow]};
+      check();
+      tx.set(account,next);
+      tx.set(base.collection('accountSources').doc('current'),next);
+      tx.set(base.collection('accountHistory').doc('$revision'),next);
+      if(nextRow==null){tx.delete(graph);}else{tx.set(graph,nextRow);}
+    },timeout:const Duration(seconds:15));
+    check();
+    final fresh=await readFriends();check();
+    if(fresh.requireCurrent().revision<=view.revision)throw const DedaPrivateDataConflict();
+    return pair;
+  }
+
   /// Direct read-only residual sources in the unpublished synthetic candidate.
   /// No wallet issuance or writes; default closed.
   static const walletCandidateEnabled =
