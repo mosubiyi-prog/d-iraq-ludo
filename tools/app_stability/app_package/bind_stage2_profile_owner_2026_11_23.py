@@ -1644,6 +1644,20 @@ def _stage04_prize_page(source):
   Future<void> _replyToAdmin() async {
     if (widget.stage04RequestStream != null && widget.stage04Current?.call() != true) return;""",
         'stage04-prize-reply-entry')
+    # The dialog owns its text field's controller. Its exit animation
+    # can continue after showDialog resolves, so never dispose a controller
+    # from the caller while the TextField still uses it.
+    def bind_reply_lifetime(method):
+        method=once(method,'    final controller = TextEditingController();',
+            "    var replyDraft = '';",'stage04-prize-reply-draft')
+        method=once(method,'          controller: controller,',
+            '          onChanged: (value) => replyDraft = value,','stage04-prize-reply-field')
+        method=once(method,'              controller.text.trim(),',
+            '              replyDraft.trim(),','stage04-prize-reply-value')
+        return once(method,'    controller.dispose();',
+            '', 'stage04-prize-reply-no-early-dispose')
+    body=_stage04_region(body,'  Future<void> _replyToAdmin() async {',
+        '  Future<void> _confirmPrizeReceived() async {',bind_reply_lifetime)
     body=once(body,'    if (reply == null || reply.trim().isEmpty) return;',
         """    if (reply == null || reply.trim().isEmpty) return;
     if (widget.stage04RequestStream != null) {
@@ -1781,6 +1795,14 @@ void main() {
     await tester.ensureVisible(replyButton);
     await tester.tap(replyButton);
     await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField),'Discard this draft');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(reply,isNull);
+    expect(tester.takeException(),isNull);
+    await tester.tap(replyButton);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).controller,isNull);
     await tester.enterText(find.byType(TextField),'Synthetic reply');
     await tester.tap(find.text('Send reply'));
     await tester.pumpAndSettle();
