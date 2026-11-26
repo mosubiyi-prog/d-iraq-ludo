@@ -68,7 +68,7 @@ function generateProfileName(original) {
 // Uses the tested pointReceipt/core event IDs and the fixed accepted lab ID.
 // Neither this generator nor the workflow publishes Firebase rules.
 function generateProfileActions(original) {
-  const {pointReceipt}=require('../stage03/uid-ownership-projection.cjs');
+  const {pointReceipt,generateWalletRead}=require('../stage03/uid-ownership-projection.cjs');
   const {eventKey}=require('../stage03/reconcile-core.cjs');
   const {uid,base}=require('../stage03/uid-trusted-fixture.cjs');
   let candidate=generateProfileName(original);
@@ -250,6 +250,6 @@ function generateProfileActions(original) {
     }
 `;
   if(candidate.split(end).length!==2)throw Error('profile-action-end');
-  return candidate.replace(end,()=>directory+end);
+  return generateWalletRead(candidate.replace(end,()=>directory+end));
 }
 module.exports={generateProfileName,generateProfileActions};

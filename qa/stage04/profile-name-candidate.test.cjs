@@ -3,7 +3,7 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
-const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch,serverTimestamp,Timestamp}=require('firebase/firestore');
+const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch,serverTimestamp,Timestamp,runTransaction}=require('firebase/firestore');
 const {build,buildAccount,base,uid}=require('../stage03/uid-trusted-fixture.cjs');
 const {generateProfileName,generateProfileActions}=require('./profile-name-candidate.cjs');
 const projectId='demo-deda-stage03-uid';
@@ -132,6 +132,42 @@ test('Spark candidate: fixed synthetic point reserve and return are atomic, repl
   const initial=core.applyEvent(rights[base],award,'lab-uid');
   await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),base),initial));
   let state=initial;
+  // Use the existing trusted emulator refresh, never the authenticated client.
+  // The original account and progress revisions must both stay current.
+  const {refreshWallet}=require('../stage03/uid-ownership-projection.cjs');
+  const wallet=base+'/wallet/current',o=original.profile.originalId;
+  const seedWallet=async()=>env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore(),b=writeBatch(db);
+    b.set(doc(db,'users/'+uid),{accountKey:uid,sharePersonalId:o});
+    b.set(doc(db,'deda_sessions/'+uid),{accountKey:uid,uid});
+    b.set(doc(db,'deda_share_ids/'+o),{ownerUid:uid,publicId:o,kind:'personal',active:true});
+    b.set(doc(db,'deda_diamond_gift_balances/'+o),{publicId:o,balance:70});
+    await b.commit();
+  });
+  const refresh=async()=>{
+    let result;
+    await env.withSecurityRulesDisabled(async ctx=>{
+      const db=ctx.firestore();
+      const store={db:{projectId},runTransaction:fn=>runTransaction(db,tx=>fn({
+        get:async path=>{const snap=await tx.get(doc(db,path));return snap.exists()?snap.data():null;},
+        set:(path,value)=>tx.set(doc(db,path),value),
+      }))};
+      result=await refreshWallet({store,uid});
+    });
+    return result.view;
+  };
+  const readWallet=()=>getDocFromServer(doc(client(),wallet));
+  await seedWallet();
+  let proof=await refresh();
+  assert.deepEqual((await assertSucceeds(readWallet())).data(),proof);
+  await assertFails(setDoc(doc(client(),wallet),{...proof,giftResidual:999999}));
+  await assertFails(getDocFromServer(doc(client('foreign'),wallet)));
+  const second=renamed(original);
+  await assertSucceeds(write(client(),second));
+  await assertFails(readWallet());
+  proof=await refresh();
+  assert.equal(proof.accountRevision,second.revision);
+  assert.deepEqual((await assertSucceeds(readWallet())).data(),proof);
   const attempt=(c,threshold,action,{delta=null,omit=null,old=state}={})=>{
     const r=pointReceipt(uid,threshold,action),k=core.eventKey(r);
     const next=core.applyEvent(old,r,'lab-uid');
@@ -154,9 +190,18 @@ test('Spark candidate: fixed synthetic point reserve and return are atomic, repl
   for(const t of [5000,10000,15000,20000,25000]){
     const reserve=attempt(client(),t,'reserve');
     await assertSucceeds(reserve.commit);state=reserve.next;
+    await assertFails(readWallet());
+    proof=await refresh();
+    assert.equal(proof.progressVersion,state.version);
+    assert.equal(proof.giftResidual,70);
+    assert.deepEqual((await assertSucceeds(readWallet())).data(),proof);
     if(t!==25000){
       const claim=attempt(client(),t,'claim');
       await assertSucceeds(claim.commit);state=claim.next;
+      await assertFails(readWallet());
+      proof=await refresh();
+      assert.equal(proof.progressVersion,state.version);
+      assert.deepEqual((await assertSucceeds(readWallet())).data(),proof);
     }
     assert.deepEqual(await read(base),state);
   }

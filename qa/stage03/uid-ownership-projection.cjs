@@ -397,4 +397,46 @@ async function pointTier({store,uid,threshold,action}){
     return {replayed:false,state:next};
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt};
+
+// Shared read-only wallet proof for isolated emulator candidates. No client
+// balance or derived projection writes. Keep both candidate suites identical.
+function generateWalletRead(originalRules){
+  const anchor='      match /account/current {';
+  if(originalRules.split(anchor).length!==2 || originalRules.includes('match /wallet/current {'))throw Error('wallet-rule-anchor');
+  return originalRules.replace(anchor,()=>[
+    '      match /wallet/current {',
+    '        function sourceCurrent(w) {',
+    '          let root = /databases/$(database)/documents/deda_lab_uid_authority/$(uid);',
+    '          let account = get(/databases/$(database)/documents/deda_lab_uid_authority/$(uid)/account/current).data;',
+    '          let gift = get(/databases/$(database)/documents/deda_diamond_gift_balances/$(w.originalId)).data;',
+    '          let route = get(/databases/$(database)/documents/deda_share_ids/$(w.originalId)).data;',
+    '          let user = get(/databases/$(database)/documents/users/$(uid)).data;',
+    '          let session = get(/databases/$(database)/documents/deda_sessions/$(uid)).data;',
+    '          return w.format == 1 && w.uid == uid && w.complete == true && w.sourceKind == "synthetic-lab-wallet-v1" &&',
+    '            user.accountKey == uid && user.sharePersonalId == w.originalId && session.accountKey == uid && session.uid == uid &&',
+    '            w.giftResidual is int && w.giftResidual >= 0 && w.managerPersonal is int && w.managerPersonal >= 0 &&',
+    '            w.hasManagerPersonal is bool && get(root).data.balances.earnedDiamonds is int && get(root).data.balances.earnedDiamonds >= 0 &&',
+    '            w.giftResidual + w.managerPersonal + get(root).data.balances.earnedDiamonds <= 9007199254740990 &&',
+    '            w.originalId == account.profile.originalId && w.accountRevision == account.revision &&',
+    '            w.progressVersion == get(root).data.version &&',
+    '            w.inventoryRevision == get(/databases/$(database)/documents/deda_lab_uid_authority/$(uid)/inventory/current).data.revision &&',
+    '            route.ownerUid == uid && route.publicId == w.originalId && route.active == true && route.kind == "personal" &&',
+    '            gift.publicId == w.originalId && (!gift.keys().hasAny(["ownerUid"]) || gift.ownerUid == uid) &&',
+    '            gift.balance == w.giftResidual && managerCurrent(w);',
+    '        }',
+    '        function managerCurrent(w) {',
+    '          let ap = /databases/$(database)/documents/admins/$(uid);',
+    '          let gp = /databases/$(database)/documents/admin_entry_access/$(uid);',
+    '          let mp = /databases/$(database)/documents/deda_gm_personal_diamond_wallets/$(uid);',
+    '          return w.hasManagerPersonal == false ?',
+    '            (w.managerPersonal == 0 && !exists(ap) && !exists(gp) && !exists(mp)) :',
+    '            (get(ap).data.role == "general_manager" && get(ap).data.active == true && get(ap).data.status == "active" &&',
+    '            get(gp).data.accountKey == uid && get(gp).data.active == true && get(gp).data.status == "active" &&',
+    '            get(gp).data.accessType == "general_manager_gateway" && get(gp).data.allowedRole == "general_manager" &&',
+    '            get(mp).data.accountKey == uid && get(mp).data.balance == w.managerPersonal);',
+    '        }',
+    '        allow get: if owner(uid) && sourceCurrent(resource.data);',
+    '        allow list, create, update, delete: if false;',
+    '      }',anchor].join('\n'));
+}
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead};
