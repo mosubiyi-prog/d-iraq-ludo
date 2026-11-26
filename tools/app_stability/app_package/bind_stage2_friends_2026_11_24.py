@@ -481,7 +481,10 @@ def patch_lab_service(src):
          "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
     ]:
         def patch(body):
-            return one(body,'async {\n','async {\n    '+guard+'\n','lab-method-'+start)
+            # The method may contain nested async transaction closures.
+            # Insert at its first signature boundary, never inside a callback.
+            i=body.index('async {\n')+len('async {\n')
+            return body[:i]+'    '+guard+'\n'+body[i:]
         src=region(src,start,end,patch)
     return src
 
