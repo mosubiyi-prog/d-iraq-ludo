@@ -429,9 +429,11 @@ class DedaStage04ProfileRead {
 /// No directory discovery, notification, task award or relationship writer.
 class DedaStage04FriendRow {
   const DedaStage04FriendRow._(this.ownerUid, this.pairKey, this.peerUid,
-      this.peerPublicId, this.peerName, this.incoming, this.status);
+      this.peerPublicId, this.peerName, this.incoming, this.status, this.requestRevision);
   final String ownerUid, pairKey, peerUid, peerPublicId, peerName, status;
   final bool incoming;
+  final int? requestRevision;
+  String get notificationKey => '$pairKey:${requestRevision ?? "legacy"}';
 }
 
 /// Full account-scoped snapshot; do not replace missing fields with a
@@ -485,7 +487,11 @@ class DedaStage04FriendsView {
         v.trim() == v && !RegExp(r'[<>\x00-\x1f]').hasMatch(v);
     final rows = <DedaStage04FriendRow>[];
     for (final value in raw) {
-      if (value is! Map || value.length != fields.length ||
+      if (value is! Map ||
+          value.length != fields.length + (value.containsKey('requestRevision') ? 1 : 0) ||
+          (value.containsKey('requestRevision') &&
+            (value['requestRevision'] is! int || (value['requestRevision'] as int) < 1 ||
+             (value['requestRevision'] as int) > profile.accountRevision)) ||
           !fields.every(value.containsKey) ||
           !member(value['requesterUid']) || !member(value['recipientUid']) ||
           !alias(value['requesterPublicId']) || !alias(value['recipientPublicId']) ||
@@ -502,7 +508,7 @@ class DedaStage04FriendsView {
       rows.add(DedaStage04FriendRow._(profile.uid, value['pairKey'] as String,
           value[incoming ? 'requesterUid' : 'recipientUid'] as String, peerId,
           value[incoming ? 'requesterName' : 'recipientName'] as String,
-          incoming, value['status'] as String));
+          incoming, value['status'] as String, value['requestRevision'] as int?));
     }
     final publicIds = <String>{};
     if (rows.any((r) => !publicIds.add(r.peerPublicId))) {

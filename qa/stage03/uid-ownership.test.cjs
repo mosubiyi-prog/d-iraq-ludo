@@ -190,9 +190,13 @@ test('04/02 bilateral synthetic lifecycle uses one owner UID, canonical row and 
   const incoming=await peer('send',4);
   assert.equal(incoming.friends[0].requesterUid,other);
   assert.equal(incoming.friends[0].recipientUid,uid);
+  assert.equal(sent.friends[0].requestRevision,3);
+  assert.equal(rejected.friends[0].requestRevision,3);
+  assert.equal(incoming.friends[0].requestRevision,5);
   await assert.rejects(peer('accept',5),{code:'friends-not-pending-recipient'});
   const accepted=await friendAction('accept',5);
   assert.equal(accepted.friends[0].status,'accepted');
+  assert.equal(accepted.friends[0].requestRevision,5);
   assert.deepEqual((await db.doc(friendGraphPath).get()).data(),accepted.friends[0]);
   const gone=await peer('remove',6);
   assert.equal(gone.friends.length,0);

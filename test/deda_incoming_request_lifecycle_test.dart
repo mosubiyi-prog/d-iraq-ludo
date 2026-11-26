@@ -144,6 +144,19 @@ void main() {
     h.streams['A']!.addError(StateError('offline')); await Future<void>.delayed(Duration.zero);
     expect(h.counts.last, 1); await h.close();
   });
+  test('explicit rendered request receipt cannot mark newer event or another UID', () async {
+    final h = Harness();
+    await h.start('stage04_uid_A');
+    await h.emit('stage04_uid_A', {'pair:1','pair:3'});
+    await h.lifecycle.markSeen(displayed:{'pair:1'},expectedScope:'stage04_uid_B');
+    expect(h.saved,isEmpty);
+    await h.lifecycle.markSeen(displayed:{'pair:1'},expectedScope:'stage04_uid_A');
+    expect(h.counts.last,1);
+    expect(h.saved.single.$2,['pair:1']);
+    await h.lifecycle.markSeen(displayed:{'pair:1'},expectedScope:'stage04_uid_A');
+    expect(h.saved,hasLength(1));
+    await h.close();
+  });
   test('seen history retains original 250-ID bound and scope', () async {
     final h = Harness(); await h.start('A');
     await h.emit('A', Set.from(List.generate(300, (i) => 'id-$i')));

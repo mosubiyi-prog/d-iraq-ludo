@@ -84,6 +84,21 @@ class FriendsSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.patch_lab_service(changed)
 
+    def test_lab_notification_binding_reuses_original_lifecycle(self):
+        source = '''class DedaIncomingRequestNotifications {
+  static Future<void> start() async {
+  }
+  static Future<void> markCurrentIncomingSeen() async {
+  }
+}
+Future<DedaSocialSession> dedaPrepareSocialSectionEntry(
+'''
+        bound=mod.patch_lab_notifications(source)
+        self.assertIn("scope:'stage04_uid_'+owner!",bound)
+        self.assertIn('stage04NotificationKey!',bound)
+        self.assertIn('_lifecycle.markSeen(displayed:keys,',bound)
+        self.assertNotIn('DedaBackend.accountKeyForPhone',bound)
+
     def test_repository_cannot_be_patched(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

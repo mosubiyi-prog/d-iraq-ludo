@@ -153,6 +153,13 @@ void main(){
     expect(view.incomingRequests.single.peerUid,'synthetic-peer-002');
     expect(view.outgoingRequests.single.peerUid,'synthetic-peer-003');
     expect(view.rows.length,4);
+    final oldNotice=view.incomingRequests.single.notificationKey;
+    final newNotice=project([{...incoming,'requestRevision':1}]).incomingRequests.single.notificationKey;
+    expect(oldNotice,isNot(newNotice));
+    expect(newNotice,endsWith(':1'));
+    expect(()=>project([{...incoming,'requestRevision':0}]),throwsFormatException);
+    expect(()=>project([{...incoming,'requestRevision':2}]),throwsFormatException);
+    expect(()=>project([{...incoming,'requestRevision':'1'}]),throwsFormatException);
     final preview=view.requireAcceptedPeer(view.accepted.single.pairKey,'@DEDA-QA5678');
     expect(preview.peerUid,'synthetic-peer-001');
     view.verifyPreview(preview,'synthetic-peer-001','@DEDA-QA5678');

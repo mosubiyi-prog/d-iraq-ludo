@@ -54,17 +54,18 @@ class DedaIncomingRequestLifecycle {
     }
   }
 
-  Future<void> markSeen() {
+  Future<void> markSeen({Set<String>? displayed, String? expectedScope}) {
     final generation = _generation, feed = _feed;
-    if (feed == null || !feed.isCurrent()) return Future<void>.value();
-    final requested = Set<String>.of(_incoming);
+    if (feed == null || !feed.isCurrent() ||
+        (expectedScope != null && feed.scope != expectedScope)) return Future<void>.value();
+    final requested = Set<String>.of(displayed ?? _incoming);
     if (requested.isEmpty) return Future<void>.value();
     bool current() => generation == _generation && identical(feed, _feed) && feed.isCurrent();
     // Serialize local writes across generations too: an already-issued A write
     // must settle before a later A -> B -> A write to that same preference key.
     final previous = _scopeWrites[feed.scope] ?? Future<void>.value();
     final operation = previous.then((_) async {
-      if (!current()) return;
+      if (!current() || requested.every(_seen.contains)) return;
       var next = {..._seen, ...requested};
       if (next.length > 250) next = next.skip(next.length - 250).toSet();
       final ids = next.toList()..sort();

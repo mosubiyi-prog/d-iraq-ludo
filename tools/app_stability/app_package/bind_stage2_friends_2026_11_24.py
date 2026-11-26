@@ -368,7 +368,8 @@ LAB_HELPERS = r'''
       return DedaFriendshipRecord(id:r.pairKey,members:[a,b],
         requesterUid:a,recipientUid:b,requesterPublicId:a,recipientPublicId:b,
         requesterName:r.incoming?r.peerName:p.displayName,
-        recipientName:r.incoming?p.displayName:r.peerName,status:r.status);
+        recipientName:r.incoming?p.displayName:r.peerName,status:r.status,
+        stage04NotificationKey:r.notificationKey);
     }));
   }
 
@@ -479,6 +480,10 @@ def patch_lab_service(src):
     if LAB_MARK in src:
         raise ValueError('FRIENDS_LAB_ALREADY_BOUND')
     src = "import 'deda_stage03_lab_uid_storage_2026_11_25.dart';\n" + src
+    def record(body):
+        body=one(body,'  final String status;', '  final String status;\n  final String? stage04NotificationKey;', 'lab-record-event')
+        return one(body,'    required this.status,','    required this.status,\n    this.stage04NotificationKey,','lab-record-event-ctor')
+    src=region(src,'class DedaFriendshipRecord {','class DedaSocialSession {',record)
     def session(body):
         body=one(body,'    required this.profile,','    required this.profile,\n    this.stage04Read,','lab-session-ctor')
         return one(body,'  final DedaSocialProfile profile;',
@@ -527,7 +532,45 @@ def patch_lab_search(body):
         'lab-search')
 
 
+def patch_lab_notifications(main):
+    def notifications(body):
+        anchor='  static Future<void> start() async {'
+        body=one(body,anchor,anchor+'''
+    if(DedaSocialService.stage04LabMode) {
+      final owner=FirebaseAuth.instance.currentUser?.uid;
+      bool current()=>owner!=null && FirebaseAuth.instance.currentUser?.uid==owner;
+      await _lifecycle.start(isCurrent:current,prepare:() async {
+        final session=await DedaSocialService.readLabSession();
+        if(!current() || session.profile.ownerUid!=owner || !session.stage04Current)
+          throw StateError('friends-notification-owner-mismatch');
+        return DedaIncomingRequestFeed(scope:'stage04_uid_'+owner!,
+          isCurrent:()=>current() && session.stage04Current,
+          watch:()=>DedaSocialService.watchRelations(session.uid).map((rows)=>
+            rows.where((r)=>r.status=='pending' && r.recipientPublicId==session.publicId)
+              .map((r)=>r.stage04NotificationKey!).toSet()));
+      });
+      return;
+    }''','lab-notification-uid-feed')
+        anchor='  static Future<void> markCurrentIncomingSeen() async {'
+        return one(body,anchor,'''  static Future<void> markLabDisplayed(DedaSocialSession session,
+      List<DedaFriendshipRecord> rows) async {
+    if(!DedaSocialService.stage04LabMode || !session.stage04Current)return;
+    final keys=rows.where((r)=>r.status=='pending' &&
+        r.recipientPublicId==session.publicId && r.stage04NotificationKey!=null)
+        .map((r)=>r.stage04NotificationKey!).toSet();
+    try {
+      await _lifecycle.markSeen(displayed:keys,
+        expectedScope:'stage04_uid_'+session.profile.ownerUid);
+    } catch(_) {}
+  }
+
+'''+anchor,'lab-notification-mark-displayed')
+    return region(main,'class DedaIncomingRequestNotifications {',
+        'Future<DedaSocialSession> dedaPrepareSocialSectionEntry(',notifications)
+
+
 def patch_lab_main(main):
+    main=patch_lab_notifications(main)
     def friends(body):
         anchor='  Future<void> _prepare({bool ownerProofAlreadyReady = false}) async {'
         body=one(body,anchor,anchor+'''
@@ -609,12 +652,23 @@ def patch_lab_main(main):
       try {
         final value=await DedaSocialService.readLabSession();
         if(!mounted || !value.stage04Current)return;
+        await DedaIncomingRequestNotifications.start();
+        if(!mounted || !value.stage04Current)return;
         setState(() { _session=value; _requestsStream=DedaSocialService.watchRelations(value.uid); });
       } catch(error) {
         if(mounted)setState(() => _entryError=error);
       } finally { _preparingRequests=false; }
       return;
     }''','lab-request-entry')
+        body=one(body,'                final all = snapshot.data!;',
+            '''                final all = snapshot.data!;
+                if(DedaSocialService.stage04LabMode) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if(mounted && identical(session,_session) && session.stage04Current) {
+                      unawaited(DedaIncomingRequestNotifications.markLabDisplayed(session,all));
+                    }
+                  });
+                }''','lab-mark-rendered-requests')
         return body
     main=region(main,'class _DedaFriendsPageState','class _DedaFriendCompactCard',friends)
     main=region(main,'class _DedaAddFriendPageState','class DedaFriendRequestsPage',add)

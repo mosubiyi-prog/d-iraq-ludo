@@ -370,7 +370,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/test/deda_stage2_profile_store_lifetime_test.dart" test/deda_stage2_profile_store_lifetime_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_profile_store_lifetime_test.dart
           flutter test --no-pub --reporter expanded test/deda_stage2_google_and_admin_isolation_policy_test.dart
-          flutter test --no-pub --reporter expanded test/deda_stage2_friends_relation_feed_test.dart test/deda_100411_friend_copy_test.dart
+          flutter test --no-pub --reporter expanded test/deda_stage2_friends_relation_feed_test.dart test/deda_100411_friend_copy_test.dart test/deda_incoming_request_lifecycle_test.dart
           flutter test --no-pub --reporter expanded --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_100441_assembled_friend_alias_search_test.dart
           cp "$GITHUB_WORKSPACE/test/deda_stage2_weekly_league_session_test.dart" test/deda_stage2_weekly_league_session_test.dart
           cp "$GITHUB_WORKSPACE/test/deda_weekly_100404_league_clock_test.dart" test/deda_weekly_100404_league_clock_test.dart

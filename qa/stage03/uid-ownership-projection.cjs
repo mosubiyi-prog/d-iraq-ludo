@@ -136,7 +136,13 @@ function parseAccount(raw,uid){
     (p.activeId===p.originalId?p.fixedColor===null:['gold','diamond','royal','pink'].includes(p.fixedColor)),
     'account-profile-invalid');
   const friends=unique(raw.friends,'pairKey',200,row=>{
-    exact(row,['pairKey','members','requesterUid','recipientUid','requesterPublicId','recipientPublicId','requesterName','recipientName','status']);
+    const fields=['pairKey','members','requesterUid','recipientUid','requesterPublicId','recipientPublicId','requesterName','recipientName','status'];
+    if(Object.hasOwn(row,'requestRevision')){
+      fields.push('requestRevision');
+      requireThat(Number.isSafeInteger(row.requestRevision)&&row.requestRevision>0&&
+        row.requestRevision<=raw.revision,'account-friend-request-revision');
+    }
+    exact(row,fields);
     const a=row.requesterUid,b=row.recipientUid;
     requireThat(member(a)&&member(b)&&a!==b&&[a,b].includes(uid)&&
       Array.isArray(row.members)&&row.members.length===2&&row.members.includes(a)&&row.members.includes(b)&&
@@ -488,7 +494,8 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
       nextRow={pairKey:pair,members:[actor,recipient],requesterUid:actor,recipientUid:recipient,
         requesterPublicId:simulatePeer?peerId:original,recipientPublicId:simulatePeer?original:peerId,
         requesterName:simulatePeer?profile.displayName:old.profile.displayName,
-        recipientName:simulatePeer?old.profile.displayName:profile.displayName,status:'pending'};
+        recipientName:simulatePeer?old.profile.displayName:profile.displayName,status:'pending',
+        requestRevision:old.revision+1};
     }else if(action==='accept'||action==='reject'){
       requireThat(previous&&previous.status==='pending'&&previous.recipientUid===actor&&
         previous.requesterUid===recipient,'friends-not-pending-recipient');
