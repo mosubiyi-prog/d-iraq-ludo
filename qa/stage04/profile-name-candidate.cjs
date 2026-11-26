@@ -354,4 +354,77 @@ function syntheticPrizeCode(finalEventKey){
   if(typeof finalEventKey!=='string'||!/^[a-f0-9]{64}$/.test(finalEventKey))throw Error('prize-fixture-key');
   return 'Q4'+finalEventKey.slice(0,14);
 }
-module.exports={generateProfileName,generateProfileActions,syntheticPrizeCode};
+// Narrow live readiness candidate, based on the previously published locked
+// account candidate, NOT on the action-enabled emulator candidate. Only exact
+// synthetic records can be read. Missing sources remain missing; no new writes.
+function generateProfileReadiness(original){
+  const locked=generateAccount(original);
+  const end='    match /{document=**} { allow read, write: if false; }';
+  if(locked.split(end).length!==2 || locked.includes('match /deda_diamond_gift_balances/'))throw Error('readiness-anchor');
+  const additions=String.raw`
+    function stage04ReadinessOwner(uid) {
+      let a=get(/databases/$(database)/documents/deda_lab_uid_authority/$(uid)/account/current).data;
+      return owner(uid) && a.uid == uid && a.profile.originalId == '@DEDA-QA1234';
+    }
+    function stage04ReadyMoney(v) {
+      return v is int && v >= 0 && v <= 9007199254740990;
+    }
+    function stage04ReadyRoute(uid) {
+      let r=get(/databases/$(database)/documents/deda_share_ids/@DEDA-QA1234).data;
+      return r.ownerUid == uid && r.publicId == '@DEDA-QA1234' && r.kind == 'personal' && r.active == true;
+    }
+    match /users/{uid} {
+      allow get: if stage04ReadinessOwner(uid) &&
+        (!exists(/databases/$(database)/documents/users/$(uid)) ||
+         (resource.data.keys().hasOnly(['accountKey','sharePersonalId']) &&
+          resource.data.accountKey == uid && resource.data.sharePersonalId == '@DEDA-QA1234'));
+      allow list, create, update, delete: if false;
+    }
+    match /deda_sessions/{uid} {
+      allow get: if stage04ReadinessOwner(uid) &&
+        (!exists(/databases/$(database)/documents/deda_sessions/$(uid)) ||
+         (resource.data.keys().hasOnly(['uid','accountKey']) &&
+          resource.data.uid == uid && resource.data.accountKey == uid));
+      allow list, create, update, delete: if false;
+    }
+    match /deda_share_ids/{o} {
+      allow get: if o == '@DEDA-QA1234' && stage04ReadinessOwner(request.auth.uid) &&
+        (!exists(/databases/$(database)/documents/deda_share_ids/$(o)) ||
+         (resource.data.keys().hasOnly(['ownerUid','publicId','kind','active']) &&
+          stage04ReadyRoute(request.auth.uid)));
+      allow list, create, update, delete: if false;
+    }
+    match /deda_diamond_gift_balances/{o} {
+      allow get: if o == '@DEDA-QA1234' && stage04ReadinessOwner(request.auth.uid) &&
+        (!exists(/databases/$(database)/documents/deda_diamond_gift_balances/$(o)) ||
+         (stage04ReadyRoute(request.auth.uid) &&
+          resource.data.keys().hasOnly(['publicId','ownerUid','balance']) &&
+          resource.data.publicId == o && stage04ReadyMoney(resource.data.balance) &&
+          (!resource.data.keys().hasAny(['ownerUid']) || resource.data.ownerUid == request.auth.uid)));
+      allow list, create, update, delete: if false;
+    }
+    match /deda_gm_personal_diamond_wallets/{uid} {
+      allow get: if stage04ReadinessOwner(uid) &&
+        !exists(/databases/$(database)/documents/admins/$(uid)) &&
+        !exists(/databases/$(database)/documents/admin_entry_access/$(uid)) &&
+        !exists(/databases/$(database)/documents/deda_gm_personal_diamond_wallets/$(uid));
+      allow list, create, update, delete: if false;
+    }
+    match /prize_winner_requests/{id} {
+      allow get: if stage04ReadinessOwner(request.auth.uid) &&
+        id == 'prize_v1_' + request.auth.uid &&
+        (!exists(/databases/$(database)/documents/prize_winner_requests/$(id)) ||
+         (resource.data.ownerUid == request.auth.uid && resource.data.accountKey == request.auth.uid &&
+          resource.data.cycleId == 'prize_v1' && resource.data.dedaId == '@DEDA-QA1234' &&
+          resource.data.phone == '' &&
+          resource.data.rewardCode.matches('^Q4[a-f0-9]{14}$') &&
+          resource.data.keys().hasOnly(['ownerUid','cycleId','accountKey','name','phone','dedaId',
+            'rewardCode','pointsAtCompletion','completedThresholds','finalReservedPoints','status',
+            'adminMessage','prizeDetails','userReply','createdAt','updatedAt','userReplyAt',
+            'winnerConfirmedAt','deliveredAt'])));
+      allow list, create, update, delete: if false;
+    }
+`;
+  return locked.replace(end,()=>additions+end);
+}
+module.exports={generateProfileName,generateProfileActions,syntheticPrizeCode,generateProfileReadiness};

@@ -39,3 +39,13 @@ jobs:
           printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":false}}}' > firebase.json
           npm install --no-audit --no-fund --ignore-scripts --no-package-lock @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
           GCLOUD_PROJECT=demo-deda-stage03-uid npx --yes firebase-tools@13.35.1 emulators:exec --project demo-deda-stage03-uid --only firestore --config firebase.json --non-interactive 'node --test stage04/profile-name-candidate.test.cjs'
+          node -e 'const fs=require("node:fs");const g=require("./stage04/profile-name-candidate.cjs");const old=fs.readFileSync("original.rules","utf8");fs.writeFileSync("profile-readiness-readonly.rules",g.generateProfileReadiness(old));fs.writeFileSync("previous-account-fixed.rules",require("./stage03/uid-spark-fixture-rules.cjs").generateAccount(old))'
+          sha256sum profile-readiness-readonly.rules previous-account-fixed.rules > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage04-profile-readiness-LAB-ONLY
+          path: |
+            ${{ runner.temp }}/stage04-profile-name/profile-readiness-readonly.rules
+            ${{ runner.temp }}/stage04-profile-name/previous-account-fixed.rules
+            ${{ runner.temp }}/stage04-profile-name/SHA256SUMS.txt
+          if-no-files-found: error

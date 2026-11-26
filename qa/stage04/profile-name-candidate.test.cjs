@@ -3,9 +3,9 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
-const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch,serverTimestamp,Timestamp,runTransaction,updateDoc}=require('firebase/firestore');
+const {doc,setDoc,deleteDoc,getDocFromServer,writeBatch,serverTimestamp,Timestamp,runTransaction,updateDoc,collection,getDocsFromServer}=require('firebase/firestore');
 const {build,buildAccount,base,uid}=require('../stage03/uid-trusted-fixture.cjs');
-const {generateProfileName,generateProfileActions,syntheticPrizeCode}=require('./profile-name-candidate.cjs');
+const {generateProfileName,generateProfileActions,syntheticPrizeCode,generateProfileReadiness}=require('./profile-name-candidate.cjs');
 const projectId='demo-deda-stage03-uid';
 const account=base+'/account/current',source=base+'/accountSources/current',history=base+'/accountHistory/';
 const original=buildAccount()[account], rights=build();
@@ -348,4 +348,57 @@ test('Spark candidate: only accepted fixed synthetic alias switches atomically, 
   assert.equal((await read(alias)).originalId,o);
   assert.deepEqual(await read(invPath),inv);
   assert.deepEqual(await read(base),rights[base]);
+});
+
+test('live readiness only: preserve locked authority; exact synthetic reads and missing sources, no new writes',async()=>{
+  // Last test uses the separate readiness rules, not the action candidate.
+  await env.cleanup();
+  env=await initializeTestEnvironment({projectId,firestore:{rules:generateProfileReadiness(readFileSync('original.rules','utf8'))}});
+  await env.clearFirestore();
+  const o=original.profile.originalId,prize='prize_winner_requests/prize_v1_'+uid;
+  const paths=['users/'+uid,'deda_sessions/'+uid,'deda_share_ids/'+o,
+    'deda_diamond_gift_balances/'+o,'deda_gm_personal_diamond_wallets/'+uid,prize];
+  const seed=async rows=>env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore(),b=writeBatch(db);
+    for(const [p,v] of Object.entries(rows))b.set(doc(db,p),v);
+    await b.commit();
+  });
+  await seed({...rights,...buildAccount()});
+  const a=client(),b=client(),foreign=client('foreign'),anon=client(uid,'anonymous');
+  const unsigned=env.unauthenticatedContext().firestore();
+  const readWith=(c,p)=>getDocFromServer(doc(c,p));
+  for(const p of paths){
+    assert.equal((await assertSucceeds(readWith(a,p))).exists(),false);
+    assert.equal((await assertSucceeds(readWith(b,p))).exists(),false);
+    for(const c of [foreign,anon,unsigned])await assertFails(readWith(c,p));
+    await assertFails(setDoc(doc(a,p),{}));
+    await assertFails(getDocsFromServer(collection(a,p.split('/')[0])));
+  }
+  const sources={
+    [paths[0]]:{accountKey:uid,sharePersonalId:o},
+    [paths[1]]:{uid,accountKey:uid},
+    [paths[2]]:{ownerUid:uid,publicId:o,kind:'personal',active:true},
+    [paths[3]]:{publicId:o,balance:70},
+  };
+  await seed(sources);
+  for(const [p,v] of Object.entries(sources)){
+    assert.deepEqual((await assertSucceeds(readWith(a,p))).data(),v);
+    assert.deepEqual((await assertSucceeds(readWith(b,p))).data(),v);
+    await assertFails(setDoc(doc(a,p),v));
+    await assertFails(deleteDoc(doc(a,p)));
+  }
+  await seed({[paths[3]]:{publicId:o,balance:70,ownerUid:'foreign'}});
+  await assertFails(readWith(a,paths[3]));
+  await seed({[paths[4]]:{accountKey:uid,balance:1000000}});
+  await assertFails(readWith(a,paths[4]));
+  await seed({[prize]:{ownerUid:'foreign',accountKey:uid,cycleId:'prize_v1',dedaId:o,phone:'',rewardCode:'Q400000000000000'}});
+  await assertFails(readWith(a,prize));
+  await assertFails(readWith(a,'deda_share_ids/@DEDA-QA9999'));
+  await assertFails(readWith(a,'admins/'+uid));
+  await assertFails(readWith(a,'admin_entry_access/'+uid));
+  assert.deepEqual((await assertSucceeds(readWith(a,base))).data(),rights[base]);
+  assert.deepEqual((await assertSucceeds(readWith(a,account))).data(),original);
+  await assertFails(write(a,renamed(original)));
+  await assertFails(setDoc(doc(a,base),{...rights[base],version:99}));
+  await assertFails(readWith(a,source));
 });
