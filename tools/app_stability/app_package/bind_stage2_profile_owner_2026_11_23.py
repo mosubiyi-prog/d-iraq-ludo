@@ -843,6 +843,8 @@ STAGE04_FIELDS = """
           name:view.displayName,phone:'',dedaId:view.originalId,
           rewardCode:DedaStage04TierState.syntheticPrizeCode,pointsAtCompletion:tiers.finalPoints!,
           stage04RequestStream:stream,stage04Submit:()=>DedaStage03LabStorage.submitPrizeCandidate(read),
+          stage04Reply:(message)=>DedaStage03LabStorage.replyPrizeCandidate(read,message),
+          stage04Confirm:()=>DedaStage03LabStorage.confirmPrizeCandidate(read),
           stage04Current:()=>_stage04SameSession());
       }))));
   }
@@ -1590,12 +1592,15 @@ def _stage04_prize_page(source):
     body=once(body,'  final int pointsAtCompletion;',
         """  final int pointsAtCompletion;
   final Stream<Map<String,dynamic>?>? stage04RequestStream;
-  final Future<void> Function()? stage04Submit;
+  final Future<void> Function()? stage04Submit, stage04Confirm;
+  final Future<void> Function(String)? stage04Reply;
   final bool Function()? stage04Current;""",'stage04-prize-page-fields')
     body=once(body,'    required this.pointsAtCompletion,',
         """    required this.pointsAtCompletion,
     this.stage04RequestStream,
     this.stage04Submit,
+    this.stage04Reply,
+    this.stage04Confirm,
     this.stage04Current,""",'stage04-prize-page-constructor')
     # Guard the original method at its entry, not a particular legacy
     # backend statement (the assembled recipe can wrap that call).
@@ -1620,9 +1625,41 @@ def _stage04_prize_page(source):
     if (widget.stage04RequestStream != null) return _stage04SubmitRequest();""",
         'stage04-prize-submit-entry')
     body=once(body,'  Future<void> _replyToAdmin() async {',
-        '  Future<void> _replyToAdmin() async {\n    if (widget.stage04RequestStream != null) return;','stage04-prize-no-legacy-reply')
+        """  Future<void> _stage04Follow(Future<void> Function()? operation) async {
+    if (_submitting || widget.stage04Current?.call() != true || operation == null) return;
+    setState(() => _submitting=true);
+    try {
+      await operation();
+      if (!mounted || widget.stage04Current?.call() != true) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        t('تم تأكيد إجراء الفحص فقط.', 'Synthetic action confirmed only.'))));
+    } catch (_) {
+      if (!mounted || widget.stage04Current?.call() != true) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        t('تعذر تأكيد إجراء الفحص.', 'Synthetic action not confirmed.'))));
+    } finally {
+      if (mounted) setState(() => _submitting=false);
+    }
+  }
+  Future<void> _replyToAdmin() async {
+    if (widget.stage04RequestStream != null && widget.stage04Current?.call() != true) return;""",
+        'stage04-prize-reply-entry')
+    body=once(body,'    if (reply == null || reply.trim().isEmpty) return;',
+        """    if (reply == null || reply.trim().isEmpty) return;
+    if (widget.stage04RequestStream != null) {
+      if (mounted && widget.stage04Reply != null) await _stage04Follow(()=>widget.stage04Reply!(reply));
+      return;
+    }""",'stage04-prize-reply-route')
     body=once(body,'  Future<void> _confirmPrizeReceived() async {',
-        '  Future<void> _confirmPrizeReceived() async {\n    if (widget.stage04RequestStream != null) return;','stage04-prize-no-legacy-confirm')
+        """  Future<void> _confirmPrizeReceived() async {
+    if (widget.stage04RequestStream != null && widget.stage04Current?.call() != true) return;""",
+        'stage04-prize-confirm-entry')
+    body=once(body,'    if (confirmed != true || !mounted) return;',
+        """    if (confirmed != true || !mounted) return;
+    if (widget.stage04RequestStream != null) {
+      await _stage04Follow(widget.stage04Confirm);
+      return;
+    }""",'stage04-prize-confirm-route')
     body=once(body,'stream: DedaBackend.prizeWinnerRequestForUser(widget.phone),',
         'stream: widget.stage04RequestStream ?? DedaBackend.prizeWinnerRequestForUser(widget.phone),','stage04-prize-stream')
     body=once(body,'          final data = snapshot.data;',
@@ -1639,10 +1676,6 @@ def _stage04_prize_page(source):
     body=once(body,"t('الرمز النهائي الكامل', 'Complete final code')",
         "widget.stage04RequestStream != null ? t('رمز الفحص فقط', 'Synthetic test code') : t('الرمز النهائي الكامل', 'Complete final code')",
         'stage04-prize-page-label')
-    body=once(body,"if (status == 'needs_info') ...[",
-        "if (widget.stage04RequestStream == null && status == 'needs_info') ...[",'stage04-prize-no-reply-ui')
-    body=once(body,"if (status == 'prize_sent') ...[",
-        "if (widget.stage04RequestStream == null && status == 'prize_sent') ...[",'stage04-prize-no-receipt-ui')
     return source[:a]+body+source[z:]
 
 def bind_stage04_lab(project: Path):
@@ -1694,9 +1727,11 @@ def bind_stage04_lab(project: Path):
     test = project/'test/deda_stage04_original_profile_hold_test.dart'
     if test.exists():
         raise ValueError('STAGE04_PROFILE_TEST_ALREADY_EXISTS')
-    test.write_text("""import 'package:flutter/material.dart';
+    test.write_text("""import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/main.dart' as app;
+import 'package:d_iraq_ludo/prize_winner_pages.dart';
 void main() {
   testWidgets('original profile remains held without an approved lab principal',
       (tester) async {
@@ -1706,6 +1741,52 @@ void main() {
     expect(find.byKey(const Key('deda_stage04_verified_id')), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('original prize page submits and follows the injected UID route only',
+      (tester) async {
+    final stream=StreamController<Map<String,dynamic>?>.broadcast();
+    var submits=0, confirms=0;
+    String? reply;
+    await tester.pumpWidget(MaterialApp(home: DedaPrizeWinnerRequestPage(
+      isArabic:false,name:'Synthetic QA',phone:'',dedaId:'@DEDA-QA1234',
+      rewardCode:'Q44741009ed027a9',pointsAtCompletion:505,
+      stage04RequestStream:stream.stream,stage04Current:()=>true,
+      stage04Submit:() async {submits++;},
+      stage04Reply:(value) async {reply=value;},
+      stage04Confirm:() async {confirms++;})));
+    await tester.pump();
+    stream.add(null);
+    await tester.pumpAndSettle();
+    final submit=find.text('Contact DEDA administration to claim prize');
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(submits,1);
+    stream.add({'status':'needs_info','adminMessage':'Synthetic inquiry'});
+    await tester.pumpAndSettle();
+    final replyButton=find.text('Reply to administration');
+    await tester.ensureVisible(replyButton);
+    await tester.tap(replyButton);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField),'Synthetic reply');
+    await tester.tap(find.text('Send reply'));
+    await tester.pumpAndSettle();
+    expect(reply,'Synthetic reply');
+    stream.add({'status':'prize_sent','prizeDetails':'Synthetic test only'});
+    await tester.pumpAndSettle();
+    final confirm=find.text('✅ I received the prize');
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, I received it'));
+    await tester.pumpAndSettle();
+    expect(confirms,1);
+    stream.add({'status':'delivered','prizeDetails':'Synthetic test only'});
+    await tester.pumpAndSettle();
+    expect(find.text('✅ I received the prize'),findsNothing);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await stream.close();
   });
 }
 """)

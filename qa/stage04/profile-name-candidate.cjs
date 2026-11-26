@@ -280,10 +280,73 @@ function generateProfileActions(original) {
       }
       allow get: if prizeOwner();
       allow create: if prizeOwner() && completePrize(request.auth.uid,request.resource.data);
-      allow list, update, delete: if false;
+      // Only the original owner-side transitions. Administrative status
+      // changes remain denied to every client in this synthetic candidate.
+      allow update: if prizeOwner() &&
+        resource.data.ownerUid == request.auth.uid &&
+        resource.data.accountKey == request.auth.uid &&
+        resource.data.cycleId == 'prize_v1' &&
+        resource.data.rewardCode == "`+code+String.raw`" &&
+        request.resource.data.updatedAt == request.time &&
+        ((resource.data.status == 'needs_info' &&
+          request.resource.data.status == 'reviewing' &&
+          request.resource.data.userReply is string &&
+          request.resource.data.userReply.size() > 0 &&
+          request.resource.data.userReply.size() <= 600 &&
+          request.resource.data.userReplyAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['status','userReply','userReplyAt','updatedAt'])) ||
+         (resource.data.status == 'prize_sent' &&
+          resource.data.prizeDetails is string && resource.data.prizeDetails.size() > 0 &&
+          request.resource.data.status == 'delivered' &&
+          request.resource.data.winnerConfirmedAt == request.time &&
+          request.resource.data.deliveredAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['status','winnerConfirmedAt','deliveredAt','updatedAt'])));
+      allow list, delete: if false;
     }
 `;
-  return generateWalletRead(candidate.replace(end,()=>directory+prize+end));
+  // Read only the two existing residual source records, never the admin
+  // role documents or a writable client projection. Exact synthetic schema.
+  // The protected legacy-shaped source may change without a projection job.
+  const walletSources=String.raw`
+    function walletOwner(uid,o) {
+      let a=get(accountPath(uid)).data;
+      let u=get(/databases/$(database)/documents/users/$(uid)).data;
+      let s=get(/databases/$(database)/documents/deda_sessions/$(uid)).data;
+      return owner(uid) && a.uid == uid && a.profile.originalId == o &&
+        u.accountKey == uid && u.sharePersonalId == o && s.uid == uid &&
+        s.accountKey == uid && labOriginal(uid,o);
+    }
+    function ordinaryWallet(uid) {
+      return !exists(/databases/$(database)/documents/admins/$(uid)) &&
+        !exists(/databases/$(database)/documents/admin_entry_access/$(uid)) &&
+        !exists(/databases/$(database)/documents/deda_gm_personal_diamond_wallets/$(uid));
+    }
+    function managerWallet(uid) {
+      let a=get(/databases/$(database)/documents/admins/$(uid)).data;
+      let g=get(/databases/$(database)/documents/admin_entry_access/$(uid)).data;
+      return a.role == 'general_manager' && a.active == true && a.status == 'active' &&
+        g.accountKey == uid && g.active == true && g.status == 'active' &&
+        g.accessType == 'general_manager_gateway' && g.allowedRole == 'general_manager';
+    }
+    function money(v) { return v is int && v >= 0 && v <= 9007199254740990; }
+    match /deda_diamond_gift_balances/{o} {
+      allow get: if walletOwner(request.auth.uid,o) &&
+        resource.data.keys().hasOnly(['publicId','ownerUid','balance']) &&
+        resource.data.publicId == o && money(resource.data.balance) &&
+        (!resource.data.keys().hasAny(['ownerUid']) || resource.data.ownerUid == request.auth.uid);
+      allow list, create, update, delete: if false;
+    }
+    match /deda_gm_personal_diamond_wallets/{uid} {
+      allow get: if walletOwner(uid,'@DEDA-QA1234') &&
+        (ordinaryWallet(uid) || (managerWallet(uid) &&
+        resource.data.keys().hasOnly(['accountKey','balance']) &&
+        resource.data.accountKey == uid && money(resource.data.balance)));
+      allow list, create, update, delete: if false;
+    }
+`;
+  return generateWalletRead(candidate.replace(end,()=>directory+prize+walletSources+end));
 }
 // Deterministic display-only reference for the single synthetic fixture.
 // Never a production issuer or proof of entitlement by itself.

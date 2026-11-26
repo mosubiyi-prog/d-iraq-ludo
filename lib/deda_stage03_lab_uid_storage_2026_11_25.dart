@@ -310,6 +310,24 @@ class DedaStage04PersonalWallet {
     return decode(row, fresh);
   }
 
+  // Both source snapshots must be server-confirmed under the candidate
+  // owner rules. A missing personal document is allowed only for a proven
+  // ordinary account; a missing gift source never means zero.
+  static DedaStage04PersonalWallet fromSources(
+      DedaStage04ProfileView opening,DedaStage04ProfileView fresh,
+      Map<String,dynamic>? gift,Map<String,dynamic>? personal) {
+    if(gift==null || gift['publicId']!=fresh.originalId ||
+        (gift.containsKey('ownerUid') && gift['ownerUid']!=fresh.uid) ||
+        (personal!=null && personal['accountKey']!=fresh.uid)) {
+      throw const FormatException('profile-wallet-source-unproven');
+    }
+    return decodeForOpening({'format':1,'uid':fresh.uid,'complete':true,
+      'sourceKind':'synthetic-lab-wallet-v1','progressVersion':fresh.progressRevision,
+      'inventoryRevision':fresh.inventoryRevision,'accountRevision':fresh.accountRevision,
+      'originalId':fresh.originalId,'giftResidual':gift['balance'],
+      'managerPersonal':personal==null?0:personal['balance'],
+      'hasManagerPersonal':personal!=null},opening,fresh);
+  }
   static DedaStage04PersonalWallet decode(Map<String,Object?> row,
       DedaStage04ProfileView profile) {
     const keys = {'format','uid','complete','sourceKind','progressVersion',
@@ -572,8 +590,8 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
   }
 
 
-  /// A static synthetic wallet projection only. No live rules or wallet
-  /// issuance are provided by this candidate; default closed.
+  /// Direct read-only residual sources in the unpublished synthetic candidate.
+  /// No wallet issuance or writes; default closed.
   static const walletCandidateEnabled =
       bool.fromEnvironment('DEDA_STAGE04_PROFILE_WALLET_CANDIDATE');
 
@@ -601,9 +619,14 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       final p = await tx.get(base);
       final i = await tx.get(base.collection('inventory').doc('current'));
       final a = await tx.get(base.collection('account').doc('current'));
-      final w = await tx.get(base.collection('wallet').doc('current'));
+      final gift=await tx.get(db.collection('deda_diamond_gift_balances').doc(old.originalId));
+      final personal=await tx.get(db.collection('deda_gm_personal_diamond_wallets').doc(uid));
       check();
-      for (final row in [p,i,a,w]) {
+      if(gift.metadata.isFromCache || gift.metadata.hasPendingWrites ||
+          personal.metadata.isFromCache || personal.metadata.hasPendingWrites) {
+        throw const DedaPrivateDataConflict();
+      }
+      for (final row in [p,i,a]) {
         if (!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites) {
           throw StateError('profile-wallet-server-source-required');
         }
@@ -611,7 +634,7 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       final fresh = DedaStage04ProfileView.fromProtected(
           DedaStage03ProtectedSnapshot.decode(expectedUid: uid,
             progress: p.data(), inventory: i.data(), account: a.data()));
-      return DedaStage04PersonalWallet.decodeForOpening(w.data()!, old, fresh);
+      return DedaStage04PersonalWallet.fromSources(old,fresh,gift.data(),personal.data());
     }, timeout: const Duration(seconds: 15));
     check();
     return result;
@@ -700,9 +723,11 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     if(!row.exists)return null;
     final d=row.data()!;
     if(d['ownerUid']!=uid || d['accountKey']!=uid || d['cycleId']!='prize_v1' ||
-        d['rewardCode']!=DedaStage04TierState.syntheticPrizeCode || d['status']!='new' ||
+        d['rewardCode']!=DedaStage04TierState.syntheticPrizeCode ||
+        !const {'new','reviewing','needs_info','approved','prize_sent','rejected','delivered'}.contains(d['status']) ||
         d['phone']!='' || d['finalReservedPoints']!=25000 ||
-        d['adminMessage']!='' || d['prizeDetails']!='' || d['userReply']!='') {
+        d['adminMessage'] is! String || d['prizeDetails'] is! String || d['userReply'] is! String ||
+        (const {'prize_sent','delivered'}.contains(d['status']) && (d['prizeDetails'] as String).isEmpty)) {
       throw const FormatException('profile-prize-request-unproven');
     }
     return d;
@@ -775,6 +800,36 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final saved=_readPrizeRow(await ref.get(const GetOptions(source:Source.server)));
     check();
     if(saved==null || saved['pointsAtCompletion']!=tiers.finalPoints)throw const DedaPrivateDataConflict();
+  }
+
+  static Future<void> replyPrizeCandidate(DedaStage04ProfileRead opening,String message) =>
+      _updatePrizeCandidate(opening,message:message);
+  static Future<void> confirmPrizeCandidate(DedaStage04ProfileRead opening) =>
+      _updatePrizeCandidate(opening);
+  static Future<void> _updatePrizeCandidate(DedaStage04ProfileRead opening,{String? message}) async {
+    if(!actionsCandidateEnabled)throw StateError('profile-actions-disabled');
+    final current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
+    await _io.verifyOwner(uid,uid,check);
+    final fresh=await readProfile(),tiers=await readPointTierCandidate(fresh);
+    if(!tiers.prizeReady)throw const DedaPrivateDataConflict();
+    final reply=message?.trim(), target=message==null?'delivered':'reviewing';
+    if(reply!=null && (reply.isEmpty || reply.length>600))throw const FormatException('profile-prize-reply-invalid');
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app()),ref=_prizeRef(db);
+    await db.runTransaction<void>((tx) async {
+      check();
+      final row=_readPrizeRow(await tx.get(ref));check();
+      if(row==null || row['pointsAtCompletion']!=tiers.finalPoints)throw const DedaPrivateDataConflict();
+      if(row['status']==target && (reply==null || row['userReply']==reply))return;
+      if(row['status']!=(reply==null?'prize_sent':'needs_info'))throw const DedaPrivateDataConflict();
+      tx.update(ref,{'status':target,'updatedAt':FieldValue.serverTimestamp(),
+        if(reply!=null)...{'userReply':reply,'userReplyAt':FieldValue.serverTimestamp()}
+        else ...{'winnerConfirmedAt':FieldValue.serverTimestamp(),'deliveredAt':FieldValue.serverTimestamp()}});
+    });
+    check();
+    final saved=_readPrizeRow(await ref.get(const GetOptions(source:Source.server)));check();
+    if(saved==null || saved['status']!=target || saved['pointsAtCompletion']!=tiers.finalPoints ||
+        (reply!=null && saved['userReply']!=reply))throw const DedaPrivateDataConflict();
   }
 
   /// Atomic owner selection, account history and existing public directory.

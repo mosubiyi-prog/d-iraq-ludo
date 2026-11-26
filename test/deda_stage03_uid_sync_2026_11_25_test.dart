@@ -50,6 +50,17 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('wallet reads verified residuals directly without a cached projection', () {
+    final view=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+      expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:protectedAccount()));
+    final gift=<String,dynamic>{'publicId':view.originalId,'balance':70};
+    expect(DedaStage04PersonalWallet.fromSources(view,view,gift,null).visibleDiamonds,270);
+    expect(DedaStage04PersonalWallet.fromSources(view,view,{...gift,'balance':15},null).visibleDiamonds,215);
+    expect(DedaStage04PersonalWallet.fromSources(view,view,gift,{'accountKey':uid,'balance':1000000}).visibleDiamonds,1000270);
+    expect(()=>DedaStage04PersonalWallet.fromSources(view,view,null,null),throwsFormatException);
+    expect(()=>DedaStage04PersonalWallet.fromSources(view,view,{...gift,'ownerUid':'foreign'},null),throwsFormatException);
+    expect(()=>DedaStage04PersonalWallet.fromSources(view,view,gift,{'accountKey':'foreign','balance':1}),throwsFormatException);
+  });
   test('synthetic prize display follows verified reservations, not the phone', () {
     const empty = DedaStage04TierState({}, {});
     expect(empty.codePart(5000), isNull);
