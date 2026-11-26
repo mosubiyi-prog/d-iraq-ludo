@@ -82,6 +82,41 @@ class WeeklySourceTests(unittest.TestCase):
         maintenance=mod.patch_lab_maintenance(mod.patch_maintenance((ROOT/'lib/deda_weekly_maintenance_status_100408.dart').read_text()))
         self.assertIn('data?["paused"] is! bool',maintenance)
 
+
+    def test_lab_social_only_binds_two_original_routes(self):
+        anchor='          currentAccountStillAuthorized: stillSameViewer,\n'
+        original=anchor+anchor
+        result=mod.patch_lab_main_actions(original)
+        self.assertEqual(result.count('DedaFriendPublicProfilePage(profile: profile)'),2)
+        self.assertEqual(result.count('labAccountChanges: DedaSectionAccountChanges.epoch'),2)
+        self.assertEqual(result.count(anchor),2)
+        for bad in (anchor,original+anchor,result):
+            with self.assertRaises(ValueError):
+                mod.patch_lab_main_actions(bad)
+
+    def test_lab_social_reuses_safe_screen_and_existing_service(self):
+        old=(ROOT/'lib/deda_weekly_leaderboard_safe_screen.dart').read_text()
+        bound=mod.patch_lab_safe(old)
+        for marker in ('DedaSocialService.stage04LabMode',
+            'DedaSocialService.stage04Actions','DedaSocialService.readLabSession()',
+            'DedaSocialService.readLabPublicProfile(',
+            'DedaSocialService.watchRelations(session.uid)',
+            'DedaStage03LabStorage.readFriends()',
+            'DedaWeeklyServerSnapshotPair.parse(',
+            'profile.ownerUid!=\'synthetic-peer-001\'',
+            'current.isOtherVerifiedParticipant(live.viewerUid)',
+            'epoch!=_requestEpoch','authState.data?.uid!=owner',
+            'onOpenExistingPublicProfile:','onSendExistingFriendRequest:',
+            'friendRelationFor:'):
+            self.assertIn(marker,bound)
+        self.assertEqual(bound.count('DedaSocialService.sendFriendRequest('),1)
+        self.assertNotIn('FirebaseFirestore',mod.LAB_SOCIAL)
+        self.assertNotIn('performFriendCandidate(',mod.LAB_SOCIAL)
+        self.assertNotIn('claimAfterOriginalReward(',mod.LAB_SOCIAL)
+        self.assertNotIn('signIn',mod.LAB_SOCIAL)
+        with self.assertRaises(ValueError):
+            mod.patch_lab_safe(bound)
+
     def test_original_repo_not_writeable(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

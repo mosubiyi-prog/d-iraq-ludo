@@ -461,14 +461,195 @@ def patch_lab_maintenance(s):
         "          return const FittedBox(fit:BoxFit.scaleDown,child:Text('جارِ التحقق من حالة الدوري...'));\n"
         '        }','lab-control-proven')
 
+
+# The original competitor card already has the callbacks. Bind them only in
+# the disposable combined laboratory; no parallel social service or writer.
+LAB_ACTION_MARK = 'DEDA_STAGE04_WEEKLY_EXISTING_SOCIAL_ACTIONS'
+
+def patch_lab_main_actions(s):
+    anchor = '          currentAccountStillAuthorized: stillSameViewer,\n'
+    if s.count(anchor)!=2 or LAB_ACTION_MARK in s:
+        raise ValueError('WEEKLY_LAB_SOCIAL_BOTH_ORIGINAL_ROUTES')
+    return s.replace(anchor,anchor+
+        '          // '+LAB_ACTION_MARK+'\n'
+        '          labPublicProfileBuilder: (profile) => DedaFriendPublicProfilePage(profile: profile),\n'
+        '          labAccountChanges: DedaSectionAccountChanges.epoch,\n')
+
+LAB_SOCIAL = r'''
+  // DEDA_STAGE04_WEEKLY_EXISTING_SOCIAL_ACTIONS
+  // Only the peer already proven by verifyRankingProof is supported.
+  // No public ID is interpreted as an authentication UID.
+  bool get _labSocialEnabled => mounted && _stillCurrent &&
+      DedaStage03LabStorage.leagueLabMode && DedaSocialService.stage04LabMode &&
+      widget.labPublicProfileBuilder!=null && widget.labAccountChanges!=null;
+
+  bool _labPeer(DedaWeeklyPublicCompetitor target) =>
+      target.safePublicIdentity &&
+      target.participantId=='weekly-user-DEDA-QA5678' &&
+      target.originalPublicId=='@DEDA-QA5678' &&
+      target.activePublicId=='@DEDA-QA5678';
+
+  DedaWeeklyFriendRelation _labRelation(DedaWeeklyPublicCompetitor target) {
+    try {
+      if(!_labSocialEnabled || _snapshot==null || _labFriends==null)
+        return DedaWeeklyFriendRelation.unknown;
+      final view=_labFriends!.requireCurrent();
+      if(view.uid!=DedaStage03LabStorage.leagueAccountKey())
+        return DedaWeeklyFriendRelation.unknown;
+      if(target.originalPublicId==view.originalId)return DedaWeeklyFriendRelation.self;
+      if(!_labPeer(target))return DedaWeeklyFriendRelation.unknown;
+      final rows=view.rows.where((r)=>r.peerUid=='synthetic-peer-001' ||
+          r.peerPublicId==target.originalPublicId).toList();
+      if(rows.isEmpty)return DedaWeeklyFriendRelation.notFriends;
+      if(rows.length!=1 || rows.single.peerUid!='synthetic-peer-001' ||
+          rows.single.peerPublicId!=target.originalPublicId)
+        return DedaWeeklyFriendRelation.unknown;
+      switch(rows.single.status) {
+        case 'accepted': return DedaWeeklyFriendRelation.friends;
+        case 'pending': return DedaWeeklyFriendRelation.pending;
+        case 'rejected': return DedaWeeklyFriendRelation.notFriends;
+        default: return DedaWeeklyFriendRelation.unknown;
+      }
+    } catch(_) { return DedaWeeklyFriendRelation.unknown; }
+  }
+
+  Future<void> _labAction(DedaWeeklyPublicCompetitor target,
+      {required bool send}) async {
+    if(!_labSocialEnabled || !_labPeer(target) || _labActionInFlight ||
+        _snapshot==null || (send && (!DedaSocialService.stage04Actions ||
+          _labRelation(target)!=DedaWeeklyFriendRelation.notFriends)))return;
+    _labActionInFlight=true;
+    try {
+      final week=DedaStage04LeagueRead.weekId(DateTime.now().toUtc());
+      final owner=DedaStage03LabStorage.leagueAccountKey();
+      void check() {
+        if(!_labSocialEnabled || owner.isEmpty ||
+            DedaStage03LabStorage.leagueAccountKey()!=owner ||
+            DedaStage04LeagueRead.weekId(DateTime.now().toUtc())!=week)
+          throw StateError('league-social-session-or-week-changed');
+      }
+      check();
+      // The rendered competitor is not authority; re-read current complete
+      // standings with the original guarded loader before either action.
+      final fresh=DedaWeeklyServerSnapshotPair.parse(
+          await widget.loadVerifiedStandings!());
+      check();
+      final live=fresh.current;
+      final current=live.profilesByUid[target.participantId]?.verifiedCompetitor;
+      if(!live.verified || current==null || !_labPeer(current) ||
+          !current.isOtherVerifiedParticipant(live.viewerUid) ||
+          current.displayName!=target.displayName)
+        throw StateError('league-social-stale-competitor');
+      final session=await DedaSocialService.readLabSession();
+      check();
+      if(!session.stage04Current || session.profile.ownerUid!=owner)
+        throw StateError('league-social-owner-conflict');
+
+      Future<DedaSocialProfile> verifiedProfile() async {
+        if(!_labSocialEnabled || !session.stage04Current ||
+            DedaStage03LabStorage.leagueAccountKey()!=owner)
+          throw StateError('league-social-session-changed');
+        final profile=await DedaSocialService.readLabPublicProfile(
+            target.originalPublicId);
+        if(!_labSocialEnabled || !session.stage04Current ||
+            DedaStage03LabStorage.leagueAccountKey()!=owner ||
+            profile==null || profile.ownerUid!='synthetic-peer-001' ||
+            profile.publicId!=target.originalPublicId ||
+            profile.displayName!=target.displayName)
+          throw StateError('league-social-directory-conflict');
+        return profile;
+      }
+
+      final profile=await verifiedProfile();
+      check();
+      if(send) {
+        if(!DedaSocialService.stage04Actions)
+          throw StateError('league-social-write-held');
+        // Reuse the original service and its fresh central transaction;
+        // do not create a relation, task receipt or reward in this screen.
+        await DedaSocialService.sendFriendRequest(sender:session,target:profile);
+        if(_labSocialEnabled && session.stage04Current) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content:Text('تم إرسال طلب الصداقة')));
+          unawaited(_read());
+        }
+      } else {
+        // Retain the original public-profile page. Refresh through the
+        // existing relationship feed and verified directory, not phone data.
+        final updates=DedaSocialService.watchRelations(session.uid)
+            .asyncMap((_)=>verifiedProfile());
+        final auth=FirebaseAuth.instance.authStateChanges();
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>
+          AnimatedBuilder(animation:widget.labAccountChanges!,builder:(ctx,child)=>
+            StreamBuilder<User?>(stream:auth,builder:(ctx,authState)=>
+              StreamBuilder<DedaSocialProfile>(stream:updates,builder:(ctx,profileState) {
+                if(!_labSocialEnabled || !session.stage04Current ||
+                    authState.hasError || authState.data?.uid!=owner ||
+                    profileState.hasError) {
+                  return const Scaffold(body:Center(child:Text('جارِ التحقق من ملف المتصدر')));
+                }
+                final verified=profileState.data;
+                if(verified==null)return const Scaffold(
+                    body:Center(child:CircularProgressIndicator()));
+                return widget.labPublicProfileBuilder!(verified);
+              })))));
+      }
+    } catch(_) {
+      if(_labSocialEnabled)ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content:Text('تعذر التحقق من الإجراء، أعد المحاولة')));
+    } finally {
+      _labActionInFlight=false;
+    }
+  }
+
+'''
+
+def patch_lab_safe(s):
+    if LAB_ACTION_MARK in s or LAB_IMPORT in s:
+        raise ValueError('WEEKLY_LAB_SOCIAL_DUPLICATE_SAFE')
+    s=LAB_IMPORT+"import 'package:firebase_auth/firebase_auth.dart';\n"\
+        "import 'deda_social_service.dart';\n"\
+        "import 'deda_weekly_competitor_public_card.dart';\n"+s
+    s=one(s,'    this.onOpenDailyTasks,\n',
+        '    this.onOpenDailyTasks,\n    this.labPublicProfileBuilder,\n    this.labAccountChanges,\n',
+        'lab-social-optional-original-profile')
+    s=one(s,'  final Duration? refreshInterval;',
+        '  final Duration? refreshInterval;\n'
+        '  final Widget Function(DedaSocialProfile)? labPublicProfileBuilder;\n'
+        '  final Listenable? labAccountChanges;', 'lab-social-fields')
+    s=one(s,'  bool _requestInFlight = false;',
+        '  bool _requestInFlight = false;\n'
+        '  bool _labActionInFlight=false;\n'
+        '  DedaStage04FriendsRead? _labFriends;\n'+LAB_SOCIAL,
+        'lab-social-existing-screen')
+    s=one(s,'      setState(() => _snapshot = converted);',
+        '      DedaStage04FriendsRead? friends;\n'
+        '      if(_labSocialEnabled) {\n'
+        '        try { friends=await DedaStage03LabStorage.readFriends(); friends.requireCurrent(); }\n'
+        '        catch(_) { friends=null; }\n'
+        '      }\n'
+        '      if(!mounted || epoch!=_requestEpoch || !_stillCurrent)return;\n'
+        '      setState(() { _snapshot=converted; _labFriends=friends; });',
+        'lab-social-central-relations')
+    s=one(s,'      onOpenDailyTasks: widget.onOpenDailyTasks,',
+        '      onOpenDailyTasks: widget.onOpenDailyTasks,\n'
+        '      friendRelationFor: _labSocialEnabled && safeSnapshot!=null ? _labRelation : null,\n'
+        '      onOpenExistingPublicProfile: _labSocialEnabled && safeSnapshot!=null\n'
+        '          ? (target)=>_labAction(target,send:false) : null,\n'
+        '      onSendExistingFriendRequest: _labSocialEnabled && safeSnapshot!=null && DedaSocialService.stage04Actions\n'
+        '          ? (target)=>_labAction(target,send:true) : null,',
+        'lab-social-original-card-callbacks')
+    return s
+
+
 def bind_lab(project):
     project=Path(project).resolve()
     if project==ROOT or ROOT in project.parents or project in ROOT.parents:
         raise ValueError('WEEKLY_LAB_DISPOSABLE_REQUIRED')
     files={key:(project/path).read_text() for key,path in PATHS.items()}
     verify(files)
-    transforms={'main':patch_lab_main,'gate':patch_lab_gate,
-                'direct':patch_lab_direct,'page':patch_lab_page,
+    transforms={'main':lambda s:patch_lab_main_actions(patch_lab_main(s)),'gate':patch_lab_gate,
+                'direct':patch_lab_direct,'page':patch_lab_page,'safe':patch_lab_safe,
                 'prize':patch_lab_prize,'maintenance':patch_lab_maintenance}
     updated={key:patch(files[key]) for key,patch in transforms.items()}
     for key,value in updated.items():
