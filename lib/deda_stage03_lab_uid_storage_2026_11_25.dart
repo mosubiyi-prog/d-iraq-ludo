@@ -506,6 +506,7 @@ class DedaStage04FriendsRead {
   DedaStage04FriendsRead._(this._profile, this._friends);
   final DedaStage04ProfileRead _profile;
   final DedaStage04FriendsView _friends;
+  DedaStage04ProfileView requireProfile() => _profile.requireCurrent();
   DedaStage04FriendsView requireCurrent() {
     _profile.requireCurrent();
     return _friends;

@@ -340,9 +340,259 @@ def bind(project, verify_only=False):
     print('PASS_STAGE2_FRIENDS_ORIGINAL_RELATIONS_OWNER_UID_SEARCH_REQUESTS_COPY_SHARE_NO_DEPLOY')
 
 
+# 04/02 reuses original presentation widgets and the Stage03 account projection.
+# Explicit lab mode only; all legacy source remains byte-for-byte otherwise.
+LAB_MARK = 'DEDA_STAGE04_FRIENDS_UID_SOURCE'
+LAB_HELPERS = r'''
+  static const stage04LabMode = bool.fromEnvironment('DEDA_STAGE04_FRIENDS_LAB');
+  static Future<DedaSocialSession> readLabSession() async {
+    final read = await DedaStage03LabStorage.readFriends();
+    final p = read.requireProfile();
+    // Legacy presentation session is only an interface adapter: the key used
+    // by its existing row widgets is the public ID, never an Auth principal.
+    // The cosmetic fields are unused in this adapter; peer appearance is held
+    // unless independently verified. No public profile is written.
+    return DedaSocialSession(uid:p.originalId, publicId:p.originalId,
+      profile:DedaSocialProfile(publicId:p.originalId,ownerUid:p.uid,
+        displayName:p.displayName,avatarStyle:0,frameStyle:0,
+        backgroundStyle:0,level:1,badges:const []), stage04Read:read);
+  }
+
+  static List<DedaFriendshipRecord> labPresentationRows(DedaStage04FriendsRead opening) {
+    final p=opening.requireProfile(), view=opening.requireCurrent();
+    return List.unmodifiable(view.rows.map((r) {
+      final a=r.incoming?r.peerPublicId:p.originalId;
+      final b=r.incoming?p.originalId:r.peerPublicId;
+      // These two fields are the OLD renderer's directional lookup keys.
+      // The authoritative row ID remains the canonical UID pair.
+      return DedaFriendshipRecord(id:r.pairKey,members:[a,b],
+        requesterUid:a,recipientUid:b,requesterPublicId:a,recipientPublicId:b,
+        requesterName:r.incoming?r.peerName:p.displayName,
+        recipientName:r.incoming?p.displayName:r.peerName,status:r.status);
+    }));
+  }
+
+  static Stream<List<DedaFriendshipRecord>> _watchLabRelations(String key) async* {
+    final opening=await DedaStage03LabStorage.readFriends();
+    final p=opening.requireProfile();
+    if(key!=p.originalId)throw StateError('friends-lab-key-mismatch');
+    yield labPresentationRows(opening);
+    var revision=p.accountRevision;
+    // Observe only the existing owner projection. Revalidate through the
+    // same central transaction before publishing any changed revision.
+    await for(final signal in _db.doc('deda_lab_uid_authority/'+p.uid+'/account/current')
+        .snapshots(includeMetadataChanges:true)) {
+      opening.requireCurrent();
+      if(signal.metadata.isFromCache || signal.metadata.hasPendingWrites)continue;
+      if(!signal.exists)throw StateError('friends-lab-source-missing');
+      final value=signal.data()?['revision'];
+      if(value==revision)continue;
+      final fresh=await DedaStage03LabStorage.readFriends();
+      opening.requireCurrent();
+      final next=fresh.requireCurrent();
+      if(next.uid!=p.uid || next.originalId!=key || next.revision<revision)
+        throw StateError('friends-lab-stale-revision');
+      revision=next.revision;
+      yield labPresentationRows(fresh);
+    }
+  }
+
+  // Read the existing directory and public profile only if they agree on
+  // the canonical ID and actual peer UID. No Functions or phone lookup.
+  // Current live lab rules can deny these paths; denial stays an error.
+  static Future<DedaSocialProfile?> readLabPublicProfile(String raw) async {
+    final opening=await DedaStage03LabStorage.readFriends();
+    final owner=opening.requireProfile();
+    final requested=normalizePublicId(raw);
+    if(!RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(requested))
+      throw StateError('friends-lab-invalid-id');
+    if(requested==owner.originalId || requested==owner.activeId)
+      throw StateError('social-self-request');
+    Future<Map<String,dynamic>?> read(String path) async {
+      final row=await _db.doc(path).get(const GetOptions(source:Source.server));
+      opening.requireCurrent();
+      if(row.metadata.isFromCache || row.metadata.hasPendingWrites)
+        throw StateError('friends-lab-unconfirmed-directory');
+      return row.data();
+    }
+    var original=requested;
+    var route=await read('deda_share_ids/'+original);
+    if(route==null) {
+      final alias=await read('deda_public_alias_routes/'+requested);
+      if(alias==null)return null;
+      final candidate=alias['originalId'];
+      if(alias['aliasId']!=requested || candidate is! String ||
+          !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(candidate))
+        throw StateError('friends-lab-alias-unproven');
+      original=candidate;
+      final active=await read('deda_public_active_aliases/'+original);
+      final selection=await read('deda_stage71_active_identifier/'+original);
+      if(active==null || selection==null || active['originalId']!=original ||
+          selection['originalId']!=original || active['activeId']!=requested ||
+          selection['activeId']!=requested || active['baseColor']!=alias['baseColor'])
+        throw StateError('friends-lab-alias-unproven');
+      route=await read('deda_share_ids/'+original);
+    }
+    final peer=route?['ownerUid'];
+    if(route==null || route['publicId']!=original || route['kind']!='personal' ||
+        route['active']!=true || peer is! String || peer.isEmpty ||
+        peer==owner.uid || original==owner.originalId)
+      throw StateError('friends-lab-directory-owner-unproven');
+    final data=await read('deda_social_profiles/'+original);
+    if(data==null || data['publicId']!=original || data['ownerUid']!=peer ||
+        data['displayName'] is! String || (data['displayName'] as String).trim().isEmpty ||
+        ['avatarStyle','frameStyle','backgroundStyle','level'].any((k)=>data[k] is! int) ||
+        data['badges'] is! List || !(data['badges'] as List).every((v)=>v is String))
+      throw StateError('friends-lab-public-profile-unproven');
+    for(final relation in opening.requireCurrent().rows) {
+      if(relation.peerPublicId==original && relation.peerUid!=peer)
+        throw StateError('friends-lab-peer-owner-conflict');
+    }
+    return DedaSocialProfile.fromMap(data);
+  }
+'''
+
+def patch_lab_service(src):
+    if LAB_MARK in src:
+        raise ValueError('FRIENDS_LAB_ALREADY_BOUND')
+    src = "import 'deda_stage03_lab_uid_storage_2026_11_25.dart';\n" + src
+    def session(body):
+        body=one(body,'    required this.profile,','    required this.profile,\n    this.stage04Read,','lab-session-ctor')
+        return one(body,'  final DedaSocialProfile profile;',
+            '  final DedaSocialProfile profile;\n  final DedaStage04FriendsRead? stage04Read;\n'
+            '  bool get stage04Current {\n    try { stage04Read?.requireCurrent(); return stage04Read!=null; }\n'
+            '    catch (_) { return false; }\n  }','lab-session-guard')
+    src=region(src,'class DedaSocialSession {','class DedaSocialService {',session)
+    src=one(src,'class DedaSocialService {','class DedaSocialService {\n  // '+LAB_MARK+'\n'+LAB_HELPERS,'lab-service')
+    src=one(src,'  static Stream<List<DedaFriendshipRecord>> watchRelations(String uid) {',
+        '  static Stream<List<DedaFriendshipRecord>> watchRelations(String uid) {\n'
+        '    if(stage04LabMode)return _watchLabRelations(uid);','lab-relations')
+    # Never let original writer/phone preparation run under the new lab UID.
+    for start,end,guard in [
+        ('  static Future<DedaSocialSession> ensurePersonalSession(', '  static Future<DedaSocialProfile?> findByPublicId(',
+         'if(stage04LabMode)return readLabSession();'),
+        ('  static Future<DedaSocialProfile?> findByPublicId(', '  static Stream<List<DedaFriendshipRecord>> watchRelations(',
+         'if(stage04LabMode)return readLabPublicProfile(raw);'),
+        ('  static Future<String> sendFriendRequest(', '  static Future<void> respondToRequest(',
+         "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
+        ('  static Future<void> respondToRequest(', '  static Future<void> removeRelation(',
+         "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
+        ('  static Future<void> removeRelation(', '  static Future<DedaSocialProfile?> profileForFriend(',
+         "if(stage04LabMode)throw StateError('friends-lab-authority-held');"),
+    ]:
+        def patch(body):
+            return one(body,'async {\n','async {\n    '+guard+'\n','lab-method-'+start)
+        src=region(src,start,end,patch)
+    return src
+
+def patch_lab_main(main):
+    def friends(body):
+        anchor='  Future<void> _prepare({bool ownerProofAlreadyReady = false}) async {'
+        body=one(body,anchor,anchor+'''
+    if(DedaSocialService.stage04LabMode) {
+      if(!mounted || _loadingFriends)return;
+      final generation=++_friendsGeneration;
+      setState(() { _loadingFriends=true; _session=null; _relationsStream=null; _error=null; });
+      try {
+        final session=await DedaSocialService.readLabSession();
+        if(!mounted || generation!=_friendsGeneration || !session.stage04Current)return;
+        setState(() { _session=session; _relationsStream=DedaSocialService.watchRelations(session.uid); });
+      } catch(error) {
+        if(mounted && generation==_friendsGeneration)setState(() => _error=error);
+      } finally {
+        if(mounted && generation==_friendsGeneration)setState(() => _loadingFriends=false);
+      }
+      return;
+    }''','lab-friends-entry')
+        body=one(body,'  void _onRescueReady() {','  void _onRescueReady() {\n    if(DedaSocialService.stage04LabMode)return;','lab-no-phone-retry')
+        body=one(body,'                  if (DedaSocialFriendCount.notifier.value != verifiedCount) {',
+            '                  if(DedaSocialService.stage04LabMode)return;\n'
+            '                  if (DedaSocialFriendCount.notifier.value != verifiedCount) {','lab-no-old-count-write')
+        body=one(body,'  Future<void> _remove(DedaFriendshipRecord relation) async {',
+            '  Future<void> _remove(DedaFriendshipRecord relation) async {\n'
+            '    if(DedaSocialService.stage04LabMode) {\n'
+            "      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(dedaText('معاملة العلاقة بانتظار اعتماد المصدر الموحد.','Relationship transaction awaits unified authority.'))));\n"
+            '      return;\n    }','lab-remove-held')
+        body=one(body,'  Future<void> _openProfile(DedaFriendshipRecord relation) async {',
+            '  Future<void> _openProfile(DedaFriendshipRecord relation) async {\n'
+            '    if(DedaSocialService.stage04LabMode) {\n'
+            "      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(dedaText('عرض الصديق بانتظار اعتماد الدليل العام.','Friend preview awaits verified public directory.'))));\n"
+            '      return;\n    }','lab-preview-held')
+        return body
+    def add(body):
+        anchor='  Future<void> _prepare() async {'
+        body=one(body,anchor,anchor+'''
+    if(DedaSocialService.stage04LabMode) {
+      try {
+        final session=await DedaSocialService.readLabSession();
+        if(mounted && session.stage04Current)setState(() => _session=session);
+      } catch(_) {
+        if(mounted)setState(() { _session=null; _result=null;
+          _resultMessage=dedaText('تعذر التحقق من الحساب الموحد.','Unified account verification failed.'); });
+      }
+      return;
+    }''','lab-add-entry')
+        body=one(body,'  Future<void> _copyMyId() async {','''  Future<void> _copyMyId() async {
+    if(DedaSocialService.stage04LabMode) {
+      try {
+        final read=await DedaStage03LabStorage.readProfile();
+        if(!mounted)return;
+        await Clipboard.setData(ClipboardData(text:read.requireCurrent().activeId));
+        read.requireCurrent();
+      } catch(_) {}
+      return;
+    }''','lab-copy-own-id')
+        body=one(body,'final found = await DedaStage51FriendSearch.findByUserInput(id);',
+            'final found = await (DedaSocialService.stage04LabMode ? DedaSocialService.readLabPublicProfile(id) : DedaStage51FriendSearch.findByUserInput(id));','lab-search')
+        return body
+    def requests(body):
+        body=one(body,'    unawaited(DedaIncomingRequestNotifications.markCurrentIncomingSeen());',
+            '    if(!DedaSocialService.stage04LabMode)unawaited(DedaIncomingRequestNotifications.markCurrentIncomingSeen());','lab-no-old-notification')
+        anchor='  Future<void> _prepare() async {'
+        body=one(body,anchor,anchor+'''
+    if(DedaSocialService.stage04LabMode) {
+      if(!mounted || _preparingRequests)return;
+      _preparingRequests=true;
+      setState(() { _session=null; _requestsStream=null; _entryError=null; });
+      try {
+        final value=await DedaSocialService.readLabSession();
+        if(!mounted || !value.stage04Current)return;
+        setState(() { _session=value; _requestsStream=DedaSocialService.watchRelations(value.uid); });
+      } catch(error) {
+        if(mounted)setState(() => _entryError=error);
+      } finally { _preparingRequests=false; }
+      return;
+    }''','lab-request-entry')
+        return body
+    main=region(main,'class _DedaFriendsPageState','class _DedaFriendCompactCard',friends)
+    main=region(main,'class _DedaAddFriendPageState','class DedaFriendRequestsPage',add)
+    return region(main,'class _DedaFriendRequestsPageState','class DedaFriendPublicProfilePage',requests)
+
+def bind_lab(project):
+    project=Path(project).resolve()
+    if project == ROOT or ROOT in project.parents or project in ROOT.parents:
+        raise ValueError('FRIENDS_LAB_DISPOSABLE_REQUIRED')
+    m,s=project/'lib/main.dart',project/'lib/deda_social_service.dart'
+    main,service=m.read_text(),s.read_text()
+    verify(main,service)
+    if 'DEDA_STAGE04_PROFILE_UID_READ_ONLY' not in main:
+        raise ValueError('FRIENDS_LAB_PROFILE_BIND_REQUIRED')
+    new_main,new_service=patch_lab_main(main),patch_lab_service(service)
+    # Only disposable assembled source, all anchors before any write.
+    m.write_text(new_main)
+    s.write_text(new_service)
+    print('PASS_STAGE04_FRIENDS_ORIGINAL_LIST_REQUESTS_UID_SOURCE_NO_LEGACY_WRITES')
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('project', type=Path)
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--stage04-lab', action='store_true')
     args = parser.parse_args()
-    bind(args.project, args.verify_only)
+    if args.stage04_lab:
+        if args.verify_only: raise ValueError('lab and verify-only are exclusive')
+        bind_lab(args.project)
+    else:
+        bind(args.project, args.verify_only)

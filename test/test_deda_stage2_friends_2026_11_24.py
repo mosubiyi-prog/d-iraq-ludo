@@ -52,6 +52,14 @@ class FriendsSourceTests(unittest.TestCase):
         self.assertIn('_resultQuery != DedaSocialService.normalizePublicId(_idController.text)', changed)
         self.assertIn('DedaSocialService.sendFriendRequest(sender: sender, target: target)', changed)
 
+    def test_lab_binding_keeps_repository_immutable_and_requires_approved_previous_binding(self):
+        with self.assertRaises(ValueError):
+            mod.bind_lab(ROOT)
+        self.assertIn('readFriends()', mod.LAB_HELPERS)
+        self.assertIn('opening.requireCurrent()', mod.LAB_HELPERS)
+        self.assertNotIn('signInAnonymously', mod.LAB_HELPERS)
+        self.assertNotIn('httpsCallable', mod.LAB_HELPERS)
+
     def test_repository_cannot_be_patched(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
