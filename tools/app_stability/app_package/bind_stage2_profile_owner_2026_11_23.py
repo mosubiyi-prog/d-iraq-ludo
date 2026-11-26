@@ -1597,18 +1597,28 @@ def _stage04_prize_page(source):
     this.stage04RequestStream,
     this.stage04Submit,
     this.stage04Current,""",'stage04-prize-page-constructor')
-    body=once(body,'      await DedaBackend.submitPrizeWinnerRequest(',
-        """      if (widget.stage04RequestStream != null) {
-        if (widget.stage04Current?.call() != true || widget.stage04Submit == null) return;
-        await widget.stage04Submit!();
-        if (!mounted || widget.stage04Current?.call() != true) return;
-      } else await DedaBackend.submitPrizeWinnerRequest(""",'stage04-prize-submit')
-    body=once(body,"'تم إرسال طلب الجائزة إلى إدارة DEDA بنجاح.',",
-        "widget.stage04RequestStream != null ? 'تم تأكيد طلب الفحص فقط.' : 'تم إرسال طلب الجائزة إلى إدارة DEDA بنجاح.',",
-        'stage04-prize-message-ar')
-    body=once(body,"'Your prize request was sent to DEDA administration.',",
-        "widget.stage04RequestStream != null ? 'Synthetic request confirmed only.' : 'Your prize request was sent to DEDA administration.',",
-        'stage04-prize-message-en')
+    # Guard the original method at its entry, not a particular legacy
+    # backend statement (the assembled recipe can wrap that call).
+    body=once(body,'  Future<void> _submitRequest() async {',
+        """  Future<void> _stage04SubmitRequest() async {
+    if (_submitting || widget.stage04Current?.call() != true || widget.stage04Submit == null) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.stage04Submit!();
+      if (!mounted || widget.stage04Current?.call() != true) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        t('تم تأكيد طلب الفحص فقط.', 'Synthetic request confirmed only.'))));
+    } catch (_) {
+      if (!mounted || widget.stage04Current?.call() != true) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        t('تعذر تأكيد طلب الفحص.', 'Synthetic request not confirmed.'))));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+  Future<void> _submitRequest() async {
+    if (widget.stage04RequestStream != null) return _stage04SubmitRequest();""",
+        'stage04-prize-submit-entry')
     body=once(body,'  Future<void> _replyToAdmin() async {',
         '  Future<void> _replyToAdmin() async {\n    if (widget.stage04RequestStream != null) return;','stage04-prize-no-legacy-reply')
     body=once(body,'  Future<void> _confirmPrizeReceived() async {',
