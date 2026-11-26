@@ -7,7 +7,7 @@ const load=createRequire(import.meta.url);
 const {build,buildAccount,base,uid:fixtureUid,project:fixtureProject}=load('../stage03-trusted-fixture/uid-trusted-fixture.cjs');
 import {initializeApp,deleteApp} from 'firebase/app';
 import {initializeAuth,inMemoryPersistence,signInWithEmailAndPassword,getIdTokenResult} from 'firebase/auth';
-import {initializeFirestore,memoryLocalCache,doc,getDocFromServer,setLogLevel,writeBatch} from 'firebase/firestore';
+import {initializeFirestore,memoryLocalCache,doc,getDocFromServer,setLogLevel,writeBatch,runTransaction} from 'firebase/firestore';
 
 const projectId='deda-qa-uid-lab-20261108', uid='PLmG06Uhhheef1hDE2MLfX6DEpg2', email='deda-qa-test@example.com';
 const expectedHash='705e70c89ef87374a56ed7cf1f31fc408050935b04a9b4120b8b11685872a323';
@@ -130,6 +130,8 @@ async function main(){
     require(o==='@DEDA-QA1234');
     const specs=[
       ['account',accountView,d=>same(d,accountRows[accountView])],
+      ['wallet-account-binding','users/'+uid,d=>same(d,{accountKey:uid,sharePersonalId:o})],
+      ['wallet-session-binding','deda_sessions/'+uid,d=>same(d,{uid,accountKey:uid})],
       ['wallet-original-route','deda_share_ids/'+o,d=>d.ownerUid===uid&&d.publicId===o&&d.kind==='personal'&&d.active===true],
       ['wallet-gift-residual','deda_diamond_gift_balances/'+o,d=>d.publicId===o&&
         (!Object.hasOwn(d,'ownerUid')||d.ownerUid===uid)&&Number.isSafeInteger(d.balance)&&d.balance>=0&&d.balance<=9007199254740990],
@@ -164,12 +166,44 @@ async function main(){
     // a real prize code from the synthetic fixture. Evidence-only outcome.
     console.log('PASS_STAGE04_PINNED_READ_ONLY_OBSERVATIONS_TWO_CLIENTS');
     if(Object.values(findings).some(s=>s==='read-denied'||s==='unexpected-shape')||
-        findings.account!=='verified-shape'||findings['wallet-original-route']!=='verified-shape'||
+        findings.account!=='verified-shape'||findings['wallet-account-binding']!=='verified-shape'||
+        findings['wallet-session-binding']!=='verified-shape'||findings['wallet-original-route']!=='verified-shape'||
         findings['wallet-gift-residual']!=='verified-shape'){
       console.log('BLOCK_STAGE04_LIVE_SOURCE_READINESS');
       process.exitCode=1;
     }else{
       console.log('STAGE04_LIVE_SOURCE_OBSERVED_NOT_ENTITLEMENT_OR_DEVICE_APPROVAL');
+      // Same read transaction used by the wallet adapter, with additional
+      // exact fixture binding checks. Never set/update/delete a document.
+      stage='stage04-wallet-consistent-read';
+      async function readWallet(c){
+        return runTransaction(c.db,async tx=>{
+          async function read(path){
+            const row=await tx.get(doc(c.db,path));
+            require(!row.metadata.fromCache&&!row.metadata.hasPendingWrites);
+            return row.exists()?row.data():null;
+          }
+          const p=await read(root),i=await read(view),a=await read(accountView);
+          const u=await read('users/'+uid),session=await read('deda_sessions/'+uid);
+          const route=await read('deda_share_ids/'+o),gift=await read('deda_diamond_gift_balances/'+o);
+          // Readiness rules permit this missing document only if both admin
+          // role and gateway are absent. A denial or actual row must HOLD.
+          const personal=await read('deda_gm_personal_diamond_wallets/'+uid);
+          require(same(p,expected[root])&&same(i,expected[view])&&same(a,accountRows[accountView]));
+          require(same(u,{accountKey:uid,sharePersonalId:o})&&same(session,{uid,accountKey:uid}));
+          require(same(route,{ownerUid:uid,publicId:o,kind:'personal',active:true}));
+          require(same(gift,{publicId:o,balance:70})&&personal===null);
+          const earned=p.balances.earnedDiamonds, total=earned+gift.balance;
+          require(Number.isSafeInteger(earned)&&earned>=0&&Number.isSafeInteger(total)&&total<=9007199254740990);
+          // Existing fixture: 1200 earned less 1000 spent, plus 70 residual;
+          // the pending 250-diamond gift is not credited.
+          require(earned===200&&total===270);
+          return {progressVersion:p.version,inventoryRevision:i.revision,accountRevision:a.revision,earned,gift:gift.balance,total};
+        });
+      }
+      const walletA=await readWallet(first),walletB=await readWallet(second);
+      require(same(walletA,walletB));
+      console.log('PASS_STAGE04_EXACT_SYNTHETIC_WALLET_270_TWO_READ_TRANSACTIONS_NO_PENDING_GIFT');
     }
     console.log('STAGE04_REAL_PRIZE_ISSUER_AND_POSITIVE_DEVICE_TEST_NOT_PROVEN');
   }
