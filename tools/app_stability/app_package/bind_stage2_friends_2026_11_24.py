@@ -519,6 +519,14 @@ def patch_lab_service(src):
     src=src[:i]+'    if(stage04LabMode)return readLabFriendPreview(relation,myUid);\n'+src[i:]
     return src
 
+def patch_lab_search(body):
+    # Preserve surrounding await / DedaSectionOperationContext.wait and
+    # all existing session fences in the reconstructed 100450-derived app.
+    return one(body, 'DedaStage51FriendSearch.findByUserInput(id)',
+        '(DedaSocialService.stage04LabMode ? DedaSocialService.readLabPublicProfile(id) : DedaStage51FriendSearch.findByUserInput(id))',
+        'lab-search')
+
+
 def patch_lab_main(main):
     def friends(body):
         anchor='  Future<void> _prepare({bool ownerProofAlreadyReady = false}) async {'
@@ -576,8 +584,7 @@ def patch_lab_main(main):
       } catch(_) {}
       return;
     }''','lab-copy-own-id')
-        body=one(body,'final found = await DedaStage51FriendSearch.findByUserInput(id);',
-            'final found = await (DedaSocialService.stage04LabMode ? DedaSocialService.readLabPublicProfile(id) : DedaStage51FriendSearch.findByUserInput(id));','lab-search')
+        body=patch_lab_search(body)
         # The add page also renders the owner's ID before a session opens.
         # Do not ask the legacy phone preference or legacy alias widget.
         old_id = "    final myId = _session?.publicId ??\n        DedaBackend.personalShareIdForPhone(DedaPreferences.phone).trim();"

@@ -60,6 +60,19 @@ class FriendsSourceTests(unittest.TestCase):
         self.assertNotIn('signInAnonymously', mod.LAB_HELPERS)
         self.assertNotIn('httpsCallable', mod.LAB_HELPERS)
 
+    def test_lab_search_preserves_existing_outer_session_operation(self):
+        call='DedaStage51FriendSearch.findByUserInput(id)'
+        replacement='(DedaSocialService.stage04LabMode ? DedaSocialService.readLabPublicProfile(id) : '+call+')'
+        for body in (
+            'final found = await '+call+';',
+            'final found = await DedaSectionOperationContext.wait(\n        '+call+');',
+            'final found = await\n        '+call+';',
+        ):
+            self.assertEqual(mod.patch_lab_search(body),body.replace(call,replacement))
+        for invalid in ('missing search',call+';'+call):
+            with self.assertRaises(ValueError):
+                mod.patch_lab_search(invalid)
+
     def test_lab_preview_uses_current_accepted_relation_and_existing_service(self):
         src = profile.archived_profile_member('lib/deda_social_service.dart')
         changed = mod.patch_lab_service(mod.patch_service(src))
