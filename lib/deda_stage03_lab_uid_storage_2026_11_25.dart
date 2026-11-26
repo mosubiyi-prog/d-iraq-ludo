@@ -707,7 +707,15 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     }
     return d;
   }
-  static Stream<Map<String,dynamic>?> watchPrizeCandidate(DedaStage04ProfileRead opening) async* {
+  static Stream<Map<String,dynamic>?> watchPrizeCandidate(DedaStage04ProfileRead opening) =>
+      Stream<Map<String,dynamic>?>.multi((controller) {
+        // Every attachment re-verifies its owner and server state, including
+        // a card flipped away and then back. Cancel the old listener.
+        final subscription=_watchPrizeCandidate(opening).listen(
+          controller.add,onError:controller.addError,onDone:controller.close);
+        controller.onCancel=subscription.cancel;
+      },isBroadcast:true);
+  static Stream<Map<String,dynamic>?> _watchPrizeCandidate(DedaStage04ProfileRead opening) async* {
     if(!actionsCandidateEnabled)throw StateError('profile-actions-disabled');
     final current=_intent();
     void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();_io._check(uid,uid);}
