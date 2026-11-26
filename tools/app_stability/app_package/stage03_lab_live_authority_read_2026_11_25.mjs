@@ -119,6 +119,59 @@ async function main(){
     console.log('SYNTHETIC_ACCOUNT_ONLY_NO_AWARDS_NO_DEPLOY');
   }else{
     console.log('READ_ONLY_NO_AWARDS_NO_DEPLOY');
+    // Stage 04: inspect only the exact existing synthetic account's source
+    // paths. No permission probing via writes, no legacy phone or historical
+    // identity, no automatic publication or fixture creation.
+    stage='stage04-profile-live-readiness';
+    require(process.env.ACCOUNT_FIXTURE_AUTHORIZED==='false');
+    require(process.env.GITHUB_REPOSITORY==='mosubiyi-prog/d-iraq-ludo'&&
+      process.env.GITHUB_REF==='refs/heads/deda-100451-owner-admin-session-safe-repair-2026-11-20');
+    const o=accountRows[accountView].profile.originalId;
+    require(o==='@DEDA-QA1234');
+    const specs=[
+      ['account',accountView,d=>same(d,accountRows[accountView])],
+      ['wallet-original-route','deda_share_ids/'+o,d=>d.ownerUid===uid&&d.publicId===o&&d.kind==='personal'&&d.active===true],
+      ['wallet-gift-residual','deda_diamond_gift_balances/'+o,d=>d.publicId===o&&
+        (!Object.hasOwn(d,'ownerUid')||d.ownerUid===uid)&&Number.isSafeInteger(d.balance)&&d.balance>=0&&d.balance<=9007199254740990],
+      ['wallet-personal-residual','deda_gm_personal_diamond_wallets/'+uid,d=>d.accountKey===uid&&
+        Number.isSafeInteger(d.balance)&&d.balance>=0&&d.balance<=9007199254740990],
+      ['prize-request','prize_winner_requests/prize_v1_'+uid,d=>d.ownerUid===uid&&
+        d.accountKey===uid&&d.cycleId==='prize_v1'&&d.dedaId===o&&typeof d.rewardCode==='string'],
+    ];
+    async function inspect(c,path,valid){
+      try{
+        const s=await getDocFromServer(doc(c.db,path));
+        require(!s.metadata.fromCache&&!s.metadata.hasPendingWrites);
+        if(!s.exists())return {state:'missing'};
+        const value=s.data();
+        return {state:valid(value)?'verified-shape':'unexpected-shape',value};
+      }catch(e){
+        if(e.code==='permission-denied')return {state:'read-denied'};
+        throw e;
+      }
+    }
+    const findings={};
+    for(const [label,path,valid] of specs){
+      const a=await inspect(first,path,valid),b=await inspect(second,path,valid);
+      require(a.state===b.state);
+      if(a.value!==undefined||b.value!==undefined)require(same(a.value,b.value));
+      await denied(()=>getDocFromServer(doc(unauth.db,path)));
+      findings[label]=a.state;
+      console.log('STAGE04_LIVE_SOURCE',label,a.state);
+    }
+    // A successful read is not proof of issuance or mutation authorization.
+    // Missing/denied residuals must not be converted into zero. Never infer
+    // a real prize code from the synthetic fixture. Evidence-only outcome.
+    console.log('PASS_STAGE04_PINNED_READ_ONLY_OBSERVATIONS_TWO_CLIENTS');
+    if(Object.values(findings).some(s=>s==='read-denied'||s==='unexpected-shape')||
+        findings.account!=='verified-shape'||findings['wallet-original-route']!=='verified-shape'||
+        findings['wallet-gift-residual']!=='verified-shape'){
+      console.log('BLOCK_STAGE04_LIVE_SOURCE_READINESS');
+      process.exitCode=1;
+    }else{
+      console.log('STAGE04_LIVE_SOURCE_OBSERVED_NOT_ENTITLEMENT_OR_DEVICE_APPROVAL');
+    }
+    console.log('STAGE04_REAL_PRIZE_ISSUER_AND_POSITIVE_DEVICE_TEST_NOT_PROVEN');
   }
 }
 try{await main();}catch(e){
