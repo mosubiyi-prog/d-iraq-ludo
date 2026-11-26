@@ -499,6 +499,19 @@ jobs:
             test "$(ip -o link show | wc -l)" -eq 1
             exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
           ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_social_service.dart
+      - name: Stage04 03 bind existing weekly leaderboard to central UID and receipt proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/bind_stage2_weekly_league_2026_11_24.py "$DEDA_STAGE1_SOURCE" --stage04-lab
+          cd "$DEDA_STAGE1_SOURCE"
+          flutter_bin="$(command -v flutter)"
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ip -o link show | wc -l)" -eq 1
+            exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_leaderboard_page.dart
       - name: Bind phase 01 hold into the complete assembled DEDA entry and compile isolated debug QA
         env:
           LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}

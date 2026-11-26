@@ -50,6 +50,37 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/03 protected weekly claims match score exactly and exclude frozen claims',(){
+    final account=protectedAccount();
+    final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;
+    final frozen=DateTime.utc(2026,11,6,22).millisecondsSinceEpoch;
+    final key='2026-11-01|open_map';
+    final receipt={'claimKey':key,'dayId':'2026-11-01','taskId':'open_map',
+      'completedMs':at,'claimedMs':at+1};
+    final week={'weekId':'2026-10-31','claimedKeys':[key],
+      'completedTasks':1,'weeklyXp':20};
+    account['tasks']=[receipt,{'claimKey':'2026-11-07|open_map','dayId':'2026-11-07',
+      'taskId':'open_map','completedMs':frozen,'claimedMs':frozen+1}];
+    account['league']=[week];
+    DedaStage04ProfileView p()=>DedaStage04ProfileView.fromProtected(
+      DedaStage03ProtectedSnapshot.decode(expectedUid:uid,
+        progress:protectedProgress(),inventory:protectedInventory(),account:account));
+    expect(DedaStage04LeagueRead.verifiedWeeks(p()),{'2026-10-31':{key}});
+    final score=<String,dynamic>{'weekId':'2026-10-31','publicId':'@DEDA-QA1234',
+      'claimedKeys':[key],'completedTasks':1,'weeklyXp':20};
+    DedaStage04LeagueRead.validateOwnerScore(p(),'2026-10-31',score);
+    expect(()=>DedaStage04LeagueRead.validateOwnerScore(p(),'2026-10-31',null),throwsStateError);
+    expect(()=>DedaStage04LeagueRead.validateOwnerScore(p(),'2026-10-31',
+      {...score,'claimedKeys':['2026-11-01|long_trip']}),throwsStateError);
+    expect(()=>DedaStage04LeagueRead.validateOwnerScore(p(),'2026-10-31',
+      {...score,'weeklyXp':40}),throwsStateError);
+    account['league']=[];
+    expect(()=>DedaStage04LeagueRead.verifiedWeeks(p()),throwsFormatException);
+    account['league']=[week];
+    account['tasks']=[receipt,receipt];
+    expect(()=>DedaStage04LeagueRead.verifiedWeeks(p()),throwsFormatException);
+  });
+
   test('wallet reads verified residuals directly without a cached projection', () {
     final view=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
       expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:protectedAccount()));

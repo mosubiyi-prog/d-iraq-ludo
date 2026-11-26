@@ -42,6 +42,22 @@ class WeeklySourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.patch_main(fixture + fixture)
 
+    def test_lab_routes_reuse_uid_and_preserve_legacy_routes(self):
+        old='readCanonicalAccount: () => DedaBackend.accountKeyForPhone(\n            DedaPreferences.phone).trim(),'
+        src=mod.LAB_IMPORT+old+'\n'+old
+        bound=mod.patch_lab_main(src)
+        self.assertEqual(bound.count('DedaStage03LabStorage.leagueAccountKey()'),2)
+        self.assertEqual(bound.count('DedaBackend.accountKeyForPhone('),2)
+        with self.assertRaises(ValueError):
+            mod.patch_lab_main(mod.LAB_IMPORT+old)
+        gate=mod.patch_lab_gate(mod.patch_gate((ROOT/'lib/deda_weekly_account_view_gate.dart').read_text()))
+        self.assertIn('account==uid && account==DedaStage03LabStorage.leagueAccountKey()',gate)
+        self.assertIn('_openingAccountEpoch',gate)
+        self.assertIn('opening.verifyUnchanged(fresh)',mod.LAB_LOAD)
+        self.assertNotIn('claimAfterOriginalReward',mod.LAB_LOAD)
+        with self.assertRaises(ValueError):
+            mod.bind_lab(ROOT)
+
     def test_original_repo_not_writeable(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)

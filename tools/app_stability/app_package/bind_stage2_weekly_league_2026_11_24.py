@@ -309,9 +309,135 @@ def bind(project, verify_only=False):
     print('PASS_STAGE2_WEEKLY_ORIGINAL_ROUTES_RANK_OWNER_FREEZE_PRIZE_READ_NO_PAYOUT')
 
 
+
+LAB_MARK = 'DEDA_STAGE04_WEEKLY_UNIFIED_UID'
+LAB_IMPORT = "import 'deda_stage03_lab_uid_storage_2026_11_25.dart';\n"
+
+def patch_lab_main(s):
+    anchor = 'readCanonicalAccount: () => DedaBackend.accountKeyForPhone(\n            DedaPreferences.phone).trim(),'
+    if s.count(anchor)!=2 or LAB_MARK in s or LAB_IMPORT not in s:
+        raise ValueError('WEEKLY_LAB_BOTH_ROUTES_OR_PROFILE_IMPORT')
+    return s.replace(anchor,
+        'readCanonicalAccount: () => DedaStage03LabStorage.leagueLabMode\n'
+        '            ? DedaStage03LabStorage.leagueAccountKey()\n'
+        '            : DedaBackend.accountKeyForPhone(\n'
+        '            DedaPreferences.phone).trim(),')
+
+def patch_lab_gate(s):
+    s=LAB_IMPORT+s
+    return one(s,'_authReady && _account.hasMatch(account) && _uid.hasMatch(uid)',
+        '_authReady && _uid.hasMatch(uid) && (DedaStage03LabStorage.leagueLabMode\n'
+        '          ? account==uid && account==DedaStage03LabStorage.leagueAccountKey()\n'
+        '          : _account.hasMatch(account))','lab-gate-one-uid')
+
+LAB_LOAD = r'''
+  // DEDA_STAGE04_WEEKLY_UNIFIED_UID
+  static Future<Object?> _loadLabStandings(String accountKey,bool Function() sameViewer) async {
+    if(!sameViewer() || accountKey!=DedaStage03LabStorage.leagueAccountKey())
+      throw StateError('league-lab-owner-required');
+    final opening=await DedaStage03LabStorage.readLeague(),p=opening.requireCurrent();
+    final now=DateTime.now().toUtc(), w=week(now);
+    void check(){
+      opening.requireCurrent();
+      if(!sameViewer() || accountKey!=DedaStage03LabStorage.leagueAccountKey() ||
+          week(DateTime.now().toUtc()).id!=w.id)
+        throw StateError('league-lab-owner-or-week-changed');
+    }
+    check();
+    final current=await _read(w.id,p.originalId,'live',
+        w.close.difference(now).inMilliseconds,lab:opening);
+    check();
+    final previous=w.start.isAtSameMomentAs(origin)?<String,dynamic>{
+      'verified':true,'status':'closed','rewardsCredited':false,
+      'weekId':'before-first-week','remainingMs':0,'rows':[],
+      'viewerParticipantId':null,'viewerPlace':null,
+    }:await _read(week(w.start.subtract(const Duration(milliseconds:1))).id,
+        p.originalId,'closed',0,lab:opening);
+    check();
+    final fresh=await DedaStage03LabStorage.readLeague();
+    opening.verifyUnchanged(fresh);
+    check();
+    return {'source':'deda_direct_firestore_v1','readOnly':true,
+      'current':current,'previous':previous};
+  }
+
+'''
+
+def patch_lab_direct(s):
+    if MARK not in s or LAB_MARK in s:
+        raise ValueError('WEEKLY_LAB_EXISTING_DIRECT_REQUIRED')
+    s=LAB_IMPORT+s
+    s=one(s,'  static Future<Object?> loadStandings({',LAB_LOAD+'  static Future<Object?> loadStandings({','lab-reader')
+    s=one(s,"    if (!sameViewer()) throw StateError('league-account-switched');",
+        "    if(DedaStage03LabStorage.leagueLabMode)return _loadLabStandings(accountKey,sameViewer);\n"
+        "    if (!sameViewer()) throw StateError('league-account-switched');",'lab-no-phone-or-outbox')
+    anchor='    required String accountKey, required String taskId,\n  }) async {'
+    s=one(s,anchor,anchor+'\n    if(DedaStage03LabStorage.leagueLabMode){\n'
+        '      final confirmed=await DedaStage03LabStorage.confirmLeagueClaim(accountKey,taskId);\n'
+        '      if(confirmed)standingRefresh.value+=1;\n      return confirmed;\n    }','lab-claim-existing-only')
+    s=one(s,'String id, String viewer, String status, int left) async {',
+        'String id, String viewer, String status, int left,{DedaStage04LeagueRead? lab}) async {','lab-read-parameter')
+    s=one(s,'    final all = <Map<String, dynamic>>[];',
+        '    final owner=lab?.requireCurrent();\n'
+        '    if(lab!=null){\n'
+        '      final own=snap.docs.where((d)=>d.id==viewer).toList();\n'
+        '      if(own.length>1)throw StateError("league-lab-duplicate-owner");\n'
+        '      lab.verifyOwnerScore(id,own.isEmpty?null:own.single.data());\n'
+        '    }\n'
+        '    final all = <Map<String, dynamic>>[];','lab-score-proof')
+    s=one(s,"          row['updatedAt'] is! Timestamp) continue;",
+        "          row['updatedAt'] is! Timestamp) {\n"
+        "        if(lab!=null && !(pid==viewer && xp==0 && tasks==0))\n"
+        "          throw StateError('league-lab-invalid-rank-row');\n"
+        "        continue;\n      }",'lab-no-skipped-invalid-rank')
+    s=one(s,"all.add({'id': pid, 'name': name, 'xp': xp, 'tasks': tasks,",
+        "all.add({'id': pid, 'name': owner!=null && pid==viewer?owner.displayName:name, 'xp': xp, 'tasks': tasks,",'lab-owner-name')
+    s=one(s,'final known = pid == viewer && authUid != null',
+        'final known = lab==null && pid == viewer && authUid != null','lab-no-old-id-cache')
+    s=one(s,'var displayedId = known?.displayId ?? pid;',
+        'var displayedId = owner!=null && pid==viewer?owner.activeId:(known?.displayId ?? pid);','lab-owner-display-id')
+    s=one(s,"if (proof?['displayId'] is String) {",
+        "if ((owner==null || pid!=viewer) && proof?['displayId'] is String) {",'lab-no-overwrite-own-id')
+    s=one(s,"if (p?['publicId'] == pid &&",
+        "if (p?['publicId'] == pid && (owner==null || pid!=viewer || p?['ownerUid']==owner.uid) &&",'lab-own-appearance-owner')
+    return s
+
+def patch_lab_page(s):
+    if LAB_IMPORT in s: raise ValueError('WEEKLY_LAB_DUPLICATE_PAGE')
+    s=LAB_IMPORT+s
+    for expression,scale in (('details?.activePublicId','11'),('profile(row)?.activePublicId','11*scale')):
+        if expression=='details?.activePublicId':
+            old=': DedaUnifiedActiveIdLabel100410(\n                        originalId:_originalFromWeekly(row)!,\n                        style:TextStyle(fontSize:11,color:silver))'
+        else:
+            old=': DedaUnifiedActiveIdLabel100410(\n                          originalId:_originalFromWeekly(row)!,\n                          style:TextStyle(fontSize:11*scale,color:silver))'
+        new=': DedaStage03LabStorage.leagueLabMode ? Text('+expression+" ?? '—',\n"
+        new+='                          textDirection:TextDirection.ltr,maxLines:1,overflow:TextOverflow.ellipsis,\n'
+        new+='                          style:TextStyle(fontSize:'+scale+',color:silver)) '+old
+        s=one(s,old,new,'lab-verified-label-'+scale)
+    return s
+
+def bind_lab(project):
+    project=Path(project).resolve()
+    if project==ROOT or ROOT in project.parents or project in ROOT.parents:
+        raise ValueError('WEEKLY_LAB_DISPOSABLE_REQUIRED')
+    files={key:(project/path).read_text() for key,path in PATHS.items()}
+    verify(files)
+    transforms={'main':patch_lab_main,'gate':patch_lab_gate,
+                'direct':patch_lab_direct,'page':patch_lab_page}
+    updated={key:patch(files[key]) for key,patch in transforms.items()}
+    for key,value in updated.items():
+        (project/PATHS[key]).write_text(value)
+    print('PASS_STAGE04_WEEKLY_ORIGINAL_ROUTES_CENTRAL_UID_RECEIPTS_READ_ONLY')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('project', type=Path)
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--stage04-lab', action='store_true')
     args = parser.parse_args()
-    bind(args.project, args.verify_only)
+    if args.stage04_lab:
+        if args.verify_only: raise ValueError('lab and verify-only are exclusive')
+        bind_lab(args.project)
+    else:
+        bind(args.project, args.verify_only)

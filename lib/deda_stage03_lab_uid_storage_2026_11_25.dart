@@ -9,6 +9,8 @@ import 'deda_auth_session_runtime.dart';
 import 'deda_private_data_sync.dart';
 import 'deda_profile_visible_diamonds.dart';
 import 'deda_stage02_lab_single_uid_2026_11_25.dart';
+import 'deda_weekly_league_clock.dart';
+import 'deda_weekly_community_outbox.dart';
 
 /// Read-only envelope. Only the guarded server transaction establishes source
 /// provenance; decoding a map never grants rewards, money, ownership or roles.
@@ -569,6 +571,91 @@ class DedaStage04FriendsRead {
   }
 }
 
+/// 04/03: reuse the protected account as the sole owner-score authority.
+/// Ranking additionally requires an independently complete server score set.
+class DedaStage04LeagueRead {
+  DedaStage04LeagueRead._(this._profile);
+  final DedaStage04ProfileRead _profile;
+  DedaStage04ProfileView requireCurrent()=>_profile.requireCurrent();
+  static String day(DateTime utc)=>DedaWeeklyCommunityOutbox.baghdadDay(utc);
+  static String weekId(DateTime utc)=>day(DedaWeeklyLeagueClock.at(utc).weekStart);
+
+  /// Check claimed task evidence and all stored weekly records, including
+  /// omission and duplicate keys. Unclaimed or frozen tasks never count.
+  static Map<String,Set<String>> verifiedWeeks(DedaStage04ProfileView p) {
+    final tasks=p._source.account['tasks'] as List, leagues=p._source.account['league'] as List;
+    if(tasks.length>20000 || leagues.length>520)throw const FormatException('league-source-limit');
+    final taskKeys=<String>{}, expected=<String,Set<String>>{};
+    for(final r in tasks){
+      if(r is! Map || r.length!=5 || !['claimKey','dayId','taskId','completedMs','claimedMs'].every(r.containsKey) ||
+          r['dayId'] is! String || !DedaWeeklyCommunityOutbox.tasks.contains(r['taskId']) ||
+          r['claimKey']!=r['dayId'].toString()+'|'+r['taskId'].toString() || r['completedMs'] is! int ||
+          (r['completedMs'] as int)<=0 || !taskKeys.add(r['claimKey'] as String))
+        throw const FormatException('league-task-proof');
+      final completed=DateTime.fromMillisecondsSinceEpoch(r['completedMs'] as int,isUtc:true);
+      if(day(completed)!=r['dayId'])throw const FormatException('league-task-day');
+      final claimed=r['claimedMs'];
+      if(claimed==null)continue;
+      if(claimed is! int || claimed<(r['completedMs'] as int))
+        throw const FormatException('league-claim-proof');
+      final stamp=DateTime.fromMillisecondsSinceEpoch(claimed,isUtc:true);
+      if(day(stamp)!=r['dayId'])throw const FormatException('league-claim-day');
+      if(DedaWeeklyLeagueClock.at(stamp).canAccumulate){
+        final keys=expected.putIfAbsent(weekId(stamp),()=> <String>{});
+        keys.add(r['claimKey'] as String);
+        if(keys.length>56)throw const FormatException('league-claim-limit');
+      }
+    }
+    final actual=<String,Set<String>>{};
+    for(final r in leagues){
+      if(r is! Map || r.length!=4 || !['weekId','claimedKeys','completedTasks','weeklyXp'].every(r.containsKey) ||
+          r['weekId'] is! String || r['claimedKeys'] is! List ||
+          !(r['claimedKeys'] as List).every((v)=>v is String))
+        throw const FormatException('league-week-proof');
+      final id=r['weekId'] as String, values=(r['claimedKeys'] as List).cast<String>();
+      final set=values.toSet();
+      final date=DateTime.tryParse(id+'T03:00:00Z');
+      if(date==null || !DedaWeeklyLeagueClock.at(date).canAccumulate || weekId(date)!=id ||
+          DedaWeeklyLeagueClock.at(date).weekStart!=date || actual.containsKey(id) ||
+          set.length!=values.length || set.length>56 ||
+          r['completedTasks']!=set.length || r['weeklyXp']!=set.length*20 ||
+          (expected[id]?.length??0)!=set.length ||
+          !(expected[id]??<String>{}).containsAll(set))
+        throw const FormatException('league-week-proof');
+      actual[id]=Set.unmodifiable(set);
+    }
+    if(expected.keys.any((k)=>!actual.containsKey(k)))
+      throw const FormatException('league-omitted-claims');
+    return Map.unmodifiable(actual);
+  }
+
+  Set<String> claims(String id)=>verifiedWeeks(requireCurrent())[id]??const <String>{};
+
+  void verifyOwnerScore(String week,Map<String,dynamic>? score){
+    validateOwnerScore(requireCurrent(),week,score);
+  }
+  static void validateOwnerScore(DedaStage04ProfileView p,String week,Map<String,dynamic>? score){
+    final keys=verifiedWeeks(p)[week]??const <String>{};
+    if(score==null){
+      if(keys.isNotEmpty)throw StateError('league-owner-score-missing');
+      return;
+    }
+    final raw=score['claimedKeys'];
+    if(score['publicId']!=p.originalId || score['weekId']!=week ||
+        raw is! List || !raw.every((v)=>v is String) ||
+        raw.length!=keys.length || raw.toSet().length!=keys.length ||
+        !keys.containsAll(raw.cast<String>()) ||
+        score['completedTasks']!=keys.length || score['weeklyXp']!=keys.length*20)
+      throw StateError('league-owner-score-conflict');
+  }
+  void verifyUnchanged(DedaStage04LeagueRead fresh){
+    final a=requireCurrent(),b=fresh.requireCurrent();
+    if(a.uid!=b.uid || a.accountRevision!=b.accountRevision ||
+        a.originalId!=b.originalId || a.activeId!=b.activeId ||
+        a.displayName!=b.displayName)throw const DedaPrivateDataConflict();
+  }
+}
+
 /// The restored private revision used to open the existing profile editor.
 /// A selection never confers an entitlement. The base is held for CAS.
 class DedaStage04AppearanceRead {
@@ -812,6 +899,31 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final fresh=await readFriends();check();
     if(fresh.requireCurrent().revision<=view.revision)throw const DedaPrivateDataConflict();
     return pair;
+  }
+
+  static const leagueLabMode=bool.fromEnvironment('DEDA_STAGE04_LEAGUE_LAB');
+  static String leagueAccountKey()=>leagueLabMode && _matches()?uid:'';
+
+  static Future<DedaStage04LeagueRead> readLeague() async {
+    if(!leagueLabMode)throw StateError('league-lab-disabled');
+    final p=await readProfile();
+    DedaStage04LeagueRead.verifiedWeeks(p.requireCurrent());
+    return DedaStage04LeagueRead._(p);
+  }
+
+  /// Confirm existing evidence only; no legacy phone journal or XP issuance.
+  static Future<bool> confirmLeagueClaim(String key,String taskId) async {
+    if(!leagueLabMode || key!=leagueAccountKey())return false;
+    try{
+      final now=DateTime.now().toUtc(), clock=DedaWeeklyLeagueClock.at(now);
+      if(!clock.canAccumulate)return false;
+      final read=await readLeague(),live=DateTime.now().toUtc();
+      return DedaWeeklyLeagueClock.at(live).canAccumulate &&
+          DedaStage04LeagueRead.weekId(live)==DedaStage04LeagueRead.weekId(now) &&
+          DedaStage04LeagueRead.day(live)==DedaStage04LeagueRead.day(now) &&
+          read.claims(DedaStage04LeagueRead.weekId(now))
+            .contains(DedaStage04LeagueRead.day(now)+'|'+taskId);
+    }catch(_){return false;}
   }
 
   /// Direct read-only residual sources in the unpublished synthetic candidate.
