@@ -54,8 +54,11 @@ def patch_cards(source):
     }
     final key = _key(originalId);
     final state = notifier(originalId);''')
-    s = once(s, '    final key = _key(originalId);\n    final prefs = await SharedPreferences.getInstance();',
-        '''    if (DedaStage03LabStorage.storeLabMode) {
+    use_header = '''  static Future<void> use(
+    String originalId, DedaPremiumIdCardColor choice,
+  ) async {'''
+    s = once(s, use_header,
+        use_header + '''\n    if (DedaStage03LabStorage.storeLabMode) {
       final opening = _labOpen[originalId];
       if (opening == null) throw StateError('store-card-open-required');
       opening.requireCurrent();
@@ -74,8 +77,7 @@ def patch_cards(source):
       }
       return;
     }
-    final key = _key(originalId);
-    final prefs = await SharedPreferences.getInstance();''')
+    '''.rstrip())
     s = once(s, '    _states[originalId]?.value = null;',
         '    _labOpen.remove(originalId);\n    _states[originalId]?.value = null;')
     if s.count('active == widget.color') != 2:
@@ -90,13 +92,15 @@ def patch_cards(source):
 def patch_native_checkout(source):
     s = IMPORT + source
     s = once(s,'  static const live = true;', '  static const live = !'+MODE+';')
-    s = once(s,'    _item(frameId);\n    final data = await DedaOwner18Cosmetics.read(originalId);',
-        '''    _item(frameId);
-    if (DedaStage03LabStorage.storeLabMode) {
+    owned_header = '''  static Future<bool> isOwned(
+      {required String originalId, required String frameId}) async {'''
+    s = once(s,owned_header,
+        owned_header + '''\n    if (DedaStage03LabStorage.storeLabMode) {
+      _item(frameId);
       final p = await DedaStage03LabStorage.readStoreProfile(originalId);
       return p.requireCurrent().verifiedPaidFrameIds.contains(frameId);
     }
-    final data = await DedaOwner18Cosmetics.read(originalId);''')
+    '''.rstrip())
     s = once(s,'  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {',
         '''  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {
     if (DedaStage03LabStorage.storeLabMode) {
@@ -126,17 +130,16 @@ def patch_receipt_checkout(source):
     if (DedaStage03LabStorage.storeLabMode) {
       throw StateError('store-central-spend-authority-held');
     }''')
-    s = once(s,'''  }) async {
-    final uid = await _verifyOwner(originalId);
-    purchaseId(originalId, frameId);''',
-        '''  }) async {
-    if (DedaStage03LabStorage.storeLabMode) {
+    owned_header = '''  static Future<bool> isOwned({
+    required String originalId, required String frameId,
+  }) async {'''
+    s = once(s,owned_header,
+        owned_header + '''\n    if (DedaStage03LabStorage.storeLabMode) {
       purchaseId(originalId,frameId);
       final p = await DedaStage03LabStorage.readStoreProfile(originalId);
       return p.requireCurrent().verifiedPaidFrameIds.contains(frameId);
     }
-    final uid = await _verifyOwner(originalId);
-    purchaseId(originalId, frameId);''')
+    '''.rstrip())
     s = once(s,'  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {',
         '''  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {
     if (DedaStage03LabStorage.storeLabMode) {
