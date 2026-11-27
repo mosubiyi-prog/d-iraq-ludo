@@ -286,6 +286,48 @@ async function refreshWallet({store,uid}){
   });
 }
 
+// 04/04: mirror the ORIGINAL checkout's completed receipt pair, not a
+// second purchase. Trusted synthetic emulator only; no debit or new grant.
+// The wallet evidence already proves the canonical original ID -> same UID.
+async function syncStoreFrameReceipts({store,uid}){
+  requireDemo(store,uid);
+  return store.runTransaction(async tx=>{
+    const evidence=await walletEvidence(tx,uid);
+    const original=evidence.originalId,base='deda_lab_uid_authority/'+uid;
+    const source=base+'/inventorySources/current',view=base+'/inventory/current';
+    const old=parse(await tx.get(view),uid);
+    requireThat(equal(parse(await tx.get(source),uid),old)&&
+      equal(await tx.get(base+'/inventoryHistory/'+old.revision),old),
+      'store-inventory-history-conflict');
+    const verified=[];
+    for(const frameId of frames){
+      const r=await tx.get('deda_lab_frame_receipts/'+original+'/frames/'+frameId);
+      const o=await tx.get('deda_lab_owned_frames/'+original+'/frames/'+frameId);
+      if(r===null&&o===null)continue;
+      requireThat(r&&o,'store-frame-pair-incomplete');
+      exact(r,['publicId','frameId','kind','cost','createdAt']);
+      exact(o,['publicId','frameId','receiptId','createdAt']);
+      const a=r.createdAt,b=o.createdAt;
+      requireThat(r.publicId===original&&o.publicId===original&&
+        r.frameId===frameId&&o.frameId===frameId&&r.kind==='lab_frame'&&
+        r.cost===1000&&o.receiptId===original+'_'+frameId&&
+        a&&b&&typeof a.toMillis==='function'&&typeof a.isEqual==='function'&&
+        a.isEqual(b)&&stamp(Math.floor(a.toMillis())),'store-frame-proof-mismatch');
+      const createdMs=Math.floor(a.toMillis());
+      verified.push({frameId,receipt:{uid,frameId,kind:r.kind,cost:r.cost,createdMs},
+        ownership:{uid,frameId,receiptId:uid+'_'+frameId,createdMs}});
+    }
+    // A projection with a prior paid item may never silently drop it.
+    const next=parse({...old,revision:old.revision+1,frames:verified},uid);
+    preserve(old,next);
+    if(equal(next.frames,old.frames))return {replayed:true,view:old};
+    const history=base+'/inventoryHistory/'+next.revision;
+    requireThat(await tx.get(history)===null,'store-inventory-history-conflict');
+    tx.set(source,next);tx.set(view,next);tx.set(history,next);
+    return {replayed:false,view:next};
+  });
+}
+
 // Switch a previously received ID in the existing account/history and
 // original public directory in ONE transaction. No grant, UID, or debit.
 // Trusted emulator only; no new client permissions or production routing.
@@ -883,4 +925,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
+module.exports={syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};

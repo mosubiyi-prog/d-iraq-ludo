@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
+const {syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -798,4 +798,67 @@ test('04/01 original five point stages use one ledger, reserve/return once and t
   assert.equal((await operate(5000,'claim')).state.balances.points,final.balances.points);
   assert.equal((await db.collection(base+'/events').get()).size,10);
   await assertFails(setDoc(doc(client(),base),{...final,balances:{...final.balances,points:999999}}));
+});
+
+ 
+// 04/04 original checkout readback uses the existing protected inventory,
+// canonical route and wallet. All legacy-shaped records below are synthetic.
+async function seedStoreReadback(){
+  await seedWalletEvidence();
+  const {build}=require('./uid-trusted-fixture.cjs');
+  const docs=build();
+  for(const p of [source,base+'/inventoryHistory/1'])await db.doc(p).set(docs[p]);
+  const old=await read();
+  const {Timestamp}=require('firebase-admin/firestore');
+  async function pair(frameId,createdMs){
+    const createdAt=Timestamp.fromMillis(createdMs);
+    await db.doc('deda_lab_frame_receipts/'+original+'/frames/'+frameId).set(
+      {publicId:original,frameId,kind:'lab_frame',cost:1000,createdAt});
+    await db.doc('deda_lab_owned_frames/'+original+'/frames/'+frameId).set(
+      {publicId:original,frameId,receiptId:original+'_'+frameId,createdAt});
+  }
+  await pair(old.frames[0].frameId,old.frames[0].receipt.createdMs);
+  return {old,pair};
+}
+const syncStore=()=>syncStoreFrameReceipts({store,uid});
+test('04/04 completed original checkout reflects ownership once across two sessions, never debits again',async()=>{
+  const {old,pair}=await seedStoreReadback();
+  assert.equal((await syncStore()).replayed,true);
+  const beforeProgress=(await db.doc(base).get()).data();
+  const beforeWallet=(await db.doc(walletGiftPath).get()).data();
+  const beforeAccount=(await db.doc(acctView).get()).data();
+  await pair('FRAME_05',old.frames[0].receipt.createdMs+1000);
+  const outcomes=await Promise.all([syncStore(),syncStore()]);
+  assert.equal(outcomes.filter(x=>!x.replayed).length,1);
+  const result=await read();
+  assert.equal(result.revision,2);
+  assert.deepEqual(result.frames.map(x=>x.frameId),['FRAME_03','FRAME_05']);
+  assert.deepEqual(result.idGifts,old.idGifts);
+  assert.deepEqual(result.diamondGifts,old.diamondGifts);
+  assert.deepEqual((await db.doc(source).get()).data(),result);
+  assert.deepEqual((await db.doc(base+'/inventoryHistory/2').get()).data(),result);
+  assert.deepEqual((await db.doc(base).get()).data(),beforeProgress);
+  assert.deepEqual((await db.doc(walletGiftPath).get()).data(),beforeWallet);
+  assert.deepEqual((await db.doc(acctView).get()).data(),beforeAccount);
+  assert.deepEqual((await getDocFromServer(doc(client(),view))).data(),result);
+  await assertFails(setDoc(doc(client(),view),{...result,revision:3}));
+});
+test('04/04 rejects partial, forged, missing historical receipt and wrong canonical route',async()=>{
+  const {old,pair}=await seedStoreReadback();
+  await pair('FRAME_05',old.frames[0].receipt.createdMs+1000);
+  const path='deda_lab_owned_frames/'+original+'/frames/FRAME_05';
+  const owned=(await db.doc(path).get()).data();
+  await db.doc(path).delete();
+  await assert.rejects(syncStore(),{code:'store-frame-pair-incomplete'});
+  await db.doc(path).set({...owned,receiptId:'foreign_FRAME_05'});
+  await assert.rejects(syncStore(),{code:'store-frame-proof-mismatch'});
+  await db.doc(path).set(owned);
+  await db.doc(walletRoutePath).update({ownerUid:'foreign'});
+  await assert.rejects(syncStore(),{code:'wallet-owner-unproven'});
+  await db.doc(walletRoutePath).update({ownerUid:uid});
+  await db.doc('deda_lab_frame_receipts/'+original+'/frames/FRAME_03').delete();
+  await db.doc('deda_lab_owned_frames/'+original+'/frames/FRAME_03').delete();
+  await assert.rejects(syncStore(),{code:'ownership-history-regression'});
+  assert.deepEqual(await read(),old);
+  assert.equal((await db.doc(base+'/inventoryHistory/2').get()).exists,false);
 });
