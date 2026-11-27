@@ -377,7 +377,7 @@ test('04/03 original weekly award receipt maps once to UID inventory, without mi
     const reservation=()=>({uid,weekId,giftId:legacyId,reservedAt:serverTimestamp()});
     const reserve=actor=>runTransaction(actor,async tx=>{
       const mark=doc(actor,seen);
-      if((await tx.get(mark)).exists)return false;
+      if((await tx.get(mark)).exists())return false;
       tx.set(mark,reservation());return true;
     });
     const one=client(),two=client();
@@ -387,8 +387,13 @@ test('04/03 original weekly award receipt maps once to UID inventory, without mi
     await assertFails(setDoc(doc(client(uid,'anonymous'),seen),reservation()));
     await assertFails(setDoc(doc(one,seen),{...reservation(),giftId:'fake'}));
     await assertFails(setDoc(doc(one,base+'/leagueCardSeen/2026-11-07'),{...reservation(),weekId:'2026-11-07'}));
+    assert.equal((await db.doc(seen).get()).exists,false);
     const reserved=await Promise.all([reserve(one),reserve(two)]);
     assert.deepEqual(reserved.sort(),[false,true]);
+    const persisted=(await db.doc(seen).get()).data();
+    assert.equal(persisted.uid,uid);
+    assert.equal(persisted.weekId,weekId);
+    assert.equal(persisted.giftId,legacyId);
     assert.equal(await reserve(client()),false);
     await assertFails(setDoc(doc(one,seen),reservation()));
     await assertFails(deleteDoc(doc(one,seen)));
