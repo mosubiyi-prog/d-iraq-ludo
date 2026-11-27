@@ -1490,8 +1490,32 @@ def _stage04_editor_state(body):
     body = once(body, '  bool _saving = false;', """  bool _saving = false;
   bool _stage04EditorHeld = false;
   bool _stage04ReopenRequired = false;
+  DedaStage04AppearanceRead? _stage04CheckoutOpening;
+  Future<bool> _stage04UsePurchasedFrame(int style,String id) async {
+    final original=widget.stage04Appearance!;
+    if (_saving || _stage04EditorHeld || _stage04ReopenRequired) return false;
+    try {
+      final old=(_stage04CheckoutOpening ?? original).requireCurrent();
+      final fresh=await DedaStage03LabStorage.readStoreProfile(old.originalId);
+      if (!fresh.requireCurrent().verifiedPaidFrameIds.contains(id)) return false;
+      final appearance=await DedaStage03LabStorage.readAppearance(fresh);
+      if (!mounted || !dedaSectionCurrent) return false;
+      original.requireCurrent();
+      if (appearance.privateVersion != original.privateVersion) {
+        setState(() { _stage04ReopenRequired=true;
+          _error=dedaText('أعيد فتح المحرر للتحقق من الحفظ.','Reopen editor to verify the save.'); });
+        return false;
+      }
+      setState(() {
+        _stage04CheckoutOpening=appearance;
+        _serverVerifiedPaidStyles.add(style);
+        _frameStyle=style; _previewFrameStyle=null;
+      });
+      return true;
+    } catch (_) { return false; }
+  }
   Future<void> _stage04SaveAppearance() async {
-    final opening = widget.stage04Appearance!;
+    final opening = _stage04CheckoutOpening ?? widget.stage04Appearance!;
     if (_saving || _stage04EditorHeld || _stage04ReopenRequired) return;
     setState(() { _saving = true; _error = null; });
     try {
@@ -1569,7 +1593,20 @@ def _stage04_editor_state(body):
                               ? SelectableText(widget.stage04Appearance!.requireCurrent().activeId)
                               : DedaSixActiveIdentity(""", 'stage04-editor-id')
     body = once(body, 'if (index >= 6)\n                                  DedaSixFramePurchaseAction(',
-        """if (index >= 6 && widget.stage04Appearance != null)
+        """if (index >= 6 && widget.stage04Appearance != null &&
+                                    DedaStage03LabStorage.storeCheckoutCandidateEnabled)
+                                  DedaSixFramePurchaseAction(
+                                    originalId: widget.stage04Appearance!.requireCurrent().originalId,
+                                    frameId: DedaLabPremiumFrameStyles.byProfileStyle(index)!.id,
+                                    isActive: _frameStyle == index,
+                                    onVerifiedOwned: () => _stage04UsePurchasedFrame(index,
+                                      DedaLabPremiumFrameStyles.byProfileStyle(index)!.id),
+                                    onOwnershipVerified: (owned) {
+                                      if (mounted && dedaSectionCurrent && owned) {
+                                        setState(() => _serverVerifiedPaidStyles.add(index));
+                                      }
+                                    })
+                                else if (index >= 6 && widget.stage04Appearance != null)
                                   TextButton(
                                     onPressed: _saving || !_serverVerifiedPaidStyles.contains(index)
                                         ? null : () => setState(() {

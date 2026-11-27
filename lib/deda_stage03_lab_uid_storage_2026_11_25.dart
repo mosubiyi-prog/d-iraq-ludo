@@ -746,6 +746,7 @@ class DedaStage04AppearanceRead {
   final DedaStage04ProfileRead _profile;
   final DedaPrivateDataRevision _revision;
   final DedaStage04Appearance? selection;
+  int get privateVersion => _revision.version;
   String? get freeCardChoice {
     requireCurrent();
     final fields = _revision.payload!.fields;
@@ -1513,6 +1514,130 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
   // 04/04: reuse the single account guard and existing private journal.
   // No legacy phone, new wallet, ownership or UID.
   static const storeLabMode = bool.fromEnvironment('DEDA_STAGE04_STORE_LAB');
+
+  // Default off. The protected exact approval is produced by the same
+  // synthetic checkout engine in emulator QA. It never accepts a client
+  // proposed balance, price, ownership or write list. No production fallback.
+  static const storeCheckoutCandidateEnabled = storeLabMode &&
+      bool.fromEnvironment('DEDA_STAGE04_STORE_CHECKOUT_CANDIDATE');
+
+  static Future<int> readStorePurchaseBalance(String originalId) async {
+    if (!storeCheckoutCandidateEnabled) {
+      throw StateError('store-central-spend-authority-held');
+    }
+    final opening=await readStoreProfile(originalId),current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();}
+    await _io.verifyOwner(uid,uid,check);
+    final ref=FirebaseFirestore.instanceFor(app:Firebase.app())
+        .doc('deda_lab_uid_authority/$uid/wallet/current');
+    final row=await ref.get(const GetOptions(source:Source.server));
+    check();
+    if(!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites) {
+      throw StateError('store-wallet-source-held');
+    }
+    final view=opening.requireCurrent();
+    final wallet=DedaStage04PersonalWallet.decode(row.data()!,view);
+    return wallet.hasManagerPersonal ? wallet.managerPersonal :
+      wallet.earnedResidual+wallet.giftResidual;
+  }
+
+  static Future<void> performStoreCheckoutCandidate(String originalId,String frameId) async {
+    if (!storeCheckoutCandidateEnabled) {
+      throw StateError('store-central-spend-authority-held');
+    }
+    if(!RegExp(r'^FRAME_(03|0[5-9]|1[0-6])$').hasMatch(frameId)) {
+      throw ArgumentError('unknown-paid-frame');
+    }
+    final opening=await readStoreProfile(originalId), current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();opening.requireCurrent();}
+    await _io.verifyOwner(uid,uid,check);
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app());
+    final base=db.doc('deda_lab_uid_authority/$uid');
+    await db.runTransaction<void>((tx) async {
+      check();
+      final p=await tx.get(base);
+      final i=await tx.get(base.collection('inventory').doc('current'));
+      final a=await tx.get(base.collection('account').doc('current'));
+      check();
+      for(final row in [p,i,a]){
+        if(!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites) {
+          throw const DedaPrivateDataConflict();
+        }
+      }
+      final fresh=DedaStage04ProfileView.fromProtected(
+        DedaStage03ProtectedSnapshot.decode(expectedUid:uid,
+          progress:p.data(),inventory:i.data(),account:a.data()));
+      if(fresh.originalId!=originalId)throw const DedaPrivateDataStale();
+      if(fresh.verifiedPaidFrameIds.contains(frameId))return;
+      final plan=await tx.get(base.collection('storeCheckoutPlans').doc(frameId));
+      check();
+      if(!plan.exists || plan.metadata.isFromCache || plan.metadata.hasPendingWrites) {
+        throw StateError('store-exact-approval-held');
+      }
+      final approved=plan.data()!;
+      if(approved.length!=9 || approved['format']!=1 || approved['uid']!=uid ||
+          approved['originalId']!=originalId || approved['frameId']!=frameId ||
+          approved['cost']!=1000 || approved['progressRevision']!=fresh.progressRevision ||
+          approved['inventoryRevision']!=fresh.inventoryRevision ||
+          approved['accountRevision']!=fresh.accountRevision || approved['rows'] is! List) {
+        throw const DedaPrivateDataConflict();
+      }
+      final rows=approved['rows'] as List;
+      final root=base.path,revision=fresh.inventoryRevision+1;
+      final mandatory=<String>{
+        '$root/inventory/current','$root/inventorySources/current',
+        '$root/inventoryHistory/$revision','$root/wallet/current',
+        '$root/framePurchases/$frameId',
+        'deda_lab_frame_receipts/$originalId/frames/$frameId',
+        'deda_lab_owned_frames/$originalId/frames/$frameId',
+        'deda_native_account_cosmetics/$originalId',
+      };
+      final allowed=<String>{...mandatory,root,
+        'deda_diamond_gift_balances/$originalId',
+        'deda_gm_personal_diamond_wallets/$uid'};
+      final seen=<String>{},writes=<String,Map<String,dynamic>>{};
+      final eventKeys=<String>{},receiptKeys=<String>{};
+      if(rows.length<9 || rows.length>12)throw const FormatException('store-plan-size');
+      for(final row in rows){
+        if(row is! Map || row.length!=3 || !row.containsKey('before') ||
+            row['p'] is! String || row['after'] is! Map) {
+          throw const FormatException('store-plan-row');
+        }
+        final path=row['p'] as String;
+        if(!seen.add(path))throw const FormatException('store-plan-duplicate');
+        final data=Map<String,dynamic>.from(row['after'] as Map);
+        if(!allowed.contains(path)){
+          final event=RegExp('^$root/events/([a-f0-9]{64})\$').firstMatch(path);
+          final receipt=RegExp('^$root/receipts/([a-f0-9]{64})\$').firstMatch(path);
+          if(event!=null){eventKeys.add(event.group(1)!);}
+          else if(receipt!=null){receiptKeys.add(receipt.group(1)!);}
+          else {throw const FormatException('store-plan-path');}
+        }
+        writes[path]=data;
+      }
+      if(!seen.containsAll(mandatory) || eventKeys.length!=receiptKeys.length ||
+          !eventKeys.containsAll(receiptKeys) || eventKeys.length>1 ||
+          (seen.contains(root)!=eventKeys.isNotEmpty)) {
+        throw const FormatException('store-plan-incomplete');
+      }
+      final audit=writes['$root/framePurchases/$frameId']!;
+      if(audit['uid']!=uid || audit['originalId']!=originalId ||
+          audit['frameId']!=frameId || audit['cost']!=1000) {
+        throw const FormatException('store-plan-audit');
+      }
+      check();
+      // The separately emulator-tested exact before/after rules enforce every
+      // target document and the all-or-nothing ring. This is not a generic
+      // writer: only the protected approval for this frame may be submitted.
+      for(final entry in writes.entries){tx.set(db.doc(entry.key),entry.value);}
+    });
+    check();
+    final confirmed=await readStoreProfile(originalId);
+    check();
+    if(!confirmed.requireCurrent().verifiedPaidFrameIds.contains(frameId)) {
+      throw StateError('store-purchase-not-confirmed');
+    }
+  }
 
   static Future<DedaStage04ProfileRead> readStoreProfile(String originalId) async {
     if (!storeLabMode) throw StateError('store-lab-disabled');

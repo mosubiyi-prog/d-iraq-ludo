@@ -435,6 +435,37 @@ async function purchaseStoreFrameCandidate({store,uid,frameId}){
   });
 }
 
+// Capture the EXISTING trusted transaction, without committing it. The
+// resulting exact approval is a synthetic emulator transport, not an issuer
+// or a general client authority. Reuse the same arithmetic and receipt keys.
+async function prepareStoreFrameCandidate({store,uid,frameId}){
+  requireDemo(store,uid);
+  let plan;
+  const capture={db:store.db,serverTimestamp:()=>store.serverTimestamp(),
+    runTransaction:action=>store.runTransaction(async tx=>{
+      const before=new Map(),writes=new Map();
+      const result=await action({
+        get:async path=>{const row=await tx.get(path);before.set(path,row);return row;},
+        set:(path,data)=>writes.set(path,data)});
+      requireThat(!result.replayed&&writes.size>0&&writes.size<=13,
+        'store-plan-not-new-purchase');
+      const account=before.get('deda_lab_uid_authority/'+uid+'/account/current');
+      const progress=before.get('deda_lab_uid_authority/'+uid);
+      const inventory=before.get('deda_lab_uid_authority/'+uid+'/inventory/current');
+      requireThat(account&&progress&&inventory,'store-plan-source-held');
+      const rows=Array.from(writes,([p,after])=>{
+        requireThat(before.has(p),'store-plan-missing-before');
+        return {p,before:before.get(p),after};
+      });
+      plan={format:1,uid,originalId:account.profile.originalId,frameId,cost:1000,
+        progressRevision:progress.version,inventoryRevision:inventory.revision,
+        accountRevision:account.revision,rows};
+      return result;
+    })};
+  await purchaseStoreFrameCandidate({store:capture,uid,frameId});
+  return plan;
+}
+
 // Switch a previously received ID in the existing account/history and
 // original public directory in ONE transaction. No grant, UID, or debit.
 // Trusted emulator only; no new client permissions or production routing.
@@ -1032,4 +1063,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
+module.exports={prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};

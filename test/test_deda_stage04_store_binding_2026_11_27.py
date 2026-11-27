@@ -29,7 +29,7 @@ class StoreBindingPreflight(unittest.TestCase):
             bind_migrated(root)
             cases = ((names[0], patch_cards, ('restore','use')),
                      (names[1], patch_native_checkout, ('isOwned','verifiedOwnedFrameIds','verifiedPurchaseBalance','_buy')),
-                     (names[2], patch_receipt_checkout, ('isOwned','verifiedOwnedFrameIds','verifiedPurchaseBalance')))
+                     (names[2], patch_receipt_checkout, ('isOwned','verifiedOwnedFrameIds','verifiedPurchaseBalance','buyOnce')))
             for name, patch, methods in cases:
                 with self.subTest(file=name):
                     old = (root/'lib'/name).read_text()
@@ -47,7 +47,8 @@ class StoreBindingPreflight(unittest.TestCase):
                         self.assertIn('DedaStage03LabStorage.saveStoreFreeCard(',new)
                         self.assertIn('height: 50',new)
                     else:
-                        self.assertIn('store-central-spend-authority-held',new)
+                        self.assertIn('DedaStage03LabStorage.performStoreCheckoutCandidate(',new)
+                        self.assertIn('DedaStage03LabStorage.readStorePurchaseBalance(',new)
                         self.assertIn('priceDiamonds = 1000',new)
 
     def test_profile_route_uses_existing_foil(self):

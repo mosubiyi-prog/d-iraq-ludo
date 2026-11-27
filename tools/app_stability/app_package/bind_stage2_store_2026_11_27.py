@@ -108,7 +108,7 @@ def patch_cards(source):
 
 def patch_native_checkout(source):
     s = IMPORT + source
-    s = once(s,'  static const live = true;', '  static const live = !'+MODE+';')
+    s = once(s,'  static const live = true;', '  static const live = !'+MODE+' || DedaStage03LabStorage.storeCheckoutCandidateEnabled;')
     s = inject(s, 'isOwned',
         '''    if (DedaStage03LabStorage.storeLabMode) {
       _item(frameId);
@@ -123,14 +123,15 @@ def patch_native_checkout(source):
     }''')
     s = inject(s, 'verifiedPurchaseBalance',
         '''    if (DedaStage03LabStorage.storeLabMode) {
-      throw StateError('store-central-spend-authority-held');
+      return DedaStage03LabStorage.readStorePurchaseBalance(originalId);
     }''')
     s = inject(s, '_buy', '''    if (DedaStage03LabStorage.storeLabMode) {
-      throw StateError('store-central-spend-authority-held');
+      await DedaStage03LabStorage.performStoreCheckoutCandidate(original,frame);
+      return;
     }''')
     s = once(s,"    _item(frameId);\n    final key = '$originalId/$frameId';",
         """    _item(frameId);
-    if (DedaStage03LabStorage.storeLabMode) {
+    if (DedaStage03LabStorage.storeLabMode && !DedaStage03LabStorage.storeCheckoutCandidateEnabled) {
       return Future<void>.error(StateError('store-central-spend-authority-held'));
     }
     final key = '$originalId/$frameId';""")
@@ -140,10 +141,15 @@ def patch_native_checkout(source):
 def patch_receipt_checkout(source):
     s = IMPORT + source
     s = once(s, "static const bool live = bool.fromEnvironment(",
-        "static const bool live = !"+MODE+" && bool.fromEnvironment(")
+        "static const bool live = DedaStage03LabStorage.storeCheckoutCandidateEnabled || !"+MODE+" && bool.fromEnvironment(")
     s = inject(s, 'verifiedPurchaseBalance',
         '''    if (DedaStage03LabStorage.storeLabMode) {
-      throw StateError('store-central-spend-authority-held');
+      return DedaStage03LabStorage.readStorePurchaseBalance(originalId);
+    }''')
+    s = inject(s, 'buyOnce',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
+      await DedaStage03LabStorage.performStoreCheckoutCandidate(originalId,frameId);
+      return;
     }''')
     s = inject(s, 'isOwned',
         '''    if (DedaStage03LabStorage.storeLabMode) {

@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
+const {prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -950,23 +950,6 @@ function storeExactClientValue(v){
   if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,storeExactClientValue(x)]));
   return v;
 }
-async function captureStoreCandidate(frameId){
-  let writes;
-  const capture={db,serverTimestamp:()=>FieldValue.serverTimestamp(),runTransaction:action=>
-    store.runTransaction(async tx=>{
-      const pending=new Map();
-      const r=await action({get:tx.get,set:(p,data)=>pending.set(p,data)});
-      writes=pending;return r;
-    })};
-  const result=await purchaseStoreFrameCandidate({store:capture,uid,frameId});
-  assert.equal(result.replayed,false);assert.ok(writes.size>0&&writes.size<=13);
-  const rows=[];
-  for(const [p,after] of writes){
-    const snap=await db.doc(p).get();
-    rows.push({p,before:snap.exists?snap.data():null,after});
-  }
-  return rows;
-}
 async function exactStoreRules(originalRules,rows,frameId,manager){
   const tail='    match /{document=**} { allow read, write: if false; }';
   assert.equal(originalRules.split(tail).length,2);
@@ -994,7 +977,9 @@ async function exactStoreRules(originalRules,rows,frameId,manager){
     return '    match /'+row.p+' {\n      allow '+(row.before===null?'create':'update')+
       ': if '+conditions.join(' &&\n        ')+';\n    }';
   });
-  return originalRules.replace(tail,()=>blocks.join('\n')+'\n'+tail);
+  return originalRules.replace(tail,()=>blocks.join('\n')+'\n'+
+    '    match /'+base+'/storeCheckoutPlans/'+frameId+' { allow get: if owner('+JSON.stringify(uid)+'); }\n'+
+    '    match /'+base+'/wallet/current { allow get: if owner('+JSON.stringify(uid)+'); }\n'+tail);
 }
 test('04/04 Spark direct-client exact fixture transaction feasibility: atomic rule gate, reject partial/forged/foreign/replay',async()=>{
   const originalRules=readFileSync('firestore.rules','utf8');
@@ -1005,11 +990,14 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
   try{
     // Both original payment paths, using one existing synthetic UID and
     // the same native inventory paths. This is not a general checkout rule.
-    for(const manager of [false,true]){
+    for(const [frameId,manager] of [...require('./purchase-frames.cjs').frames.filter(f=>f!=='FRAME_03').map(f=>[f,false]),['FRAME_05',true]]){
       await env.clearFirestore();await seedStorePurchase();
       if(manager)await seedWalletManager();
       else await db.doc(walletGiftPath).update({balance:900});
-      const frameId='FRAME_05',rows=await captureStoreCandidate(frameId);
+      await refreshWallet({store,uid});
+      const plan=await prepareStoreFrameCandidate({store,uid,frameId}),rows=plan.rows;
+      const planPath=base+'/storeCheckoutPlans/'+frameId;
+      await db.doc(planPath).set(plan);
       const rules=await exactStoreRules(originalRules,rows,frameId,manager);
       await install(rules);
       const c=client();
@@ -1019,6 +1007,8 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
         return batch.commit();
       };
       const audit=base+'/framePurchases/'+frameId;
+      await assertFails(setDoc(doc(c,planPath),{...plan,cost:1}));
+      await assertFails(getDocFromServer(doc(client('foreign'),planPath)));
       await assertFails(commit(c,rows.filter(r=>r.p!==audit)));
       await assertFails(commit(c,rows.filter(r=>r.p!==view)));
       await assertFails(commit(c,rows.map(r=>r.p===audit?{...r,after:{...r.after,cost:1}}:r)));
@@ -1030,9 +1020,14 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
       }
       // Same guard at actual client transaction boundary, not Admin SDK.
       await assertSucceeds(runTransaction(c,async tx=>{
-        const root=await tx.get(doc(c,base));
-        assert.ok(root.exists());
-        for(const row of rows)tx.set(doc(c,row.p),storeExactClientValue(row.after));
+        const root=await tx.get(doc(c,base)),inv=await tx.get(doc(c,view)),
+          account=await tx.get(doc(c,acctView)),approved=await tx.get(doc(c,planPath));
+        assert.ok(root.exists()&&inv.exists()&&account.exists()&&approved.exists());
+        const plan=approved.data();
+        assert.equal(plan.progressRevision,root.data().version);
+        assert.equal(plan.inventoryRevision,inv.data().revision);
+        assert.equal(plan.accountRevision,account.data().revision);
+        for(const row of plan.rows)tx.set(doc(c,row.p),row.after);
       }));
       for(const row of rows)assert.deepEqual((await db.doc(row.p).get()).data(),row.after);
       await assertFails(commit(client()));
