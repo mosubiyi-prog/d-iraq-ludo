@@ -950,7 +950,8 @@ function storeExactClientValue(v){
   if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,storeExactClientValue(x)]));
   return v;
 }
-async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan=false}={}){
+async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan=false,direct=false}={}){
+  assert.ok(!(protectedPlan&&direct));
   const tail='    match /{document=**} { allow read, write: if false; }';
   assert.equal(originalRules.split(tail).length,2);
   const audit=base+'/framePurchases/'+frameId;
@@ -979,23 +980,72 @@ async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan
   const planPath=base+'/storeCheckoutPlans/'+frameId;
   const planExpr='get('+fp(planPath)+').data';
   const planRow=i=>planExpr+'.rows['+i+']';
+  // Direct-rule feasibility: no plan document read or client-issued approval.
+  // Deliberately restricted to the existing synthetic account, revision and
+  // mixed/manager write topology. Other fields are exact fixture invariants.
+  const read=p=>'get('+fp(p)+').data';
+  const earned=read(base)+'.balances.earnedDiamonds';
+  const gifted=read(walletGiftPath)+'.balance';
+  const personal=read(walletPersonalPath)+'.balance';
+  const e=manager?'0':earned, g=manager?'0':'(1000 - '+earned+')', m=manager?'1000':'0';
+  const created=rows.find(r=>r.p===audit).after.createdMs;
+  const directValue=(row,side,clock)=>{
+    const before=side==='before', root=row[side];
+    function walk(v,keys=[]){
+      const k=keys.join('.'),last=keys.at(-1);
+      if(row.p===base&&k==='balances.earnedDiamonds')return before?earned:'('+earned+' - '+e+')';
+      if(row.p===walletGiftPath&&k==='balance')return before?gifted:'('+gifted+' - '+g+')';
+      if(row.p===walletPersonalPath&&k==='balance')return before?personal:'('+personal+' - '+m+')';
+      if(row.p===base+'/wallet/current'){
+        if(k==='giftResidual'&&!manager)return before?gifted:'('+gifted+' - '+g+')';
+        if(k==='managerPersonal'&&manager)return before?personal:'('+personal+' - '+m+')';
+      }
+      if(!before){
+        if(row.p===audit&&k==='payment.earnedDiamonds')return e;
+        if(row.p===audit&&k==='payment.giftedDiamonds')return g;
+        if(row.p===audit&&k==='payment.managerDiamonds')return m;
+        if((row.p.startsWith(base+'/receipts/')||row.p.startsWith(base+'/events/'))&&
+          (k==='delta.earnedDiamonds'||k==='receipt.delta.earnedDiamonds'))return '(0 - '+e+')';
+        if(row.p.startsWith(base+'/events/')&&k==='afterBalances.earnedDiamonds')return '('+earned+' - '+e+')';
+        if(last==='createdMs'&&v===created)return clock;
+        if((last==='createdAt'||last==='updatedAt')&&v&&typeof v.toMillis==='function'&&v.toMillis()===created)
+          return 'timestamp.value('+clock+')';
+      }
+      if(Array.isArray(v))return '['+v.map((x,i)=>walk(x,[...keys,String(i)])).join(',')+']';
+      if(v&&typeof v==='object'&&typeof v.toMillis!=='function')
+        return '{'+Object.entries(v).map(([key,x])=>JSON.stringify(key)+':'+walk(x,[...keys,key])).join(',')+'}';
+      return storeExactRuleValue(v);
+    }
+    return walk(root);
+  };
   const blocks=rows.map((row,i)=>{
     assert.match(row.p,/^[A-Za-z0-9_@/-]+$/);
     const nextIndex=(i+1)%rows.length,next=rows[nextIndex];
+    const clock=row.p===audit?'request.resource.data.createdMs':'getAfter('+fp(audit)+').data.createdMs';
+    const value=(r,index,side)=>direct?directValue(r,side,clock):
+      protectedPlan?planRow(index)+'.'+side:storeExactRuleValue(r[side]);
     const conditions=['owner('+JSON.stringify(uid)+')',
-      'request.resource.data == '+(protectedPlan?planRow(i)+'.after':storeExactRuleValue(row.after)),
-      'getAfter('+fp(next.p)+').data == '+(protectedPlan?planRow(nextIndex)+'.after':storeExactRuleValue(next.after))];
+      'request.resource.data == '+value(row,i,'after'),
+      'getAfter('+fp(next.p)+').data == '+value(next,nextIndex,'after')];
     if(protectedPlan){
       conditions.push(planRow(i)+'.p == '+JSON.stringify(row.p));
       if(row.before===null)conditions.push(planRow(i)+'.before == null');
     }
-    if(row.before!==null)conditions.push('resource.data == '+(protectedPlan?planRow(i)+'.before':storeExactRuleValue(row.before)));
+    if(row.before!==null)conditions.push('resource.data == '+value(row,i,'before'));
     if(row.p===audit){
       if(protectedPlan)conditions.push(planExpr+'.uid == '+JSON.stringify(uid),
         planExpr+'.originalId == '+JSON.stringify(original),
         planExpr+'.frameId == '+JSON.stringify(frameId),
         planExpr+'.cost == 1000',planExpr+'.format == 1',
         planExpr+'.rows.size() == '+rows.length);
+      if(direct){
+        conditions.push(clock+' is int',clock+' > 0',
+          'timestamp.value('+clock+') <= request.time + duration.value(5, "s")',
+          'timestamp.value('+clock+') >= request.time - duration.value(5, "m")');
+        if(manager)conditions.push(personal+' is int',personal+' >= 1000',personal+' <= 9007199254740990');
+        else conditions.push(earned+' is int',earned+' > 0',earned+' < 1000',
+          gifted+' is int',gifted+' >= '+g,gifted+' <= 9007199254740990 - '+earned);
+      }
       conditions.push(...guard);
     }
     else conditions.push('!exists('+fp(audit)+')');
@@ -1003,7 +1053,7 @@ async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan
       ': if '+conditions.join(' &&\n        ')+';\n    }';
   });
   return originalRules.replace(tail,()=>blocks.join('\n')+'\n'+
-    '    match /'+base+'/storeCheckoutPlans/'+frameId+' { allow get: if owner('+JSON.stringify(uid)+'); }\n'+
+    (direct?'':'    match /'+base+'/storeCheckoutPlans/'+frameId+' { allow get: if owner('+JSON.stringify(uid)+'); }\n')+
     '    match /'+base+'/wallet/current { allow get: if owner('+JSON.stringify(uid)+'); }\n'+tail);
 }
 test('04/04 Spark direct-client exact fixture transaction feasibility: atomic rule gate, reject partial/forged/foreign/replay',async()=>{
@@ -1094,6 +1144,52 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
       }));
       for(const row of rows)assert.deepEqual((await db.doc(row.p).get()).data(),row.after);
       await assertFails(commit(client()));
+      assert.equal((await purchaseStore(frameId)).replayed,true);
+      assert.equal((await syncStore()).replayed,true);
+      await install(originalRules);
+    }
+  }finally{await install(originalRules);}
+});
+
+
+test('04/04 Spark direct rule feasibility without a protected approval document: mixed and manager sources',async()=>{
+  const originalRules=readFileSync('firestore.rules','utf8');
+  const install=async rules=>{await env.cleanup();env=await initializeTestEnvironment({projectId,firestore:{rules}});};
+  try{
+    for(const manager of [false,true]){
+      await env.clearFirestore();await seedStorePurchase();
+      if(manager)await seedWalletManager();else await db.doc(walletGiftPath).update({balance:900});
+      await refreshWallet({store,uid});
+      const frameId='FRAME_05',audit=base+'/framePurchases/'+frameId,
+        planPath=base+'/storeCheckoutPlans/'+frameId;
+      const first=await prepareStoreFrameCandidate({store,uid,frameId});
+      const rules=await exactStoreRules(originalRules,first.rows,frameId,manager,{direct:true});
+      await install(rules);
+      const c=client();
+      const commit=(target,rows)=>{const b=writeBatch(target);for(const row of rows)b.set(doc(target,row.p),storeExactClientValue(row.after));return b.commit();};
+      // Same rules after legitimate synthetic source changes; no approval
+      // document exists. The trusted engine is only the test oracle here.
+      const balanceRef=db.doc(manager?walletPersonalPath:walletGiftPath);
+      await balanceRef.update({balance:(await balanceRef.get()).data().balance+37});
+      if(!manager)await db.doc(base).update({'balances.earnedDiamonds':350});
+      await refreshWallet({store,uid});
+      const fresh=await prepareStoreFrameCandidate({store,uid,frameId}),rows=fresh.rows;
+      assert.deepEqual(rows.map(r=>[r.p,r.before===null]),first.rows.map(r=>[r.p,r.before===null]));
+      assert.equal((await db.doc(planPath).get()).exists,false);
+      await assertFails(getDocFromServer(doc(c,planPath)));
+      await assertFails(setDoc(doc(c,planPath),storeExactClientValue(fresh)));
+      await assertFails(commit(c,first.rows));
+      await assertFails(commit(c,rows.filter(r=>r.p!==audit)));
+      await assertFails(commit(c,rows.filter(r=>r.p!==view)));
+      await assertFails(commit(client('foreign'),rows));
+      await assertFails(commit(c,rows.map(r=>r.p===audit?{...r,after:{...r.after,cost:1}}:r)));
+      const debit=manager?walletPersonalPath:walletGiftPath;
+      await assertFails(commit(c,rows.map(r=>r.p===debit?{...r,after:{...r.after,balance:r.after.balance+1}}:r)));
+      for(const row of rows){const v=await db.doc(row.p).get();assert.deepEqual(v.exists?v.data():null,row.before);}
+      await assertSucceeds(commit(c,rows));
+      for(const row of rows)assert.deepEqual((await db.doc(row.p).get()).data(),row.after);
+      assert.equal((await db.doc(planPath).get()).exists,false);
+      await assertFails(commit(c,rows));
       assert.equal((await purchaseStore(frameId)).replayed,true);
       assert.equal((await syncStore()).replayed,true);
       await install(originalRules);
