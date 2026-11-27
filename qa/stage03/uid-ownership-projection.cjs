@@ -1,5 +1,5 @@
 'use strict';
-// Protected read projection only; no purchase, award, wallet or alias mutation.
+// Protected projections and isolated trusted demo candidates; no production or client authority.
 // Source fixtures are synthetic and written only by a trusted emulator context.
 const {isDeepStrictEqual:equal}=require('node:util');
 const core=require('./reconcile-core.cjs');
@@ -286,19 +286,7 @@ async function refreshWallet({store,uid}){
   });
 }
 
-// 04/04: mirror the ORIGINAL checkout's completed receipt pair, not a
-// second purchase. Trusted synthetic emulator only; no debit or new grant.
-// The wallet evidence already proves the canonical original ID -> same UID.
-async function syncStoreFrameReceipts({store,uid}){
-  requireDemo(store,uid);
-  return store.runTransaction(async tx=>{
-    const evidence=await walletEvidence(tx,uid);
-    const original=evidence.originalId,base='deda_lab_uid_authority/'+uid;
-    const source=base+'/inventorySources/current',view=base+'/inventory/current';
-    const old=parse(await tx.get(view),uid);
-    requireThat(equal(parse(await tx.get(source),uid),old)&&
-      equal(await tx.get(base+'/inventoryHistory/'+old.revision),old),
-      'store-inventory-history-conflict');
+async function storeVerifiedFrames(tx,uid,original){
     const verified=[];
     for(const frameId of frames){
       const r=await tx.get('deda_lab_frame_receipts/'+original+'/frames/'+frameId);
@@ -317,6 +305,23 @@ async function syncStoreFrameReceipts({store,uid}){
       verified.push({frameId,receipt:{uid,frameId,kind:r.kind,cost:r.cost,createdMs},
         ownership:{uid,frameId,receiptId:uid+'_'+frameId,createdMs}});
     }
+    return verified;
+}
+
+// 04/04: mirror the ORIGINAL checkout's completed receipt pair, not a
+// second purchase. Trusted synthetic emulator only; no debit or new grant.
+// The wallet evidence already proves the canonical original ID -> same UID.
+async function syncStoreFrameReceipts({store,uid}){
+  requireDemo(store,uid);
+  return store.runTransaction(async tx=>{
+    const evidence=await walletEvidence(tx,uid);
+    const original=evidence.originalId,base='deda_lab_uid_authority/'+uid;
+    const source=base+'/inventorySources/current',view=base+'/inventory/current';
+    const old=parse(await tx.get(view),uid);
+    requireThat(equal(parse(await tx.get(source),uid),old)&&
+      equal(await tx.get(base+'/inventoryHistory/'+old.revision),old),
+      'store-inventory-history-conflict');
+    const verified=await storeVerifiedFrames(tx,uid,original);
     // A projection with a prior paid item may never silently drop it.
     const next=parse({...old,revision:old.revision+1,frames:verified},uid);
     preserve(old,next);
@@ -325,6 +330,108 @@ async function syncStoreFrameReceipts({store,uid}){
     requireThat(await tx.get(history)===null,'store-inventory-history-conflict');
     tx.set(source,next);tx.set(view,next);tx.set(history,next);
     return {replayed:false,view:next};
+  });
+}
+
+// Trusted local emulator only: one debit, original receipt pair and existing
+// UID inventory/history. Reuse the reviewed checkout's earned-first / GM-only
+// payment policy and existing reconcile core. Not a callable, not a new wallet.
+async function purchaseStoreFrameCandidate({store,uid,frameId}){
+  requireDemo(store,uid);
+  requireThat(frames.includes(frameId),'store-frame-invalid');
+  const {Timestamp}=require('firebase-admin/firestore');
+  const now=Timestamp.fromMillis(Date.now()),createdMs=now.toMillis();
+  return store.runTransaction(async tx=>{
+    const evidence=await walletEvidence(tx,uid),original=evidence.originalId;
+    const base='deda_lab_uid_authority/'+uid, source=base+'/inventorySources/current',
+      view=base+'/inventory/current',wallet=base+'/wallet/current';
+    const state=parseState(await tx.get(base),uid,'lab-uid');
+    const old=parse(await tx.get(view),uid);
+    requireThat(equal(parse(await tx.get(source),uid),old)&&
+      equal(await tx.get(base+'/inventoryHistory/'+old.revision),old),'store-inventory-history-conflict');
+    const verified=await storeVerifiedFrames(tx,uid,original);
+    // Never charge against an unsynchronized or regressed ownership source.
+    requireThat(equal(verified,old.frames),'store-inventory-readback-required');
+    const nativePath='deda_native_account_cosmetics/'+original;
+    const native=await tx.get(nativePath);
+    requireThat(native&&native.originalId===original&&Array.isArray(native.ownedFrames)&&
+      Array.isArray(native.pendingFrames)&&new Set(native.ownedFrames).size===native.ownedFrames.length&&
+      native.ownedFrames.every(f=>frames.includes(f))&&native.pendingFrames.length===0,
+      'store-native-proof-held');
+    const auditPath=base+'/framePurchases/'+frameId;
+    const audit=await tx.get(auditPath);
+    const owned=old.frames.find(f=>f.frameId===frameId);
+    if(owned){
+      if(audit!==null){
+        requireThat(audit.format===1&&audit.uid===uid&&audit.originalId===original&&audit.frameId===frameId&&
+          audit.cost===1000&&audit.createdMs===owned.receipt.createdMs&&
+          Number.isSafeInteger(audit.progressVersion)&&audit.progressVersion<=state.version&&
+          audit.payment&&['earnedDiamonds','giftedDiamonds','managerDiamonds'].every(k=>
+            Number.isSafeInteger(audit.payment[k])&&audit.payment[k]>=0)&&
+          Object.keys(audit.payment).length===3&&Object.values(audit.payment).reduce((a,b)=>a+b,0)===1000&&
+          (audit.payment.managerDiamonds===0||audit.payment.managerDiamonds===1000)&&
+          native.ownedFrames.includes(frameId),'store-purchase-audit-conflict');
+        if(audit.payment.earnedDiamonds>0){
+          const r=core.parseReceipt({format:1,accountKey:uid,source:'cosmetic-debit-v1',
+            sourceId:'stage04-store-frame|'+original+'|'+frameId,kind:'spend',
+            delta:{points:0,coins:0,xp:0,earnedDiamonds:-audit.payment.earnedDiamonds}},uid,'lab-uid');
+          const k=core.eventKey(r),saved=await tx.get(base+'/receipts/'+k),event=await tx.get(base+'/events/'+k);
+          requireThat(audit.eventKey===k&&saved&&event&&event.accountKey===uid&&event.eventKey===k&&
+            event.receiptId===k&&event.appliedVersion===audit.progressVersion&&
+            core.sameEvent(core.parseReceipt(saved,uid,'lab-uid'),r)&&
+            core.sameEvent(core.parseReceipt(event.receipt,uid,'lab-uid'),r),'store-purchase-audit-conflict');
+        }else requireThat(audit.eventKey===null,'store-purchase-audit-conflict');
+      }
+      return {replayed:true,view:old,state};
+    }
+    requireThat(audit===null&&!native.ownedFrames.includes(frameId),'store-purchase-proof-conflict');
+    const walletOld=await tx.get(wallet);
+    requireThat(walletOld===null||equal(walletOld,evidence),'store-wallet-refresh-required');
+    const giftPath='deda_diamond_gift_balances/'+original,gmPath='deda_gm_personal_diamond_wallets/'+uid;
+    const gift=await tx.get(giftPath),gm=await tx.get(gmPath);
+    const payment={earnedDiamonds:0,giftedDiamonds:0,managerDiamonds:0};
+    if(evidence.hasManagerPersonal){
+      requireThat(evidence.managerPersonal>=1000,'store-insufficient-diamonds');
+      payment.managerDiamonds=1000;
+    }else{
+      requireThat(state.balances.earnedDiamonds+evidence.giftResidual>=1000,'store-insufficient-diamonds');
+      payment.earnedDiamonds=Math.min(1000,state.balances.earnedDiamonds);
+      payment.giftedDiamonds=1000-payment.earnedDiamonds;
+    }
+    let nextState=state,receipt=null,eventKey=null;
+    if(payment.earnedDiamonds){
+      receipt=core.parseReceipt({format:1,accountKey:uid,source:'cosmetic-debit-v1',
+        sourceId:'stage04-store-frame|'+original+'|'+frameId,kind:'spend',
+        delta:{points:0,coins:0,xp:0,earnedDiamonds:-payment.earnedDiamonds}},uid,'lab-uid');
+      eventKey=core.eventKey(receipt);
+      requireThat(await tx.get(base+'/receipts/'+eventKey)===null&&
+        await tx.get(base+'/events/'+eventKey)===null,'store-partial-debit');
+      nextState=core.applyEvent(state,receipt,'lab-uid');
+    }
+    const row={frameId,receipt:{uid,frameId,kind:'lab_frame',cost:1000,createdMs},
+      ownership:{uid,frameId,receiptId:uid+'_'+frameId,createdMs}};
+    const next=parse({...old,revision:old.revision+1,frames:[...old.frames,row]},uid);
+    preserve(old,next);
+    const history=base+'/inventoryHistory/'+next.revision;
+    requireThat(await tx.get(history)===null,'store-inventory-history-conflict');
+    // All checks/read operations precede the first write.
+    if(receipt){
+      tx.set(base+'/receipts/'+eventKey,receipt);
+      tx.set(base+'/events/'+eventKey,{format:1,accountKey:uid,eventKey,receipt,receiptId:eventKey,
+        appliedVersion:nextState.version,afterBalances:nextState.balances,createdAt:now});
+      tx.set(base,{...nextState});
+    }
+    if(payment.giftedDiamonds)tx.set(giftPath,{...gift,balance:evidence.giftResidual-payment.giftedDiamonds,updatedAt:now});
+    if(payment.managerDiamonds)tx.set(gmPath,{...gm,balance:evidence.managerPersonal-payment.managerDiamonds,updatedAt:now});
+    tx.set('deda_lab_frame_receipts/'+original+'/frames/'+frameId,{publicId:original,frameId,kind:'lab_frame',cost:1000,createdAt:now});
+    tx.set('deda_lab_owned_frames/'+original+'/frames/'+frameId,{publicId:original,frameId,receiptId:original+'_'+frameId,createdAt:now});
+    tx.set(nativePath,{...native,ownedFrames:[...native.ownedFrames,frameId],updatedAt:now});
+    tx.set(auditPath,{format:1,uid,originalId:original,frameId,cost:1000,payment,
+      progressVersion:nextState.version,eventKey,createdMs});
+    tx.set(source,next);tx.set(view,next);tx.set(history,next);
+    tx.set(wallet,{...evidence,progressVersion:nextState.version,inventoryRevision:next.revision,
+      giftResidual:evidence.giftResidual-payment.giftedDiamonds,managerPersonal:evidence.managerPersonal-payment.managerDiamonds});
+    return {replayed:false,view:next,state:nextState,payment};
   });
 }
 
@@ -925,4 +1032,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
+module.exports={purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
