@@ -5,7 +5,7 @@ const {isDeepStrictEqual:equal}=require('node:util');
 const core=require('./reconcile-core.cjs');
 const {LAB_UID,account,parseState}=core;
 const {frames}=require('./purchase-frames.cjs');
-const {weekStart}=require('./deda_weekly_direct_prize_plan.js');
+const {weekStart,plan,WEEK_MS}=require('./deda_weekly_direct_prize_plan.js');
 const fail=code=>{throw Object.assign(Error(code),{code})};
 const requireThat=(ok,code)=>{if(!ok)fail(code)};
 function exact(v,keys){
@@ -601,6 +601,119 @@ async function buildLeagueCandidate({store,uid,weekId,peerTasks=[]}){
     return docs;
   });
 }
+
+// 04/03 bridge: the existing worker creates exactly one legacy Hadaya gift.
+// Import that *existing* receipt into the protected UID inventory, using the
+// existing prize planner. No gift issuance, claim, balance or admin mutation.
+// This candidate is restricted to the same synthetic owner and peer in demo.
+async function syncLeagueGiftCandidate({store,uid,weekId,atMs}){
+  requireDemo(store,uid);
+  const start=weekStart(weekId),end=start+WEEK_MS,cutoff=end-6*3600000;
+  requireThat(Number.isSafeInteger(atMs)&&atMs>=end,'league-gift-before-close');
+  const db=store.db,base='deda_lab_uid_authority/'+uid;
+  const ownerId='@DEDA-QA1234',peerId='@DEDA-QA5678',peerUid='synthetic-peer-001';
+  const weekPath='deda_weekly_direct_weeks/'+weekId;
+  const floor=[250,200,150,100,100,100,100,100,100,100];
+  return db.runTransaction(async tx=>{
+    const get=async path=>{const s=await tx.get(db.doc(path));return s.exists?s.data():null;};
+    const acct=parseAccount(await get(base+'/account/current'),uid);
+    requireThat(acct.profile.originalId===ownerId&&
+      equal(acct,await get(base+'/accountSources/current'))&&
+      equal(acct,await get(base+'/accountHistory/'+acct.revision)),
+      'league-gift-account-conflict');
+    const user=await get('users/'+uid),session=await get('deda_sessions/'+uid);
+    requireThat(user?.accountKey===uid&&user.sharePersonalId===ownerId&&
+      session?.uid===uid&&session.accountKey===uid,'league-gift-owner-conflict');
+    for(const [id,who] of [[ownerId,uid],[peerId,peerUid]]){
+      const route=await get('deda_share_ids/'+id);
+      requireThat(route?.ownerUid===who&&route.publicId===id&&
+        route.kind==='personal'&&route.active===true,'league-gift-directory-conflict');
+    }
+    const proof=await get(weekPath);
+    exact(proof,['format','synthetic','complete','ownerUid','weekId','accountRevision','rows']);
+    requireThat(proof.format===1&&proof.synthetic===true&&proof.complete===true&&
+      proof.ownerUid===uid&&proof.weekId===weekId&&proof.accountRevision===acct.revision&&
+      Array.isArray(proof.rows)&&proof.rows.length<=2,'league-gift-ranking-conflict');
+    const scores=await tx.get(db.collection(weekPath+'/scores').limit(3));
+    requireThat(scores.size===proof.rows.length,'league-gift-ranking-conflict');
+    const records=scores.docs.map(d=>({id:d.id,data:d.data()})),seen=new Set();
+    const ownClaims=acct.league.find(x=>x.weekId===weekId)?.claimedKeys??[];
+    for(const p of proof.rows){
+      exact(p,['publicId','ownerUid','activeId','displayName','claimedKeys','reachedMs']);
+      const isOwner=p.publicId===ownerId;
+      requireThat(!seen.has(p.publicId)&&
+        (isOwner?p.ownerUid===uid&&p.activeId===acct.profile.activeId&&
+          p.displayName===acct.profile.displayName:p.publicId===peerId&&
+          p.ownerUid===peerUid&&p.activeId===peerId)&&
+        Array.isArray(p.claimedKeys)&&p.claimedKeys.length>=1&&p.claimedKeys.length<=56&&
+        new Set(p.claimedKeys).size===p.claimedKeys.length&&
+        p.claimedKeys.every(k=>{
+          if(typeof k!=='string')return false;
+          const [day,task,...rest]=k.split('|');
+          return !rest.length&&realDay(day)&&taskIds.has(task)&&
+            Date.parse(day+'T09:00:00Z')>=start&&Date.parse(day+'T09:00:00Z')<cutoff;
+        })&&Number.isSafeInteger(p.reachedMs)&&p.reachedMs>=start&&p.reachedMs<cutoff,
+        'league-gift-ranking-conflict');
+      seen.add(p.publicId);
+      const s=records.find(r=>r.id===p.publicId)?.data;
+      requireThat(s&&s.publicId===p.publicId&&s.weekId===weekId&&
+        s.displayName===p.displayName&&s.updatedAt?.toMillis?.()===p.reachedMs&&
+        s.weeklyXp===20*p.claimedKeys.length&&s.completedTasks===p.claimedKeys.length&&
+        equal(s.claimedKeys,p.claimedKeys)&&(!isOwner||equal(p.claimedKeys,ownClaims)),
+        'league-gift-score-conflict');
+    }
+    requireThat(seen.has(ownerId)===(ownClaims.length>0),'league-gift-owner-score-missing');
+    const amounts=await get('deda_weekly_direct_prize_plans/'+weekId);
+    const control=await get('deda_weekly_direct_control/active');
+    requireThat(amounts?.weekId===weekId&&Array.isArray(amounts.amounts)&&
+      amounts.amounts.length===10&&amounts.amounts.every((n,i)=>
+        Number.isSafeInteger(n)&&n>=floor[i]&&n<=1000000),'league-gift-plan-conflict');
+    requireThat(control?.weekId===weekId&&control.paused===false,'league-gift-control-held');
+    const reviews=await tx.get(db.collection('deda_weekly_direct_reviews/'+weekId+'/users').limit(3));
+    requireThat(reviews.size<=2,'league-gift-review-conflict');
+    const freezes=new Map();
+    for(const d of reviews.docs){
+      const v=d.data();
+      requireThat(seen.has(d.id)&&typeof v.frozen==='boolean','league-gift-review-conflict');
+      freezes.set(d.id,v.frozen);
+    }
+    const result=plan({weekId,atMs,records,freezes,approvedAmounts:amounts.amounts});
+    const winner=result.winners.find(w=>w.publicId===ownerId);
+    const old=parse(await get(base+'/inventory/current'),uid);
+    requireThat(equal(old,await get(base+'/inventorySources/current'))&&
+      equal(old,await get(base+'/inventoryHistory/'+old.revision)),'league-gift-inventory-conflict');
+    const canonicalId='deda-weekly-'+weekId+'-'+uid;
+    const prior=old.diamondGifts.find(g=>g.giftId===canonicalId);
+    const legacyId='deda-weekly-'+weekId+'-'+ownerId.slice(1);
+    const gift=await get('deda_diamond_gifts/'+legacyId);
+    if(!winner||!gift){
+      requireThat(!prior&&!gift,'league-gift-existing-conflict');
+      return {state:winner?'awaiting-issuance':'not-eligible',view:old};
+    }
+    const created=gift.createdAt?.toMillis?.(),received=gift.claimedAt?.toMillis?.();
+    requireThat(winner.giftId===legacyId&&gift.giftId===legacyId&&
+      gift.sourceType==='weekly_league'&&gift.adminUid==='deda-weekly-league-system'&&
+      gift.targetPublicId===ownerId&&gift.targetName===winner.name&&gift.amount===winner.amount&&
+      Number.isSafeInteger(created)&&created>=end&&created<=atMs&&
+      (gift.status==='pending'?gift.claimedAt==null:
+        gift.status==='received'&&Number.isSafeInteger(received)&&received>=created&&received<=atMs),
+      'league-gift-receipt-conflict');
+    const nextGift={giftId:canonicalId,uid,sourceType:'weekly_league',weekId,
+      amount:winner.amount,status:gift.status,createdMs:created,
+      receivedMs:gift.status==='received'?received:null};
+    if(prior&&equal(prior,nextGift))return {state:'replayed',view:old};
+    const next=parse({...old,revision:old.revision+1,
+      diamondGifts:[...old.diamondGifts.filter(g=>g.giftId!==canonicalId),nextGift]},uid);
+    preserve(old,next);
+    const history=base+'/inventoryHistory/'+next.revision;
+    requireThat(await get(history)===null,'league-gift-inventory-conflict');
+    tx.set(db.doc(base+'/inventory/current'),next);
+    tx.set(db.doc(base+'/inventorySources/current'),next);
+    tx.set(db.doc(history),next);
+    return {state:'projected',view:next};
+  });
+}
+
 function generateLeagueCandidateRules(originalRules){
   const tail='    match /{document=**} { allow read, write: if false; }';
   if(originalRules.split(tail).length!==2||originalRules.includes('function leagueFixtureOwner('))
@@ -729,4 +842,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,generateLeagueCandidateRules};
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,generateLeagueCandidateRules};

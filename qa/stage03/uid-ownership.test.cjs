@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -324,6 +324,62 @@ test('04/03 existing week fixture is complete, read-only and restricted to the s
     assert.equal((await db.collection('deda_diamond_gifts').get()).size,0);
   }finally{await local.cleanup();}
 });
+
+test('04/03 original weekly award receipt maps once to UID inventory, without minting or crediting',async()=>{
+  await seedFriendActionFixture();
+  const inv=fixture();inv.diamondGifts=[admin()];await seed(inv);await apply();
+  const docs=await buildLeagueCandidate({store,uid,weekId});
+  const batch=db.batch();for(const [p,d] of Object.entries(docs))batch.set(db.doc(p),d);
+  const amounts=[300,200,150,100,100,100,100,100,100,100];
+  const planPath='deda_weekly_direct_prize_plans/'+weekId;
+  const control='deda_weekly_direct_control/active';
+  batch.set(db.doc(planPath),{weekId,amounts});
+  batch.set(db.doc(control),{weekId,paused:false});
+  await batch.commit();
+  const sync=(atMs=ms+100)=>syncLeagueGiftCandidate({store,uid,weekId,atMs});
+  await assert.rejects(sync(ms-1),{code:'league-gift-before-close'});
+  assert.equal((await sync()).state,'awaiting-issuance');
+  assert.equal((await read()).revision,1);
+  const legacyId='deda-weekly-'+weekId+'-'+original.slice(1);
+  const giftPath='deda_diamond_gifts/'+legacyId;
+  const {Timestamp}=require('firebase-admin/firestore');
+  const originalGift={giftId:legacyId,sourceType:'weekly_league',
+    adminUid:'deda-weekly-league-system',adminName:'دوري DEDA',
+    senderLabel:'إدارة DEDA',targetPublicId:original,targetName:'Synthetic QA',
+    amount:300,reason:'جائزة الدوري',status:'pending',createdAt:Timestamp.fromMillis(ms)};
+  await db.doc(giftPath).set({...originalGift,amount:250});
+  await assert.rejects(sync(),{code:'league-gift-receipt-conflict'});
+  await db.doc(giftPath).set(originalGift);
+  await db.doc(control).set({weekId,paused:true});
+  await assert.rejects(sync(),{code:'league-gift-control-held'});
+  await db.doc(control).set({weekId,paused:false});
+  const reviewPath='deda_weekly_direct_reviews/'+weekId+'/users/'+original;
+  await db.doc(reviewPath).set({frozen:true});
+  await assert.rejects(sync(),{code:'league-gift-existing-conflict'});
+  await db.doc(reviewPath).delete();
+  const extra='deda_weekly_direct_weeks/'+weekId+'/scores/@DEDA-EXTRA1';
+  await db.doc(extra).set({weeklyXp:20});
+  await assert.rejects(sync(),{code:'league-gift-ranking-conflict'});
+  await db.doc(extra).delete();
+  const outcomes=await Promise.all([sync(),sync()]);
+  assert.deepEqual(outcomes.map(v=>v.state).sort(),['projected','replayed']);
+  const pending=(await read()).diamondGifts.find(x=>x.sourceType==='weekly_league');
+  assert.deepEqual(pending,{giftId:'deda-weekly-'+weekId+'-'+uid,uid,
+    sourceType:'weekly_league',weekId,amount:300,status:'pending',createdMs:ms,receivedMs:null});
+  assert.equal((await db.collection('deda_diamond_gifts').get()).size,1);
+  assert.equal((await db.doc('deda_diamond_gift_balances/'+original).get()).exists,false);
+  // Mirror the already-authorized original claim receipt, never credit again.
+  await db.doc(giftPath).update({status:'received',claimedAt:Timestamp.fromMillis(ms+50)});
+  await db.doc('deda_diamond_gift_balances/'+original).set({publicId:original,balance:300});
+  assert.equal((await sync()).state,'projected');
+  assert.equal((await sync()).state,'replayed');
+  assert.equal((await read()).diamondGifts.find(x=>x.sourceType==='weekly_league').receivedMs,ms+50);
+  assert.equal((await db.doc('deda_diamond_gift_balances/'+original).get()).data().balance,300);
+  assert.equal((await db.collection(base+'/inventoryHistory').get()).size,3);
+  assert.equal((await db.doc('users/'+other).get()).exists,false);
+  assert.deepEqual((await db.doc(acctView).get()).data(),accountFixture());
+});
+
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{
   await accountSeed(accountFixture());const a=await accountApply();
   assert.equal(a.view.friends[0].recipientUid,other);

@@ -445,9 +445,10 @@ def patch_lab_prize(s):
         '        final data=snapshot.data!.data();\n'
         '        if(DedaStage03LabStorage.leagueLabMode){\n'
         '          final amounts=data?["amounts"];\n'
+        '          const ownerFloor=[250,200,150,100,100,100,100,100,100,100];\n'
         '          if(DedaStage03LabStorage.leagueAccountKey().isEmpty || data?["weekId"]!=DedaWeeklyPrizePlan.thisWeekId ||\n'
         '              amounts is! List || amounts.length!=10 || List.generate(10,(i)=>i).any((i)=>\n'
-        '                amounts[i] is! int || amounts[i]<DedaWeeklyPrizePlan.minimum[i] || amounts[i]>1000000))\n'
+        '                amounts[i] is! int || amounts[i]<ownerFloor[i] || amounts[i]>1000000))\n'
         "            return Text('💎 …',style:TextStyle(color:color,fontSize:fontSize));\n"
         '        }\n'
         '        final values = DedaWeeklyPrizePlan.amounts(data);','lab-prize-no-guesses')
