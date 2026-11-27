@@ -924,3 +924,121 @@ test('04/04 insufficient funds, old native-only ownership, pending purchase, par
   assert.equal((await db.doc(base+'/inventoryHistory/2').get()).exists,false);
   await assert.rejects(purchaseStore('FRAME_01'),{code:'store-frame-invalid'});
 });
+
+
+// Spark feasibility proof only. Reuse the already tested checkout to derive
+// exact before/after documents for the synthetic fixture. No rule is written
+// to a deployable file and no production or live laboratory is contacted.
+// The ring requires every changed document to observe the next exact write.
+// The purchase audit must not exist yet; its own rule verifies owner routing
+// and role. No wildcard owner write or caller-controlled amount is allowed.
+function storeExactRuleValue(v){
+  if(v===null||typeof v==='string'||typeof v==='boolean')return JSON.stringify(v);
+  if(typeof v==='number'&&Number.isSafeInteger(v))return String(v);
+  if(v&&typeof v.toMillis==='function'){
+    const ms=v.toMillis();
+    if(!Number.isSafeInteger(ms))throw Error('store-fixture-timestamp');
+    return 'timestamp.value('+ms+')';
+  }
+  if(Array.isArray(v))return '['+v.map(storeExactRuleValue).join(',')+']';
+  if(v&&typeof v==='object')return '{'+Object.entries(v).map(([k,x])=>JSON.stringify(k)+':'+storeExactRuleValue(x)).join(',')+'}';
+  throw Error('store-fixture-rule-value');
+}
+function storeExactClientValue(v){
+  if(v&&typeof v.toMillis==='function')return require('firebase/firestore').Timestamp.fromMillis(v.toMillis());
+  if(Array.isArray(v))return v.map(storeExactClientValue);
+  if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,storeExactClientValue(x)]));
+  return v;
+}
+async function captureStoreCandidate(frameId){
+  let writes;
+  const capture={db,serverTimestamp:()=>FieldValue.serverTimestamp(),runTransaction:action=>
+    store.runTransaction(async tx=>{
+      const pending=new Map();
+      const r=await action({get:tx.get,set:(p,data)=>pending.set(p,data)});
+      writes=pending;return r;
+    })};
+  const result=await purchaseStoreFrameCandidate({store:capture,uid,frameId});
+  assert.equal(result.replayed,false);assert.ok(writes.size>0&&writes.size<=13);
+  const rows=[];
+  for(const [p,after] of writes){
+    const snap=await db.doc(p).get();
+    rows.push({p,before:snap.exists?snap.data():null,after});
+  }
+  return rows;
+}
+async function exactStoreRules(originalRules,rows,frameId,manager){
+  const tail='    match /{document=**} { allow read, write: if false; }';
+  assert.equal(originalRules.split(tail).length,2);
+  const audit=base+'/framePurchases/'+frameId;
+  assert.ok(rows.some(r=>r.p===audit&&r.before===null));
+  const fp=p=>'/databases/$(database)/documents/'+p;
+  const check=async p=>{
+    const snap=await db.doc(p).get();
+    return snap.exists?'get('+fp(p)+').data == '+storeExactRuleValue(snap.data()):'!exists('+fp(p)+')';
+  };
+  const guard=[];
+  for(const p of ['users/'+uid,'deda_sessions/'+uid,walletRoutePath,walletAdminPath,walletAccessPath]){
+    guard.push(await check(p));
+  }
+  if(!manager)guard.push(await check(walletPersonalPath));
+  const blocks=rows.map((row,i)=>{
+    assert.match(row.p,/^[A-Za-z0-9_@/-]+$/);
+    const next=rows[(i+1)%rows.length];
+    const conditions=['owner('+JSON.stringify(uid)+')',
+      'request.resource.data == '+storeExactRuleValue(row.after),
+      'getAfter('+fp(next.p)+').data == '+storeExactRuleValue(next.after)];
+    if(row.before!==null)conditions.push('resource.data == '+storeExactRuleValue(row.before));
+    if(row.p===audit)conditions.push(...guard);
+    else conditions.push('!exists('+fp(audit)+')');
+    return '    match /'+row.p+' {\n      allow '+(row.before===null?'create':'update')+
+      ': if '+conditions.join(' &&\n        ')+';\n    }';
+  });
+  return originalRules.replace(tail,()=>blocks.join('\n')+'\n'+tail);
+}
+test('04/04 Spark direct-client exact fixture transaction feasibility: atomic rule gate, reject partial/forged/foreign/replay',async()=>{
+  const originalRules=readFileSync('firestore.rules','utf8');
+  const install=async rules=>{
+    await env.cleanup();
+    env=await initializeTestEnvironment({projectId,firestore:{rules}});
+  };
+  try{
+    // Both original payment paths, using one existing synthetic UID and
+    // the same native inventory paths. This is not a general checkout rule.
+    for(const manager of [false,true]){
+      await env.clearFirestore();await seedStorePurchase();
+      if(manager)await seedWalletManager();
+      else await db.doc(walletGiftPath).update({balance:900});
+      const frameId='FRAME_05',rows=await captureStoreCandidate(frameId);
+      const rules=await exactStoreRules(originalRules,rows,frameId,manager);
+      await install(rules);
+      const c=client();
+      const commit=(target,entries=rows)=>{
+        const batch=writeBatch(target);
+        for(const row of entries)batch.set(doc(target,row.p),storeExactClientValue(row.after));
+        return batch.commit();
+      };
+      const audit=base+'/framePurchases/'+frameId;
+      await assertFails(commit(c,rows.filter(r=>r.p!==audit)));
+      await assertFails(commit(c,rows.filter(r=>r.p!==view)));
+      await assertFails(commit(c,rows.map(r=>r.p===audit?{...r,after:{...r.after,cost:1}}:r)));
+      await assertFails(commit(client('foreign')));
+      await assertFails(commit(client(uid,'anonymous')));
+      for(const row of rows){
+        const snap=await db.doc(row.p).get();
+        assert.deepEqual(snap.exists?snap.data():null,row.before);
+      }
+      // Same guard at actual client transaction boundary, not Admin SDK.
+      await assertSucceeds(runTransaction(c,async tx=>{
+        const root=await tx.get(doc(c,base));
+        assert.ok(root.exists());
+        for(const row of rows)tx.set(doc(c,row.p),storeExactClientValue(row.after));
+      }));
+      for(const row of rows)assert.deepEqual((await db.doc(row.p).get()).data(),row.after);
+      await assertFails(commit(client()));
+      assert.equal((await purchaseStore(frameId)).replayed,true);
+      assert.equal((await syncStore()).replayed,true);
+      await install(originalRules);
+    }
+  }finally{await install(originalRules);}
+});
