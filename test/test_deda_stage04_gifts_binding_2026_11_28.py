@@ -10,6 +10,7 @@ import bind_stage2_gifts_2026_11_28 as gifts
 import bind_stage2_profile_owner_2026_11_23 as profile
 import bind_stage2_weekly_league_2026_11_24 as league
 from bind_auth_runtime import pairs, tokens
+from bind_all_sections import bind_service
 
 
 def archive(name):
@@ -18,7 +19,7 @@ def archive(name):
 
 class GiftBindingTest(unittest.TestCase):
     def test_original_page_badges_and_single_claim_route(self):
-        original = archive('main.dart')
+        original = profile.bind_existing_section_lifetime(archive('main.dart'))
         main = gifts.member(league.LAB_IMPORT + original, 'class DedaGiftInbox ', bottom.patch_inbox)
         main = league.patch_lab_gifts_main(main)
         bound = gifts.patch_main(main)
@@ -37,7 +38,7 @@ class GiftBindingTest(unittest.TestCase):
         pairs(tokens(patched))
 
     def test_original_identifier_transaction_and_viewed_badge(self):
-        before = archive('deda_stage74_id_gift_service.dart')
+        before = bind_service(archive('deda_stage74_id_gift_service.dart'))
         service = gifts.patch_identifier_service(before)
         pairs(tokens(service))
         self.assertEqual(service.count('transaction.set(receipt, {'), 1)
@@ -47,7 +48,7 @@ class GiftBindingTest(unittest.TestCase):
         self.assertNotIn('DedaPreferences.phone', service)
         with self.assertRaises(ValueError):
             gifts.patch_identifier_service(service)
-        original = bottom.patch_id_badge(archive('deda_stage75_unread_gift_badge.dart'))
+        original = bottom.patch_id_badge(bind_service(archive('deda_stage75_unread_gift_badge.dart')))
         badge = gifts.patch_badge(original)
         pairs(tokens(badge))
         self.assertIn('watchGiftsInventory(opening)', badge)

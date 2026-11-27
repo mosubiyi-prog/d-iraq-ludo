@@ -35,9 +35,9 @@ def patch_main(s):
             'stream: _labGiftStream ?? DedaBackend.watchPersonalDiamondGifts(_publicId),',
             'gifts-use-current-stream')
         return one(body,
-            '        await DedaDiamondsWallet.load();\n        balanceRefreshed = true;',
+            '        await DedaSectionOperationContext.wait(() => DedaDiamondsWallet.load());\n        balanceRefreshed = true;',
             '        if (!' + STORAGE + '.giftsLabMode) {\n'
-            '          await DedaDiamondsWallet.load();\n          balanceRefreshed = true;\n        }',
+            '          await DedaSectionOperationContext.wait(() => DedaDiamondsWallet.load());\n          balanceRefreshed = true;\n        }',
             'gifts-no-legacy-wallet-refresh')
 
     s = member(s, 'class _DedaMyGiftsPageState ', inbox)
@@ -129,14 +129,15 @@ def patch_identifier_service(s):
       opening.requireCurrent();
       return rows;
     }''', 'gifts-identifier-protected-read')
-    s = one(s, '    final uid = await _verifiedOwner(gift.originalId);',
+    s = one(s, '    final uid = await DedaSectionOperationContext.wait(() => _verifiedOwner(gift.originalId));',
         '''    final labMode = DedaStage03LabStorage.giftsLabMode;
     if (labMode && !DedaStage03LabStorage.giftsClaimCandidateEnabled) {
       throw StateError('identifier-gift-claim-held');
     }
     final opening = labMode
         ? await DedaStage03LabStorage.openGiftsInbox(gift.originalId) : null;
-    final uid = opening?.requireCurrent().uid ?? await _verifiedOwner(gift.originalId);''',
+    final uid = opening?.requireCurrent().uid ??
+        await DedaSectionOperationContext.wait(() => _verifiedOwner(gift.originalId));''',
         'gifts-identifier-current-session')
     s = one(s, '      final row = issued.data();',
         '''      if (opening != null) {
