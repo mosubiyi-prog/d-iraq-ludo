@@ -3,7 +3,7 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
-const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch,query,limit}=require('firebase/firestore');
+const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch,query,limit,serverTimestamp,runTransaction}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
@@ -388,13 +388,42 @@ test('04/03 actual original payout worker creates one demo gift, then projects s
   const batch=db.batch();for(const [p,d] of Object.entries(docs))batch.set(db.doc(p),d);
   const planPath='deda_weekly_direct_prize_plans/'+weekId;
   const control='deda_weekly_direct_control/active';
-  batch.set(db.doc(planPath),{weekId,amounts:[350,200,150,100,100,100,100,100,100,100]});
-  batch.set(db.doc(control),{weekId,paused:true});await batch.commit();
+  await batch.commit();
+  // Reuse checked-in rules and the existing secondary-admin / recipient
+  // transaction shapes against the SAME isolated demo records. No Auth user
+  // is enrolled; these are mocked rules contexts, not a second player UID.
+  const originalRules=await initializeTestEnvironment({projectId,firestore:{rules:readFileSync('original-firestore.rules','utf8')}});
+  try {
+  const gmUid='qa_manager_uid',staffUid='qa_staff_uid';
+  await db.doc('admins/'+gmUid).set({role:'general_manager',active:true,status:'active'});
+  await db.doc('admins/'+staffUid).set({role:'employee',active:true,status:'active'});
+  const manager=originalRules.authenticatedContext(gmUid).firestore();
+  const staff=originalRules.authenticatedContext(staffUid).firestore();
+  const player=originalRules.authenticatedContext(uid,{firebase:{sign_in_provider:'password'}}).firestore();
+  const reason='QA verified weekly plan and protected UID';
+  const managerChange=async (actor,action,path,fields,publicId='')=>runTransaction(actor,async tx=>{
+    const target=doc(actor,path);
+    const prior=await tx.get(target);
+    tx.set(target,{weekId,...fields,reason,updatedAt:serverTimestamp(),updatedBy:gmUid});
+    if(action==='freeze'||action==='unfreeze')tx.set(doc(actor,'deda_weekly_direct_notices/'+weekId+'/users/'+original),{
+      weekId,publicId:original,frozen:fields.frozen,notice:fields.notice,updatedAt:serverTimestamp(),updatedBy:gmUid});
+    tx.set(doc(actor,'deda_weekly_direct_admin_events/qa_uid_'+action),{action,weekId,publicId,reason,createdAt:serverTimestamp(),createdBy:gmUid});
+  });
+  await assertFails(setDoc(doc(staff,control),{weekId,paused:true,reason,updatedAt:serverTimestamp(),updatedBy:staffUid}));
+  await assertFails(setDoc(doc(player,control),{weekId,paused:true,reason,updatedAt:serverTimestamp(),updatedBy:uid}));
+  await assertSucceeds(managerChange(manager,'pause',control,{paused:true}));
+  await assertSucceeds(managerChange(manager,'prizes_increase',planPath,{amounts:[350,200,150,100,100,100,100,100,100,100]}));
+  await assertFails(setDoc(doc(manager,planPath),{weekId,amounts:[250,200,150,100,100,100,100,100,100,100],reason,updatedAt:serverTimestamp(),updatedBy:gmUid}));
   const run=(atMs=ms+100)=>settleLeagueCandidate({store,uid,weekId,atMs});
   await assert.rejects(run(ms-1),{code:'league-settlement-window'});
   await assert.rejects(run(),{code:'league-gift-control-held'});
   assert.equal((await db.collection('deda_diamond_gifts').get()).size,0);
-  await db.doc(control).set({weekId,paused:false});
+  const reviewPath='deda_weekly_direct_reviews/'+weekId+'/users/'+original;
+  await assertSucceeds(managerChange(manager,'freeze',reviewPath,{publicId:original,frozen:true,notice:'QA weekly points held for review'},original));
+  await assertSucceeds(managerChange(manager,'resume',control,{paused:false}));
+  await assert.rejects(run(),{code:'league-settlement-single-proven-owner'});
+  assert.equal((await db.collection('deda_diamond_gifts').get()).size,0);
+  await assertSucceeds(managerChange(manager,'unfreeze',reviewPath,{publicId:original,frozen:false,notice:'QA weekly points review completed'},original));
   const route='deda_share_ids/'+original;
   const prior=(await db.doc(route).get()).data();
   await db.doc(route).set({...prior,ownerUid:other});
@@ -415,6 +444,38 @@ test('04/03 actual original payout worker creates one demo gift, then projects s
   assert.equal((await db.doc('deda_diamond_gift_balances/'+original).get()).exists,false);
   assert.equal((await db.collection(base+'/inventoryHistory').get()).size,2);
   assert.deepEqual((await db.doc(acctView).get()).data(),accountFixture());
+  // The ORIGINAL recipient rule requires the original deterministic gift ID
+  // and the paired credit, not the UID projection key. Verify the actual
+  // client transaction instead of fabricating a received receipt via SDK.
+  const giftPath=gifts.docs[0].ref.path;
+  const balancePath='deda_diamond_gift_balances/'+original;
+  const claim=(actor,amount=350)=>{
+    const batch=writeBatch(actor);
+    batch.update(doc(actor,giftPath),{status:'received',claimedAt:serverTimestamp()});
+    batch.set(doc(actor,balancePath),{publicId:original,balance:amount,lastClaimGiftId:gifts.docs[0].id,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    return batch.commit();
+  };
+  await assertSucceeds(getDocFromServer(doc(player,giftPath)));
+  await assertFails(getDocFromServer(doc(staff,giftPath)));
+  await assertFails(claim(staff));
+  await assertFails(claim(player,351));
+  await assertSucceeds(claim(player));
+  await assertFails(claim(player));
+  const actual=(await db.doc(giftPath).get()).data();
+  assert.equal(actual.status,'received');
+  const sync=()=>syncLeagueGiftCandidate({store,uid,weekId,atMs:actual.claimedAt.toMillis()+1});
+  assert.equal((await sync()).state,'projected');
+  assert.equal((await sync()).state,'replayed');
+  assert.equal((await read()).diamondGifts.find(g=>g.sourceType==='weekly_league').status,'received');
+  assert.equal((await db.doc(balancePath).get()).data().balance,350);
+  assert.equal((await db.collection('deda_diamond_gifts').get()).size,1);
+  assert.equal((await db.collection(base+'/inventoryHistory').get()).size,3);
+  assert.deepEqual((await db.doc(acctView).get()).data(),accountFixture());
+  } finally {
+    await originalRules.cleanup();
+    const restored=await initializeTestEnvironment({projectId,firestore:{rules:readFileSync('firestore.rules','utf8')}});
+    await restored.cleanup();
+  }
   const {settleWeek}=require('./deda_weekly_direct_prize_worker.cjs');
   await assert.rejects(settleWeek({projectId:'not-the-demo'},weekId,ms+100,
     {verifyDemoCandidate:async()=>{}}),/WEEKLY_CANDIDATE_GUARD_EMULATOR_ONLY/);
