@@ -80,6 +80,50 @@ void main(){
     expect(DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,
       {...gift,'status':'received','claimedAt':Timestamp.fromMillisecondsSinceEpoch(at+1)})['status'],'received');
   });
+
+  test('04/03 winner-card candidate uses protected issued prize and approved copy only',(){
+    const week='2026-10-31', legacy='deda-weekly-2026-10-31-DEDA-QA1234';
+    final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;
+    final issued=DateTime.utc(2026,11,7,3).millisecondsSinceEpoch;
+    const key='2026-11-01|open_map';
+    final a=protectedAccount();
+    a['tasks']=[{'claimKey':key,'dayId':'2026-11-01','taskId':'open_map','completedMs':at,'claimedMs':at+1}];
+    a['league']=[{'weekId':week,'claimedKeys':[key],'completedTasks':1,'weeklyXp':20}];
+    final inv=protectedInventory();
+    final canonical=<String,Object?>{'giftId':'deda-weekly-$week-$uid',
+      'uid':uid,'sourceType':'weekly_league','weekId':week,'amount':275,
+      'status':'pending','createdMs':issued,'receivedMs':null};
+    inv['diamondGifts']=[canonical];
+    DedaStage04ProfileView p()=>DedaStage04ProfileView.fromProtected(
+      DedaStage03ProtectedSnapshot.decode(expectedUid:uid,progress:protectedProgress(),
+        inventory:inv,account:a));
+    final row=<String,dynamic>{'publicId':p().originalId,'ownerUid':uid,
+      'activeId':p().activeId,'displayName':p().displayName,'claimedKeys':[key],'reachedMs':at+1};
+    final proof=<String,dynamic>{'format':1,'synthetic':true,'complete':true,'ownerUid':uid,
+      'weekId':week,'accountRevision':1,'rows':[row]};
+    final scores={p().originalId:<String,dynamic>{'publicId':p().originalId,'weekId':week,
+      'displayName':p().displayName,'claimedKeys':[key],'weeklyXp':20,'completedTasks':1,
+      'updatedAt':Timestamp.fromMillisecondsSinceEpoch(at+1)}};
+    final gift=<String,dynamic>{'giftId':legacy,'sourceType':'weekly_league',
+      'adminUid':'deda-weekly-league-system','targetPublicId':p().originalId,
+      'amount':275,'status':'pending','createdAt':Timestamp.fromMillisecondsSinceEpoch(issued),
+      'reason':'جائزة دوري DEDA — الأسبوع $week — المركز 1'};
+    Map<String,String>? check(Map<String,dynamic>? value)=>
+      DedaStage04LeagueRead.verifyWinnerCardCandidate(p(),week,proof,scores,value);
+    final card=check(gift)!;
+    expect(card['title'],'تهانينا يا بطل DEDA!');
+    expect(card['rankText'],'المركز الأول 🥇');
+    expect(card['prizeText'],'275 💎');
+    expect(card['primary'],'🎁 الذهاب إلى هداياي');
+    expect(card['background'],'#101C35');
+    expect(card.values.join(' '),isNot(contains(p().originalId)));
+    expect(card.values.join(' '),isNot(contains(p().displayName)));
+    expect(check(null),isNull);
+    expect(()=>check({...gift,'reason':'جائزة دوري DEDA — الأسبوع $week — المركز 2'}),throwsStateError);
+    expect(()=>check({...gift,'amount':150}),throwsStateError);
+    inv['diamondGifts']=[{...canonical,'createdMs':issued-1}];
+    expect(()=>check({...gift,'createdAt':Timestamp.fromMillisecondsSinceEpoch(issued-1)}),throwsStateError);
+  });
   test('04/03 complete ranking proof cannot omit or fabricate synthetic rows',(){
     final a=protectedAccount();
     final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;

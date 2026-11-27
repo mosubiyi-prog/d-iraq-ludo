@@ -661,6 +661,49 @@ class DedaStage04LeagueRead {
     return Map<String,dynamic>.unmodifiable(gift);
   }
 
+
+  /// Stage31's approved card copy, backed by the current UID proof and the
+  /// original worker receipt, not by its historical mock prize amounts.
+  /// Pure lab candidate: this does not display, acknowledge or claim a gift.
+  static Map<String,String>? verifyWinnerCardCandidate(
+      DedaStage04ProfileView p,String week,Map<String,dynamic>? proof,
+      Map<String,Map<String,dynamic>> scores,Map<String,dynamic>? gift) {
+    final rows=verifyRankingProof(p,week,proof,scores);
+    if(gift==null || !rows.containsKey(p.originalId))return null;
+    final giftId='deda-weekly-$week-${p.originalId.substring(1)}';
+    final receipt=verifyWeeklyGift(p,giftId,gift);
+    final ranked=rows.values.toList()..sort((a,b){
+      final xp=(b['claimedKeys'] as List).length.compareTo((a['claimedKeys'] as List).length);
+      if(xp!=0)return xp;
+      final time=(a['reachedMs'] as int).compareTo(b['reachedMs'] as int);
+      return time!=0?time:(a['publicId'] as String).compareTo(b['publicId'] as String);
+    });
+    final place=ranked.indexWhere((r)=>r['publicId']==p.originalId)+1;
+    if(place<1 || place>10)return null;
+    final start=DateTime.parse(week+'T03:00:00Z');
+    final release=DedaWeeklyLeagueClock.at(start).nextWeekStart;
+    // An issued, protected receipt proves the boundary without trusting the
+    // handset clock. The original worker records its rank in this reason.
+    if((receipt['createdAt'] as Timestamp).millisecondsSinceEpoch<release.millisecondsSinceEpoch ||
+        receipt['reason']!='جائزة دوري DEDA — الأسبوع $week — المركز $place')
+      throw StateError('league-winner-card-receipt-conflict');
+    const ranks=['الأول','الثاني','الثالث','الرابع','الخامس',
+      'السادس','السابع','الثامن','التاسع','العاشر'];
+    const medals=[' 🥇',' 🥈',' 🥉'];
+    return Map<String,String>.unmodifiable({
+      'background':'#101C35','innerBackground':'#233651','gold':'#F7CB65',
+      'icon':'trophy','title':'تهانينا يا بطل DEDA!',
+      'intro':'لقد حققت إنجازاً رائعاً في دوري المتصدرين الأسبوعي',
+      'rankLabel':'مركزك النهائي',
+      'rankText':'المركز '+ranks[place-1]+(place<=3?medals[place-1]:''),
+      'prizeText':receipt['amount'].toString()+' 💎',
+      'prizeLabel':'جائزتك الأسبوعية',
+      'footer':'شكراً لمشاركتك وتميّزك! استمر بالتحدي، فالدوري الجديد بدأ الآن.',
+      'primary':'🎁 الذهاب إلى هداياي',
+      'secondary':'مشاهدة نتائج الأسبوع','close':'إغلاق',
+    });
+  }
+
   Set<String> claims(String id)=>verifiedWeeks(requireCurrent())[id]??const <String>{};
 
   void verifyOwnerScore(String week,Map<String,dynamic>? score){
