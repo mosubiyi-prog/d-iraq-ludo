@@ -661,49 +661,6 @@ class DedaStage04LeagueRead {
     return Map<String,dynamic>.unmodifiable(gift);
   }
 
-
-  /// Stage31's approved card copy, backed by the current UID proof and the
-  /// original worker receipt, not by its historical mock prize amounts.
-  /// Pure lab candidate: this does not display, acknowledge or claim a gift.
-  static Map<String,String>? verifyWinnerCardCandidate(
-      DedaStage04ProfileView p,String week,Map<String,dynamic>? proof,
-      Map<String,Map<String,dynamic>> scores,Map<String,dynamic>? gift) {
-    final rows=verifyRankingProof(p,week,proof,scores);
-    if(gift==null || !rows.containsKey(p.originalId))return null;
-    final giftId='deda-weekly-$week-${p.originalId.substring(1)}';
-    final receipt=verifyWeeklyGift(p,giftId,gift);
-    final ranked=rows.values.toList()..sort((a,b){
-      final xp=(b['claimedKeys'] as List).length.compareTo((a['claimedKeys'] as List).length);
-      if(xp!=0)return xp;
-      final time=(a['reachedMs'] as int).compareTo(b['reachedMs'] as int);
-      return time!=0?time:(a['publicId'] as String).compareTo(b['publicId'] as String);
-    });
-    final place=ranked.indexWhere((r)=>r['publicId']==p.originalId)+1;
-    if(place<1 || place>10)return null;
-    final start=DateTime.parse(week+'T03:00:00Z');
-    final release=DedaWeeklyLeagueClock.at(start).nextWeekStart;
-    // An issued, protected receipt proves the boundary without trusting the
-    // handset clock. The original worker records its rank in this reason.
-    if((receipt['createdAt'] as Timestamp).millisecondsSinceEpoch<release.millisecondsSinceEpoch ||
-        receipt['reason']!='جائزة دوري DEDA — الأسبوع $week — المركز $place')
-      throw StateError('league-winner-card-receipt-conflict');
-    const ranks=['الأول','الثاني','الثالث','الرابع','الخامس',
-      'السادس','السابع','الثامن','التاسع','العاشر'];
-    const medals=[' 🥇',' 🥈',' 🥉'];
-    return Map<String,String>.unmodifiable({
-      'background':'#101C35','innerBackground':'#233651','gold':'#F7CB65',
-      'icon':'trophy','title':'تهانينا يا بطل DEDA!',
-      'intro':'لقد حققت إنجازاً رائعاً في دوري المتصدرين الأسبوعي',
-      'rankLabel':'مركزك النهائي',
-      'rankText':'المركز '+ranks[place-1]+(place<=3?medals[place-1]:''),
-      'prizeText':receipt['amount'].toString()+' 💎',
-      'prizeLabel':'جائزتك الأسبوعية',
-      'footer':'شكراً لمشاركتك وتميّزك! استمر بالتحدي، فالدوري الجديد بدأ الآن.',
-      'primary':'🎁 الذهاب إلى هداياي',
-      'secondary':'مشاهدة نتائج الأسبوع','close':'إغلاق',
-    });
-  }
-
   Set<String> claims(String id)=>verifiedWeeks(requireCurrent())[id]??const <String>{};
 
   void verifyOwnerScore(String week,Map<String,dynamic>? score){
@@ -1035,77 +992,6 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final p=await readProfile();
     DedaStage04LeagueRead.verifiedWeeks(p.requireCurrent());
     return DedaStage04LeagueRead._(p);
-  }
-
-
-  // Only a disposable laboratory may reserve a card. The original payout
-  // and wallet writers are untouched. Reserve BEFORE presenting a popup:
-  // concurrent devices cannot both win the same UID/week reservation.
-  static const leagueWinnerCardCandidateEnabled=
-      bool.fromEnvironment('DEDA_STAGE04_LEAGUE_WINNER_CARD_CANDIDATE');
-
-  static Future<Map<String,String>?> reserveWinnerCardCandidate(
-      String week,bool Function() sameViewer) async {
-    if(!leagueLabMode || !leagueWinnerCardCandidateEnabled || !sameViewer())return null;
-    final opening=await readProfile(), old=opening.requireCurrent();
-    if(old.originalId!='@DEDA-QA1234' ||
-        !RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}$').hasMatch(week))return null;
-    final protectedGift=old.diamondGiftRecords.where((row)=>row is Map &&
-      row['sourceType']=='weekly_league' && row['weekId']==week).toList();
-    if(protectedGift.isEmpty)return null;
-    if(protectedGift.length!=1)throw const DedaPrivateDataConflict();
-    void check(){
-      opening.requireCurrent();
-      if(!sameViewer() || leagueAccountKey()!=old.uid)throw const DedaPrivateDataStale();
-    }
-    check();
-    final db=FirebaseFirestore.instanceFor(app:Firebase.app());
-    final base=db.doc('deda_lab_uid_authority/$uid');
-    final weekRef=db.collection('deda_weekly_direct_weeks').doc(week);
-    final seenRef=base.collection('leagueCardSeen').doc(week);
-    final giftId='deda-weekly-$week-${old.originalId.substring(1)}';
-    final giftRef=db.collection('deda_diamond_gifts').doc(giftId);
-    final scores=await weekRef.collection('scores').limit(3)
-        .get(const GetOptions(source:Source.server));
-    check();
-    if(scores.metadata.isFromCache || scores.metadata.hasPendingWrites ||
-        scores.docs.length>2)throw const DedaPrivateDataConflict();
-    final ids=scores.docs.map((row)=>row.id).toList(growable:false);
-    final card=await db.runTransaction<Map<String,String>?>((tx)async{
-      check();
-      final seen=await tx.get(seenRef);
-      if(seen.metadata.isFromCache || seen.metadata.hasPendingWrites)
-        throw const DedaPrivateDataConflict();
-      if(seen.exists)return null;
-      final account=await tx.get(base.collection('account').doc('current'));
-      final inventory=await tx.get(base.collection('inventory').doc('current'));
-      final proof=await tx.get(weekRef);
-      final gift=await tx.get(giftRef);
-      final rows=<String,Map<String,dynamic>>{};
-      for(final id in ids){
-        final row=await tx.get(weekRef.collection('scores').doc(id));
-        if(!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites)
-          throw const DedaPrivateDataConflict();
-        rows[id]=row.data()!;
-      }
-      check();
-      for(final row in [account,inventory,proof,gift]){
-        if(!row.exists || row.metadata.isFromCache || row.metadata.hasPendingWrites)
-          throw const DedaPrivateDataConflict();
-      }
-      final fresh=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
-        expectedUid:uid,progress:old._source.progress,account:account.data(),inventory:inventory.data()));
-      if(fresh.accountRevision!=old.accountRevision || fresh.inventoryRevision!=old.inventoryRevision ||
-          fresh.originalId!=old.originalId)throw const DedaPrivateDataConflict();
-      final candidate=DedaStage04LeagueRead.verifyWinnerCardCandidate(fresh,week,proof.data(),rows,gift.data());
-      if(candidate==null)return null;
-      check();
-      tx.set(seenRef,{'uid':uid,'weekId':week,'giftId':giftId,
-        'reservedAt':FieldValue.serverTimestamp()});
-      return candidate;
-    },timeout:const Duration(seconds:15));
-    check();
-    return card;
   }
 
   // Candidate only; default closed. No change to financial rules or issuer.
