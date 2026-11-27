@@ -1,8 +1,11 @@
 """04/04: original store components, disposable assembly only, default off."""
 from pathlib import Path
 import sys
+import re
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / 'tools/app_stability'))
+from bind_auth_runtime import body_range, tokens, pairs
 IMPORT = "import 'deda_stage03_lab_uid_storage_2026_11_25.dart';\n"
 MODE = "DedaStage03LabStorage.storeLabMode"
 
@@ -11,6 +14,19 @@ def once(source, old, new):
     if source.count(old) != 1:
         raise ValueError('STORE_SOURCE_ANCHOR_DRIFT: ' + old[:80])
     return source.replace(old, new, 1)
+
+
+def inject(source, name, code):
+    # Reuse the existing balanced Dart parser, not guessed await text.
+    declarations = re.findall(r'\bFuture<[^;\n]+?>\s+' + re.escape(name) + r'\s*\(', source)
+    if len(declarations) != 1:
+        raise ValueError('STORE_METHOD_NOT_UNIQUE: ' + name)
+    opening, closing, _, _ = body_range(source, name)
+    if 'DedaStage03LabStorage.storeLabMode' in source[opening+1:closing]:
+        raise ValueError('STORE_METHOD_ALREADY_BOUND: ' + name)
+    updated = source[:opening+1] + '\n' + code.rstrip() + '\n' + source[opening+1:]
+    pairs(tokens(updated))
+    return updated
 
 
 def patch_cards(source):
@@ -29,7 +45,7 @@ def patch_cards(source):
       return value;
     } catch (_) { return null; }
   }''')
-    s = once(s, '    final key = _key(originalId);\n    final state = notifier(originalId);',
+    s = inject(s, 'restore',
         '''    if (DedaStage03LabStorage.storeLabMode) {
       final state = notifier(originalId);
       final version = (_versions[originalId] ?? 0) + 1;
@@ -52,13 +68,9 @@ def patch_cards(source):
       }
       return;
     }
-    final key = _key(originalId);
-    final state = notifier(originalId);''')
-    use_header = '''  static Future<void> use(
-    String originalId, DedaPremiumIdCardColor choice,
-  ) async {'''
-    s = once(s, use_header,
-        use_header + '''\n    if (DedaStage03LabStorage.storeLabMode) {
+    ''')
+    s = inject(s, 'use',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
       final opening = _labOpen[originalId];
       if (opening == null) throw StateError('store-card-open-required');
       opening.requireCurrent();
@@ -83,6 +95,11 @@ def patch_cards(source):
     if s.count('active == widget.color') != 2:
         raise ValueError('STORE_CARD_ACTION_DRIFT')
     s = s.replace('active == widget.color','DedaStage71FreeCards.visibleChoice(widget.originalId,active) == widget.color')
+    if 'DEDA_ACCOUNT_CHOICE_BOUND_V1' in s:
+        s = once(s, '(!dedaAccountChoiceSyncEnabled || DedaFreeCardSyncBridge.statusFor',
+            '(DedaStage03LabStorage.storeLabMode || !dedaAccountChoiceSyncEnabled || DedaFreeCardSyncBridge.statusFor')
+        s = once(s, '(dedaAccountChoiceSyncEnabled && DedaFreeCardSyncBridge.statusFor',
+            '(!DedaStage03LabStorage.storeLabMode && dedaAccountChoiceSyncEnabled && DedaFreeCardSyncBridge.statusFor')
     s = once(s, 'builder: (context, color, child) => color == null',
         'builder: (context, color, child) => DedaStage71FreeCards.visibleChoice(widget.originalId,color) == null')
     s = once(s, '                color: color,', '                color: color!,')
@@ -92,24 +109,23 @@ def patch_cards(source):
 def patch_native_checkout(source):
     s = IMPORT + source
     s = once(s,'  static const live = true;', '  static const live = !'+MODE+';')
-    owned_header = '''  static Future<bool> isOwned(
-      {required String originalId, required String frameId}) async {'''
-    s = once(s,owned_header,
-        owned_header + '''\n    if (DedaStage03LabStorage.storeLabMode) {
+    s = inject(s, 'isOwned',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
       _item(frameId);
       final p = await DedaStage03LabStorage.readStoreProfile(originalId);
       return p.requireCurrent().verifiedPaidFrameIds.contains(frameId);
     }
     '''.rstrip())
-    s = once(s,'  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {',
-        '''  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {
-    if (DedaStage03LabStorage.storeLabMode) {
+    s = inject(s, 'verifiedOwnedFrameIds',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
       final p = await DedaStage03LabStorage.readStoreProfile(originalId);
       return p.requireCurrent().verifiedPaidFrameIds;
     }''')
-    s = once(s,'  static Future<int> verifiedPurchaseBalance(String originalId) async {',
-        '''  static Future<int> verifiedPurchaseBalance(String originalId) async {
-    if (DedaStage03LabStorage.storeLabMode) {
+    s = inject(s, 'verifiedPurchaseBalance',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
+      throw StateError('store-central-spend-authority-held');
+    }''')
+    s = inject(s, '_buy', '''    if (DedaStage03LabStorage.storeLabMode) {
       throw StateError('store-central-spend-authority-held');
     }''')
     s = once(s,"    _item(frameId);\n    final key = '$originalId/$frameId';",
@@ -125,24 +141,19 @@ def patch_receipt_checkout(source):
     s = IMPORT + source
     s = once(s, "static const bool live = bool.fromEnvironment(",
         "static const bool live = !"+MODE+" && bool.fromEnvironment(")
-    s = once(s,'  static Future<int> verifiedPurchaseBalance(String originalId) async {',
-        '''  static Future<int> verifiedPurchaseBalance(String originalId) async {
-    if (DedaStage03LabStorage.storeLabMode) {
+    s = inject(s, 'verifiedPurchaseBalance',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
       throw StateError('store-central-spend-authority-held');
     }''')
-    owned_header = '''  static Future<bool> isOwned({
-    required String originalId, required String frameId,
-  }) async {'''
-    s = once(s,owned_header,
-        owned_header + '''\n    if (DedaStage03LabStorage.storeLabMode) {
+    s = inject(s, 'isOwned',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
       purchaseId(originalId,frameId);
       final p = await DedaStage03LabStorage.readStoreProfile(originalId);
       return p.requireCurrent().verifiedPaidFrameIds.contains(frameId);
     }
     '''.rstrip())
-    s = once(s,'  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {',
-        '''  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {
-    if (DedaStage03LabStorage.storeLabMode) {
+    s = inject(s, 'verifiedOwnedFrameIds',
+        '''    if (DedaStage03LabStorage.storeLabMode) {
       final p = await DedaStage03LabStorage.readStoreProfile(originalId);
       return p.requireCurrent().verifiedPaidFrameIds;
     }''')
@@ -205,6 +216,8 @@ def bind(root):
         lib/'deda_owner18_frame_checkout.dart':patch_native_checkout((lib/'deda_owner18_frame_checkout.dart').read_text()),
         lib/'deda_lab_frame_secure_checkout.dart':patch_receipt_checkout((lib/'deda_lab_frame_secure_checkout.dart').read_text()),
     }
+    for p,s in changes.items():
+        pairs(tokens(s))
     for p,s in changes.items():
         p.write_text(s)
     print('PASS_STAGE04_STORE_ORIGINAL_FREE_CARDS_UID_JOURNAL_PAID_OWNERSHIP_PROTECTED_NO_NATIVE_DEBIT')
