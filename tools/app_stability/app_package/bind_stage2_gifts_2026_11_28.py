@@ -17,27 +17,59 @@ def member(s, marker, patch):
 def patch_main(s):
     if LAB_IMPORT not in s:
         raise ValueError('GIFTS_EXISTING_LEAGUE_BINDING_REQUIRED')
-    s = member(s, 'class _DedaMyGiftsPageState ', lambda body: one(
-        one(body, STORAGE + '.leagueLabMode', STORAGE + '.giftsInboxLabMode', 'gifts-page'),
-        '        await DedaDiamondsWallet.load();\n        balanceRefreshed = true;',
-        '        if (!' + STORAGE + '.giftsLabMode) {\n'
-        '          await DedaDiamondsWallet.load();\n          balanceRefreshed = true;\n        }',
-        'gifts-no-legacy-wallet-refresh'))
+    def inbox(body):
+        body = one(body, STORAGE + '.leagueLabMode', STORAGE + '.giftsInboxLabMode', 'gifts-page')
+        body = one(body, "  String _publicId='';",
+            "  String _publicId='';\n  Stream<List<Map<String, dynamic>>>? _labGiftStream;",
+            'gifts-retain-stream')
+        body = one(body, '        if(mounted && dedaSectionCurrent)setState(()=>_publicId=id);',
+            '''        if (mounted && dedaSectionCurrent) {
+          setState(() {
+            _publicId = id;
+            if (DedaStage03LabStorage.giftsLabMode) {
+              _labGiftStream = DedaBackend.watchPersonalDiamondGifts(id);
+            }
+          });
+        }''', 'gifts-open-existing-stream-once')
+        body = one(body, 'stream: DedaBackend.watchPersonalDiamondGifts(_publicId),',
+            'stream: _labGiftStream ?? DedaBackend.watchPersonalDiamondGifts(_publicId),',
+            'gifts-use-current-stream')
+        return one(body,
+            '        await DedaDiamondsWallet.load();\n        balanceRefreshed = true;',
+            '        if (!' + STORAGE + '.giftsLabMode) {\n'
+            '          await DedaDiamondsWallet.load();\n          balanceRefreshed = true;\n        }',
+            'gifts-no-legacy-wallet-refresh')
+
+    s = member(s, 'class _DedaMyGiftsPageState ', inbox)
     s = member(s, 'class _DedaGiftNavBadgeState ', lambda body: one(
         body, '    unawaited(DedaStage75UnreadGiftBadge.start(',
         '    if (' + STORAGE + '.giftsLabMode) return;\n'
         '    unawaited(DedaStage75UnreadGiftBadge.start(', 'gifts-shared-badge-owner'))
 
     def badge(body):
+        body = one(body, '  static int _generation = 0;',
+            '  static int _generation = 0;\n  static DedaStage04ProfileRead? _giftLabOpening;',
+            'gifts-badge-session')
+        body = one(body, '  static Future<void> stop() async {\n    ++_generation;',
+            '  static Future<void> stop() async {\n    ++_generation;\n    _giftLabOpening = null;',
+            'gifts-badge-clear-session')
         body = one(body, '  static Future<void> start() async {',
             '''  static Future<void> start() async {
     if (DedaStage03LabStorage.giftsLabMode) {
-      if (_subscription != null) return;
+      if (_subscription != null) {
+        try {
+          _giftLabOpening!.requireCurrent();
+          return;
+        } catch (_) {
+          accountChanged();
+        }
+      }
       final generation = ++_generation;
       try {
         final opening = await DedaStage03LabStorage.openGiftsInbox();
         final id = opening.requireCurrent().originalId;
         if (_generation != generation) return;
+        _giftLabOpening = opening;
         unawaited(DedaStage75UnreadGiftBadge.start(id));
         _subscription = DedaBackend.watchPersonalDiamondGifts(id).listen((gifts) {
           if (_generation != generation) return;

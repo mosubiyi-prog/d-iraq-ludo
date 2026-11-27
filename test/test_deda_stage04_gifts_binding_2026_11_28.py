@@ -26,6 +26,9 @@ class GiftBindingTest(unittest.TestCase):
         self.assertEqual(bound.count('DedaBackend.claimDiamondGift('), main.count('DedaBackend.claimDiamondGift('))
         self.assertEqual(bottom.home.visual_signature(bound), bottom.home.visual_signature(main))
         self.assertEqual(bound.count('DedaStage03LabStorage.openGiftsInbox()'), 1)
+        self.assertIn('_giftLabOpening!.requireCurrent();', bound)
+        self.assertIn('_giftLabOpening = null;', bound)
+        self.assertIn('stream: _labGiftStream ?? DedaBackend.watchPersonalDiamondGifts(_publicId)', bound)
         with self.assertRaises(ValueError):
             gifts.patch_main(bound)
         backend = league.patch_lab_gift_backend(archive('deda_backend.dart'))
