@@ -965,6 +965,13 @@ async function exactStoreRules(originalRules,rows,frameId,manager){
     guard.push(await check(p));
   }
   if(!manager)guard.push(await check(walletPersonalPath));
+  // The exact plan also depends on read-only authority rows. A client may
+  // bypass Dart's revision checks, so bind these dependencies at the audit
+  // rule. Rows already written have their own exact resource.data guard.
+  guard.push(await check(acctView));
+  for(const p of [base,walletGiftPath]){
+    if(!rows.some(row=>row.p===p))guard.push(await check(p));
+  }
   const blocks=rows.map((row,i)=>{
     assert.match(row.p,/^[A-Za-z0-9_@/-]+$/);
     const next=rows[(i+1)%rows.length];
@@ -1014,6 +1021,21 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
       await assertFails(commit(c,rows.map(r=>r.p===audit?{...r,after:{...r.after,cost:1}}:r)));
       await assertFails(commit(client('foreign')));
       await assertFails(commit(client(uid,'anonymous')));
+      // Independent trusted changes between approval and submission must
+      // invalidate even a raw client batch that skips the Dart transaction.
+      if(frameId==='FRAME_05'){
+        const stale=[ [acctView, data=>({...data,revision:data.revision+1})] ];
+        if(manager){
+          stale.push([base,data=>({...data,version:data.version+1})]);
+          stale.push([walletGiftPath,data=>({...data,balance:data.balance+1})]);
+        }
+        for(const [path,change] of stale){
+          const ref=db.doc(path),before=(await ref.get()).data();
+          await ref.set(change(before));
+          try{await assertFails(commit(c));}
+          finally{await ref.set(before);}
+        }
+      }
       for(const row of rows){
         const snap=await db.doc(row.p).get();
         assert.deepEqual(snap.exists?snap.data():null,row.before);
