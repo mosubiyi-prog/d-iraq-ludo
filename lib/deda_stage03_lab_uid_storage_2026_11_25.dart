@@ -629,6 +629,38 @@ class DedaStage04LeagueRead {
     return Map.unmodifiable(actual);
   }
 
+  /// Match the original Hadaya receipt to the one protected weekly UID receipt.
+  /// A display ID, score, cached card or planned amount is never claim proof.
+  static Map<String,dynamic> verifyWeeklyGift(
+      DedaStage04ProfileView profile, String giftId, Map<String,dynamic> gift) {
+    final matching=<Map>[];
+    for(final raw in profile.diamondGiftRecords){
+      if(raw is! Map)throw const FormatException('league-gift-protected-row');
+      if(raw['sourceType']!='weekly_league')continue;
+      final week=raw['weekId'];
+      if(week is! String || !RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}$').hasMatch(week) ||
+          raw['uid']!=profile.uid || raw['giftId']!='deda-weekly-$week-${profile.uid}'){
+        throw const FormatException('league-gift-protected-owner');
+      }
+      if(giftId=='deda-weekly-$week-${profile.originalId.substring(1)}')matching.add(raw);
+    }
+    if(matching.length!=1)throw StateError('league-gift-proof-missing-or-duplicate');
+    final r=matching.single, created=gift['createdAt'], claimed=gift['claimedAt'];
+    if(gift['giftId']!=giftId || gift['sourceType']!='weekly_league' ||
+        gift['adminUid']!='deda-weekly-league-system' ||
+        gift['targetPublicId']!=profile.originalId || r['amount'] is! int ||
+        (r['amount'] as int)<=0 || (r['amount'] as int)>1000000 ||
+        gift['amount']!=r['amount'] || gift['status']!=r['status'] ||
+        created is! Timestamp || created.millisecondsSinceEpoch!=r['createdMs'] ||
+        (r['status']=='pending' ? claimed!=null || r['receivedMs']!=null :
+          r['status']!='received' || claimed is! Timestamp ||
+          claimed.millisecondsSinceEpoch!=r['receivedMs'] ||
+          claimed.millisecondsSinceEpoch<created.millisecondsSinceEpoch)){
+      throw StateError('league-gift-original-receipt-conflict');
+    }
+    return Map<String,dynamic>.unmodifiable(gift);
+  }
+
   Set<String> claims(String id)=>verifiedWeeks(requireCurrent())[id]??const <String>{};
 
   void verifyOwnerScore(String week,Map<String,dynamic>? score){
@@ -960,6 +992,85 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     final p=await readProfile();
     DedaStage04LeagueRead.verifiedWeeks(p.requireCurrent());
     return DedaStage04LeagueRead._(p);
+  }
+
+  // Candidate only; default closed. No change to financial rules or issuer.
+  static const leagueGiftClaimCandidateEnabled =
+      bool.fromEnvironment('DEDA_STAGE04_LEAGUE_GIFT_CLAIM_CANDIDATE');
+
+  /// Original gift list, scoped to the protected original ID, never a phone
+  /// alias. A weekly row must have both the original receipt and UID proof.
+  static Stream<List<Map<String,dynamic>>> watchLeagueGiftCandidate(String originalId) async* {
+    if(!leagueLabMode)throw StateError('league-lab-disabled');
+    final opening=await readProfile(), p=opening.requireCurrent();
+    if(originalId!=p.originalId)throw StateError('league-gift-owner-required');
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app());
+    await for(final snap in db.collection('deda_diamond_gifts')
+        .where('targetPublicId',isEqualTo:originalId)
+        .snapshots(includeMetadataChanges:true)){
+      opening.requireCurrent();
+      if(snap.metadata.isFromCache || snap.metadata.hasPendingWrites)continue;
+      final current=await readProfile(), fresh=current.requireCurrent();
+      opening.requireCurrent();
+      if(fresh.uid!=p.uid || fresh.originalId!=originalId)throw const DedaPrivateDataStale();
+      final rows=<Map<String,dynamic>>[], seen=<String>{};
+      for(final row in snap.docs){
+        final data=row.data();
+        if(data['giftId']!=row.id || data['targetPublicId']!=originalId || !seen.add(row.id)){
+          throw StateError('league-gift-row-conflict');
+        }
+        rows.add(data['sourceType']=='weekly_league'
+            ? DedaStage04LeagueRead.verifyWeeklyGift(fresh,row.id,data)
+            : Map<String,dynamic>.unmodifiable(data));
+      }
+      for(final raw in fresh.diamondGiftRecords){
+        if(raw is! Map)throw const FormatException('league-gift-protected-row');
+        if(raw['sourceType']=='weekly_league' &&
+            !seen.contains('deda-weekly-${raw['weekId']}-${originalId.substring(1)}')){
+          throw StateError('league-gift-original-receipt-missing');
+        }
+      }
+      rows.sort((a,b){
+        final x=a['createdAt'], y=b['createdAt'];
+        return (y is Timestamp?y.millisecondsSinceEpoch:0)
+            .compareTo(x is Timestamp?x.millisecondsSinceEpoch:0);
+      });
+      current.requireCurrent();opening.requireCurrent();
+      yield List.unmodifiable(rows);
+    }
+  }
+
+  static Future<DedaStage04ProfileRead> openLeagueGiftClaim(String originalId) async {
+    if(!leagueLabMode || !leagueGiftClaimCandidateEnabled)
+      throw StateError('league-gift-claim-held');
+    final read=await readProfile();
+    if(read.requireCurrent().originalId!=originalId)
+      throw StateError('league-gift-owner-required');
+    return read;
+  }
+
+  /// Called inside the EXISTING claim transaction before any wallet write.
+  /// Verify the same protected account and inventory revisions on each retry.
+  static Future<void> verifyLeagueGiftClaim(
+      Transaction tx,FirebaseFirestore db,DedaStage04ProfileRead opening,
+      String originalId,String giftId,Map<String,dynamic> gift) async {
+    final old=opening.requireCurrent();
+    if(!leagueLabMode || !leagueGiftClaimCandidateEnabled ||
+        old.originalId!=originalId || gift['status']!='pending')
+      throw StateError('league-gift-claim-held');
+    final base=db.doc('deda_lab_uid_authority/$uid');
+    final account=await tx.get(base.collection('account').doc('current'));
+    final inventory=await tx.get(base.collection('inventory').doc('current'));
+    opening.requireCurrent();
+    if(!account.exists || !inventory.exists || account.metadata.isFromCache ||
+        inventory.metadata.isFromCache || account.metadata.hasPendingWrites ||
+        inventory.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+    final fresh=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+      expectedUid:uid,progress:old._source.progress,account:account.data(),inventory:inventory.data()));
+    if(fresh.originalId!=originalId || fresh.accountRevision!=old.accountRevision ||
+        fresh.inventoryRevision!=old.inventoryRevision)throw const DedaPrivateDataConflict();
+    DedaStage04LeagueRead.verifyWeeklyGift(fresh,giftId,gift);
+    opening.requireCurrent();
   }
 
   /// Confirm existing evidence only; no legacy phone journal or XP issuance.

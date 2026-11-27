@@ -643,18 +643,81 @@ def patch_lab_safe(s):
     return s
 
 
+
+def patch_lab_gifts_main(s):
+    marker='class _DedaMyGiftsPageState'
+    if s.count(marker)!=1 or LAB_IMPORT not in s:
+        raise ValueError('WEEKLY_LAB_ORIGINAL_HADAYA_PAGE_REQUIRED')
+    start=s.index(marker)
+    end=s.find('\nclass ',start+len(marker))
+    if end<0:
+        end=len(s)
+    body=s[start:end]
+    body=one(body,'  late final String _publicId;',
+        "  String _publicId='';", 'lab-hadaya-original-id')
+    body=one(body,
+        '    _publicId =\n        DedaBackend.personalShareIdForPhone(DedaPreferences.phone).trim();',
+        '    if(DedaStage03LabStorage.leagueLabMode){\n'
+        '      unawaited(DedaStage03LabStorage.readProfile().then((read){\n'
+        '        final id=read.requireCurrent().originalId;\n'
+        '        if(mounted && dedaSectionCurrent)setState(()=>_publicId=id);\n'
+        '      }).catchError((Object _){ }));\n'
+        '    }else{\n'
+        '      _publicId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone).trim();\n'
+        '    }','lab-hadaya-no-phone-fallback')
+    # Reuse the card, original claim call and server result. No new button.
+    if body.count('DedaBackend.claimDiamondGift(')!=1 or \
+        body.count('DedaBackend.watchPersonalDiamondGifts(_publicId)')!=1:
+        raise ValueError('WEEKLY_LAB_ORIGINAL_HADAYA_CALLS_REQUIRED')
+    return s[:start]+body+s[end:]
+
+
+def patch_lab_gift_backend(s):
+    if LAB_IMPORT in s:
+        raise ValueError('WEEKLY_LAB_DUPLICATE_GIFT_BACKEND')
+    s=LAB_IMPORT+s
+    s=one(s,
+        '  static Stream<List<Map<String, dynamic>>> watchPersonalDiamondGifts(\n'
+        '    String rawPublicId,\n  ) {',
+        '  static Stream<List<Map<String, dynamic>>> watchPersonalDiamondGifts(\n'
+        '    String rawPublicId,\n  ) {\n'
+        '    if(DedaStage03LabStorage.leagueLabMode)\n'
+        '      return DedaStage03LabStorage.watchLeagueGiftCandidate(rawPublicId);',
+        'lab-hadaya-original-reader')
+    start=s.index('  static Future<Map<String, dynamic>> claimDiamondGift({')
+    end=s.index('  /// Reads the server-backed gift portion',start)
+    body=s[start:end]
+    body=one(body,'    final cleanGiftId = giftId.trim();',
+        '    final labOpening=DedaStage03LabStorage.leagueLabMode\n'
+        '        ? await DedaStage03LabStorage.openLeagueGiftClaim(targetPublicId) : null;\n'
+        '    final cleanGiftId = giftId.trim();','lab-hadaya-claim-owner')
+    body=one(body,'        final gift = giftSnapshot.data()!;',
+        '        final gift = giftSnapshot.data()!;\n'
+        '        if(labOpening!=null){\n'
+        '          await DedaStage03LabStorage.verifyLeagueGiftClaim(\n'
+        '              transaction,firestore,labOpening,publicId,cleanGiftId,gift);\n'
+        '        }','lab-hadaya-original-claim-transaction')
+    body=one(body,'        final next = current + amount;',
+        '        final next = current + amount;\n'
+        '        labOpening?.requireCurrent();','lab-hadaya-claim-before-writes')
+    return s[:start]+body+s[end:]
+
+
 def bind_lab(project):
     project=Path(project).resolve()
     if project==ROOT or ROOT in project.parents or project in ROOT.parents:
         raise ValueError('WEEKLY_LAB_DISPOSABLE_REQUIRED')
     files={key:(project/path).read_text() for key,path in PATHS.items()}
     verify(files)
-    transforms={'main':lambda s:patch_lab_main_actions(patch_lab_main(s)),'gate':patch_lab_gate,
+    transforms={'main':lambda s:patch_lab_gifts_main(patch_lab_main_actions(patch_lab_main(s))),'gate':patch_lab_gate,
                 'direct':patch_lab_direct,'page':patch_lab_page,'safe':patch_lab_safe,
                 'prize':patch_lab_prize,'maintenance':patch_lab_maintenance}
     updated={key:patch(files[key]) for key,patch in transforms.items()}
+    backend=project/'lib/deda_backend.dart'
+    bound_backend=patch_lab_gift_backend(backend.read_text())
     for key,value in updated.items():
         (project/PATHS[key]).write_text(value)
+    backend.write_text(bound_backend)
     print('PASS_STAGE04_WEEKLY_ORIGINAL_ROUTES_CENTRAL_UID_RECEIPTS_READ_ONLY')
 
 

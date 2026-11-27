@@ -51,6 +51,35 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/03 weekly original Hadaya receipt must match one protected UID gift',(){
+    const week='2026-10-31', legacy='deda-weekly-2026-10-31-DEDA-QA1234';
+    final at=DateTime.utc(2026,11,7,3).millisecondsSinceEpoch;
+    final inv=protectedInventory();
+    final canonical=<String,Object?>{'giftId':'deda-weekly-$week-$uid',
+      'uid':uid,'sourceType':'weekly_league','weekId':week,'amount':250,
+      'status':'pending','createdMs':at,'receivedMs':null};
+    inv['diamondGifts']=[canonical];
+    DedaStage04ProfileView p()=>DedaStage04ProfileView.fromProtected(
+      DedaStage03ProtectedSnapshot.decode(expectedUid:uid,progress:protectedProgress(),
+          inventory:inv,account:protectedAccount()));
+    final gift=<String,dynamic>{'giftId':legacy,'sourceType':'weekly_league',
+      'adminUid':'deda-weekly-league-system','targetPublicId':'@DEDA-QA1234',
+      'amount':250,'status':'pending','createdAt':Timestamp.fromMillisecondsSinceEpoch(at)};
+    expect(DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,gift),gift);
+    for(final altered in [
+      {...gift,'amount':251},{...gift,'targetPublicId':'@DEDA-QA5678'},
+      {...gift,'status':'received'},{...gift,'adminUid':'unknown'},
+    ]){
+      expect(()=>DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,altered),throwsStateError);
+    }
+    inv['diamondGifts']=[canonical,canonical];
+    expect(()=>DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,gift),throwsStateError);
+    inv['diamondGifts']=[{...canonical,'uid':'other'}];
+    expect(()=>DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,gift),throwsFormatException);
+    inv['diamondGifts']=[{...canonical,'status':'received','receivedMs':at+1}];
+    expect(DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,
+      {...gift,'status':'received','claimedAt':Timestamp.fromMillisecondsSinceEpoch(at+1)})['status'],'received');
+  });
   test('04/03 complete ranking proof cannot omit or fabricate synthetic rows',(){
     final a=protectedAccount();
     final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;

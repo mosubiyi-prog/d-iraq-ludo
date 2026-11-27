@@ -119,6 +119,24 @@ class WeeklySourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.patch_lab_safe(bound)
 
+    def test_lab_hadaya_uses_protected_archive_and_original_claim_transaction(self):
+        import tarfile
+        with tarfile.open(ROOT/'tools/app_stability/100380-baseline.tar.gz','r:gz') as tar:
+            main=tar.extractfile('lib/main.dart').read().decode()
+            backend=tar.extractfile('lib/deda_backend.dart').read().decode()
+        # Assembly's existing generic account guard supplies dedaSectionCurrent.
+        out=mod.patch_lab_gifts_main(mod.LAB_IMPORT+main)
+        self.assertEqual(out.count('DedaBackend.claimDiamondGift('),main.count('DedaBackend.claimDiamondGift('))
+        self.assertIn('DedaStage03LabStorage.readProfile().then',out)
+        self.assertIn('if(mounted && dedaSectionCurrent)',out)
+        changed=mod.patch_lab_gift_backend(backend)
+        self.assertIn('DedaStage03LabStorage.watchLeagueGiftCandidate(rawPublicId)',changed)
+        self.assertIn('await DedaStage03LabStorage.verifyLeagueGiftClaim(',changed)
+        self.assertEqual(changed.count('transaction.update(giftRef,'),backend.count('transaction.update(giftRef,'))
+        self.assertEqual(changed.count("'lastClaimGiftId': cleanGiftId"),backend.count("'lastClaimGiftId': cleanGiftId"))
+        with self.assertRaises(ValueError):
+            mod.patch_lab_gift_backend(changed)
+
     def test_original_repo_not_writeable(self):
         with self.assertRaises(ValueError):
             mod.bind(ROOT)
