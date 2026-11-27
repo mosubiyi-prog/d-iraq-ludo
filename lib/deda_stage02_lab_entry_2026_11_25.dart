@@ -101,15 +101,9 @@ class _LabPageState extends State<_LabPage> with WidgetsBindingObserver {
     if (_busy || _observe() != 'UID_MATCHED_SERVER_UNVERIFIED') return;
     setState(() { _busy = true; _status = 'CHECKING'; });
     try {
-      final snapshot = DedaAuthRuntime.capture();
-      final user = FirebaseAuth.instance.currentUser;
-      if (snapshot == null || user?.uid != _uid) throw StateError('no UID');
-      // A forced token refresh needs a server response; cache is not proof.
-      final token = await user!.getIdToken(true)
-          .timeout(const Duration(seconds: 15));
+      final snapshot = await DedaStage02LabSingleUid.verifyServer(expectedUid: _uid);
       DedaAuthRuntime.checkSnapshot(snapshot);
-      if (token == null || token.isEmpty ||
-          _observe() != 'UID_MATCHED_SERVER_UNVERIFIED') {
+      if (_observe() != 'UID_MATCHED_SERVER_UNVERIFIED') {
         throw StateError('no server proof');
       }
       if (mounted) setState(() => _status = 'UID_SERVER_VERIFIED');

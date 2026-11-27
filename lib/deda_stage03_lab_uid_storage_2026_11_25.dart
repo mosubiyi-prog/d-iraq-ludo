@@ -1581,10 +1581,9 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
   @override
   Future<void> verifyOwner(String account, String original, void Function() check) async {
     check(); _check(account, original);
-    final token = await FirebaseAuth.instance.currentUser!.getIdToken(true)
-        .timeout(const Duration(seconds: 15));
+    final snapshot = await DedaStage02LabSingleUid.verifyServer(expectedUid: uid);
     check(); _check(account, original);
-    if (token == null || token.isEmpty) throw StateError('server-auth-required');
+    DedaAuthRuntime.checkSnapshot(snapshot);
   }
 
   DedaPrivateDataRevision _decode(DocumentSnapshot<Map<String, dynamic>> snap) {

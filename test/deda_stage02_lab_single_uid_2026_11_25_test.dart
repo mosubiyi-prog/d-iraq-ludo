@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_stage02_lab_single_uid_2026_11_25.dart';
 import 'package:d_iraq_ludo/deda_session_transition_gate.dart';
+import 'package:d_iraq_ludo/deda_auth_session_runtime.dart' show DedaAuthSnapshot;
 
 void main() {
   bool lab({String project = 'deda-qa-uid-lab-20261108',
@@ -35,6 +36,20 @@ void main() {
     expect(principal(' approved-test-uid ', DedaSessionAuthKind.authenticated,
         expected: ' approved-test-uid '), isFalse);
   });
+  test('server proof cannot survive a changed epoch or wrong principal', () {
+    const uid = DedaStage02LabSingleUid.approvedUid;
+    const before = DedaAuthSnapshot(uid, DedaSessionAuthKind.authenticated, 4);
+    bool accepted(DedaAuthSnapshot after, {bool server = true}) =>
+      DedaStage02LabSingleUid.matchesVerifiedSession(
+        before: before, after: after, serverResponded: server);
+    expect(accepted(before), isTrue);
+    expect(accepted(before, server: false), isFalse);
+    expect(accepted(const DedaAuthSnapshot(uid, DedaSessionAuthKind.authenticated, 5)), isFalse);
+    expect(accepted(const DedaAuthSnapshot('different', DedaSessionAuthKind.authenticated, 4)), isFalse);
+    expect(accepted(const DedaAuthSnapshot(uid, DedaSessionAuthKind.anonymous, 4)), isFalse);
+    expect(accepted(const DedaAuthSnapshot(null, DedaSessionAuthKind.none, 5)), isFalse);
+  });
+
   test('independent inspections of the same UID remain stable', () {
     for (var i = 0; i < 100; i++) {
       expect(principal(DedaStage02LabSingleUid.approvedUid, DedaSessionAuthKind.authenticated), isTrue);

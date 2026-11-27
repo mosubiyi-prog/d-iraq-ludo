@@ -55,6 +55,42 @@ class DedaStage02LabSingleUid {
     return live.uid;
   }
 
+  /// Verification must be bound to the same authenticated SDK epoch, not
+  /// merely the same UID string after an intervening sign-out or switch.
+  static bool matchesVerifiedSession({
+    required DedaAuthSnapshot before,
+    required DedaAuthSnapshot after,
+    required bool serverResponded,
+  }) => serverResponded && before.matches(after) &&
+      matchesPrincipal(expectedUid: approvedUid, uid: before.uid,
+          kind: before.kind);
+
+  /// Reuse the same verified-session boundary for app admission and storage.
+  /// No credential creation, login, sign-out, cached proof or token persistence.
+  static Future<DedaAuthSnapshot> verifyServer({required String expectedUid}) async {
+    final app = Firebase.app();
+    requireLab(app);
+    final auth = FirebaseAuth.instanceFor(app: app);
+    final before = DedaAuthRuntime.capture();
+    final user = auth.currentUser;
+    if (before == null || user == null ||
+        user.email != approvedEmail ||
+        inspect(expectedUid: expectedUid) != expectedUid) {
+      throw StateError('stage02-existing-lab-session-required');
+    }
+    final token = await user.getIdToken(true).timeout(const Duration(seconds: 15));
+    requireLab(app);
+    final after = DedaAuthRuntime.capture();
+    if (after == null || !matchesVerifiedSession(before: before, after: after,
+          serverResponded: token != null && token.isNotEmpty) ||
+        auth.currentUser?.email != approvedEmail ||
+        inspect(expectedUid: expectedUid) != expectedUid) {
+      throw StateError('stage02-server-session-proof-rejected');
+    }
+    DedaAuthRuntime.checkSnapshot(before);
+    return before;
+  }
+
   /// One explicit existing-account login through the EXISTING shared lane.
   /// Only dedicated lab account credentials, never a production phone/PIN.
   /// No automatic retry, fallback, sign-up, linking or account replacement.
