@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[3]
 PACKAGE = 'com.deda.qa.uiddevice'
 ANDROID = '{http://schemas.android.com/apk/res/android}'
 TOOLS = '{http://schemas.android.com/tools}'
+# Flutter's manifest preflight uses the literal android: prefix.
+ET.register_namespace('android', ANDROID[1:-1])
+ET.register_namespace('tools', TOOLS[1:-1])
 DENSITIES = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
 
 
@@ -42,6 +45,10 @@ def prepare(project):
     tree = ET.parse(manifest)
     doc = tree.getroot()
     app = doc.find('application')
+    embedding = [n for n in app.findall('meta-data')
+                 if n.get(ANDROID+'name') == 'flutterEmbedding'] if app is not None else []
+    require(len(embedding) == 1 and embedding[0].get(ANDROID+'value') == '2',
+            'FLUTTER_V2_EMBEDDING_REQUIRED')
     require(app is not None and app.get(ANDROID+'allowBackup') == 'false', 'BACKUP_HOLD_REQUIRED')
     for perm in ('android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE'):
         require(any(n.get(ANDROID+'name') == perm and n.get(TOOLS+'node') == 'remove'
@@ -75,7 +82,14 @@ def prepare(project):
     app.set(ANDROID+'icon', '@mipmap/deda_qa_launcher')
     if ANDROID+'roundIcon' in app.attrib:
         app.set(ANDROID+'roundIcon', '@mipmap/deda_qa_launcher')
-    tree.write(manifest, encoding='utf-8', xml_declaration=True)
+    # Check the serialized result BEFORE replacing the known-good manifest.
+    encoded = ET.tostring(doc, encoding='utf-8', xml_declaration=True)
+    require(b'xmlns:android=' in encoded and b'xmlns:tools=' in encoded
+            and b'android:name="flutterEmbedding"' in encoded
+            and b'android:value="2"' in encoded, 'FLUTTER_MANIFEST_PREFIX_REQUIRED')
+    restored = ET.fromstring(encoded)
+    require(ET.tostring(restored) == ET.tostring(doc), 'MANIFEST_ROUNDTRIP_CHANGED')
+    manifest.write_bytes(encoded)
     require(digest(source) == digest(reference), 'ORIGINAL_ICON_CHANGED')
     print('PASS_QA_LAUNCHER_INDEPENDENT_PACKAGE_ORIGINAL_ICON_RETAINED_FULL_ENTRY_HELD')
 
