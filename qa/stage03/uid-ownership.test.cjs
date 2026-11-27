@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
+const {generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -1224,6 +1224,68 @@ test('04/04 Spark direct rule feasibility without approval: all 13 frames and fo
       assert.equal((await purchaseStore(frameId)).replayed,true);
       assert.equal((await syncStore()).replayed,true);
       await install(originalRules);
+    }
+  }finally{await install(originalRules);}
+});
+
+
+test('04/04 stable direct candidate purchases catalog in sequence without rules reinstall or approval',async()=>{
+  const originalRules=readFileSync('firestore.rules','utf8');
+  const rules=generateStoreDirectCandidateRules({store,uid,originalRules});
+  const install=async value=>{await env.cleanup();env=await initializeTestEnvironment({projectId,firestore:{rules:value}});};
+  try{
+    await install(rules);
+    const cases=[false,true];
+    for(const manager of cases){
+      await env.clearFirestore();await seedStorePurchase();
+      if(manager)await seedWalletManager();
+      else {
+        await db.doc(base).update({'balances.earnedDiamonds':2500});
+        await db.doc(walletGiftPath).update({balance:12000});
+      }
+      await refreshWallet({store,uid});
+      const ids=require('./purchase-frames.cjs').frames.filter(id=>id!=='FRAME_03');
+      const old=await read(), initialAccount=(await db.doc(acctView).get()).data();
+      const c=client();
+      const commit=(target,rows)=>{const b=writeBatch(target);for(const row of rows)b.set(doc(target,row.p),storeExactClientValue(row.after));return b.commit();};
+      for(const [index,frameId] of ids.entries()){
+        const approved=await prepareStoreFrameCandidate({store,uid,frameId}),rows=approved.rows,
+          audit=base+'/framePurchases/'+frameId;
+        assert.equal((await db.doc(base+'/storeCheckoutPlans/'+frameId).get()).exists,false);
+        if(index<4){
+          await assertFails(commit(c,rows.filter(r=>r.p!==audit)));
+          await assertFails(commit(c,rows.filter(r=>r.p!==base+'/inventoryHistory/'+(old.revision+index+1))));
+          await assertFails(commit(c,rows.map(r=>r.p===audit?{...r,after:{...r.after,cost:1}}:r)));
+          await assertFails(commit(client('foreign'),rows));
+          await assertFails(commit(c,rows.map(r=>r.p===view?{...r,after:{...r.after,diamondGifts:[]}}:r)));
+          for(const row of rows){const snap=await db.doc(row.p).get();assert.deepEqual(snap.exists?snap.data():null,row.before);}
+        }
+        // Use the protected source reads like the existing Flutter route;
+        // the trusted engine provides expected rows, not an approval doc.
+        await assertSucceeds(runTransaction(c,async tx=>{
+          const p=await tx.get(doc(c,base)),i=await tx.get(doc(c,view)),a=await tx.get(doc(c,acctView)),
+            w=await tx.get(doc(c,base+'/wallet/current')),g=await tx.get(doc(c,walletGiftPath)),
+            n=await tx.get(doc(c,nativeStorePath));
+          if(manager)assert.ok((await tx.get(doc(c,walletPersonalPath))).exists());
+          assert.ok(p.exists()&&i.exists()&&a.exists()&&w.exists()&&g.exists()&&n.exists());
+          for(const row of rows)tx.set(doc(c,row.p),storeExactClientValue(row.after));
+        }));
+        for(const row of rows)assert.deepEqual((await db.doc(row.p).get()).data(),row.after);
+        await assertFails(commit(c,rows));
+        assert.equal((await purchaseStore(frameId)).replayed,true);
+        assert.equal((await syncStore()).replayed,true);
+      }
+      const final=await read(),wallet=(await db.doc(base+'/wallet/current').get()).data(),
+        progress=(await db.doc(base).get()).data();
+      assert.equal(final.frames.length,13);
+      assert.equal(final.revision,old.revision+ids.length);
+      assert.deepEqual(final.idGifts,old.idGifts);assert.deepEqual(final.diamondGifts,old.diamondGifts);
+      assert.deepEqual((await db.doc(acctView).get()).data(),initialAccount);
+      assert.equal(progress.balances.points,5);assert.equal(progress.balances.coins,10);assert.equal(progress.balances.xp,20);
+      assert.equal(progress.balances.earnedDiamonds,manager?200:0);
+      assert.equal(wallet.giftResidual,manager?70:2500);
+      assert.equal(wallet.managerPersonal,manager?988000:0);
+      assert.equal((await db.collection(base+'/storeCheckoutPlans').get()).size,0);
     }
   }finally{await install(originalRules);}
 });

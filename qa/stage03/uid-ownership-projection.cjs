@@ -1063,4 +1063,88 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
+
+/**
+ * Unpublished stable direct-purchase rules for the existing DEMO account only.
+ * Derive the single new frame from the inventory delta; all writes are tied
+ * to its fresh audit and each successor in the atomic transaction.
+ * Never install on a real project. Existing base rules remain unchanged.
+ */
+function generateStoreDirectCandidateRules({store,uid,originalRules}){
+  requireDemo(store,uid);
+  const original='@DEDA-QA1234', root='deda_lab_uid_authority/'+uid;
+  const tail='    match /{document=**} { allow read, write: if false; }';
+  requireThat(originalRules.split(tail).length===2,'store-rule-layout');
+  const p=path=>'/databases/$(database)/documents/'+path;
+  const keyMap=Object.fromEntries(frames.map(frameId=>[frameId,core.eventKey(core.parseReceipt({
+    format:1,accountKey:uid,source:'cosmetic-debit-v1',
+    sourceId:'stage04-store-frame|'+original+'|'+frameId,kind:'spend',
+    delta:{points:0,coins:0,xp:0,earnedDiamonds:-1}},uid,'lab-uid'))]));
+  const u=JSON.stringify(uid),o=JSON.stringify(original);
+  const rule=
+    '    function stRoot() { return '+p(root)+'; }\n'+
+    '    function stInv() { return '+p(root+'/inventory/current')+'; }\n'+
+    '    function stSource() { return '+p(root+'/inventorySources/current')+'; }\n'+
+    '    function stWallet() { return '+p(root+'/wallet/current')+'; }\n'+
+    '    function stGift() { return '+p('deda_diamond_gift_balances/'+original)+'; }\n'+
+    '    function stPersonal() { return '+p('deda_gm_personal_diamond_wallets/'+uid)+'; }\n'+
+    '    function stNative() { return '+p('deda_native_account_cosmetics/'+original)+'; }\n'+
+    '    function stAccount() { return '+p(root+'/account/current')+'; }\n'+
+    '    function stHistory(rev) { return '+p(root+'/inventoryHistory/$(rev)')+'; }\n'+
+    '    function stAudit(id) { return '+p(root+'/framePurchases/$(id)')+'; }\n'+
+    '    function stPairReceipt(id) { return '+p('deda_lab_frame_receipts/'+original+'/frames/$(id)')+'; }\n'+
+    '    function stPairOwner(id) { return '+p('deda_lab_owned_frames/'+original+'/frames/$(id)')+'; }\n'+
+    '    function stReceipt(key) { return '+p(root+'/receipts/$(key)')+'; }\n'+
+    '    function stEvent(key) { return '+p(root+'/events/$(key)')+'; }\n'+
+    '    function stKeys() { return '+JSON.stringify(keyMap)+'; }\n'+
+    '    function stFrame() { return getAfter(stInv()).data.frames.removeAll(get(stInv()).data.frames)[0].frameId; }\n'+
+    '    function stA() { return getAfter(stAudit(stFrame())).data; }\n'+
+    '    function stNew() { return owner('+u+') && stFrame() in stKeys() && !exists(stAudit(stFrame())) && stA().frameId == stFrame(); }\n'+
+    '    function stW() { return get(stWallet()).data; }\n'+
+    '    function stMoney(v) { return v is int && v >= 0 && v <= 9007199254740990; }\n'+
+    '    function stTime(a) { return timestamp.value(a.createdMs); }\n'+
+    '    function stExpectedFrame(a) { return {"frameId":a.frameId,"receipt":{"uid":'+u+',"frameId":a.frameId,"kind":"lab_frame","cost":1000,"createdMs":a.createdMs},"ownership":{"uid":'+u+',"frameId":a.frameId,"receiptId":'+u+' + "_" + a.frameId,"createdMs":a.createdMs}}; }\n'+
+    '    function stExpectedPair(a) { return {"publicId":'+o+',"frameId":a.frameId,"kind":"lab_frame","cost":1000,"createdAt":stTime(a)}; }\n'+
+    '    function stExpectedOwner(a) { return {"publicId":'+o+',"frameId":a.frameId,"receiptId":'+o+' + "_" + a.frameId,"createdAt":stTime(a)}; }\n'+
+    '    function stExpectedReceipt(a) { return {"format":1,"accountKey":'+u+',"source":"cosmetic-debit-v1","sourceId":"stage04-store-frame|" + '+o+' + "|" + a.frameId,"kind":"spend","delta":{"points":0,"coins":0,"xp":0,"earnedDiamonds":0-a.payment.earnedDiamonds}}; }\n'+
+    '    function stRole(w) {\n'+
+    '      let admin = '+p('admins/'+uid)+'; let access = '+p('admin_entry_access/'+uid)+';\n'+
+    '      return w.hasManagerPersonal ? get(admin).data.role == "general_manager" && get(admin).data.active == true && get(admin).data.status == "active" && get(access).data.accountKey == '+u+' && get(access).data.active == true && get(access).data.status == "active" && get(access).data.accessType == "general_manager_gateway" && get(access).data.allowedRole == "general_manager" : !exists(admin) && !exists(access) && !exists(stPersonal());\n'+
+    '    }\n'+
+    '    function stIdentity() {\n'+
+    '      let user = get('+p('users/'+uid)+').data; let session = get('+p('deda_sessions/'+uid)+').data; let route = get('+p('deda_share_ids/'+original)+').data;\n'+
+    '      return user.accountKey == '+u+' && user.sharePersonalId == '+o+' && session.uid == '+u+' && session.accountKey == '+u+' && route.ownerUid == '+u+' && route.publicId == '+o+' && route.kind == "personal" && route.active == true;\n'+
+    '    }\n'+
+    '    function stValidAudit(a,id) {\n'+
+    '      let w=stW(); let progress=get(stRoot()).data; let e=progress.balances.earnedDiamonds; let pay=a.payment;\n'+
+    '      return owner('+u+') && id in stKeys() && stFrame() == id && a.keys().hasOnly(["format","uid","originalId","frameId","cost","payment","progressVersion","eventKey","createdMs"]) && a.format == 1 && a.uid == '+u+' && a.originalId == '+o+' && a.frameId == id && a.cost == 1000 && a.createdMs is int && a.createdMs > 0 && stTime(a) <= request.time + duration.value(5,"s") && stTime(a) >= request.time - duration.value(5,"m") && pay.keys().hasOnly(["earnedDiamonds","giftedDiamonds","managerDiamonds"]) && stMoney(e) && stMoney(w.giftResidual) && stMoney(w.managerPersonal) && w.uid == '+u+' && w.originalId == '+o+' && w.complete == true && w.progressVersion == progress.version && w.inventoryRevision == get(stInv()).data.revision && stMoney(pay.earnedDiamonds) && stMoney(pay.giftedDiamonds) && stMoney(pay.managerDiamonds) && pay.earnedDiamonds + pay.giftedDiamonds + pay.managerDiamonds == 1000 && (w.hasManagerPersonal == true ? pay.managerDiamonds == 1000 && w.managerPersonal >= 1000 : w.hasManagerPersonal == false && w.managerPersonal == 0 && pay.managerDiamonds == 0 && pay.earnedDiamonds == (e >= 1000 ? 1000 : e) && pay.giftedDiamonds <= w.giftResidual) && a.progressVersion == progress.version + (pay.earnedDiamonds > 0 ? 1 : 0) && a.eventKey == (pay.earnedDiamonds > 0 ? stKeys()[id] : null) && stIdentity();\n'+
+    '    }\n'+
+    '    function stValidInventory(old,n,a) {\n'+
+    '      let added=n.frames.removeAll(old.frames);\n'+
+    '      return n.diff(old).affectedKeys().hasOnly(["frames","revision"]) && old.uid == '+u+' && old.complete == true && n.revision == old.revision + 1 && stMoney(n.revision) && n.frames.size() == old.frames.size()+1 && n.frames.size() <= '+frames.length+' && n.frames.toSet().hasAll(old.frames.toSet()) && added.size()==1 && added[0] == stExpectedFrame(a) && get(stSource()).data == old && getAfter(stSource()).data == n;\n'+
+    '    }\n'+
+    '    function stValidWallet(old,n,a) {\n'+
+    '      let pay=a.payment; let inv=getAfter(stInv()).data; let gift=get(stGift()).data;\n'+
+    '      return old.uid == '+u+' && old.originalId == '+o+' && old.complete == true && old.inventoryRevision+1 == inv.revision && n.diff(old).affectedKeys().hasOnly(["progressVersion","inventoryRevision","giftResidual","managerPersonal"]) && n.progressVersion == a.progressVersion && n.inventoryRevision == inv.revision && n.giftResidual == old.giftResidual-pay.giftedDiamonds && n.managerPersonal == old.managerPersonal-pay.managerDiamonds && stMoney(n.giftResidual) && stMoney(n.managerPersonal) && gift.publicId == '+o+' && gift.balance == old.giftResidual && (pay.earnedDiamonds == 0 || getAfter(stRoot()).data.version == a.progressVersion) && (pay.giftedDiamonds == 0 || getAfter(stGift()).data.balance == n.giftResidual) && (pay.managerDiamonds == 0 || getAfter(stPersonal()).data.balance == n.managerPersonal);\n'+
+    '    }\n'+
+    '    match /'+root+'/framePurchases/{id} { allow create: if stValidAudit(request.resource.data,id); }\n'+
+    '    match /'+root+'/inventory/current { allow update: if stNew() && stValidInventory(resource.data,request.resource.data,stA()); }\n'+
+    '    match /'+root+'/inventorySources/current { allow update: if stNew() && resource.data == get(stInv()).data && request.resource.data == getAfter(stInv()).data && !exists(stHistory(request.resource.data.revision)) && getAfter(stHistory(request.resource.data.revision)).data == request.resource.data; }\n'+
+    '    match /'+root+'/inventoryHistory/{rev} { allow create: if stNew() && request.resource.data == getAfter(stInv()).data && rev == string(request.resource.data.revision) && !get(stNative()).data.ownedFrames.hasAny([stFrame()]) && getAfter(stNative()).data.ownedFrames.hasAll([stFrame()]); }\n'+
+    '    match /deda_native_account_cosmetics/'+original+' { allow get: if owner('+u+'); allow update: if stNew() && resource.data.originalId == '+o+' && resource.data.pendingFrames.size()==0 && resource.data.ownedFrames.size()==get(stInv()).data.frames.size() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["ownedFrames","updatedAt"]) && request.resource.data.ownedFrames == resource.data.ownedFrames.concat([stFrame()]) && request.resource.data.updatedAt == stTime(stA()) && !exists(stPairReceipt(stFrame())) && getAfter(stPairReceipt(stFrame())).data == stExpectedPair(stA()); }\n'+
+    '    match /deda_lab_frame_receipts/'+original+'/frames/{id} { allow create: if stNew() && id == stFrame() && request.resource.data == stExpectedPair(stA()) && !exists(stPairOwner(id)) && getAfter(stPairOwner(id)).data == stExpectedOwner(stA()); }\n'+
+    '    match /deda_lab_owned_frames/'+original+'/frames/{id} { allow create: if stNew() && id == stFrame() && request.resource.data == stExpectedOwner(stA()) && stW().inventoryRevision == get(stInv()).data.revision && getAfter(stWallet()).data.inventoryRevision == getAfter(stInv()).data.revision && get(stAccount()).data.profile.originalId == '+o+' && get(stAccount()).data.uid == '+u+' && get(stAccount()).data.revision == stW().accountRevision; }\n'+
+    '    match /'+root+'/wallet/current { allow get: if owner('+u+'); allow update: if stNew() && stValidWallet(resource.data,request.resource.data,stA()); }\n'+
+    '    match /'+root+' { allow update: if stNew() && stA().payment.earnedDiamonds > 0 && resource.data.accountKey == '+u+' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["version","balances"]) && request.resource.data.version == resource.data.version+1 && request.resource.data.version == stA().progressVersion && request.resource.data.balances.diff(resource.data.balances).affectedKeys().hasOnly(["earnedDiamonds"]) && request.resource.data.balances.earnedDiamonds == resource.data.balances.earnedDiamonds-stA().payment.earnedDiamonds && stMoney(request.resource.data.balances.earnedDiamonds) && !exists(stReceipt(stA().eventKey)) && getAfter(stReceipt(stA().eventKey)).data == stExpectedReceipt(stA()); }\n'+
+    '    match /'+root+'/receipts/{key} { allow create: if stNew() && key == stA().eventKey && stA().payment.earnedDiamonds > 0 && request.resource.data == stExpectedReceipt(stA()) && !exists(stEvent(key)) && getAfter(stEvent(key)).data.receipt == request.resource.data; }\n'+
+    '    match /'+root+'/events/{key} { allow create: if stNew() && key == stA().eventKey && stA().payment.earnedDiamonds > 0 && request.resource.data == {"format":1,"accountKey":'+u+',"eventKey":key,"receipt":stExpectedReceipt(stA()),"receiptId":key,"appliedVersion":stA().progressVersion,"afterBalances":getAfter(stRoot()).data.balances,"createdAt":stTime(stA())}; }\n'+
+    '    match /deda_diamond_gift_balances/'+original+' { allow get: if owner('+u+'); allow update: if stNew() && stA().payment.giftedDiamonds > 0 && resource.data.publicId == '+o+' && resource.data.balance == stW().giftResidual && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance","updatedAt"]) && request.resource.data.balance == resource.data.balance-stA().payment.giftedDiamonds && stMoney(request.resource.data.balance) && request.resource.data.updatedAt == stTime(stA()); }\n'+
+    '    match /deda_gm_personal_diamond_wallets/'+uid+' { allow get: if owner('+u+'); allow update: if stNew() && stA().payment.managerDiamonds == 1000 && resource.data.accountKey == '+u+' && resource.data.balance == stW().managerPersonal && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance","updatedAt"]) && request.resource.data.balance == resource.data.balance-1000 && stMoney(request.resource.data.balance) && request.resource.data.updatedAt == stTime(stA()); }\n';
+  // Check role on a required write with otherwise few lookups.
+  const marker='request.resource.data == stExpectedPair(stA()) && !exists(stPairOwner(id))';
+  requireThat(rule.split(marker).length===2,'store-rule-role-layout');
+  return originalRules.replace(tail,()=>rule.replace(marker,
+    'request.resource.data == stExpectedPair(stA()) && stRole(stW()) && !exists(stPairOwner(id))')+tail);
+}
+
+module.exports={generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
