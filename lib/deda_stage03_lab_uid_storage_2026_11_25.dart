@@ -355,6 +355,103 @@ class DedaStage04PersonalWallet {
   }
 }
 
+/// Direct store transaction rows for the SAME fixed synthetic UID and ID.
+/// This is a proposed client transaction, not a new authority. Firestore
+/// must independently validate all before/after values and the receipt ring.
+class DedaStage04StoreDirectRows {
+  // Derived from reconcile-core.eventKey for the pinned synthetic account.
+  // Do not use these keys for any other account or production.
+  static const eventKeys = <String,String>{
+    'FRAME_03': '478bb61195f624d9a746f55f03ca6c7fea6eb344c67e4b37c65bc334d74553ae',
+    'FRAME_05': '5bc1baa1e7e441c4f44ec76a264a7d218daae3cd99958e4c65f8318741c6f02e',
+    'FRAME_06': 'd87072a4dc96d405e738233e1de537f4d51d26c71e7729f7d90ac911dab4bf00',
+    'FRAME_07': '85be4f7bd2604a8e5438e1d0a2035e802606aab327cddfe8f7b5cd9abb97dfb1',
+    'FRAME_08': '944eaa095143e78b8310811e71e9d299adb6b4b6223151d9c2e970b4061b4ef8',
+    'FRAME_09': '8b256d01235f62a4a97e3904ebb050b4f8aa89909d628bd8452ab4bf94889c45',
+    'FRAME_10': 'ffe84b71a449b5aaef715bcfc7cd18aeb1f837e86efc5b86017e9179da869d6f',
+    'FRAME_11': 'a367ea5105b3451bf11b1557dd02b41fb22f800541b94b2be41c065813ec5742',
+    'FRAME_12': 'e6ab6c62ed047273d3384717287450d6008010570536249480ea33a3bd47b32d',
+    'FRAME_13': 'e446f01aaa4b3ef96396267a4be93feaed87faf006576fa054649632a384971e',
+    'FRAME_14': '81c0446ffe14f621314dd23ee8430e08dcda4f37591ff370bd90a742b9d457f6',
+    'FRAME_15': 'eb91f4940d8e414e66191b5da07b7d725871878193eb2bb3c93ad0bc61b372cf',
+    'FRAME_16': 'aebde7783dde9b827e69dfcb7c00c828f08f365fbced2990d391f59a8b905b06',
+  };
+
+  static Map<String,Map<String,dynamic>> prepare({
+    required DedaStage04ProfileView profile, required String frameId,
+    required Map<String,dynamic> walletRow, required Map<String,dynamic> gift,
+    required Map<String,dynamic>? personal, required Map<String,dynamic> native,
+    required int createdMs,
+  }) {
+    final uid=profile.uid, original=profile.originalId, key=eventKeys[frameId];
+    if(uid!=DedaStage02LabSingleUid.approvedUid || original!='@DEDA-QA1234' ||
+        key==null || createdMs<=0 || profile.verifiedPaidFrameIds.contains(frameId) ||
+        profile.inventoryRevision>=9007199254740990) {
+      throw StateError('store-direct-synthetic-scope-held');
+    }
+    final wallet=DedaStage04PersonalWallet.decode(walletRow,profile);
+    if(gift['publicId']!=original || gift['balance']!=wallet.giftResidual ||
+       (gift.containsKey('ownerUid')&&gift['ownerUid']!=uid) ||
+       wallet.hasManagerPersonal!=(personal!=null) ||
+       (personal!=null&&(personal['accountKey']!=uid||personal['balance']!=wallet.managerPersonal))) {
+      throw const DedaPrivateDataConflict();
+    }
+    final owned=native['ownedFrames'],pending=native['pendingFrames'];
+    final verified=profile.verifiedPaidFrameIds;
+    if(native['originalId']!=original || owned is! List || pending is! List ||
+        pending.isNotEmpty || owned.length!=verified.length ||
+        owned.toSet().length!=owned.length || !owned.every(verified.contains)) {
+      throw StateError('store-native-proof-held');
+    }
+    if(wallet.hasManagerPersonal?wallet.managerPersonal<1000:
+        wallet.earnedResidual+wallet.giftResidual<1000) {
+      throw StateError('store-insufficient-diamonds');
+    }
+    final earned=wallet.hasManagerPersonal?0:min(1000,wallet.earnedResidual);
+    final gifted=wallet.hasManagerPersonal?0:1000-earned;
+    final manager=wallet.hasManagerPersonal?1000:0;
+    if(earned>0&&profile.progressRevision>=9007199254740990) {
+      throw const DedaPrivateDataConflict();
+    }
+    final root='deda_lab_uid_authority/$uid',
+        revision=profile.inventoryRevision+1, progressVersion=profile.progressRevision+(earned>0?1:0);
+    final now=Timestamp.fromMillisecondsSinceEpoch(createdMs);
+    final frame=<String,dynamic>{'frameId':frameId,
+      'receipt':{'uid':uid,'frameId':frameId,'kind':'lab_frame','cost':1000,'createdMs':createdMs},
+      'ownership':{'uid':uid,'frameId':frameId,'receiptId':'${uid}_$frameId','createdMs':createdMs}};
+    final frames=<Map>[...profile.frameRecords.cast<Map>(),frame]
+      ..sort((a,b)=>(a['frameId'] as String).compareTo(b['frameId'] as String));
+    final inventory=<String,dynamic>{...profile._source.inventory,'revision':revision,'frames':frames};
+    final rows=<String,Map<String,dynamic>>{};
+    if(earned>0){
+      final balances=<String,dynamic>{...profile._balances,'earnedDiamonds':wallet.earnedResidual-earned};
+      final receipt=<String,dynamic>{'format':1,'accountKey':uid,'source':'cosmetic-debit-v1',
+        'sourceId':'stage04-store-frame|$original|$frameId','kind':'spend',
+        'delta':{'points':0,'coins':0,'xp':0,'earnedDiamonds':-earned}};
+      rows['$root/receipts/$key']=receipt;
+      rows['$root/events/$key']={'format':1,'accountKey':uid,'eventKey':key,'receipt':receipt,
+        'receiptId':key,'appliedVersion':progressVersion,'afterBalances':balances,'createdAt':now};
+      rows[root]={...profile._source.progress,'version':progressVersion,'balances':balances};
+    }
+    if(gifted>0)rows['deda_diamond_gift_balances/$original']={...gift,'balance':wallet.giftResidual-gifted,'updatedAt':now};
+    if(manager>0)rows['deda_gm_personal_diamond_wallets/$uid']={...personal!,'balance':wallet.managerPersonal-manager,'updatedAt':now};
+    rows['deda_lab_frame_receipts/$original/frames/$frameId']={'publicId':original,
+      'frameId':frameId,'kind':'lab_frame','cost':1000,'createdAt':now};
+    rows['deda_lab_owned_frames/$original/frames/$frameId']={'publicId':original,
+      'frameId':frameId,'receiptId':'${original}_$frameId','createdAt':now};
+    rows['deda_native_account_cosmetics/$original']={...native,'ownedFrames':[...owned,frameId],'updatedAt':now};
+    rows['$root/framePurchases/$frameId']={'format':1,'uid':uid,'originalId':original,'frameId':frameId,
+      'cost':1000,'payment':{'earnedDiamonds':earned,'giftedDiamonds':gifted,'managerDiamonds':manager},
+      'progressVersion':progressVersion,'eventKey':earned>0?key:null,'createdMs':createdMs};
+    rows['$root/inventorySources/current']=inventory;
+    rows['$root/inventory/current']=inventory;
+    rows['$root/inventoryHistory/$revision']=inventory;
+    rows['$root/wallet/current']={...walletRow,'progressVersion':progressVersion,'inventoryRevision':revision,
+      'giftResidual':wallet.giftResidual-gifted,'managerPersonal':wallet.managerPersonal-manager};
+    return rows;
+  }
+}
+
 /// Exact synthetic campaign event identities, derived from the existing
 /// reconcile-core eventKey. Not a new ledger or a real prize-code issuer.
 class DedaStage04TierState {
@@ -1520,6 +1617,10 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
   // proposed balance, price, ownership or write list. No production fallback.
   static const storeCheckoutCandidateEnabled = storeLabMode &&
       bool.fromEnvironment('DEDA_STAGE04_STORE_CHECKOUT_CANDIDATE');
+  // Separately gated; the exact existing approval route remains available
+  // for its earlier emulator regression. No fallback on direct failure.
+  static const storeDirectCandidateEnabled = storeCheckoutCandidateEnabled &&
+      bool.fromEnvironment('DEDA_STAGE04_STORE_DIRECT_CANDIDATE');
 
   static Future<int> readStorePurchaseBalance(String originalId) async {
     if (!storeCheckoutCandidateEnabled) {
@@ -1569,6 +1670,33 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
           progress:p.data(),inventory:i.data(),account:a.data()));
       if(fresh.originalId!=originalId)throw const DedaPrivateDataStale();
       if(fresh.verifiedPaidFrameIds.contains(frameId))return;
+      if(storeDirectCandidateEnabled){
+        final w=await tx.get(base.collection('wallet').doc('current'));
+        final gift=await tx.get(db.doc('deda_diamond_gift_balances/$originalId'));
+        final native=await tx.get(db.doc('deda_native_account_cosmetics/$originalId'));
+        check();
+        for(final row in [w,gift,native]){
+          if(!row.exists||row.metadata.isFromCache||row.metadata.hasPendingWrites) {
+            throw const DedaPrivateDataConflict();
+          }
+        }
+        final wallet=DedaStage04PersonalWallet.decode(w.data()!,fresh);
+        Map<String,dynamic>? personal;
+        if(wallet.hasManagerPersonal){
+          final m=await tx.get(db.doc('deda_gm_personal_diamond_wallets/$uid'));
+          check();
+          if(!m.exists||m.metadata.isFromCache||m.metadata.hasPendingWrites) {
+            throw const DedaPrivateDataConflict();
+          }
+          personal=m.data()!;
+        }
+        final writes=DedaStage04StoreDirectRows.prepare(profile:fresh,frameId:frameId,
+          walletRow:w.data()!,gift:gift.data()!,personal:personal,native:native.data()!,
+          createdMs:DateTime.now().millisecondsSinceEpoch);
+        check();
+        for(final entry in writes.entries){tx.set(db.doc(entry.key),entry.value);}
+        return;
+      }
       final plan=await tx.get(base.collection('storeCheckoutPlans').doc(frameId));
       check();
       if(!plan.exists || plan.metadata.isFromCache || plan.metadata.hasPendingWrites) {

@@ -987,7 +987,10 @@ async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan
   const earned=read(base)+'.balances.earnedDiamonds';
   const gifted=read(walletGiftPath)+'.balance';
   const personal=read(walletPersonalPath)+'.balance';
-  const e=manager?'0':earned, g=manager?'0':'(1000 - '+earned+')', m=manager?'1000':'0';
+  const spendsEarned=rows.some(r=>r.p===base),spendsGift=rows.some(r=>r.p===walletGiftPath);
+  const e=manager||!spendsEarned?'0':spendsGift?earned:'1000',
+    g=manager||!spendsGift?'0':spendsEarned?'(1000 - '+earned+')':'1000',
+    m=manager?'1000':'0';
   const created=rows.find(r=>r.p===audit).after.createdMs;
   const directValue=(row,side,clock)=>{
     const before=side==='before', root=row[side];
@@ -1043,8 +1046,13 @@ async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan
           'timestamp.value('+clock+') <= request.time + duration.value(5, "s")',
           'timestamp.value('+clock+') >= request.time - duration.value(5, "m")');
         if(manager)conditions.push(personal+' is int',personal+' >= 1000',personal+' <= 9007199254740990');
-        else conditions.push(earned+' is int',earned+' > 0',earned+' < 1000',
-          gifted+' is int',gifted+' >= '+g,gifted+' <= 9007199254740990 - '+earned);
+        else {
+          conditions.push(earned+' is int',gifted+' is int',
+            gifted+' >= '+g,earned+' >= '+e,gifted+' <= 9007199254740990 - '+earned);
+          if(spendsEarned&&spendsGift)conditions.push(earned+' > 0',earned+' < 1000');
+          else if(spendsEarned)conditions.push(earned+' >= 1000');
+          else conditions.push(earned+' == 0');
+        }
       }
       conditions.push(...guard);
     }
@@ -1053,7 +1061,9 @@ async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan
       ': if '+conditions.join(' &&\n        ')+';\n    }';
   });
   return originalRules.replace(tail,()=>blocks.join('\n')+'\n'+
-    (direct?'':'    match /'+base+'/storeCheckoutPlans/'+frameId+' { allow get: if owner('+JSON.stringify(uid)+'); }\n')+
+    (direct?[walletGiftPath,nativeStorePath,...(manager?[walletPersonalPath]:[])].map(p=>
+      '    match /'+p+' { allow get: if owner('+JSON.stringify(uid)+'); }\n').join(''):
+      '    match /'+base+'/storeCheckoutPlans/'+frameId+' { allow get: if owner('+JSON.stringify(uid)+'); }\n')+
     '    match /'+base+'/wallet/current { allow get: if owner('+JSON.stringify(uid)+'); }\n'+tail);
 }
 test('04/04 Spark direct-client exact fixture transaction feasibility: atomic rule gate, reject partial/forged/foreign/replay',async()=>{
@@ -1152,15 +1162,30 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
 });
 
 
-test('04/04 Spark direct rule feasibility without a protected approval document: mixed and manager sources',async()=>{
+test('04/04 Spark direct rule feasibility without approval: all 13 frames and four payment sources',async()=>{
   const originalRules=readFileSync('firestore.rules','utf8');
   const install=async rules=>{await env.cleanup();env=await initializeTestEnvironment({projectId,firestore:{rules}});};
   try{
-    for(const manager of [false,true]){
+    const cases=[...require('./purchase-frames.cjs').frames.map(f=>[f,'mixed']),
+      ['FRAME_05','earned'],['FRAME_05','gift'],['FRAME_05','manager']];
+    for(const [frameId,mode] of cases){
+      const manager=mode==='manager';
       await env.clearFirestore();await seedStorePurchase();
-      if(manager)await seedWalletManager();else await db.doc(walletGiftPath).update({balance:900});
+      if(frameId==='FRAME_03'){
+        // Separate synthetic fresh ownership fixture to exercise the first
+        // catalog item without overwriting an already-owned real frame.
+        for(const path of [source,view,base+'/inventoryHistory/1'])await db.doc(path).update({frames:[]});
+        await db.doc(nativeStorePath).update({ownedFrames:[]});
+        await db.doc('deda_lab_frame_receipts/'+original+'/frames/'+frameId).delete();
+        await db.doc('deda_lab_owned_frames/'+original+'/frames/'+frameId).delete();
+      }
+      if(manager)await seedWalletManager();
+      else{
+        await db.doc(walletGiftPath).update({balance:mode==='gift'?1400:900});
+        if(mode!=='mixed')await db.doc(base).update({'balances.earnedDiamonds':mode==='earned'?1500:0});
+      }
       await refreshWallet({store,uid});
-      const frameId='FRAME_05',audit=base+'/framePurchases/'+frameId,
+      const audit=base+'/framePurchases/'+frameId,
         planPath=base+'/storeCheckoutPlans/'+frameId;
       const first=await prepareStoreFrameCandidate({store,uid,frameId});
       const rules=await exactStoreRules(originalRules,first.rows,frameId,manager,{direct:true});
@@ -1170,8 +1195,8 @@ test('04/04 Spark direct rule feasibility without a protected approval document:
       // Same rules after legitimate synthetic source changes; no approval
       // document exists. The trusted engine is only the test oracle here.
       const balanceRef=db.doc(manager?walletPersonalPath:walletGiftPath);
-      await balanceRef.update({balance:(await balanceRef.get()).data().balance+37});
-      if(!manager)await db.doc(base).update({'balances.earnedDiamonds':350});
+      if(mode!=='earned')await balanceRef.update({balance:(await balanceRef.get()).data().balance+37});
+      if(mode==='mixed'||mode==='earned')await db.doc(base).update({'balances.earnedDiamonds':mode==='mixed'?350:1700});
       await refreshWallet({store,uid});
       const fresh=await prepareStoreFrameCandidate({store,uid,frameId}),rows=fresh.rows;
       assert.deepEqual(rows.map(r=>[r.p,r.before===null]),first.rows.map(r=>[r.p,r.before===null]));
@@ -1183,8 +1208,14 @@ test('04/04 Spark direct rule feasibility without a protected approval document:
       await assertFails(commit(c,rows.filter(r=>r.p!==view)));
       await assertFails(commit(client('foreign'),rows));
       await assertFails(commit(c,rows.map(r=>r.p===audit?{...r,after:{...r.after,cost:1}}:r)));
-      const debit=manager?walletPersonalPath:walletGiftPath;
-      await assertFails(commit(c,rows.map(r=>r.p===debit?{...r,after:{...r.after,balance:r.after.balance+1}}:r)));
+      const debit=manager?walletPersonalPath:mode==='earned'?base:walletGiftPath;
+      await assertFails(commit(c,rows.map(r=>r.p!==debit?r:{...r,after:mode==='earned'?
+        {...r.after,balances:{...r.after.balances,earnedDiamonds:r.after.balances.earnedDiamonds+1}}:
+        {...r.after,balance:r.after.balance+1}})));
+      for(const path of [nativeStorePath,walletGiftPath,...(manager?[walletPersonalPath]:[])]){
+        await assertSucceeds(getDocFromServer(doc(c,path)));
+        await assertFails(getDocFromServer(doc(client('foreign'),path)));
+      }
       for(const row of rows){const v=await db.doc(row.p).get();assert.deepEqual(v.exists?v.data():null,row.before);}
       await assertSucceeds(commit(c,rows));
       for(const row of rows)assert.deepEqual((await db.doc(row.p).get()).data(),row.after);

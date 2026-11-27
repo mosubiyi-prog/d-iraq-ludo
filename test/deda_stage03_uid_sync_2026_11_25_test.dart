@@ -51,6 +51,48 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/04 direct checkout rows keep original UID, receipt keys, wallet split and other progress',(){
+    const original='@DEDA-QA1234', root='deda_lab_uid_authority/$uid';
+    const at=1795800000000;
+    for(final mode in ['mixed','earned','gift','manager']){
+      final earned=mode=='earned'?1700:mode=='gift'?0:350;
+      final gift=mode=='gift'?1400:937;
+      final gm=mode=='manager'?1000037:0;
+      final p=protectedProgress();
+      p['balances']={'points':5,'coins':10,'xp':20,'earnedDiamonds':earned};
+      final i=protectedInventory();i['frames']=[];
+      final view=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:p,inventory:i,account:protectedAccount()));
+      final w=<String,dynamic>{'format':1,'uid':uid,'complete':true,'sourceKind':'synthetic-lab-wallet-v1',
+        'progressVersion':4,'inventoryRevision':1,'accountRevision':1,'originalId':original,
+        'giftResidual':gift,'managerPersonal':gm,'hasManagerPersonal':mode=='manager'};
+      final g=<String,dynamic>{'publicId':original,'balance':gift};
+      final m=mode=='manager'?<String,dynamic>{'accountKey':uid,'balance':gm}:null;
+      final n=<String,dynamic>{'originalId':original,'ownedFrames':[],'pendingFrames':[]};
+      for(final id in DedaStage04StoreDirectRows.eventKeys.keys){
+        final rows=DedaStage04StoreDirectRows.prepare(profile:view,frameId:id,walletRow:w,
+          gift:g,personal:m,native:n,createdMs:at);
+        final audit=rows['$root/framePurchases/$id']!;
+        final e=mode=='earned'?1000:mode=='mixed'?350:0;
+        final h=mode=='gift'?1000:mode=='mixed'?650:0;
+        expect(audit['payment'],{'earnedDiamonds':e,'giftedDiamonds':h,'managerDiamonds':mode=='manager'?1000:0});
+        final key=DedaStage04StoreDirectRows.eventKeys[id]!;
+        expect(audit['eventKey'],e>0?key:null);
+        expect(rows.containsKey(root),e>0);
+        if(e>0){
+          expect(rows[root]!['balances'],{'points':5,'coins':10,'xp':20,'earnedDiamonds':earned-e});
+          expect(rows['$root/receipts/$key']!['sourceId'],'stage04-store-frame|$original|$id');
+        }
+        expect(rows['$root/inventory/current'],rows['$root/inventoryHistory/2']);
+        expect(rows['$root/inventory/current']!['idGifts'],i['idGifts']);
+        expect(rows['$root/wallet/current']!['giftResidual'],gift-h);
+        expect(rows['$root/wallet/current']!['managerPersonal'],gm-(mode=='manager'?1000:0));
+        expect(rows.keys.any((k)=>k.contains('storeCheckoutPlans')),isFalse);
+      }
+      expect(()=>DedaStage04StoreDirectRows.prepare(profile:view,frameId:'FRAME_05',walletRow:w,
+        gift:{...g,'balance':0},personal:m,native:n,createdMs:at),throwsA(isA<DedaPrivateDataConflict>()));
+    }
+  });
   test('04/04 free card is UID-only cosmetic data and preserves every other field',(){
     final p=DedaPrivateDataPayload({'favorites':['saved'],'contactDraft':'draft'},uidScoped:true);
     for(final c in DedaStage04FreeCardChoice.styles){
