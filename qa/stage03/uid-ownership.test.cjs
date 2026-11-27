@@ -950,7 +950,7 @@ function storeExactClientValue(v){
   if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,storeExactClientValue(x)]));
   return v;
 }
-async function exactStoreRules(originalRules,rows,frameId,manager){
+async function exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan=false}={}){
   const tail='    match /{document=**} { allow read, write: if false; }';
   assert.equal(originalRules.split(tail).length,2);
   const audit=base+'/framePurchases/'+frameId;
@@ -972,14 +972,32 @@ async function exactStoreRules(originalRules,rows,frameId,manager){
   for(const p of [base,walletGiftPath]){
     if(!rows.some(row=>row.p===p))guard.push(await check(p));
   }
+  // Candidate only: keep the approved path topology and read-only
+  // dependencies fixed, but read the values from the trusted plan document.
+  // This avoids recompiling rules merely because the spend amount's source
+  // balance changed. It does NOT grant a client any plan issuance authority.
+  const planPath=base+'/storeCheckoutPlans/'+frameId;
+  const planExpr='get('+fp(planPath)+').data';
+  const planRow=i=>planExpr+'.rows['+i+']';
   const blocks=rows.map((row,i)=>{
     assert.match(row.p,/^[A-Za-z0-9_@/-]+$/);
-    const next=rows[(i+1)%rows.length];
+    const nextIndex=(i+1)%rows.length,next=rows[nextIndex];
     const conditions=['owner('+JSON.stringify(uid)+')',
-      'request.resource.data == '+storeExactRuleValue(row.after),
-      'getAfter('+fp(next.p)+').data == '+storeExactRuleValue(next.after)];
-    if(row.before!==null)conditions.push('resource.data == '+storeExactRuleValue(row.before));
-    if(row.p===audit)conditions.push(...guard);
+      'request.resource.data == '+(protectedPlan?planRow(i)+'.after':storeExactRuleValue(row.after)),
+      'getAfter('+fp(next.p)+').data == '+(protectedPlan?planRow(nextIndex)+'.after':storeExactRuleValue(next.after))];
+    if(protectedPlan){
+      conditions.push(planRow(i)+'.p == '+JSON.stringify(row.p));
+      if(row.before===null)conditions.push(planRow(i)+'.before == null');
+    }
+    if(row.before!==null)conditions.push('resource.data == '+(protectedPlan?planRow(i)+'.before':storeExactRuleValue(row.before)));
+    if(row.p===audit){
+      if(protectedPlan)conditions.push(planExpr+'.uid == '+JSON.stringify(uid),
+        planExpr+'.originalId == '+JSON.stringify(original),
+        planExpr+'.frameId == '+JSON.stringify(frameId),
+        planExpr+'.cost == 1000',planExpr+'.format == 1',
+        planExpr+'.rows.size() == '+rows.length);
+      conditions.push(...guard);
+    }
     else conditions.push('!exists('+fp(audit)+')');
     return '    match /'+row.p+' {\n      allow '+(row.before===null?'create':'update')+
       ': if '+conditions.join(' &&\n        ')+';\n    }';
@@ -1002,10 +1020,11 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
       if(manager)await seedWalletManager();
       else await db.doc(walletGiftPath).update({balance:900});
       await refreshWallet({store,uid});
-      const plan=await prepareStoreFrameCandidate({store,uid,frameId}),rows=plan.rows;
+      let plan=await prepareStoreFrameCandidate({store,uid,frameId}),rows=plan.rows;
       const planPath=base+'/storeCheckoutPlans/'+frameId;
       await db.doc(planPath).set(plan);
-      const rules=await exactStoreRules(originalRules,rows,frameId,manager);
+      const protectedPlan=frameId==='FRAME_05';
+      const rules=await exactStoreRules(originalRules,rows,frameId,manager,{protectedPlan});
       await install(rules);
       const c=client();
       const commit=(target,entries=rows)=>{
@@ -1039,6 +1058,28 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
       for(const row of rows){
         const snap=await db.doc(row.p).get();
         assert.deepEqual(snap.exists?snap.data():null,row.before);
+      }
+      if(protectedPlan){
+        // Refresh one protected source and issue a new plan with exactly
+        // the same path topology. No install() between old and new plans.
+        const previous=rows;
+        const balanceRef=db.doc(manager?walletPersonalPath:walletGiftPath);
+        const balance=(await balanceRef.get()).data().balance;
+        await balanceRef.update({balance:balance+37});
+        await refreshWallet({store,uid});
+        await assertFails(commit(c,previous));
+        plan=await prepareStoreFrameCandidate({store,uid,frameId});
+        rows=plan.rows;
+        assert.deepEqual(rows.map(r=>[r.p,r.before===null]),
+          previous.map(r=>[r.p,r.before===null]));
+        assert.notDeepEqual(rows,previous);
+        await assertFails(setDoc(doc(c,planPath),storeExactClientValue(plan)));
+        await db.doc(planPath).set(plan);
+        await assertFails(commit(c,previous));
+        for(const row of rows){
+          const snap=await db.doc(row.p).get();
+          assert.deepEqual(snap.exists?snap.data():null,row.before);
+        }
       }
       // Same guard at actual client transaction boundary, not Admin SDK.
       await assertSucceeds(runTransaction(c,async tx=>{
