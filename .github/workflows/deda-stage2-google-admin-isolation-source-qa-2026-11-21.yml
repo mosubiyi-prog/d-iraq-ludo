@@ -25,6 +25,7 @@ on:
       - 'tools/app_stability/app_package/audit_full_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/review_unified_stage01_inventory_2026_11_24.py'
       - 'tools/app_stability/app_package/stage01_lab_bind_full_2026_11_25.py'
+      - 'tools/app_stability/app_package/prepare_deda_qa_launcher_2026_11_27.py'
       - 'lib/deda_stage02_lab_entry_2026_11_25.dart'
       - 'tools/app_stability/app_package/stage02_lab_bind_entry_2026_11_25.py'
       - 'lib/deda_stage02_lab_single_uid_2026_11_25.dart'
@@ -560,6 +561,9 @@ jobs:
           set -euo pipefail
           python3 tools/app_stability/app_package/stage02_lab_bind_entry_2026_11_25.py "$DEDA_STAGE1_SOURCE" full-offline
           unset LAB_CONFIG
+          python3 -m venv "$RUNNER_TEMP/deda-qa-icon-venv"
+          "$RUNNER_TEMP/deda-qa-icon-venv/bin/python" -m pip install --disable-pip-version-check Pillow==11.3.0
+          "$RUNNER_TEMP/deda-qa-icon-venv/bin/python" tools/app_stability/app_package/prepare_deda_qa_launcher_2026_11_27.py "$DEDA_STAGE1_SOURCE"
           cd "$DEDA_STAGE1_SOURCE"
           flutter_bin="$(command -v flutter)"
           sudo -n unshare --net -- bash -c '
@@ -587,6 +591,15 @@ jobs:
                   assert n.get(ns+'name')!='com.google.firebase.provider.FirebaseInitProvider'
           print('PASS_STAGE02_FULL_ENTRY_PACKAGED_OFFLINE_NO_ORIGINAL_STARTUP')
           PY
+          aapt="$(find "$sdk/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          signer="$(find "$sdk/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          test -x "$aapt"
+          test -x "$signer"
+          "$aapt" dump badging "$apk" > "$RUNNER_TEMP/deda-qa-badging.txt"
+          grep -F "package: name='com.deda.qa.uiddevice'" "$RUNNER_TEMP/deda-qa-badging.txt"
+          grep -Fx "application-label:'DEDA QA'" "$RUNNER_TEMP/deda-qa-badging.txt"
+          "$signer" verify --verbose "$apk"
+          echo 'PASS_QA_HELD_DEBUG_PACKAGE_LABEL_AND_ANDROID_SIGNATURE_NO_RELEASE'
           rm -f "$apk"
       - name: No Firebase or app deployment, no signing, no final APK
         if: always()
