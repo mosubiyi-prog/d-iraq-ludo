@@ -368,6 +368,37 @@ test('04/03 original weekly award receipt maps once to UID inventory, without mi
     sourceType:'weekly_league',weekId,amount:300,status:'pending',createdMs:ms,receivedMs:null});
   assert.equal((await db.collection('deda_diamond_gifts').get()).size,1);
   assert.equal((await db.doc('deda_diamond_gift_balances/'+original).get()).exists,false);
+
+  // Use the same already-projected gift and UID, not a new issuer or account.
+  const celebrationRules=await initializeTestEnvironment({projectId,firestore:{rules:generateLeagueCandidateRules(readFileSync('firestore.rules','utf8'))}});
+  try {
+    const client=(id=uid,provider='password')=>celebrationRules.authenticatedContext(id,{firebase:{sign_in_provider:provider}}).firestore();
+    const seen=base+'/leagueCardSeen/'+weekId;
+    const reservation=()=>({uid,weekId,giftId:legacyId,reservedAt:serverTimestamp()});
+    const reserve=actor=>runTransaction(actor,async tx=>{
+      const mark=doc(actor,seen);
+      if((await tx.get(mark)).exists)return false;
+      tx.set(mark,reservation());return true;
+    });
+    const one=client(),two=client();
+    await assertSucceeds(getDocFromServer(doc(one,giftPath)));
+    await assertFails(getDocFromServer(doc(client(other),giftPath)));
+    await assertFails(getDocFromServer(doc(client(other),seen)));
+    await assertFails(setDoc(doc(client(uid,'anonymous'),seen),reservation()));
+    await assertFails(setDoc(doc(one,seen),{...reservation(),giftId:'fake'}));
+    await assertFails(setDoc(doc(one,base+'/leagueCardSeen/2026-11-07'),{...reservation(),weekId:'2026-11-07'}));
+    const reserved=await Promise.all([reserve(one),reserve(two)]);
+    assert.deepEqual(reserved.sort(),[false,true]);
+    assert.equal(await reserve(client()),false);
+    await assertFails(setDoc(doc(one,seen),reservation()));
+    await assertFails(deleteDoc(doc(one,seen)));
+    assert.equal((await db.doc('deda_diamond_gift_balances/'+original).get()).exists,false);
+    assert.equal((await db.collection('deda_diamond_gifts').get()).size,1);
+  }finally{
+    await celebrationRules.cleanup();
+    const restored=await initializeTestEnvironment({projectId,firestore:{rules:readFileSync('firestore.rules','utf8')}});
+    await restored.cleanup();
+  }
   // Mirror the already-authorized original claim receipt, never credit again.
   await db.doc(giftPath).update({status:'received',claimedAt:Timestamp.fromMillis(ms+50)});
   await db.doc('deda_diamond_gift_balances/'+original).set({publicId:original,balance:300});
