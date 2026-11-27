@@ -8,7 +8,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
+const {project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -378,6 +378,46 @@ test('04/03 original weekly award receipt maps once to UID inventory, without mi
   assert.equal((await db.collection(base+'/inventoryHistory').get()).size,3);
   assert.equal((await db.doc('users/'+other).get()).exists,false);
   assert.deepEqual((await db.doc(acctView).get()).data(),accountFixture());
+});
+
+
+test('04/03 actual original payout worker creates one demo gift, then projects same UID; repeat cannot mint twice',async()=>{
+  await seedFriendActionFixture();
+  const inv=fixture();inv.diamondGifts=[admin()];await seed(inv);await apply();
+  const docs=await buildLeagueCandidate({store,uid,weekId});
+  const batch=db.batch();for(const [p,d] of Object.entries(docs))batch.set(db.doc(p),d);
+  const planPath='deda_weekly_direct_prize_plans/'+weekId;
+  const control='deda_weekly_direct_control/active';
+  batch.set(db.doc(planPath),{weekId,amounts:[350,200,150,100,100,100,100,100,100,100]});
+  batch.set(db.doc(control),{weekId,paused:true});await batch.commit();
+  const run=(atMs=ms+100)=>settleLeagueCandidate({store,uid,weekId,atMs});
+  await assert.rejects(run(ms-1),{code:'league-settlement-window'});
+  await assert.rejects(run(),{code:'league-gift-control-held'});
+  assert.equal((await db.collection('deda_diamond_gifts').get()).size,0);
+  await db.doc(control).set({weekId,paused:false});
+  const route='deda_share_ids/'+original;
+  const prior=(await db.doc(route).get()).data();
+  await db.doc(route).set({...prior,ownerUid:other});
+  await assert.rejects(run(),{code:'league-gift-directory-conflict'});
+  await db.doc(route).set(prior);
+  const proofPath='deda_weekly_direct_weeks/'+weekId;
+  await db.doc(proofPath).update({accountRevision:99});
+  await assert.rejects(run(),{code:'league-gift-ranking-conflict'});
+  await db.doc(proofPath).set(docs[proofPath]);
+  const result=await run();
+  assert.equal(result.report.created,1);assert.equal(result.projection,'projected');
+  assert.equal(result.view.diamondGifts.find(g=>g.sourceType==='weekly_league').amount,350);
+  const replay=await run();
+  assert.equal(replay.report.existing,1);assert.equal(replay.projection,'replayed');
+  const gifts=await db.collection('deda_diamond_gifts').get();
+  assert.equal(gifts.size,1);assert.equal(gifts.docs[0].data().status,'pending');
+  assert.equal(gifts.docs[0].data().targetPublicId,original);
+  assert.equal((await db.doc('deda_diamond_gift_balances/'+original).get()).exists,false);
+  assert.equal((await db.collection(base+'/inventoryHistory').get()).size,2);
+  assert.deepEqual((await db.doc(acctView).get()).data(),accountFixture());
+  const {settleWeek}=require('./deda_weekly_direct_prize_worker.cjs');
+  await assert.rejects(settleWeek({projectId:'not-the-demo'},weekId,ms+100,
+    {verifyDemoCandidate:async()=>{}}),/WEEKLY_CANDIDATE_GUARD_EMULATOR_ONLY/);
 });
 
 test('complete protected account projection retains actual relationships, task claims and week history under same UID',async()=>{

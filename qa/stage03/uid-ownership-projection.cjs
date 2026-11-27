@@ -607,6 +607,9 @@ async function buildLeagueCandidate({store,uid,weekId,peerTasks=[]}){
 // existing prize planner. No gift issuance, claim, balance or admin mutation.
 // This candidate is restricted to the same synthetic owner and peer in demo.
 async function syncLeagueGiftCandidate({store,uid,weekId,atMs}){
+  return leagueGiftEvidence({store,uid,weekId,atMs});
+}
+async function leagueGiftEvidence({store,uid,weekId,atMs,inspectOnly=false,transaction=null}){
   requireDemo(store,uid);
   const start=weekStart(weekId),end=start+WEEK_MS,cutoff=end-6*3600000;
   requireThat(Number.isSafeInteger(atMs)&&atMs>=end,'league-gift-before-close');
@@ -614,7 +617,7 @@ async function syncLeagueGiftCandidate({store,uid,weekId,atMs}){
   const ownerId='@DEDA-QA1234',peerId='@DEDA-QA5678',peerUid='synthetic-peer-001';
   const weekPath='deda_weekly_direct_weeks/'+weekId;
   const floor=[250,200,150,100,100,100,100,100,100,100];
-  return db.runTransaction(async tx=>{
+  const work=async tx=>{
     const get=async path=>{const s=await tx.get(db.doc(path));return s.exists?s.data():null;};
     const acct=parseAccount(await get(base+'/account/current'),uid);
     requireThat(acct.profile.originalId===ownerId&&
@@ -688,7 +691,7 @@ async function syncLeagueGiftCandidate({store,uid,weekId,atMs}){
     const gift=await get('deda_diamond_gifts/'+legacyId);
     if(!winner||!gift){
       requireThat(!prior&&!gift,'league-gift-existing-conflict');
-      return {state:winner?'awaiting-issuance':'not-eligible',view:old};
+      return {state:winner?'awaiting-issuance':'not-eligible',view:old,winner,winnerCount:result.winners.length};
     }
     const created=gift.createdAt?.toMillis?.(),received=gift.claimedAt?.toMillis?.();
     requireThat(winner.giftId===legacyId&&gift.giftId===legacyId&&
@@ -701,6 +704,7 @@ async function syncLeagueGiftCandidate({store,uid,weekId,atMs}){
     const nextGift={giftId:canonicalId,uid,sourceType:'weekly_league',weekId,
       amount:winner.amount,status:gift.status,createdMs:created,
       receivedMs:gift.status==='received'?received:null};
+    if(inspectOnly)return {state:'verified-issued',view:old,winner,winnerCount:result.winners.length};
     if(prior&&equal(prior,nextGift))return {state:'replayed',view:old};
     const next=parse({...old,revision:old.revision+1,
       diamondGifts:[...old.diamondGifts.filter(g=>g.giftId!==canonicalId),nextGift]},uid);
@@ -711,7 +715,44 @@ async function syncLeagueGiftCandidate({store,uid,weekId,atMs}){
     tx.set(db.doc(base+'/inventorySources/current'),next);
     tx.set(db.doc(history),next);
     return {state:'projected',view:next};
+  };
+  return transaction?work(transaction):db.runTransaction(work);
+}
+
+
+// Use the ORIGINAL payout worker and its original deterministic gift path.
+// One authenticated synthetic account only. All proof is rechecked inside
+// the actual gift transaction; no alternate issuer or new authority.
+async function settleLeagueCandidate({store,uid,weekId,atMs}){
+  requireDemo(store,uid);
+  const end=weekStart(weekId)+WEEK_MS;
+  requireThat(Number.isSafeInteger(atMs)&&atMs>=end&&atMs<end+36*3600000,
+    'league-settlement-window');
+  const inspect=transaction=>leagueGiftEvidence({store,uid,weekId,atMs,
+    inspectOnly:true,transaction});
+  const opening=await inspect(null);
+  // The peer is not a real account and must never receive a gift.
+  requireThat(opening.winnerCount===1&&opening.winner?.publicId==='@DEDA-QA1234',
+    'league-settlement-single-proven-owner');
+  const {settleWeek}=require('./deda_weekly_direct_prize_worker.cjs');
+  const {Timestamp}=require('firebase-admin/firestore');
+  const dry=await settleWeek(store.db,weekId,atMs,{dryRun:true});
+  requireThat(dry.eligible===1&&dry.diamonds===opening.winner.amount&&
+    equal(dry.receipts,[opening.winner.giftId]),'league-settlement-plan-changed');
+  const report=await settleWeek(store.db,weekId,atMs,{
+    dryRun:false,clockTimestamp:()=>Timestamp.fromMillis(atMs),
+    verifyDemoCandidate:async ({tx,winner})=>{
+      const fresh=await inspect(tx);
+      requireThat(fresh.winnerCount===1&&equal(fresh.winner,opening.winner)&&
+        equal(winner,fresh.winner),'league-settlement-proof-changed');
+    },
   });
+  requireThat(report.created+report.existing===1&&report.invalid===0&&report.held===0,
+    'league-settlement-held');
+  // The original pending receipt is the source of truth; re-run safely
+  // after interruption. Projection never credits the balance.
+  const projected=await syncLeagueGiftCandidate({store,uid,weekId,atMs});
+  return {report,projection:projected.state,view:projected.view};
 }
 
 function generateLeagueCandidateRules(originalRules){
@@ -842,4 +883,4 @@ async function mutateFriendCandidate({store,uid,peerUid,expectedRevision,action,
     return next;
   });
 }
-module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,generateLeagueCandidateRules};
+module.exports={project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};

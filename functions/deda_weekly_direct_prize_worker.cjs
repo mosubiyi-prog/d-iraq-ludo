@@ -14,7 +14,13 @@ const APPROVED_DEFAULT=Object.freeze([250,200,150,100,100,100,100,100,100,100]);
  * approves deployment. It does not use paid Cloud Functions or billing.
  * No player device or manager wallet may create a weekly prize.
  */
-async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
+async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp,verifyDemoCandidate}={}) {
+  if(verifyDemoCandidate!==undefined && (typeof verifyDemoCandidate!=='function' ||
+      !/^127\.0\.0\.1:[0-9]+$/.test(process.env.FIRESTORE_EMULATOR_HOST||'') ||
+      process.env.GCLOUD_PROJECT!=='demo-deda-stage03-uid' ||
+      db?.projectId!=='demo-deda-stage03-uid')) {
+    throw Error('WEEKLY_CANDIDATE_GUARD_EMULATOR_ONLY');
+  }
   if(!Number.isSafeInteger(nowMs) || nowMs < weekStart(weekId)+WEEK_MS) {
     throw Error('NOT_YET_SATURDAY_06_BAGHDAD');
   }
@@ -69,6 +75,7 @@ async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
         tx.get(gift),tx.get(source),tx.get(review),tx.get(owner),
         tx.get(prizePlanRef),tx.get(controlRef),
       ]);
+      if(verifyDemoCandidate) await verifyDemoCandidate({tx,winner});
       if(controlNow.exists && controlNow.data()?.paused===true) {
         throw Error('WEEKLY_LEAGUE_PAUSED_DURING_SETTLEMENT_STOP');
       }
