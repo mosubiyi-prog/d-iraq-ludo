@@ -1007,7 +1007,7 @@ test('04/04 Spark direct-client exact fixture transaction feasibility: atomic ru
         return batch.commit();
       };
       const audit=base+'/framePurchases/'+frameId;
-      await assertFails(setDoc(doc(c,planPath),{...plan,cost:1}));
+      await assertFails(setDoc(doc(c,planPath),storeExactClientValue({...plan,cost:1})));
       await assertFails(getDocFromServer(doc(client('foreign'),planPath)));
       await assertFails(commit(c,rows.filter(r=>r.p!==audit)));
       await assertFails(commit(c,rows.filter(r=>r.p!==view)));
