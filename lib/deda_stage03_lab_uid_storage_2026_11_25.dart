@@ -746,6 +746,12 @@ class DedaStage04AppearanceRead {
   final DedaStage04ProfileRead _profile;
   final DedaPrivateDataRevision _revision;
   final DedaStage04Appearance? selection;
+  String? get freeCardChoice {
+    requireCurrent();
+    final fields = _revision.payload!.fields;
+    return fields.containsKey(DedaStage04FreeCardChoice.key)
+        ? DedaStage04FreeCardChoice.decode(fields[DedaStage04FreeCardChoice.key]) : null;
+  }
   DedaStage04ProfileView requireCurrent() => _profile.requireCurrent();
 }
 
@@ -1502,6 +1508,43 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       try { opening.requireCurrent(); fresh.requireCurrent(); return true; }
       catch (_) { return false; }
     });
+  }
+
+  // 04/04: reuse the single account guard and existing private journal.
+  // No legacy phone, new wallet, ownership or UID.
+  static const storeLabMode = bool.fromEnvironment('DEDA_STAGE04_STORE_LAB');
+
+  static Future<DedaStage04ProfileRead> readStoreProfile(String originalId) async {
+    if (!storeLabMode) throw StateError('store-lab-disabled');
+    final p = await readProfile();
+    if (p.requireCurrent().originalId != originalId) {
+      throw const DedaPrivateDataStale();
+    }
+    return p;
+  }
+
+  static Future<DedaStage04AppearanceRead> readStoreFreeCard(String originalId) async {
+    final p = await readStoreProfile(originalId);
+    return readAppearance(p);
+  }
+
+  static Future<DedaPrivateDataResult> saveStoreFreeCard(
+      DedaStage04AppearanceRead opening,String originalId,String choice) async {
+    if (!storeLabMode || opening.requireCurrent().originalId != originalId) {
+      throw const DedaPrivateDataStale();
+    }
+    final current = _intent();
+    final fresh = await readStoreProfile(originalId);
+    if (!current() || fresh.requireCurrent().uid != opening.requireCurrent().uid) {
+      throw const DedaPrivateDataStale();
+    }
+    final payload = DedaStage04FreeCardChoice.apply(opening._revision.payload!,choice);
+    return _sync.backup(account:uid,original:uid,payload:payload,
+      expectedBase:opening._revision,isCurrent:(){
+        if (!current()) return false;
+        try { opening.requireCurrent(); fresh.requireCurrent(); return true; }
+        catch (_) { return false; }
+      });
   }
 
   /// Both lists share the same existing UID private journal. Never convert

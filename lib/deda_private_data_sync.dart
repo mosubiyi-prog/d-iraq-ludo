@@ -48,6 +48,21 @@ class DedaStage04Appearance {
   }
 }
 
+/// Four existing free decorative cards. This preference never grants an ID,
+/// paid item, money or administrative rights.
+class DedaStage04FreeCardChoice {
+  static const key = 'storeFreeCardChoice';
+  static const styles = {'gold','diamond','royal','pink'};
+  static String decode(Object? value) {
+    if (value is! String || !styles.contains(value)) {
+      throw const FormatException('invalid-free-card-choice');
+    }
+    return value;
+  }
+  static DedaPrivateDataPayload apply(DedaPrivateDataPayload old,String choice) =>
+      DedaPrivateDataPayload({...old.fields,key:decode(choice)},uidScoped:true);
+}
+
 /// Nonfinancial records only. Native JSON text and malformed legacy entries
 /// remain byte-for-byte intact; no wallet, role, ID ownership or reward enters.
 class DedaPrivateDataPayload {
@@ -59,6 +74,10 @@ class DedaPrivateDataPayload {
     for (final entry in this.fields.entries) {
       if (!validKey(entry.key, uidScoped: uidScoped)) throw const FormatException('unsupported-private-data-key');
       final value = entry.value;
+      if (entry.key == DedaStage04FreeCardChoice.key) {
+        DedaStage04FreeCardChoice.decode(value);
+        continue;
+      }
       if (entry.key == DedaStage04Appearance.key) {
         DedaStage04Appearance.decode(value);
         continue;
@@ -89,7 +108,7 @@ class DedaPrivateDataPayload {
     'deda_default_travel_mode_v1', 'deda_default_map_style_v1',
   };
   static bool validKey(String key, {bool uidScoped = false}) =>
-      (uidScoped && (uidPreferenceKeys.contains(key) || key == DedaStage04Appearance.key)) ||
+      (uidScoped && (uidPreferenceKeys.contains(key) || key == DedaStage04Appearance.key || key == DedaStage04FreeCardChoice.key)) ||
       const {'favorites', 'recent', 'personalPlaces', 'contactDraft', 'quizSeen'}.contains(key) ||
       RegExp(r'^quiz:(ids|progress|completed):[0-9]{4}-[0-9]{2}-[0-9]{2}$').hasMatch(key);
   String encode() {

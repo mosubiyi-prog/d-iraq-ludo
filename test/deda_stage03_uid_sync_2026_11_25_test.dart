@@ -51,6 +51,35 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/04 free card is UID-only cosmetic data and preserves every other field',(){
+    final p=DedaPrivateDataPayload({'favorites':['saved'],'contactDraft':'draft'},uidScoped:true);
+    for(final c in DedaStage04FreeCardChoice.styles){
+      final next=DedaStage04FreeCardChoice.apply(p,c);
+      expect(next.fields,{...p.fields,DedaStage04FreeCardChoice.key:c});
+      expect(DedaPrivateDataPayload.decode(next.encode(),uidScoped:true).fields,next.fields);
+      expect(()=>DedaPrivateDataPayload.decode(next.encode()),throwsFormatException);
+    }
+    for(final v in [null,'FRAME_03','@DEDA-QA1234','admin',5000]){
+      expect(()=>DedaPrivateDataPayload({DedaStage04FreeCardChoice.key:v},uidScoped:true),throwsFormatException);
+    }
+    expect(()=>DedaPrivateDataPayload({'earnedDiamonds':5000},uidScoped:true),throwsFormatException);
+  });
+  test('04/04 two devices restore free choice and stale edits cannot replace newer fields',() async {
+    final server=Server(), a=DedaPrivateDataSync.uidScoped(Port(server,1)),
+        b=DedaPrivateDataSync.uidScoped(Port(server,2));
+    final p=DedaPrivateDataPayload({'favorites':['original']},uidScoped:true);
+    final first=await a.backup(account:uid,original:uid,payload:p,isCurrent:()=>true);
+    final second=await restore(b);
+    expect(second.revision.payload!.fields,p.fields);
+    final gold=await a.backup(account:uid,original:uid,
+      payload:DedaStage04FreeCardChoice.apply(p,'gold'),expectedBase:first.revision,isCurrent:()=>true);
+    expect(gold.status,DedaPrivateDataStatus.saved);
+    final stale=await b.backup(account:uid,original:uid,
+      payload:DedaStage04FreeCardChoice.apply(p,'pink'),expectedBase:second.revision,isCurrent:()=>true);
+    expect(stale.status,DedaPrivateDataStatus.conflict);
+    expect(server.value.payload!.fields,{'favorites':['original'],DedaStage04FreeCardChoice.key:'gold'});
+    expect(server.writes,2);
+  });
   test('04/03 weekly original Hadaya receipt must match one protected UID gift',(){
     const week='2026-10-31', legacy='deda-weekly-2026-10-31-DEDA-QA1234';
     final at=DateTime.utc(2026,11,7,3).millisecondsSinceEpoch;
