@@ -151,6 +151,38 @@ void main(){
     expect(DedaStage04LeagueRead.verifyWeeklyGift(p(),legacy,
       {...gift,'status':'received','claimedAt':Timestamp.fromMillisecondsSinceEpoch(at+1)})['status'],'received');
   });
+  test('04/05 preserves original admin gift details only for the protected owner', () {
+    const id = 'synthetic-admin-gift';
+    final created = Timestamp.fromMillisecondsSinceEpoch(1000);
+    final claimed = Timestamp.fromMillisecondsSinceEpoch(2000);
+    final row = <String, Object?>{'giftId': id, 'uid': uid, 'sourceType': 'admin',
+      'weekId': null, 'amount': 30, 'status': 'pending',
+      'createdMs': created.millisecondsSinceEpoch, 'receivedMs': null};
+    final receipt = <String, dynamic>{'giftId': id, 'targetPublicId': '@DEDA-QA1234',
+      'sourceType': 'admin', 'amount': 30, 'status': 'pending', 'createdAt': created,
+      'senderLabel': 'DEDA', 'reason': 'original reason'};
+    DedaStage04ProfileView owner(List<Map<String, Object?>> rows) =>
+        DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+          expectedUid: uid, progress: protectedProgress(), account: protectedAccount(),
+          inventory: {...protectedInventory(), 'diamondGifts': rows},
+        ));
+    Map<String, dynamic> verify(List<Map<String, Object?>> rows, Map<String, dynamic> gift) =>
+        DedaStage03LabStorage.verifyAdminDiamondGift(owner(rows), id, gift);
+    expect(verify([row], receipt), receipt);
+    for (final bad in [
+      {...receipt, 'targetPublicId': '@DEDA-QA5678'}, {...receipt, 'amount': 31},
+      {...receipt, 'status': 'received'}, {...receipt, 'sourceType': 'weekly_league'},
+      {...receipt, 'claimedAt': claimed},
+    ]) {
+      expect(() => verify([row], bad), throwsStateError);
+    }
+    expect(() => verify([], receipt), throwsStateError);
+    expect(() => verify([row, row], receipt), throwsStateError);
+    expect(() => verify([{...row, 'uid': 'foreign'}], receipt), throwsStateError);
+    final accepted = {...row, 'status': 'received', 'receivedMs': 2000};
+    expect(verify([accepted], {...receipt, 'status': 'received', 'claimedAt': claimed})
+        ['status'], 'received');
+  });
   test('04/03 complete ranking proof cannot omit or fabricate synthetic rows',(){
     final a=protectedAccount();
     final at=DateTime.utc(2026,11,1,10).millisecondsSinceEpoch;

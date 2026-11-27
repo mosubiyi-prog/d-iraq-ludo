@@ -975,6 +975,82 @@ function generateLeagueCandidateRules(originalRules){
   return originalRules.replace(tail,()=>root+tail);
 }
 
+// Project an original, completed receipt. This trusted demo worker does not
+// issue a gift, accept it on the recipient's behalf, or credit any balance.
+async function syncHadayaReceiptCandidate({store,uid,kind,id}){
+  requireDemo(store,uid);
+  requireThat(kind==='identifier'?alias(id):kind==='admin'&&key(id),'hadaya-receipt-key');
+  const base='deda_lab_uid_authority/'+uid;
+  const source=base+'/inventorySources/current',view=base+'/inventory/current';
+  return store.runTransaction(async tx=>{
+    const account=parseAccount(await tx.get(base+'/account/current'),uid);
+    const originalId=account.profile.originalId;
+    const user=await tx.get('users/'+uid),session=await tx.get('deda_sessions/'+uid);
+    const route=await tx.get('deda_share_ids/'+originalId);
+    requireThat(originalId==='@DEDA-QA1234'&&user?.accountKey===uid&&
+      user.sharePersonalId===originalId&&session?.uid===uid&&session.accountKey===uid&&
+      route?.ownerUid===uid&&route.publicId===originalId&&route.kind==='personal'&&route.active===true&&
+      equal(account,await tx.get(base+'/accountSources/current'))&&
+      equal(account,await tx.get(base+'/accountHistory/'+account.revision)),
+      'hadaya-receipt-owner');
+    const old=parse(await tx.get(view),uid);
+    requireThat(equal(old,await tx.get(source))&&
+      equal(old,await tx.get(base+'/inventoryHistory/'+old.revision)),
+      'hadaya-receipt-inventory');
+    const field=kind==='identifier'?'idGifts':'diamondGifts';
+    const identifier=kind==='identifier'?'identifier':'giftId';
+    const previous=old[field].find(row=>row[identifier]===id);
+    requireThat(previous,'hadaya-receipt-not-in-inventory');
+    let received;
+    if(kind==='identifier'){
+      const grant=await tx.get('deda_stage71_granted_registry/'+id);
+      const receipt=await tx.get('deda_stage74_id_gift_receipts/'+id);
+      requireThat(grant?.identifier===id&&grant.recipientOriginalId===originalId&&
+        grant.kind==='gifted'&&grant.group===previous.grant.group&&
+        grant.baseColor===previous.grant.baseColor&&receipt?.identifier===id&&
+        receipt.originalId===originalId&&receipt.group===grant.group,
+        'hadaya-identifier-original-receipt');
+      received={...previous,acceptance:{uid,identifier:id,group:grant.group,
+        receivedMs:receipt.receivedAt?.toMillis?.()}};
+    }else{
+      const receipt=await tx.get('deda_diamond_gifts/'+id);
+      requireThat(previous.sourceType==='admin'&&receipt?.giftId===id&&
+        receipt.sourceType==='admin'&&receipt.targetPublicId===originalId&&
+        receipt.amount===previous.amount&&receipt.status==='received'&&
+        receipt.createdAt?.toMillis?.()===previous.createdMs,'hadaya-admin-original-receipt');
+      received={...previous,status:'received',receivedMs:receipt.claimedAt?.toMillis?.()};
+    }
+    if(equal(previous,received))return {replayed:true,view:old};
+    const next=parse({...old,revision:old.revision+1,
+      [field]:old[field].map(row=>row[identifier]===id?received:row)},uid);
+    preserve(old,next);
+    const history=base+'/inventoryHistory/'+next.revision;
+    requireThat(await tx.get(history)===null,'hadaya-receipt-inventory');
+    tx.set(source,next);tx.set(view,next);tx.set(history,next);
+    return {replayed:false,view:next};
+  });
+}
+
+// Read the original gift cards for the already approved fixture account only.
+function generateGiftsReadCandidateRules(originalRules){
+  const tail='    match /{document=**} { allow read, write: if false; }';
+  if(originalRules.split(tail).length!==2||originalRules.includes('function hadayaFixtureOwner('))
+    throw Error('gifts-rule-anchor');
+  const root=[
+    '    function hadayaFixtureOwner() {',
+    '      let principal = "'+LAB_UID+'";',
+    '      let account = get(/databases/$(database)/documents/deda_lab_uid_authority/$(principal)/account/current).data;',
+    '      return owner(principal) && account.uid == principal && account.complete == true &&',
+    '        account.profile.originalId == "@DEDA-QA1234";',
+    '    }',
+    '    match /deda_diamond_gifts/{id} {',
+    '      allow get, list: if hadayaFixtureOwner() && resource.data.targetPublicId == "@DEDA-QA1234";',
+    '      allow write: if false;',
+    '    }',
+  ].join('\n')+'\n';
+  return originalRules.replace(tail,()=>root+tail);
+}
+
 // 04/02: exercise the original relationship operations in a trusted DEMO
 // transaction. The peer is a synthetic fixture, never a new Auth user.
 // No callable/client writer or production permission; a second real owner's
@@ -1147,4 +1223,4 @@ function generateStoreDirectCandidateRules({store,uid,originalRules}){
     'request.resource.data == stExpectedPair(stA()) && stRole(stW()) && !exists(stPairOwner(id))')+tail);
 }
 
-module.exports={generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules};
+module.exports={generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules,generateGiftsReadCandidateRules,syncHadayaReceiptCandidate};

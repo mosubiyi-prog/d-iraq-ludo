@@ -3,12 +3,12 @@ const {test,before,after,beforeEach}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
-const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch,query,limit,serverTimestamp,runTransaction}=require('firebase/firestore');
+const {doc,getDocFromServer,setDoc,deleteDoc,collection,getDocs,writeBatch,query,where,limit,serverTimestamp,runTransaction}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
-const {getFirestore,FieldValue}=require('firebase-admin/firestore');
+const {getFirestore,FieldValue,Timestamp}=require('firebase-admin/firestore');
 const {DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const {LAB_UID:uid}=require('./reconcile-core.cjs');
-const {generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules}=require('./uid-ownership-projection.cjs');
+const {generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,projectAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules,generateGiftsReadCandidateRules,syncHadayaReceiptCandidate}=require('./uid-ownership-projection.cjs');
 const projectId='demo-deda-stage03-uid',base='deda_lab_uid_authority/'+uid,source=base+'/inventorySources/current',view=base+'/inventory/current';
 const weekId='2026-10-31',ms=Date.UTC(2026,10,7,3),identifier='@DEDA-QAFIXTURE';
 let env,app,db,store;
@@ -107,6 +107,39 @@ test('client reads only own view and cannot write source, view, history or grant
 const acctSource=base+'/accountSources/current',acctView=base+'/account/current';
 const other='synthetic-peer-001', original='@DEDA-QA1234',peerId='@DEDA-QA5678';
 const claimMs=Date.UTC(2026,10,1,10),claimKey='2026-11-01|open_map';
+test('04/05 original Hadaya query reads only the protected owner and permits no card or balance writes',async()=>{
+  const rules=readFileSync('firestore.rules','utf8');
+  const local=await initializeTestEnvironment({projectId,firestore:{rules:generateGiftsReadCandidateRules(rules)}});
+  const ownerContext=(id=uid,provider='password')=>
+    local.authenticatedContext(id,{firebase:{sign_in_provider:provider}}).firestore();
+  try {
+    await db.doc(acctView).set(accountFixture());
+    const own='deda_diamond_gifts/synthetic-admin-gift';
+    const foreign='deda_diamond_gifts/foreign-gift';
+    await db.doc(own).set({giftId:'synthetic-admin-gift',targetPublicId:original,status:'pending',amount:30});
+    await db.doc(foreign).set({giftId:'foreign-gift',targetPublicId:peerId,status:'pending',amount:999});
+    const inbox=(actor,id)=>getDocs(query(collection(actor,'deda_diamond_gifts'),where('targetPublicId','==',id)));
+    for(const actor of [ownerContext(),ownerContext()]){
+      const rows=await assertSucceeds(inbox(actor,original));
+      assert.deepEqual(rows.docs.map(row=>row.id),['synthetic-admin-gift']);
+    }
+    const owner=ownerContext();
+    await assertFails(getDocs(collection(owner,'deda_diamond_gifts')));
+    await assertFails(inbox(owner,peerId));
+    await assertFails(inbox(ownerContext(other),original));
+    await assertFails(inbox(ownerContext(uid,'anonymous'),original));
+    await assertFails(getDocFromServer(doc(owner,foreign)));
+    await assertFails(setDoc(doc(owner,own),{status:'received'},{merge:true}));
+    await assertFails(setDoc(doc(owner,'deda_diamond_gift_balances/'+original),{balance:30}));
+    await db.doc(acctView).delete();
+    await assertFails(inbox(owner,original));
+  } finally {
+    await local.cleanup();
+    const restored=await initializeTestEnvironment({projectId,firestore:{rules}});
+    await restored.cleanup();
+  }
+});
+
 const accountFixture=(revision=1)=>({format:1,uid,revision,complete:true,
   profile:{displayName:'Synthetic QA',originalId:original,activeId:original,fixedColor:null},
   friends:[{pairKey:[uid,other].sort().join('__'),members:[uid,other],requesterUid:uid,recipientUid:other,
@@ -136,6 +169,46 @@ async function seedFriendActionFixture(direction='accepted'){
   await Promise.all(Object.entries(seed).map(([p,v])=>db.doc(p).set(v)));
   return a;
 }
+test('04/05 original receipts refresh the same UID once across two sessions without crediting diamonds',async()=>{
+  await seedFriendActionFixture();
+  await seed(fixture());
+  await apply();
+  const grant='deda_stage71_granted_registry/'+identifier;
+  const acceptance='deda_stage74_id_gift_receipts/'+identifier;
+  const card='deda_diamond_gifts/'+admin().giftId;
+  const balance='deda_diamond_gift_balances/'+original;
+  const sync=(kind,id)=>syncHadayaReceiptCandidate({store,uid,kind,id});
+  await db.doc(grant).set({identifier,recipientOriginalId:original,group:'001',baseColor:'gold',kind:'gifted'});
+  const originalCard={giftId:admin().giftId,sourceType:'admin',targetPublicId:original,amount:30,
+    createdAt:Timestamp.fromMillis(ms),status:'received',claimedAt:Timestamp.fromMillis(ms+1)};
+  const receipt={identifier,originalId:original,group:'001',receivedAt:Timestamp.fromMillis(ms+1)};
+  await db.doc(acceptance).set({...receipt,originalId:peerId});
+  await db.doc(card).set({...originalCard,amount:31});
+  await db.doc(balance).set({publicId:original,balance:30});
+  await assert.rejects(sync('identifier',identifier),{code:'hadaya-identifier-original-receipt'});
+  await assert.rejects(sync('admin',admin().giftId),{code:'hadaya-admin-original-receipt'});
+  assert.equal((await read()).revision,1);
+  await db.doc(acceptance).set(receipt);
+  await db.doc(card).set(originalCard);
+  const results=await Promise.all([
+    sync('identifier',identifier),sync('identifier',identifier),
+    sync('admin',admin().giftId),sync('admin',admin().giftId),
+  ]);
+  assert.equal(results.filter(r=>r.replayed).length,2);
+  for(const actor of [client(),client()]){
+    const projection=(await getDocFromServer(doc(actor,view))).data();
+    assert.equal(projection.revision,3);
+    assert.equal(projection.idGifts[0].acceptance.receivedMs,ms+1);
+    assert.equal(projection.diamondGifts.find(g=>g.sourceType==='admin').status,'received');
+    assert.deepEqual(projection.frames,[frame()]);
+    assert.deepEqual(projection.diamondGifts.find(g=>g.sourceType==='weekly_league'),prize());
+  }
+  assert.equal((await db.doc(balance).get()).data().balance,30);
+  assert.equal((await db.doc(base).get()).exists,false);
+  assert.equal((await db.collection(base+'/inventoryHistory').get()).size,3);
+  await db.doc(acceptance).update({receivedAt:Timestamp.fromMillis(ms+2)});
+  await assert.rejects(sync('identifier',identifier),{code:'ownership-history-regression'});
+});
 const friendAction=(action,expectedRevision,peerUid=other)=>
   mutateFriendCandidate({store,uid,peerUid,action,expectedRevision});
 test('04/02 trusted demo removes and sends exactly once, protects source and unrelated rights',async()=>{
