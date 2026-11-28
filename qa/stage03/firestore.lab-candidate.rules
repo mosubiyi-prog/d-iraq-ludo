@@ -49,6 +49,10 @@ service cloud.firestore {
       }
       // UNPUBLISHED candidate: same owner-only account snapshot.
       // No client can produce this snapshot, its sources or its history.
+      match /dailyLogin/{dayId} {
+        allow get: if owner(uid);
+        allow list, write: if false;
+      }
       match /account/current {
         allow get: if owner(uid);
         allow list, create, update, delete: if false;

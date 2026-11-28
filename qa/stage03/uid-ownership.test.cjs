@@ -1362,3 +1362,73 @@ test('04/04 stable direct candidate purchases catalog in sequence without rules 
     }
   }finally{await install(originalRules);}
 });
+
+// 04/06 uses the same progress receipt engine and account/league history.
+const {claimDailyTaskCandidate}=require('./uid-ownership-projection.cjs');
+async function dailyFixture(at=Date.UTC(2026,10,27,9)){
+  await env.loadFirestoreRules({rules:readFileSync('firestore.rules','utf8')});
+  const {build}=require('./uid-trusted-fixture.cjs');
+  await db.doc(base).set(build()[base]);
+  const a=accountFixture();a.tasks=[];a.league=[];
+  const day=new Date(at+3*3600000).toISOString().slice(0,10);
+  for(const taskId of ['open_map','open_saved_place'])a.tasks.push({
+    claimKey:day+'|'+taskId,dayId:day,taskId,completedMs:at-1000,claimedMs:null});
+  await accountSeed(a);await accountApply();
+  return at;
+}
+test('04/06 concurrent task claims from two sessions credit points and XP once, same league history',async()=>{
+  const at=await dailyFixture(),before=(await db.doc(base).get()).data();
+  const call=taskId=>claimDailyTaskCandidate({store,uid,taskId,nowMs:at});
+  const both=await Promise.all([call('open_map'),call('open_map')]);
+  assert.equal(both.filter(x=>x.replayed).length,1);
+  await Promise.all([call('open_saved_place'),call('open_map')]);
+  const current=(await db.doc(base).get()).data(),a=(await db.doc(acctView).get()).data();
+  assert.equal(current.balances.points,before.balances.points+10);
+  assert.equal(current.balances.xp,before.balances.xp+40);
+  assert.equal(current.balances.coins,before.balances.coins);
+  assert.equal(current.balances.earnedDiamonds,before.balances.earnedDiamonds);
+  assert.equal(a.league[0].weeklyXp,40);assert.equal(a.league[0].completedTasks,2);
+  assert.equal((await db.collection(base+'/events').get()).size,2);
+  const one=await getDocFromServer(doc(client(),acctView)),two=await getDocFromServer(doc(client(),acctView));
+  assert.deepEqual(one.data(),two.data());
+  assert.deepEqual(a.profile,accountFixture().profile);assert.deepEqual(a.friends,accountFixture().friends);
+});
+test('04/06 login replay does not pay twice; new Baghdad day has its own key and preserves balance',async()=>{
+  const at=await dailyFixture(),before=(await db.doc(base).get()).data();
+  const call=nowMs=>claimDailyTaskCandidate({store,uid,nowMs});
+  const results=await Promise.all([call(at),call(at)]);
+  assert.equal(results.filter(x=>x.replayed).length,1);
+  const next=Date.UTC(2026,10,27,21);await call(next);await call(at);
+  const after=(await db.doc(base).get()).data();
+  assert.equal(after.balances.points,before.balances.points+20);
+  assert.equal(after.balances.xp,before.balances.xp);
+  const day='2026-11-27',path=base+'/dailyLogin/'+day;
+  await assertSucceeds(getDocFromServer(doc(client(),path)));
+  for(const c of [client(),client('foreign'),client(uid,'anonymous')]){
+    await assertFails(setDoc(doc(c,path),{uid,dayId:day}));
+    await assertFails(deleteDoc(doc(c,path)));
+  }
+  await assertFails(getDocFromServer(doc(client('foreign'),path)));
+});
+test('04/06 missing completion, wrong owner, old day and partial receipt are rejected without payout',async()=>{
+  const at=await dailyFixture(),before=(await db.doc(base).get()).data();
+  for(const args of [{uid:'foreign',taskId:'open_map',nowMs:at},
+    {uid,taskId:'long_trip',nowMs:at},{uid,taskId:'open_map',nowMs:at+86400000},
+    {uid,taskId:'open_map',nowMs:at-2000}]){
+    await assert.rejects(claimDailyTaskCandidate({store,...args}));
+  }
+  const core=require('./reconcile-core.cjs');
+  const receipt=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',sourceId:'task|2026-11-27|open_map',
+    kind:'award',delta:{points:5,coins:0,xp:20,earnedDiamonds:0}},uid,'lab-uid');
+  await db.doc(base+'/receipts/'+core.eventKey(receipt)).set(receipt);
+  await assert.rejects(claimDailyTaskCandidate({store,uid,taskId:'open_map',nowMs:at}),{code:'daily-task-partial-claim'});
+  assert.deepEqual((await db.doc(base).get()).data(),before);
+});
+test('04/06 frozen league still keeps task points and XP, without increasing frozen score',async()=>{
+  const at=await dailyFixture(Date.UTC(2026,10,27,22));
+  const before=(await db.doc(base).get()).data();
+  const result=await claimDailyTaskCandidate({store,uid,taskId:'open_map',nowMs:at});
+  assert.deepEqual(result.view.league,[]);
+  assert.equal(result.state.balances.points,before.balances.points+5);
+  assert.equal(result.state.balances.xp,before.balances.xp+20);
+});

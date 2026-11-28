@@ -939,6 +939,47 @@ class DedaStage04PlacesRead {
   }
 }
 
+/// 04/06 adapter over the existing account task records and progress balance.
+/// No device journal, inferred balance, or new reward issuer.
+class DedaStage04TasksView {
+  DedaStage04TasksView._(this.state);
+  final Map<String,dynamic> state;
+  static DedaStage04TasksView fromProfile(DedaStage04ProfileView p,
+      {required String dayId, Map<String,dynamic>? login}) {
+    DedaStage04LeagueRead.verifiedWeeks(p);
+    final completions=<String,dynamic>{},awards=<String,dynamic>{};
+    for(final raw in p._source.account['tasks'] as List){
+      final row=raw as Map, key=row['claimKey'] as String;
+      final task=row['taskId'] as String,day=row['dayId'] as String;
+      final completed=DateTime.fromMillisecondsSinceEpoch(row['completedMs'] as int,isUtc:true).toIso8601String();
+      completions[key]={'taskId':task,'cycleId':day,'event':'protected_task','completedAt':completed};
+      final claimed=row['claimedMs'];
+      if(claimed!=null){
+        final id='task|$key';
+        awards[id]={'id':id,'points':5,'type':'task','event':'protected_task',
+          'cycleId':day,'taskId':task,
+          'createdAt':DateTime.fromMillisecondsSinceEpoch(claimed as int,isUtc:true).toIso8601String()};
+      }
+    }
+    if(login!=null){
+      if(login.length!=5 || login['uid']!=p.uid || login['dayId']!=dayId ||
+          login['claimedMs'] is! int || (login['claimedMs'] as int)<=0 ||
+          DedaStage04LeagueRead.day(DateTime.fromMillisecondsSinceEpoch(login['claimedMs'] as int,isUtc:true))!=dayId ||
+          login['eventKey'] is! String || !RegExp(r'^[a-f0-9]{64}$').hasMatch(login['eventKey'] as String) ||
+          login['progressVersion'] is! int || (login['progressVersion'] as int)<1 ||
+          (login['progressVersion'] as int)>p.progressRevision) {
+        throw const FormatException('daily-login-proof');
+      }
+      final id='daily_login|$dayId';
+      awards[id]={'id':id,'points':10,'type':'daily_login','event':'daily_login_claimed',
+        'cycleId':dayId,'dayId':dayId,
+        'createdAt':DateTime.fromMillisecondsSinceEpoch(login['claimedMs'] as int,isUtc:true).toIso8601String()};
+    }
+    return DedaStage04TasksView._({'version':1,'completions':completions,'awards':awards,
+      'ledger':awards.values.toList(),'protectedTotal':p.taskPoints});
+  }
+}
+
 /// Lab only, default off. No legacy account/phone/ID routing, no wallet,
 /// rewards, role, ownership or authoritative score writes from this class.
 /// Existing DedaPrivateDataSync provides revision and journal coordination.
@@ -1000,6 +1041,36 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     }, timeout: const Duration(seconds: 15));
     check();
     return result;
+  }
+
+  static const tasksLabMode=bool.fromEnvironment('DEDA_STAGE04_TASKS_LAB');
+  static String tasksAccountKey()=>tasksLabMode && _matches()?uid:'';
+
+  /// Same server transaction for balance, task/league history, login and UID.
+  /// Missing authoritative account data fails; missing login means unclaimed.
+  static Future<Map<String,dynamic>> readTaskState(String accountKey) async {
+    if(!tasksLabMode || accountKey!=tasksAccountKey())throw StateError('tasks-lab-owner-required');
+    final current=_intent(), dayId=DedaStage04LeagueRead.day(DateTime.now().toUtc());
+    void check(){
+      if(!current() || dayId!=DedaStage04LeagueRead.day(DateTime.now().toUtc()))throw const DedaPrivateDataStale();
+      _io._check(uid,uid);
+    }
+    await _io.verifyOwner(uid,uid,check);check();
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app()),base=db.doc('deda_lab_uid_authority/$uid');
+    final result=await db.runTransaction<Map<String,dynamic>>((tx) async {
+      check();
+      final progress=await tx.get(base),account=await tx.get(base.collection('account').doc('current')),
+        inventory=await tx.get(base.collection('inventory').doc('current')),
+        login=await tx.get(base.collection('dailyLogin').doc(dayId));
+      check();
+      for(final row in [progress,account,inventory,login]){
+        if(row.metadata.isFromCache || row.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+      }
+      final profile=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:progress.data(),account:account.data(),inventory:inventory.data()));
+      return DedaStage04TasksView.fromProfile(profile,dayId:dayId,login:login.data()).state;
+    },timeout:const Duration(seconds:15));
+    check();return result;
   }
 
   /// Stage 04/01 read binding, using the one existing session and storage

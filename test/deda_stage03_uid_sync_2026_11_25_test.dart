@@ -51,6 +51,41 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/06 original task keys and login consume same protected balance, daily reset retains history',(){
+    final a=protectedAccount();
+    final completed=DateTime.utc(2026,11,27,9).millisecondsSinceEpoch;
+    a['tasks']=[{'claimKey':'2026-11-27|open_map','dayId':'2026-11-27','taskId':'open_map',
+      'completedMs':completed,'claimedMs':completed+1}];
+    a['league']=[{'weekId':'2026-11-21','claimedKeys':['2026-11-27|open_map'],'completedTasks':1,'weeklyXp':20}];
+    final p=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+      expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:a));
+    final login={'uid':uid,'dayId':'2026-11-27','claimedMs':completed+2,
+      'eventKey':List.filled(64,'b').join(),'progressVersion':4};
+    final state=DedaStage04TasksView.fromProfile(p,dayId:'2026-11-27',login:login).state;
+    expect((state['completions'] as Map).containsKey('2026-11-27|open_map'),isTrue);
+    expect((state['awards'] as Map).keys,containsAll(['task|2026-11-27|open_map','daily_login|2026-11-27']));
+    expect(state['protectedTotal'],5); // Spending means this is not sum(awards).
+    final next=DedaStage04TasksView.fromProfile(p,dayId:'2026-11-28').state;
+    expect(next['protectedTotal'],5);
+    expect((next['awards'] as Map).containsKey('daily_login|2026-11-28'),isFalse);
+    expect((next['completions'] as Map).containsKey('2026-11-27|open_map'),isTrue);
+    for(final bad in [{...login,'uid':'foreign'},{...login,'dayId':'2026-11-28'},
+        {...login,'progressVersion':5},{...login,'extra':true}]){
+      expect(()=>DedaStage04TasksView.fromProfile(p,dayId:'2026-11-27',login:bad),throwsFormatException);
+    }
+  });
+  test('04/06 duplicate task or omitted league proof fails rather than returning empty progress',(){
+    final a=protectedAccount(),at=DateTime.utc(2026,11,27,9).millisecondsSinceEpoch;
+    final row={'claimKey':'2026-11-27|open_map','dayId':'2026-11-27','taskId':'open_map',
+      'completedMs':at,'claimedMs':at+1};
+    for(final rows in [[row],[row,row]]){
+      a['tasks']=rows;
+      final p=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+        expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:a));
+      expect(()=>DedaStage04TasksView.fromProfile(p,dayId:'2026-11-27'),throwsFormatException);
+    }
+  });
+
   test('04/04 direct checkout rows keep original UID, receipt keys, wallet split and other progress',(){
     const original='@DEDA-QA1234', root='deda_lab_uid_authority/$uid';
     const at=1795800000000;

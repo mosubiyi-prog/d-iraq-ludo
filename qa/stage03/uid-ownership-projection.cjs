@@ -5,7 +5,7 @@ const {isDeepStrictEqual:equal}=require('node:util');
 const core=require('./reconcile-core.cjs');
 const {LAB_UID,account,parseState}=core;
 const {frames}=require('./purchase-frames.cjs');
-const {weekStart,plan,WEEK_MS}=require('./deda_weekly_direct_prize_plan.js');
+const {weekStart,plan,WEEK_MS,ORIGIN}=require('./deda_weekly_direct_prize_plan.js');
 const fail=code=>{throw Object.assign(Error(code),{code})};
 const requireThat=(ok,code)=>{if(!ok)fail(code)};
 function exact(v,keys){
@@ -1223,4 +1223,66 @@ function generateStoreDirectCandidateRules({store,uid,originalRules}){
     'request.resource.data == stExpectedPair(stA()) && stRole(stW()) && !exists(stPairOwner(id))')+tail);
 }
 
-module.exports={generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules,generateGiftsReadCandidateRules,syncHadayaReceiptCandidate};
+// 04/06 trusted synthetic candidate; no callable or client award authority.
+// Completion evidence must already exist in the SAME protected account snapshot.
+async function claimDailyTaskCandidate({store,uid,taskId=null,nowMs}){
+  requireDemo(store,uid);
+  requireThat(stamp(nowMs)&&(taskId===null||taskIds.has(taskId)),'daily-task-input');
+  const {Timestamp}=require('firebase-admin/firestore');
+  const dayId=baghdadDay(nowMs),sourceId=taskId===null?'daily_login|'+dayId:'task|'+dayId+'|'+taskId;
+  const receipt=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',sourceId,
+    kind:'award',delta:{points:taskId===null?10:5,coins:0,xp:taskId===null?0:20,earnedDiamonds:0}},uid,'lab-uid');
+  const eventKey=core.eventKey(receipt),base='deda_lab_uid_authority/'+uid;
+  return store.runTransaction(async tx=>{
+    const state=parseState(await tx.get(base),uid,'lab-uid');
+    const old=parseAccount(await tx.get(base+'/account/current'),uid);
+    requireThat(equal(parseAccount(await tx.get(base+'/accountSources/current'),uid),old)&&
+      equal(await tx.get(base+'/accountHistory/'+old.revision),old),'daily-task-history-conflict');
+    const saved=await tx.get(base+'/receipts/'+eventKey),event=await tx.get(base+'/events/'+eventKey);
+    const loginPath=base+'/dailyLogin/'+dayId,login=taskId===null?await tx.get(loginPath):null;
+    const row=taskId===null?null:old.tasks.find(r=>r.claimKey===dayId+'|'+taskId);
+    if(taskId!==null)requireThat(row&&row.completedMs<=nowMs,'daily-task-not-completed');
+    if(event!==null){
+      requireThat(saved&&core.sameEvent(core.parseReceipt(saved,uid,'lab-uid'),receipt)&&
+        event.eventKey===eventKey&&event.accountKey===uid&&event.receiptId===eventKey&&
+        core.sameEvent(core.parseReceipt(event.receipt,uid,'lab-uid'),receipt)&&
+        Number.isSafeInteger(event.appliedVersion)&&event.appliedVersion<=state.version&&
+        event.appliedVersion>0,'daily-task-receipt-conflict');
+      requireThat(taskId===null?login&&login.uid===uid&&login.dayId===dayId&&
+        login.eventKey===eventKey&&login.progressVersion===event.appliedVersion&&
+        stamp(login.claimedMs)&&baghdadDay(login.claimedMs)===dayId:row.claimedMs!==null,
+        'daily-task-partial-claim');
+      return {replayed:true,state,view:old};
+    }
+    requireThat(saved===null&&(taskId===null?login===null:row.claimedMs===null),'daily-task-partial-claim');
+    const nextState=core.applyEvent(state,receipt,'lab-uid');
+    let next=old;
+    if(taskId!==null){
+      const tasks=old.tasks.map(r=>r.claimKey===row.claimKey?{...r,claimedMs:nowMs}:r);
+      const league=old.league.map(r=>({...r,claimedKeys:[...r.claimedKeys]}));
+      const origin=ORIGIN,begin=origin+Math.floor((nowMs-origin)/WEEK_MS)*WEEK_MS;
+      if(nowMs>=origin&&nowMs<begin+WEEK_MS-6*3600000){
+        const id=baghdadDay(begin);
+        let score=league.find(r=>r.weekId===id);
+        if(!score){score={weekId:id,claimedKeys:[],completedTasks:0,weeklyXp:0};league.push(score);}
+        requireThat(!score.claimedKeys.includes(row.claimKey),'daily-task-league-conflict');
+        score.claimedKeys.push(row.claimKey);score.completedTasks++;score.weeklyXp+=20;
+      }
+      next=parseAccount({...old,revision:old.revision+1,tasks,league},uid);
+      preserveAccount(old,next);
+      requireThat(await tx.get(base+'/accountHistory/'+next.revision)===null,'daily-task-history-conflict');
+    }
+    tx.set(base+'/receipts/'+eventKey,receipt);
+    tx.set(base+'/events/'+eventKey,{format:1,accountKey:uid,eventKey,receipt,receiptId:eventKey,
+      appliedVersion:nextState.version,afterBalances:nextState.balances,createdAt:Timestamp.fromMillis(nowMs)});
+    tx.set(base,{...nextState});
+    if(taskId===null)tx.set(loginPath,{uid,dayId,claimedMs:nowMs,eventKey,progressVersion:nextState.version});
+    else{
+      tx.set(base+'/accountSources/current',next);tx.set(base+'/account/current',next);
+      tx.set(base+'/accountHistory/'+next.revision,next);
+    }
+    return {replayed:false,state:nextState,view:next};
+  });
+}
+
+module.exports={claimDailyTaskCandidate,generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules,generateGiftsReadCandidateRules,syncHadayaReceiptCandidate};
