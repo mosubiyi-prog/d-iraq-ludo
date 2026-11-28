@@ -20,6 +20,8 @@ on:
       - 'tools/app_stability/app_package/bind_stage2_gifts_2026_11_28.py'
       - 'tools/app_stability/app_package/bind_stage04_tasks_2026_11_28.py'
       - 'test/test_deda_stage04_tasks_binding_2026_11_28.py'
+      - 'test/deda_stage04_tasks_native_guard_test.dart'
+      - 'qa/stage03/traffic-reward-catalog.json'
       - 'test/test_deda_stage04_gifts_binding_2026_11_28.py'
       - 'tools/app_stability/app_package/bind_stage2_tasks_quiz_2026_11_24.py'
       - 'tools/app_stability/app_package/bind_stage2_home_2026_11_24.py'
@@ -558,7 +560,13 @@ jobs:
             ip link set lo up
             test "$(ip -o link show | wc -l)" -eq 1
             exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
-          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_stage03_lab_uid_storage_2026_11_25.dart
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/traffic_quiz_page.dart lib/deda_stage03_lab_uid_storage_2026_11_25.dart
+          sudo -n unshare --net -- bash -c '
+            set -euo pipefail
+            ip link set lo up
+            test "$(ip -o link show | wc -l)" -eq 1
+            exec setpriv --reuid "$1" --regid "$2" --init-groups env -i HOME="$3" PATH="$4" PUB_CACHE="$5" CI=true "$6" "${@:7}"
+          ' _ "$(id -u)" "$(id -g)" "$HOME" "$PATH" "${PUB_CACHE:-$HOME/.pub-cache}" "$flutter_bin" test --no-pub --reporter expanded --dart-define=DEDA_STAGE04_TASKS_LAB=true --dart-define=DEDA_STAGE04_TASK_ACTIONS_CANDIDATE=true --dart-define=DEDA_STAGE03_LAB_STORAGE=true --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true test/deda_stage04_tasks_native_guard_test.dart
       - name: Bind phase 01 hold into the complete assembled DEDA entry and compile isolated debug QA
         env:
           LAB_CONFIG: ${{ secrets.DEDA_STAGE01_LAB_CONFIG }}

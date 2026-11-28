@@ -946,7 +946,7 @@ class DedaStage04TasksView {
   DedaStage04TasksView._(this.state);
   final Map<String,dynamic> state;
   static DedaStage04TasksView fromProfile(DedaStage04ProfileView p,
-      {required String dayId, Map<String,dynamic>? login}) {
+      {required String dayId, Map<String,dynamic>? login,Map<String,dynamic>? dailyAwards,Map<String,dynamic>? historicalAwards}) {
     DedaStage04LeagueRead.verifiedWeeks(p);
     final completions=<String,dynamic>{},awards=<String,dynamic>{};
     for(final raw in p._source.account['tasks'] as List){
@@ -976,9 +976,65 @@ class DedaStage04TasksView {
         'cycleId':dayId,'dayId':dayId,
         'createdAt':DateTime.fromMillisecondsSinceEpoch(login['claimedMs'] as int,isUtc:true).toIso8601String()};
     }
+    if(historicalAwards!=null){
+      final rows=historicalAwards['rows'];
+      if(historicalAwards.length!=3 || historicalAwards['format']!=1 || historicalAwards['uid']!=p.uid ||
+          rows is! List || rows.length>600)throw const FormatException('task-award-history-proof');
+      final seen=<String>{};
+      for(final row in rows){
+        if(row is! Map || row.length!=6 || row['sourceId'] is! String || !seen.add(row['sourceId'] as String) ||
+            row['eventKey'] is! String || !RegExp(r'^[a-f0-9]{64}$').hasMatch(row['eventKey'] as String) ||
+            row['createdMs'] is! int || row['progressVersion'] is! int || (row['progressVersion'] as int)<1 ||
+            (row['progressVersion'] as int)>p.progressRevision)throw const FormatException('task-history-row');
+        final parts=(row['sourceId'] as String).split('|');
+        if(parts.length!=3 || parts[1]!=DedaStage04LeagueRead.day(DateTime.fromMillisecondsSinceEpoch(row['createdMs'] as int,isUtc:true)))throw const FormatException('task-history-day');
+        if(parts[1]==dayId)continue;
+        if(parts[0]=='diamond_ad'){
+          if(row['points']!=0 || row['diamonds']!=3)throw const FormatException('task-history-diamonds');
+          continue;
+        }
+        if(!['traffic_answer','rewarded_ad'].contains(parts[0]) || row['points']!=5 || row['diamonds']!=0 ||
+            (parts[0]=='rewarded_ad'&&!DedaWeeklyCommunityOutbox.tasks.contains(parts[2])))throw const FormatException('task-history-award');
+        final id=row['sourceId'] as String;
+        awards[id]={'id':id,'points':5,'type':parts[0],'event':'protected_task','cycleId':parts[1],
+          if(parts[0]=='rewarded_ad')'taskId':parts[2],if(parts[0]=='traffic_answer')'dedupeId':parts[2],
+          'createdAt':DateTime.fromMillisecondsSinceEpoch(row['createdMs'] as int,isUtc:true).toIso8601String()};
+      }
+    }
+    var diamondViews=0;
+    if(dailyAwards!=null){
+      final rows=dailyAwards['awards'];
+      if(dailyAwards.length!=5 || dailyAwards['format']!=1 || dailyAwards['uid']!=p.uid || dailyAwards['dayId']!=dayId ||
+          rows is! Map || rows.length>18 || dailyAwards['diamondViews'] is! int ||
+          (dailyAwards['diamondViews'] as int)<0 || (dailyAwards['diamondViews'] as int)>5)throw const FormatException('daily-awards-proof');
+      diamondViews=dailyAwards['diamondViews'] as int;
+      var diamonds=0,answers=0;
+      for(final entry in rows.entries){
+        final id=entry.key,r=entry.value;
+        if(id is! String || r is! Map || r.length!=5 || r['eventKey'] is! String ||
+            !RegExp(r'^[a-f0-9]{64}$').hasMatch(r['eventKey'] as String) || r['createdMs'] is! int ||
+            DedaStage04LeagueRead.day(DateTime.fromMillisecondsSinceEpoch(r['createdMs'] as int,isUtc:true))!=dayId ||
+            r['progressVersion'] is! int || (r['progressVersion'] as int)<1 ||
+            (r['progressVersion'] as int)>p.progressRevision)throw const FormatException('daily-award-row');
+        final parts=id.split('|');
+        if(parts.length!=3 || parts[1]!=dayId)throw const FormatException('daily-award-key');
+        if(parts[0]=='diamond_ad'){
+          if(r['points']!=0 || r['diamonds']!=3 || !RegExp(r'^diamond_[a-z0-9]{1,64}$').hasMatch(parts[2]))throw const FormatException('diamond-award-proof');
+          diamonds++;continue;
+        }
+        if(r['points']!=5 || r['diamonds']!=0 ||
+            !['traffic_answer','rewarded_ad'].contains(parts[0]) ||
+            (parts[0]=='rewarded_ad'&&!DedaWeeklyCommunityOutbox.tasks.contains(parts[2])))throw const FormatException('task-extra-proof');
+        if(parts[0]=='traffic_answer')answers++;
+        awards[id]={'id':id,'points':5,'type':parts[0],'event':'protected_task',
+          'cycleId':dayId,if(parts[0]=='rewarded_ad')'taskId':parts[2],if(parts[0]=='traffic_answer')'dedupeId':parts[2],
+          'createdAt':DateTime.fromMillisecondsSinceEpoch(r['createdMs'] as int,isUtc:true).toIso8601String()};
+      }
+      if(answers>5 || diamonds!=diamondViews)throw const FormatException('daily-awards-limit');
+    }
     final ledger=awards.values.toList()..sort((a,b)=>(a['createdAt'] as String).compareTo(b['createdAt'] as String));
     return DedaStage04TasksView._({'version':1,'completions':completions,'awards':awards,
-      'ledger':ledger,'protectedTotal':p.taskPoints});
+      'ledger':ledger,'protectedTotal':p.taskPoints,'diamondViews':diamondViews,'earnedDiamonds':p.earnedDiamonds});
   }
 }
 
@@ -1048,6 +1104,110 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
   static const tasksLabMode=bool.fromEnvironment('DEDA_STAGE04_TASKS_LAB');
   static String tasksAccountKey()=>tasksLabMode && _matches()?uid:'';
 
+  static const taskActionsCandidateEnabled=bool.fromEnvironment('DEDA_STAGE04_TASK_ACTIONS_CANDIDATE');
+  static const taskAdsCandidateEnabled=bool.fromEnvironment('DEDA_STAGE04_TASK_ADS_CANDIDATE');
+
+  static String newTaskDiamondAdTarget(){
+    if(!tasksLabMode||!taskAdsCandidateEnabled)throw StateError('ad-proof-activation-held');
+    _intent();final random=Random.secure();
+    return 'diamond_'+List.generate(16,(_)=>random.nextInt(256).toRadixString(16).padLeft(2,'0')).join();
+  }
+
+  static String taskAdCommandReference(String action,String target){
+    if(!tasksLabMode||!taskActionsCandidateEnabled||!taskAdsCandidateEnabled||
+      !['ad_task','ad_diamonds'].contains(action)||!RegExp(r'^[a-z0-9_]{1,96}$').hasMatch(target))throw StateError('ad-proof-activation-held');
+    _intent();
+    return '${DedaStage04LeagueRead.day(DateTime.now().toUtc())}__${action}__$target';
+  }
+
+  /// Submit intent only. The existing protected ledger is never client-written.
+  /// An immutable response and fresh server balance are required for success.
+  static Future<Map<String,dynamic>> performTaskCommand(String action,String target,
+      {int? choice,List<String>? selection}) async {
+    if(!tasksLabMode || !taskActionsCandidateEnabled ||
+        !['complete','claim','login','quiz_open','answer','ad_task','ad_diamonds'].contains(action) ||
+        !RegExp(r'^[a-z0-9_]{1,96}$').hasMatch(target))throw StateError('task-candidate-held');
+    if(action.startsWith('ad_')&&!taskAdsCandidateEnabled)throw StateError('ad-proof-activation-held');
+    final current=_intent(),day=DedaStage04LeagueRead.day(DateTime.now().toUtc());
+    final id='${day}__${action}__$target';
+    void check(){
+      if(!current() || day!=DedaStage04LeagueRead.day(DateTime.now().toUtc()))throw const DedaPrivateDataStale();
+      _io._check(uid,uid);
+    }
+    await _io.verifyOwner(uid,uid,check);check();
+    final db=FirebaseFirestore.instanceFor(app:Firebase.app()),root='deda_lab_uid_authority/$uid';
+    final request=db.doc('$root/taskCommands/$id'),response=db.doc('$root/taskResponses/$id');
+    final existed=await db.runTransaction<bool>((tx) async {
+      check();final old=await tx.get(request);check();
+      if(old.metadata.isFromCache || old.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+      if(old.exists){
+        final data=old.data();
+        if(data?['uid']!=uid || data?['dayId']!=day || data?['action']!=action || data?['target']!=target ||
+          (action=='answer'&&data?['choice']!=choice))throw StateError('task-request-already-locked');
+        return true;
+      }
+      tx.set(request,{'format':1,'uid':uid,'dayId':day,'action':action,'target':target,
+        'choice':choice,'selection':selection,'createdAt':FieldValue.serverTimestamp()});
+      return false;
+    },timeout:const Duration(seconds:12));
+    check();
+    final answer=await response.snapshots(includeMetadataChanges:true)
+      .where((row)=>row.exists&&!row.metadata.isFromCache&&!row.metadata.hasPendingWrites)
+      .map((row)=>row.data()!).first.timeout(const Duration(seconds:12));
+    check();
+    if(answer['format']!=1 || answer['uid']!=uid || answer['commandId']!=id || answer['dayId']!=day ||
+        answer['action']!=action || answer['target']!=target || answer['accepted']!=true ||
+        answer['awarded'] is! bool || answer['completedNow'] is! bool || answer['pointsDelta'] is! int ||
+        (answer['pointsDelta'] as int)<0 || (answer['pointsDelta'] as int)>10 ||
+        answer['progressVersion'] is! int || answer['questionIds'] is! List || answer['viewsToday'] is! int ||
+        (answer['viewsToday'] as int)<0 || (answer['viewsToday'] as int)>5)throw const FormatException('task-response-proof');
+    final fresh=await readProtected();check();
+    final profile=DedaStage04ProfileView.fromProtected(fresh);
+    if((answer['progressVersion'] as int)>profile.progressRevision)throw const DedaPrivateDataConflict();
+    return {...answer,'pointsAwarded':!existed&&answer['awarded']==true,
+      'pointsDelta':existed?0:answer['pointsDelta'],'completedNow':!existed&&answer['completedNow']==true,
+      'totalPoints':profile.taskPoints,'earnedDiamonds':profile.earnedDiamonds,
+      'coins':profile.coins,'xp':profile.xp};
+  }
+
+  static Future<List<String>> readQuizSeen() async {
+    final current=_intent();
+    void check(){if(!current())throw const DedaPrivateDataStale();}
+    await _io.verifyOwner(uid,uid,check);check();
+    final row=await FirebaseFirestore.instanceFor(app:Firebase.app()).doc('deda_lab_uid_authority/$uid/quizCycles/current')
+      .get(const GetOptions(source:Source.server)).timeout(const Duration(seconds:12));
+    check();if(row.metadata.isFromCache||row.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+    if(!row.exists)return <String>[];
+    final data=row.data()!,seen=data['seen'];
+    if(data.length!=2 || data['uid']!=uid || seen is! List || seen.length>20 ||
+      !seen.every((q)=>q is String&&RegExp(r'^[a-z0-9_]{1,96}$').hasMatch(q)) || seen.toSet().length!=seen.length)throw const FormatException('quiz-seen-proof');
+    return seen.cast<String>();
+  }
+
+  static Future<Map<String,dynamic>?> readDailyQuiz() async {
+    if(!tasksLabMode)throw StateError('tasks-lab-disabled');
+    final current=_intent(),day=DedaStage04LeagueRead.day(DateTime.now().toUtc());
+    void check(){if(!current() || day!=DedaStage04LeagueRead.day(DateTime.now().toUtc()))throw const DedaPrivateDataStale();}
+    await _io.verifyOwner(uid,uid,check);check();
+    final row=await FirebaseFirestore.instanceFor(app:Firebase.app()).doc('deda_lab_uid_authority/$uid/dailyQuiz/$day')
+      .get(const GetOptions(source:Source.server)).timeout(const Duration(seconds:12));
+    check();if(row.metadata.isFromCache||row.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
+    if(!row.exists)return null;
+    final data=row.data()!,ids=data['questionIds'],answers=data['answers'],correct=data['correctIds'];
+    if(data.length!=6 || data['format']!=1 || data['uid']!=uid || data['dayId']!=day || ids is! List || ids.length!=5 ||
+        !ids.every((q)=>q is String && RegExp(r'^[a-z0-9_]{1,96}$').hasMatch(q)) ||
+        ids.map((q)=>(q as String).replaceFirst(RegExp(r'_v[2-5]$'),'')).toSet().length!=5 ||
+        answers is! Map || answers.length>5 || !answers.entries.every((e)=>ids.contains(e.key)&&e.value is int&&e.value>=0&&e.value<=3) ||
+        correct is! List || correct.toSet().length!=correct.length || !correct.every(answers.containsKey))throw const FormatException('quiz-protected-proof');
+    return data;
+  }
+
+  static Future<Map<String,dynamic>> openDailyQuiz(List<String> ids) async {
+    await performTaskCommand('quiz_open','quiz',selection:ids);
+    final quiz=await readDailyQuiz();
+    if(quiz==null)throw StateError('quiz-not-confirmed');return quiz;
+  }
+
   /// Source notifications only; every emission re-reads one atomic snapshot.
   /// Cancelling the page cancels all three subscriptions. No polling or writes.
   static Stream<Map<String,dynamic>> watchTaskState(String accountKey) {
@@ -1061,7 +1221,7 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     late StreamController<void> signals;
     signals=StreamController<void>(onListen:(){
       final db=FirebaseFirestore.instanceFor(app:Firebase.app()),base='deda_lab_uid_authority/$uid';
-      for(final path in [base,'$base/account/current','$base/dailyLogin/$dayId']){
+      for(final path in [base,'$base/account/current','$base/dailyLogin/$dayId','$base/dailyAwards/$dayId']){
         subscriptions.add(db.doc(path).snapshots(includeMetadataChanges:true).listen((row){
           if(signals.isClosed)return;
           if(!current() || dayId!=DedaStage04LeagueRead.day(DateTime.now().toUtc())){
@@ -1096,14 +1256,16 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
       check();
       final progress=await tx.get(base),account=await tx.get(base.collection('account').doc('current')),
         inventory=await tx.get(base.collection('inventory').doc('current')),
-        login=await tx.get(base.collection('dailyLogin').doc(dayId));
+        login=await tx.get(base.collection('dailyLogin').doc(dayId)),
+        awards=await tx.get(base.collection('dailyAwards').doc(dayId)),
+        history=await tx.get(base.collection('taskAwardHistory').doc('current'));
       check();
-      for(final row in [progress,account,inventory,login]){
+      for(final row in [progress,account,inventory,login,awards,history]){
         if(row.metadata.isFromCache || row.metadata.hasPendingWrites)throw const DedaPrivateDataConflict();
       }
       final profile=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
         expectedUid:uid,progress:progress.data(),account:account.data(),inventory:inventory.data()));
-      return DedaStage04TasksView.fromProfile(profile,dayId:dayId,login:login.data()).state;
+      return DedaStage04TasksView.fromProfile(profile,dayId:dayId,login:login.data(),dailyAwards:awards.data(),historicalAwards:history.data()).state;
     },timeout:const Duration(seconds:15));
     check();return result;
   }

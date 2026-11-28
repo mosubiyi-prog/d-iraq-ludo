@@ -51,6 +51,31 @@ Map<String,Object?> protectedAccount()=>{'format':1,'uid':uid,'revision':1,'comp
   'profile':{'displayName':'Synthetic QA','originalId':'@DEDA-QA1234','activeId':'@DEDA-QA1234','fixedColor':null},
   'friends':[],'tasks':[],'league':[]};
 void main(){
+  test('04/06 extra rewards restore exact task/quiz keys and preserve prior-day history without summing balance',(){
+    final profile=DedaStage04ProfileView.fromProtected(DedaStage03ProtectedSnapshot.decode(
+      expectedUid:uid,progress:protectedProgress(),inventory:protectedInventory(),account:protectedAccount()));
+    final at=DateTime.utc(2026,11,28,9).millisecondsSinceEpoch;
+    Map<String,dynamic> proof(int points,int diamonds)=>{'eventKey':List.filled(64,'a').join(),
+      'createdMs':at,'points':points,'diamonds':diamonds,'progressVersion':4};
+    final extra={'format':1,'uid':uid,'dayId':'2026-11-28','diamondViews':1,'awards':{
+      'traffic_answer|2026-11-28|sign_no_entry':proof(5,0),
+      'rewarded_ad|2026-11-28|open_map':proof(5,0),'diamond_ad|2026-11-28|diamond_1':proof(0,3)}};
+    final history={'format':1,'uid':uid,'rows':[{'sourceId':'traffic_answer|2026-11-27|sign_no_entry',
+      ...proof(5,0),'createdMs':at-86400000}]};
+    final state=DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',dailyAwards:extra,historicalAwards:history).state;
+    expect(state['protectedTotal'],5);expect(state['diamondViews'],1);
+    expect((state['awards'] as Map).keys,containsAll(['traffic_answer|2026-11-28|sign_no_entry',
+      'rewarded_ad|2026-11-28|open_map','traffic_answer|2026-11-27|sign_no_entry']));
+    expect(()=>DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',dailyAwards:{...extra,'uid':'foreign'}),throwsFormatException);
+    expect(()=>DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',dailyAwards:{...extra,'diamondViews':6}),throwsFormatException);
+    expect(()=>DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',historicalAwards:{...history,'uid':'foreign'}),throwsFormatException);
+  });
+  test('04/06 command boundary refuses unverified session without creating Firebase or awarding locally',()async{
+    final stream=DedaStage03LabStorage.watchTaskState(uid);
+    await expectLater(stream,emitsError(isA<StateError>()));
+    await expectLater(DedaStage03LabStorage.performTaskCommand('claim','open_map'),throwsStateError);
+  });
+
   test('04/06 original task keys and login consume same protected balance, daily reset retains history',(){
     final a=protectedAccount();
     final completed=DateTime.utc(2026,11,27,9).millisecondsSinceEpoch;

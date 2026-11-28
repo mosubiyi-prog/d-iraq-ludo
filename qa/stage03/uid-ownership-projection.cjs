@@ -1285,4 +1285,199 @@ async function claimDailyTaskCandidate({store,uid,taskId=null,nowMs}){
   });
 }
 
-module.exports={claimDailyTaskCandidate,generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules,generateGiftsReadCandidateRules,syncHadayaReceiptCandidate};
+// 04/06 request transport. Only this DEMO worker consumes immutable requests;
+// client requests never contain balances, reward amounts or account revisions.
+const dailyActions=new Set(['complete','claim','login','quiz_open','answer','ad_task','ad_diamonds']);
+function dailyCommandId(dayId,action,target){
+  requireThat(realDay(dayId)&&dailyActions.has(action)&&typeof target==='string'&&/^[a-z0-9_]{1,96}$/.test(target),'task-command-key');
+  return dayId+'__'+action+'__'+target;
+}
+async function taskAccount(tx,base,uid){
+  const old=parseAccount(await tx.get(base+'/account/current'),uid);
+  requireThat(equal(parseAccount(await tx.get(base+'/accountSources/current'),uid),old)&&
+    equal(await tx.get(base+'/accountHistory/'+old.revision),old),'daily-task-history-conflict');
+  return old;
+}
+async function taskAccountNext(tx,base,old,next){
+  preserveAccount(old,next);
+  requireThat(await tx.get(base+'/accountHistory/'+next.revision)===null,'daily-task-history-conflict');
+  return ()=>{tx.set(base+'/accountSources/current',next);tx.set(base+'/account/current',next);
+    tx.set(base+'/accountHistory/'+next.revision,next);};
+}
+async function completeDailyTaskCandidate({store,uid,taskId,nowMs}){
+  requireDemo(store,uid);requireThat(taskIds.has(taskId)&&stamp(nowMs),'daily-task-input');
+  const base='deda_lab_uid_authority/'+uid,dayId=baghdadDay(nowMs),claimKey=dayId+'|'+taskId;
+  return store.runTransaction(async tx=>{
+    const old=await taskAccount(tx,base,uid);
+    const state=parseState(await tx.get(base),uid,'lab-uid');
+    const row=old.tasks.find(r=>r.claimKey===claimKey);
+    if(row)return {replayed:true,state,view:old};
+    if(taskId==='traffic_skills'){
+      const quiz=await tx.get(base+'/dailyQuiz/'+dayId);
+      requireThat(quiz&&quiz.uid===uid&&quiz.dayId===dayId&&quiz.questionIds.length===5&&
+        quiz.questionIds.every(q=>Object.hasOwn(quiz.answers,q)),'quiz-five-answers-required');
+    }
+    const next=parseAccount({...old,revision:old.revision+1,tasks:[...old.tasks,
+      {claimKey,dayId,taskId,completedMs:nowMs,claimedMs:null}]},uid);
+    const write=await taskAccountNext(tx,base,old,next);
+    // No wallet write or reward for a completion signal.
+    write();return {replayed:false,state,view:next};
+  });
+}
+function quizCatalog(catalog){
+  requireThat(catalog&&catalog.format===1&&catalog.count===100&&catalog.answers&&
+    Object.keys(catalog.answers).length===100&&Object.entries(catalog.answers).every(([q,v])=>
+      /^[a-z0-9_]{1,96}$/.test(q)&&Number.isInteger(v)&&v>=0&&v<=3),'quiz-catalog-invalid');
+  return catalog.answers;
+}
+async function openDailyQuizCandidate({store,uid,ids,nowMs,catalog}){
+  requireDemo(store,uid);const answers=quizCatalog(catalog);
+  requireThat(Array.isArray(ids)&&ids.length===5&&ids.every(q=>Object.hasOwn(answers,q))&&
+    new Set(ids.map(q=>q.replace(/_v[2-5]$/,''))).size===5,'quiz-five-distinct-topics');
+  const base='deda_lab_uid_authority/'+uid,dayId=baghdadDay(nowMs),path=base+'/dailyQuiz/'+dayId;
+  return store.runTransaction(async tx=>{
+    await taskAccount(tx,base,uid);
+    const state=parseState(await tx.get(base),uid,'lab-uid'),old=await tx.get(path);
+    const history=await tx.get(base+'/quizCycles/current');
+    if(old){validateQuiz(old,uid,dayId,answers);return {replayed:true,state,quiz:old};}
+    const bases=[...new Set(Object.keys(answers).map(q=>q.replace(/_v[2-5]$/,'')))];
+    const seen=history?.seen??[];
+    requireThat(history===null||(history.uid===uid&&Array.isArray(seen)&&new Set(seen).size===seen.length&&
+      seen.every(q=>bases.includes(q))),'quiz-seen-cycle-conflict');
+    const chosen=ids.map(q=>q.replace(/_v[2-5]$/,'')),unseen=bases.filter(q=>!seen.includes(q));
+    requireThat(unseen.length>=5?chosen.every(q=>unseen.includes(q)):unseen.every(q=>chosen.includes(q)),'quiz-seen-cycle-regression');
+    const nextSeen=unseen.length>=5?[...seen,...chosen]:chosen.filter(q=>!unseen.includes(q));
+    const quiz={format:1,uid,dayId,questionIds:[...ids],answers:{},correctIds:[]};
+    tx.set(base+'/quizCycles/current',{uid,seen:nextSeen});tx.set(path,quiz);return {replayed:false,state,quiz};
+  });
+}
+function validateQuiz(q,uid,dayId,catalog){
+  exact(q,['format','uid','dayId','questionIds','answers','correctIds']);
+  requireThat(q.format===1&&q.uid===uid&&q.dayId===dayId&&Array.isArray(q.questionIds)&&q.questionIds.length===5&&
+    new Set(q.questionIds.map(id=>id.replace(/_v[2-5]$/,''))).size===5&&q.questionIds.every(id=>Object.hasOwn(catalog,id))&&
+    q.answers&&typeof q.answers==='object'&&!Array.isArray(q.answers)&&Object.keys(q.answers).length<=5&&
+    Object.entries(q.answers).every(([id,v])=>q.questionIds.includes(id)&&Number.isInteger(v)&&v>=0&&v<=3)&&
+    Array.isArray(q.correctIds)&&new Set(q.correctIds).size===q.correctIds.length&&
+    equal([...q.correctIds].sort(),Object.keys(q.answers).filter(id=>q.answers[id]===catalog[id]).sort()),'quiz-source-conflict');
+}
+async function extraDailyRewardCandidate({store,uid,action,target,choice,nowMs,catalog,commandId}){
+  requireDemo(store,uid);
+  const base='deda_lab_uid_authority/'+uid,dayId=baghdadDay(nowMs),dailyPath=base+'/dailyAwards/'+dayId;
+  return store.runTransaction(async tx=>{
+    const state=parseState(await tx.get(base),uid,'lab-uid'),account=await taskAccount(tx,base,uid);
+    const oldDaily=await tx.get(dailyPath),daily=oldDaily??{format:1,uid,dayId,awards:{},diamondViews:0};
+    const historyPath=base+'/taskAwardHistory/current',history=await tx.get(historyPath)??{format:1,uid,rows:[]};
+    requireThat(history.format===1&&history.uid===uid&&Array.isArray(history.rows)&&history.rows.length<=600&&
+      new Set(history.rows.map(r=>r.sourceId)).size===history.rows.length,'task-award-history-conflict');
+    exact(daily,['format','uid','dayId','awards','diamondViews']);
+    requireThat(daily.format===1&&daily.uid===uid&&daily.dayId===dayId&&daily.awards&&
+      typeof daily.awards==='object'&&!Array.isArray(daily.awards)&&Number.isInteger(daily.diamondViews)&&
+      daily.diamondViews>=0&&daily.diamondViews<=5,'daily-awards-conflict');
+    let quiz=null,proof=null,proofPath=null,sourceId,source='task-claim-v1',delta={points:0,coins:0,xp:0,earnedDiamonds:0};
+    if(action==='answer'){
+      const answers=quizCatalog(catalog);quiz=await tx.get(base+'/dailyQuiz/'+dayId);
+      requireThat(quiz!==null,'quiz-not-opened');validateQuiz(quiz,uid,dayId,answers);
+      requireThat(quiz.questionIds.includes(target)&&Number.isInteger(choice)&&choice>=0&&choice<=3,'quiz-answer-invalid');
+      if(Object.hasOwn(quiz.answers,target)){
+        const correct=quiz.answers[target]===answers[target];
+        if(correct){
+          const r=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',sourceId:'traffic_answer|'+dayId+'|'+target,
+            kind:'award',delta:{points:5,coins:0,xp:0,earnedDiamonds:0}},uid,'lab-uid');
+          const key=core.eventKey(r),saved=await tx.get(base+'/receipts/'+key),event=await tx.get(base+'/events/'+key);
+          requireThat(saved&&event&&core.sameEvent(core.parseReceipt(saved,uid,'lab-uid'),r)&&
+            event.eventKey===key&&event.accountKey===uid&&event.appliedVersion>0&&event.appliedVersion<=state.version&&
+            core.sameEvent(core.parseReceipt(event.receipt,uid,'lab-uid'),r)&&daily.awards[r.sourceId]?.eventKey===key,
+            'daily-extra-receipt-conflict');
+        }
+        return {replayed:true,state,quiz,daily,awarded:correct};
+      }
+      // First answer is immutable even when incorrect; retry cannot buy a second guess.
+      quiz={...quiz,answers:{...quiz.answers,[target]:choice},correctIds:[...quiz.correctIds]};
+      if(choice!==answers[target]){tx.set(base+'/dailyQuiz/'+dayId,quiz);return {replayed:false,state,quiz,daily,awarded:false};}
+      quiz.correctIds.push(target);sourceId='traffic_answer|'+dayId+'|'+target;delta.points=5;
+    }else{
+      requireThat(action==='ad_task'||action==='ad_diamonds','daily-extra-action');
+      if(action==='ad_task'){
+        requireThat(taskIds.has(target)&&account.tasks.some(r=>r.claimKey===dayId+'|'+target&&r.claimedMs!==null),'ad-task-reward-not-claimed');
+        sourceId='rewarded_ad|'+dayId+'|'+target;delta.points=5;
+      }else{
+        requireThat(/^diamond_[a-z0-9]{1,64}$/.test(target),'diamond-slot-invalid');
+        sourceId='diamond_ad|'+dayId+'|'+target;source='rewarded-ad-v1';delta.earnedDiamonds=3;
+      }
+      proofPath=base+'/adProofs/'+commandId;proof=await tx.get(proofPath);
+    }
+    const receipt=core.parseReceipt({format:1,accountKey:uid,source,sourceId,kind:'award',delta},uid,'lab-uid');
+    const eventKey=core.eventKey(receipt),saved=await tx.get(base+'/receipts/'+eventKey),event=await tx.get(base+'/events/'+eventKey);
+    if(event){
+      requireThat(saved&&core.sameEvent(core.parseReceipt(saved,uid,'lab-uid'),receipt)&&
+        event.eventKey===eventKey&&event.accountKey===uid&&event.appliedVersion<=state.version&&event.appliedVersion>0&&
+        core.sameEvent(core.parseReceipt(event.receipt,uid,'lab-uid'),receipt)&&daily.awards[sourceId]?.eventKey===eventKey,'daily-extra-receipt-conflict');
+      return {replayed:true,state,quiz,daily,awarded:true};
+    }
+    requireThat(saved===null&&!Object.hasOwn(daily.awards,sourceId),'daily-extra-partial-receipt');
+    let usePath=null;
+    if(proofPath){
+      // Proof is written ONLY by a trusted verifier, not by SDK callbacks or requests.
+      requireThat(proof&&proof.format===1&&proof.uid===uid&&proof.dayId===dayId&&proof.commandId===commandId&&
+        proof.action===action&&proof.target===target&&proof.verified===true&&proof.consumedBy===null&&
+        typeof proof.transactionId==='string'&&/^[A-Za-z0-9_-]{8,128}$/.test(proof.transactionId)&&
+        stamp(proof.verifiedMs)&&proof.verifiedMs<=nowMs&&baghdadDay(proof.verifiedMs)===dayId,'trusted-ad-proof-required');
+      if(action==='ad_diamonds')requireThat(daily.diamondViews<5,'diamond-daily-limit');
+      usePath=base+'/adProofUses/'+proof.transactionId;
+      requireThat(await tx.get(usePath)===null,'ad-provider-transaction-reused');
+    }
+    const nextState=core.applyEvent(state,receipt,'lab-uid');
+    const nextDaily={...daily,awards:{...daily.awards,[sourceId]:{eventKey,createdMs:nowMs,points:delta.points,
+      diamonds:delta.earnedDiamonds,progressVersion:nextState.version}},diamondViews:daily.diamondViews+(action==='ad_diamonds'?1:0)};
+    const {Timestamp}=require('firebase-admin/firestore');
+    tx.set(base+'/receipts/'+eventKey,receipt);tx.set(base+'/events/'+eventKey,{format:1,accountKey:uid,eventKey,receipt,
+      receiptId:eventKey,appliedVersion:nextState.version,afterBalances:nextState.balances,createdAt:Timestamp.fromMillis(nowMs)});
+    tx.set(base,{...nextState});tx.set(dailyPath,nextDaily);
+    tx.set(historyPath,{format:1,uid,rows:[...history.rows,{sourceId,...nextDaily.awards[sourceId]}].slice(-600)});
+    if(quiz)tx.set(base+'/dailyQuiz/'+dayId,quiz);
+    if(proofPath){
+      tx.set(proofPath,{...proof,consumedBy:eventKey});
+      tx.set(usePath,{uid,transactionId:proof.transactionId,commandId,eventKey});
+    }
+    return {replayed:false,state:nextState,quiz,daily:nextDaily,awarded:true};
+  });
+}
+async function executeDailyTaskCommandCandidate({store,uid,commandId,nowMs,catalog}){
+  requireDemo(store,uid);requireThat(stamp(nowMs),'task-command-clock');
+  const base='deda_lab_uid_authority/'+uid,path=base+'/taskCommands/'+commandId,ackPath=base+'/taskResponses/'+commandId;
+  const cmd=await store.runTransaction(tx=>tx.get(path));
+  requireThat(cmd!==null,'task-command-missing');
+  exact(cmd,['format','uid','dayId','action','target','choice','selection','createdAt']);
+  requireThat(cmd.format===1&&cmd.uid===uid&&cmd.createdAt&&typeof cmd.createdAt.toMillis==='function'&&
+    cmd.dayId===baghdadDay(cmd.createdAt.toMillis())&&cmd.dayId===baghdadDay(nowMs)&&
+    cmd.createdAt.toMillis()<=nowMs+5000&&nowMs-cmd.createdAt.toMillis()<=12*3600000&&
+    commandId===dailyCommandId(cmd.dayId,cmd.action,cmd.target),'task-command-owner-day');
+  requireThat(cmd.action==='answer'?Number.isInteger(cmd.choice)&&cmd.choice>=0&&cmd.choice<=3:cmd.choice===null,'task-command-choice');
+  requireThat(cmd.action==='quiz_open'?Array.isArray(cmd.selection)&&cmd.selection.length===5:cmd.selection===null,'task-command-selection');
+  const existing=await store.runTransaction(tx=>tx.get(ackPath));
+  if(existing){requireThat(existing.uid===uid&&existing.commandId===commandId&&existing.dayId===cmd.dayId,'task-command-ack-conflict');return existing;}
+  let result;
+  if(cmd.action==='complete')result=await completeDailyTaskCandidate({store,uid,taskId:cmd.target,nowMs});
+  else if(cmd.action==='claim'||cmd.action==='login'){
+    requireThat(cmd.action!=='login'||cmd.target==='login','task-command-login');
+    result=await claimDailyTaskCandidate({store,uid,taskId:cmd.action==='login'?null:cmd.target,nowMs});
+  }else if(cmd.action==='quiz_open'){
+    requireThat(cmd.target==='quiz','task-command-quiz');
+    result=await openDailyQuizCandidate({store,uid,ids:cmd.selection,nowMs,catalog});
+  }else result=await extraDailyRewardCandidate({store,uid,action:cmd.action,target:cmd.target,choice:cmd.choice,nowMs,catalog,commandId});
+  const awarded=cmd.action==='claim'||cmd.action==='login'||result.awarded===true;
+  const ack={format:1,uid,dayId:cmd.dayId,commandId,action:cmd.action,target:cmd.target,
+    accepted:true,completedNow:cmd.action==='complete'&&!result.replayed,awarded,
+    pointsDelta:awarded?(cmd.action==='login'?10:cmd.action==='ad_diamonds'?0:5):0,
+    progressVersion:result.state.version,questionIds:result.quiz?.questionIds??[],
+    viewsToday:result.daily?.diamondViews??0};
+  // An interrupted acknowledgement can be retried: receipts above remain the
+  // sole award key. Never rerun a local/financial callback after an SDK failure.
+  return store.runTransaction(async tx=>{
+    const old=await tx.get(ackPath);
+    if(old){requireThat(old.uid===uid&&old.commandId===commandId,'task-command-ack-conflict');return old;}
+    tx.set(ackPath,ack);return ack;
+  });
+}
+
+module.exports={dailyCommandId,completeDailyTaskCandidate,openDailyQuizCandidate,executeDailyTaskCommandCandidate,claimDailyTaskCandidate,generateStoreDirectCandidateRules,prepareStoreFrameCandidate,purchaseStoreFrameCandidate,syncStoreFrameReceipts,project,parse,projectAccount,parseAccount,readWalletEvidence,refreshWallet,activateOwnedId,pointTier,pointReceipt,generateWalletRead,mutateFriendCandidate,executeFriendCandidateCommand,generateFriendCandidateRules,buildLeagueCandidate,syncLeagueGiftCandidate,settleLeagueCandidate,generateLeagueCandidateRules,generateGiftsReadCandidateRules,syncHadayaReceiptCandidate};

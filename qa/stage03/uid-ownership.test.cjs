@@ -1454,3 +1454,138 @@ test('04/06 all eight original tasks share one ledger and a new day retains past
   assert.equal((await db.doc(base).get()).data().balances.points,after.balances.points+5);
   assert.equal((await db.collection(base+'/events').get()).size,9);
 });
+
+const {dailyCommandId,executeDailyTaskCommandCandidate}=require('./uid-ownership-projection.cjs');
+const trafficCatalog=JSON.parse(readFileSync('traffic-reward-catalog.json','utf8'));
+async function commandFixture(){
+  const {build}=require('./uid-trusted-fixture.cjs');
+  for(const [path,data] of Object.entries(build()))await db.doc(path).set(data);
+  const a=accountFixture();a.tasks=[];a.league=[];await accountSeed(a);await accountApply();
+}
+async function submitCommand(clientDb,action,target,{choice=null,selection=null,dayId}={}){
+  dayId??=new Date(Date.now()+3*3600000).toISOString().slice(0,10);
+  const id=dailyCommandId(dayId,action,target),ref=doc(clientDb,base+'/taskCommands/'+id);
+  const existed=await runTransaction(clientDb,async tx=>{
+    const old=await tx.get(ref);if(old.exists())return true;
+    tx.set(ref,{format:1,uid,dayId,action,target,choice,selection,createdAt:serverTimestamp()});return false;
+  });
+  return {id,existed};
+}
+const processCommand=id=>executeDailyTaskCommandCandidate({store,uid,commandId:id,nowMs:Date.now(),catalog:trafficCatalog});
+test('04/06 native request contract records completion, claims coins/XP/points once and reads same response on two devices',async()=>{
+  await commandFixture();const a=client(),b=client(),before=(await db.doc(base).get()).data();
+  for(const task of ['open_map','open_saved_place']){
+    const complete=await submitCommand(a,'complete',task);const done=await processCommand(complete.id);
+    assert.equal(done.completedNow,true);assert.equal(done.awarded,false);
+    const both=await Promise.all([submitCommand(a,'claim',task),submitCommand(b,'claim',task)]);
+    assert.equal(both.filter(x=>!x.existed).length,1);
+    await Promise.all(both.map(x=>processCommand(x.id)));
+    const one=await getDocFromServer(doc(a,base+'/taskResponses/'+both[0].id));
+    const two=await getDocFromServer(doc(b,base+'/taskResponses/'+both[1].id));
+    assert.deepEqual(one.data(),two.data());assert.equal(one.data().accepted,true);
+  }
+  const after=(await db.doc(base).get()).data();
+  assert.deepEqual(after.balances,{...before.balances,points:before.balances.points+10,
+    coins:before.balances.coins+20,xp:before.balances.xp+40});
+  const login=await submitCommand(a,'login','login');await processCommand(login.id);await processCommand(login.id);
+  assert.equal((await db.doc(base).get()).data().balances.points,after.balances.points+10);
+});
+test('04/06 original 100-question catalog locks five topics, persists wrong answers, and caps answer credit at 25 daily',async()=>{
+  await commandFixture();const a=client(),b=client(),before=(await db.doc(base).get()).data();
+  const ids=Object.keys(trafficCatalog.answers).filter(q=>!/_v[2-5]$/.test(q)).slice(0,5);
+  const open=await submitCommand(a,'quiz_open','quiz',{selection:ids});await processCommand(open.id);
+  // Another device cannot replace the first daily selection.
+  const other=await submitCommand(b,'quiz_open','quiz',{selection:ids.map(q=>q+'_v2')});
+  const locked=await processCommand(other.id);assert.deepEqual(locked.questionIds,ids);
+  for(const id of ids){
+    const answer=await submitCommand(a,'answer',id,{choice:trafficCatalog.answers[id]});
+    const responses=await Promise.all([processCommand(answer.id),processCommand(answer.id)]);
+    assert.equal(responses.every(r=>r.awarded===true),true);
+  }
+  const after=(await db.doc(base).get()).data();assert.equal(after.balances.points,before.balances.points+25);
+  assert.equal(after.balances.xp,before.balances.xp);assert.equal(after.balances.coins,before.balances.coins);
+  const q=(await db.doc(base+'/dailyQuiz/'+locked.dayId).get()).data();assert.equal(Object.keys(q.answers).length,5);
+  const complete=await submitCommand(a,'complete','traffic_skills');await processCommand(complete.id);
+  const claim=await submitCommand(a,'claim','traffic_skills');await processCommand(claim.id);
+  assert.equal((await db.doc(base).get()).data().balances.points,before.balances.points+30);
+  await assertFails(setDoc(doc(b,base+'/dailyQuiz/'+locked.dayId),{...q,answers:{}}));
+  await assertFails(setDoc(doc(b,base+'/taskCommands/'+open.id),{}));
+});
+test('04/06 wrong answer is final and incomplete quiz cannot forge a completion event',async()=>{
+  await commandFixture();const a=client(),before=(await db.doc(base).get()).data();
+  const ids=Object.keys(trafficCatalog.answers).filter(q=>!/_v[2-5]$/.test(q)).slice(0,5);
+  const open=await submitCommand(a,'quiz_open','quiz',{selection:ids});await processCommand(open.id);
+  const wrong=await submitCommand(a,'answer',ids[0],{choice:(trafficCatalog.answers[ids[0]]+1)%4});
+  const result=await processCommand(wrong.id);assert.equal(result.awarded,false);
+  await assertFails(setDoc(doc(a,base+'/taskCommands/'+wrong.id),{choice:trafficCatalog.answers[ids[0]]}));
+  const completion=await submitCommand(a,'complete','traffic_skills');
+  await assert.rejects(processCommand(completion.id),{code:'quiz-five-answers-required'});
+  assert.deepEqual((await db.doc(base).get()).data(),before);
+  const extra=await submitCommand(a,'answer',Object.keys(trafficCatalog.answers).find(q=>!ids.includes(q)),{choice:0});
+  await assert.rejects(processCommand(extra.id),{code:'quiz-answer-invalid'});
+});
+async function trustedAdProof(command){
+  const row=(await db.doc(base+'/taskCommands/'+command.id).get()).data();
+  await db.doc(base+'/adProofs/'+command.id).set({format:1,uid,dayId:row.dayId,commandId:command.id,
+    action:row.action,target:row.target,verified:true,verifiedMs:Date.now(),consumedBy:null,transactionId:'synthetic_'+command.id});
+}
+test('04/06 ad callbacks alone cannot pay; trusted same-UID proof credits task bonus once and at most five 3-diamond views',async()=>{
+  await commandFixture();const a=client(),before=(await db.doc(base).get()).data();
+  const completed=await submitCommand(a,'complete','open_map');await processCommand(completed.id);
+  const claimed=await submitCommand(a,'claim','open_map');await processCommand(claimed.id);
+  const bonus=await submitCommand(a,'ad_task','open_map');
+  await assert.rejects(processCommand(bonus.id),{code:'trusted-ad-proof-required'});
+  await assertFails(setDoc(doc(a,base+'/adProofs/'+bonus.id),{uid,verified:true}));
+  await trustedAdProof(bonus);await Promise.all([processCommand(bonus.id),processCommand(bonus.id)]);
+  for(let slot=1;slot<=5;slot++){
+    const ad=await submitCommand(a,'ad_diamonds','diamond_'+slot);
+    await trustedAdProof(ad);await processCommand(ad.id);await processCommand(ad.id);
+  }
+  const after=(await db.doc(base).get()).data();
+  assert.equal(after.balances.points,before.balances.points+10);
+  assert.equal(after.balances.earnedDiamonds,before.balances.earnedDiamonds+15);
+  const sixth=await submitCommand(a,'ad_diamonds','diamond_6');
+  await trustedAdProof(sixth);
+  await assert.rejects(processCommand(sixth.id),{code:'diamond-daily-limit'});
+  assert.deepEqual((await db.doc(base).get()).data(),after);
+});
+test('04/06 foreign, anonymous, forged amounts, response writes and stale-day requests cannot issue rewards',async()=>{
+  await commandFixture();const a=client(),dayId=new Date(Date.now()+3*3600000).toISOString().slice(0,10);
+  for(const c of [client('foreign'),client(uid,'anonymous'),env.unauthenticatedContext().firestore()]){
+    await assertFails(submitCommand(c,'login','login',{dayId}));
+  }
+  const id=dailyCommandId(dayId,'login','login');
+  await assertFails(setDoc(doc(a,base+'/taskCommands/'+id),{format:1,uid,dayId,action:'login',target:'login',
+    choice:null,selection:null,createdAt:serverTimestamp(),amount:1000000}));
+  await assertFails(setDoc(doc(a,base+'/taskResponses/'+id),{uid,accepted:true,awarded:true}));
+  const old=await submitCommand(a,'login','login',{dayId:'2026-11-01'});
+  await assert.rejects(processCommand(old.id),{code:'task-command-owner-day'});
+});
+
+test('04/06 lost response after committed award retries the same command without restoring an old balance',async()=>{
+  await commandFixture();const a=client();
+  const complete=await submitCommand(a,'complete','open_map');await processCommand(complete.id);
+  const claim=await submitCommand(a,'claim','open_map');let lost=true;
+  const wrapped={db:store.db,runTransaction:action=>store.runTransaction(tx=>action({...tx,set:(path,data)=>{
+    if(path.includes('/taskResponses/')&&lost){lost=false;throw Error('synthetic-lost-response');}tx.set(path,data);
+  }}))};
+  const before=(await db.doc(base).get()).data();
+  await assert.rejects(executeDailyTaskCommandCandidate({store:wrapped,uid,commandId:claim.id,nowMs:Date.now(),catalog:trafficCatalog}));
+  const committed=(await db.doc(base).get()).data();assert.equal(committed.balances.points,before.balances.points+5);
+  const response=await processCommand(claim.id);assert.equal(response.awarded,true);
+  assert.deepEqual((await db.doc(base).get()).data(),committed);
+  assert.equal((await db.collection(base+'/events').get()).size,Object.keys(require('./uid-trusted-fixture.cjs').build()).filter(p=>p.includes('/events/')).length+1);
+});
+
+test('04/06 two devices with different verified ad events both count, but one provider transaction cannot pay a second command',async()=>{
+  await commandFixture();const a=client(),b=client(),before=(await db.doc(base).get()).data();
+  const commands=await Promise.all([submitCommand(a,'ad_diamonds','diamond_devicea'),submitCommand(b,'ad_diamonds','diamond_deviceb')]);
+  for(const command of commands)await trustedAdProof(command);
+  await Promise.all(commands.map(c=>processCommand(c.id)));
+  assert.equal((await db.doc(base).get()).data().balances.earnedDiamonds,before.balances.earnedDiamonds+6);
+  const duplicate=await submitCommand(a,'ad_diamonds','diamond_duplicate');await trustedAdProof(duplicate);
+  const source=(await db.doc(base+'/adProofs/'+commands[0].id).get()).data();
+  await db.doc(base+'/adProofs/'+duplicate.id).update({transactionId:source.transactionId});
+  await assert.rejects(processCommand(duplicate.id),{code:'ad-provider-transaction-reused'});
+  assert.equal((await db.doc(base).get()).data().balances.earnedDiamonds,before.balances.earnedDiamonds+6);
+});

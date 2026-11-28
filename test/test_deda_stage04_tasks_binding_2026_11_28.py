@@ -33,6 +33,22 @@ class TasksBindingTests(unittest.TestCase):
         self.assertIn('taskCoins:profile.coins',after)
         self.assertEqual(before.count('Color('),after.count('Color('))
         self.assertEqual(before.count('BorderRadius.'),after.count('BorderRadius.'))
+    def test_catalog_is_generated_from_original_100_questions_and_variant_orders(self):
+        import json
+        original=profile.archived_profile_member('lib/traffic_quiz_page.dart')
+        self.assertEqual(tasks.traffic_catalog(original),json.loads((ROOT/'qa/stage03/traffic-reward-catalog.json').read_text()))
+        self.assertEqual(len(tasks.traffic_catalog(original)['answers']),100)
+    def test_original_engine_has_central_routes_before_the_local_mutation_lane(self):
+        raw=profile.archived_profile_member('lib/main.dart')
+        a=raw.index('class DedaTaskEngine {');b=raw.index('\nString dedaCategoryLabel',a)
+        engine=raw[a:b].replace('await prefs.setString(_statePrefsKey(accountKey), jsonEncode(state));',
+          'await DedaSectionOperationContext.wait(() => prefs.setString(_statePrefsKey(accountKey), jsonEncode(state)));')
+        bound=tasks.patch_engine(previous.patch_engine(engine))
+        self.assertIn("_centralDailyCommand('complete',task,cycle)",bound)
+        for action in ['claim','login','ad_task']:
+            self.assertIn("_centralDailyCommand('"+action+"'",bound)
+        self.assertIn('DedaStage03LabStorage.performTaskCommand(action,target)',bound)
+        self.assertNotIn('FirebaseAuth.instance.signIn',bound)
     def test_repository_cannot_be_modified_by_disposable_binder(self):
         with self.assertRaises(ValueError):tasks.bind(ROOT)
 if __name__=='__main__':unittest.main()

@@ -6,6 +6,7 @@ on:
       - 'qa/stage03/uid-ownership-projection.cjs'
       - 'functions/deda_weekly_direct_prize_worker.cjs'
       - 'qa/stage03/uid-ownership.test.cjs'
+      - 'qa/stage03/traffic-reward-catalog.json'
       - 'qa/stage03/firestore.lab-candidate.rules'
       - '.github/workflows/deda-stage03-ownership-qa-2026-11-25.yml'
   workflow_dispatch:
@@ -34,6 +35,7 @@ jobs:
           work="$RUNNER_TEMP/stage03-ownership"
           mkdir -p "$work"
           cp qa/stage03/uid-ownership-projection.cjs qa/stage03/uid-ownership.test.cjs qa/stage03/uid-trusted-fixture.cjs qa/stage03/uid-spark-fixture-rules.cjs tools/app_stability/progress_archive/{reconcile-core,reconcile-store,purchase-frames}.cjs functions/deda_weekly_direct_prize_plan.js functions/deda_weekly_direct_prize_worker.cjs "$work/"
+          cp qa/stage03/traffic-reward-catalog.json "$work/"
           cp qa/stage03/firestore.lab-candidate.rules "$work/firestore.rules"
           cp firestore.rules "$work/original-firestore.rules"
           cd "$work"
