@@ -1589,3 +1589,14 @@ test('04/06 two devices with different verified ad events both count, but one pr
   await assert.rejects(processCommand(duplicate.id),{code:'ad-provider-transaction-reused'});
   assert.equal((await db.doc(base).get()).data().balances.earnedDiamonds,before.balances.earnedDiamonds+6);
 });
+
+test('04/06 missing daily projection cannot reset the ad limit or erase an already applied award',async()=>{
+  await commandFixture();const a=client();
+  const first=await submitCommand(a,'ad_diamonds','diamond_first');await trustedAdProof(first);await processCommand(first.id);
+  const before=(await db.doc(base).get()).data();
+  const dayId=(await db.doc(base+'/taskCommands/'+first.id).get()).data().dayId;
+  await db.doc(base+'/dailyAwards/'+dayId).delete();
+  const second=await submitCommand(a,'ad_diamonds','diamond_second');await trustedAdProof(second);
+  await assert.rejects(processCommand(second.id),{code:'task-award-history-conflict'});
+  assert.deepEqual((await db.doc(base).get()).data(),before);
+});

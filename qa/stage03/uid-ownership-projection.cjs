@@ -1373,6 +1373,10 @@ async function extraDailyRewardCandidate({store,uid,action,target,choice,nowMs,c
     requireThat(daily.format===1&&daily.uid===uid&&daily.dayId===dayId&&daily.awards&&
       typeof daily.awards==='object'&&!Array.isArray(daily.awards)&&Number.isInteger(daily.diamondViews)&&
       daily.diamondViews>=0&&daily.diamondViews<=5,'daily-awards-conflict');
+    const today=history.rows.filter(r=>typeof r.sourceId==='string'&&r.sourceId.split('|')[1]===dayId);
+    requireThat(equal(today.map(r=>r.sourceId).sort(),Object.keys(daily.awards).sort())&&
+      today.every(({sourceId,...row})=>equal(row,daily.awards[sourceId]))&&
+      daily.diamondViews===today.filter(r=>r.sourceId.startsWith('diamond_ad|')).length,'task-award-history-conflict');
     let quiz=null,proof=null,proofPath=null,sourceId,source='task-claim-v1',delta={points:0,coins:0,xp:0,earnedDiamonds:0};
     if(action==='answer'){
       const answers=quizCatalog(catalog);quiz=await tx.get(base+'/dailyQuiz/'+dayId);

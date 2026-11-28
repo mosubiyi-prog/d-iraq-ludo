@@ -988,7 +988,12 @@ class DedaStage04TasksView {
             (row['progressVersion'] as int)>p.progressRevision)throw const FormatException('task-history-row');
         final parts=(row['sourceId'] as String).split('|');
         if(parts.length!=3 || parts[1]!=DedaStage04LeagueRead.day(DateTime.fromMillisecondsSinceEpoch(row['createdMs'] as int,isUtc:true)))throw const FormatException('task-history-day');
-        if(parts[1]==dayId)continue;
+        if(parts[1]==dayId){
+          final currentRows=dailyAwards?['awards'];
+          final currentRow=currentRows is Map?currentRows[row['sourceId']]:null;
+          if(currentRow is! Map || !['eventKey','createdMs','points','diamonds','progressVersion'].every((key)=>currentRow[key]==row[key]))throw const FormatException('task-history-current-conflict');
+          continue;
+        }
         if(parts[0]=='diamond_ad'){
           if(row['points']!=0 || row['diamonds']!=3)throw const FormatException('task-history-diamonds');
           continue;
@@ -1007,6 +1012,7 @@ class DedaStage04TasksView {
       if(dailyAwards.length!=5 || dailyAwards['format']!=1 || dailyAwards['uid']!=p.uid || dailyAwards['dayId']!=dayId ||
           rows is! Map || rows.length>18 || dailyAwards['diamondViews'] is! int ||
           (dailyAwards['diamondViews'] as int)<0 || (dailyAwards['diamondViews'] as int)>5)throw const FormatException('daily-awards-proof');
+      if(rows.isNotEmpty&&(historicalAwards==null || !rows.keys.every((id)=>(historicalAwards['rows'] as List).any((row)=>row is Map&&row['sourceId']==id))))throw const FormatException('task-award-history-missing');
       diamondViews=dailyAwards['diamondViews'] as int;
       var diamonds=0,answers=0;
       for(final entry in rows.entries){
@@ -1153,7 +1159,7 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
     check();
     final answer=await response.snapshots(includeMetadataChanges:true)
       .where((row)=>row.exists&&!row.metadata.isFromCache&&!row.metadata.hasPendingWrites)
-      .map((row)=>row.data()!).first.timeout(const Duration(seconds:12));
+      .map((row)=>row.data()!).timeout(const Duration(seconds:12)).first;
     check();
     if(answer['format']!=1 || answer['uid']!=uid || answer['commandId']!=id || answer['dayId']!=day ||
         answer['action']!=action || answer['target']!=target || answer['accepted']!=true ||

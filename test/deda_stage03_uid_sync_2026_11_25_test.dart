@@ -61,9 +61,12 @@ void main(){
       'traffic_answer|2026-11-28|sign_no_entry':proof(5,0),
       'rewarded_ad|2026-11-28|open_map':proof(5,0),'diamond_ad|2026-11-28|diamond_1':proof(0,3)}};
     final history={'format':1,'uid':uid,'rows':[{'sourceId':'traffic_answer|2026-11-27|sign_no_entry',
-      ...proof(5,0),'createdMs':at-86400000}]};
+      ...proof(5,0),'createdMs':at-86400000},
+      for(final entry in (extra['awards'] as Map).entries){'sourceId':entry.key,...Map<String,dynamic>.from(entry.value as Map)}]};
     final state=DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',dailyAwards:extra,historicalAwards:history).state;
     expect(state['protectedTotal'],5);expect(state['diamondViews'],1);
+    expect(()=>DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',dailyAwards:extra),throwsFormatException);
+    expect(()=>DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',historicalAwards:history),throwsFormatException);
     expect((state['awards'] as Map).keys,containsAll(['traffic_answer|2026-11-28|sign_no_entry',
       'rewarded_ad|2026-11-28|open_map','traffic_answer|2026-11-27|sign_no_entry']));
     expect(()=>DedaStage04TasksView.fromProfile(profile,dayId:'2026-11-28',dailyAwards:{...extra,'uid':'foreign'}),throwsFormatException);
