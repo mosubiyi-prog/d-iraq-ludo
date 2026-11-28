@@ -1366,7 +1366,6 @@ test('04/04 stable direct candidate purchases catalog in sequence without rules 
 // 04/06 uses the same progress receipt engine and account/league history.
 const {claimDailyTaskCandidate}=require('./uid-ownership-projection.cjs');
 async function dailyFixture(at=Date.UTC(2026,10,27,9)){
-  await env.loadFirestoreRules({rules:readFileSync('firestore.rules','utf8')});
   const {build}=require('./uid-trusted-fixture.cjs');
   await db.doc(base).set(build()[base]);
   const a=accountFixture();a.tasks=[];a.league=[];
@@ -1385,7 +1384,7 @@ test('04/06 concurrent task claims from two sessions credit points and XP once, 
   const current=(await db.doc(base).get()).data(),a=(await db.doc(acctView).get()).data();
   assert.equal(current.balances.points,before.balances.points+10);
   assert.equal(current.balances.xp,before.balances.xp+40);
-  assert.equal(current.balances.coins,before.balances.coins);
+  assert.equal(current.balances.coins,before.balances.coins+20);
   assert.equal(current.balances.earnedDiamonds,before.balances.earnedDiamonds);
   assert.equal(a.league[0].weeklyXp,40);assert.equal(a.league[0].completedTasks,2);
   assert.equal((await db.collection(base+'/events').get()).size,2);
@@ -1419,7 +1418,7 @@ test('04/06 missing completion, wrong owner, old day and partial receipt are rej
   }
   const core=require('./reconcile-core.cjs');
   const receipt=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',sourceId:'task|2026-11-27|open_map',
-    kind:'award',delta:{points:5,coins:0,xp:20,earnedDiamonds:0}},uid,'lab-uid');
+    kind:'award',delta:{points:5,coins:10,xp:20,earnedDiamonds:0}},uid,'lab-uid');
   await db.doc(base+'/receipts/'+core.eventKey(receipt)).set(receipt);
   await assert.rejects(claimDailyTaskCandidate({store,uid,taskId:'open_map',nowMs:at}),{code:'daily-task-partial-claim'});
   assert.deepEqual((await db.doc(base).get()).data(),before);
@@ -1431,4 +1430,27 @@ test('04/06 frozen league still keeps task points and XP, without increasing fro
   assert.deepEqual(result.view.league,[]);
   assert.equal(result.state.balances.points,before.balances.points+5);
   assert.equal(result.state.balances.xp,before.balances.xp+20);
+});
+test('04/06 all eight original tasks share one ledger and a new day retains past receipts',async()=>{
+  const at=await dailyFixture(),a=(await db.doc(acctView).get()).data();
+  const ids=['share_personal_location','open_map','share_registered_place','open_saved_place',
+    'open_received_place','review_added_place','traffic_skills','long_trip'];
+  a.revision++;a.tasks=ids.map(taskId=>({claimKey:'2026-11-27|'+taskId,dayId:'2026-11-27',
+    taskId,completedMs:at-1000,claimedMs:null}));
+  await accountSeed(a);await accountApply();
+  const before=(await db.doc(base).get()).data();
+  for(const taskId of ids)await claimDailyTaskCandidate({store,uid,taskId,nowMs:at});
+  const after=(await db.doc(base).get()).data();
+  assert.equal(after.balances.points,before.balances.points+40);
+  assert.equal(after.balances.coins,before.balances.coins+80);
+  assert.equal(after.balances.xp,before.balances.xp+160);
+  assert.equal((await db.doc(acctView).get()).data().league[0].completedTasks,8);
+  const next=(await db.doc(acctView).get()).data();next.revision++;
+  next.tasks.push({claimKey:'2026-11-28|open_map',dayId:'2026-11-28',taskId:'open_map',
+    completedMs:at+86400000-1000,claimedMs:null});
+  await accountSeed(next);await accountApply();
+  const call=()=>claimDailyTaskCandidate({store,uid,taskId:'open_map',nowMs:at+86400000});
+  const r=await Promise.all([call(),call()]);assert.equal(r.filter(x=>x.replayed).length,1);
+  assert.equal((await db.doc(base).get()).data().balances.points,after.balances.points+5);
+  assert.equal((await db.collection(base+'/events').get()).size,9);
 });

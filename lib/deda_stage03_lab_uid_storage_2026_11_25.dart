@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -975,8 +976,9 @@ class DedaStage04TasksView {
         'cycleId':dayId,'dayId':dayId,
         'createdAt':DateTime.fromMillisecondsSinceEpoch(login['claimedMs'] as int,isUtc:true).toIso8601String()};
     }
+    final ledger=awards.values.toList()..sort((a,b)=>(a['createdAt'] as String).compareTo(b['createdAt'] as String));
     return DedaStage04TasksView._({'version':1,'completions':completions,'awards':awards,
-      'ledger':awards.values.toList(),'protectedTotal':p.taskPoints});
+      'ledger':ledger,'protectedTotal':p.taskPoints});
   }
 }
 
@@ -1045,6 +1047,39 @@ class DedaStage03LabStorage implements DedaPrivateDataIo {
 
   static const tasksLabMode=bool.fromEnvironment('DEDA_STAGE04_TASKS_LAB');
   static String tasksAccountKey()=>tasksLabMode && _matches()?uid:'';
+
+  /// Source notifications only; every emission re-reads one atomic snapshot.
+  /// Cancelling the page cancels all three subscriptions. No polling or writes.
+  static Stream<Map<String,dynamic>> watchTaskState(String accountKey) {
+    final bool Function() current;
+    try {
+      current=_intent();
+      if(!tasksLabMode || accountKey!=tasksAccountKey())throw StateError('tasks-lab-owner-required');
+    } catch(error,trace) {return Stream<Map<String,dynamic>>.error(error,trace);}
+    final dayId=DedaStage04LeagueRead.day(DateTime.now().toUtc());
+    final subscriptions=<StreamSubscription<dynamic>>[];
+    late StreamController<void> signals;
+    signals=StreamController<void>(onListen:(){
+      final db=FirebaseFirestore.instanceFor(app:Firebase.app()),base='deda_lab_uid_authority/$uid';
+      for(final path in [base,'$base/account/current','$base/dailyLogin/$dayId']){
+        subscriptions.add(db.doc(path).snapshots(includeMetadataChanges:true).listen((row){
+          if(signals.isClosed)return;
+          if(!current() || dayId!=DedaStage04LeagueRead.day(DateTime.now().toUtc())){
+            signals.addError(const DedaPrivateDataStale());signals.close();return;
+          }
+          if(!row.metadata.isFromCache && !row.metadata.hasPendingWrites)signals.add(null);
+        },onError:(Object error,StackTrace trace){
+          if(!signals.isClosed)signals.addError(error,trace);
+        }));
+      }
+    },onCancel:() async {for(final subscription in subscriptions){await subscription.cancel();}});
+    return signals.stream.asyncMap((_) async {
+      if(!current())throw const DedaPrivateDataStale();
+      final result=await readTaskState(accountKey);
+      if(!current())throw const DedaPrivateDataStale();
+      return result;
+    });
+  }
 
   /// Same server transaction for balance, task/league history, login and UID.
   /// Missing authoritative account data fails; missing login means unclaimed.

@@ -1231,7 +1231,7 @@ async function claimDailyTaskCandidate({store,uid,taskId=null,nowMs}){
   const {Timestamp}=require('firebase-admin/firestore');
   const dayId=baghdadDay(nowMs),sourceId=taskId===null?'daily_login|'+dayId:'task|'+dayId+'|'+taskId;
   const receipt=core.parseReceipt({format:1,accountKey:uid,source:'task-claim-v1',sourceId,
-    kind:'award',delta:{points:taskId===null?10:5,coins:0,xp:taskId===null?0:20,earnedDiamonds:0}},uid,'lab-uid');
+    kind:'award',delta:{points:taskId===null?10:5,coins:taskId===null?0:10,xp:taskId===null?0:20,earnedDiamonds:0}},uid,'lab-uid');
   const eventKey=core.eventKey(receipt),base='deda_lab_uid_authority/'+uid;
   return store.runTransaction(async tx=>{
     const state=parseState(await tx.get(base),uid,'lab-uid');

@@ -22,6 +22,17 @@ class TasksBindingTests(unittest.TestCase):
         self.assertIn('return Future.value(expired());',patched)
         self.assertIn('state["protectedTotal"] as int',patched)
         with self.assertRaises(ValueError):tasks.patch_engine(patched)
+    def test_currency_reads_central_wallet_and_keeps_card_appearance(self):
+        raw=profile.bind_existing_section_lifetime(profile.archived_profile_member('lib/main.dart'))
+        # These additions exist in the approved reconstructed page. Test the
+        # live-source adapter as well in CI after all preceding overlays.
+        a=raw.index('class _DedaUnifiedCurrencyStripState');b=raw.index('\nclass ',a+10)
+        before=raw[a:b];after=tasks.patch_currency(before)
+        pairs(tokens(after))
+        self.assertIn('DedaStage03LabStorage.readWalletCandidate(opening)',after)
+        self.assertIn('taskCoins:profile.coins',after)
+        self.assertEqual(before.count('Color('),after.count('Color('))
+        self.assertEqual(before.count('BorderRadius.'),after.count('BorderRadius.'))
     def test_repository_cannot_be_modified_by_disposable_binder(self):
         with self.assertRaises(ValueError):tasks.bind(ROOT)
 if __name__=='__main__':unittest.main()
